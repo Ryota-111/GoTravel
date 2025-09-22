@@ -1,24 +1,25 @@
-//
-//  ContentView.swift
-//  GoTravel
-//
-//  Created by Ryota Fujitsuka on 2025/09/22.
-//
-
 import SwiftUI
 
 struct ContentView: View {
+    @StateObject private var auth = AuthViewModel()
+    
     var body: some View {
-        VStack {
-            Image(systemName: "globe")
-                .imageScale(.large)
-                .foregroundStyle(.tint)
-            Text("Hello, world!")
+        Group {
+            if auth.isLoggedIn {
+                HomeView()
+                    .environmentObject(auth)
+            } else {
+                LoginView()
+                    .environmentObject(auth)
+            }
         }
-        .padding()
+        .environmentObject(auth)
+        .animation(.easeInOut, value: auth.isLoggedIn)
     }
 }
 
-#Preview {
-    ContentView()
+struct ContentView_Previews: PreviewProvider {
+    static var previews: some View {
+        ContentView()
+    }
 }

@@ -6,6 +6,14 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		6C713EC12E81A3AC0072D26B /* FirebaseAnalytics in Frameworks */ = {isa = PBXBuildFile; productRef = 6C713EC02E81A3AC0072D26B /* FirebaseAnalytics */; };
+		6C713ECA2E81A6E90072D26B /* FirebaseAnalyticsCore in Frameworks */ = {isa = PBXBuildFile; productRef = 6C713EC92E81A6E90072D26B /* FirebaseAnalyticsCore */; };
+		6C713ECC2E81A96A0072D26B /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 6C713ECB2E81A96A0072D26B /* FirebaseAuth */; };
+		6C713ECE2E81A96A0072D26B /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 6C713ECD2E81A96A0072D26B /* FirebaseCore */; };
+		6C713ED02E81A96A0072D26B /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 6C713ECF2E81A96A0072D26B /* FirebaseFirestore */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		6C713E4E2E80F8270072D26B /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +60,11 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				6C713EC12E81A3AC0072D26B /* FirebaseAnalytics in Frameworks */,
+				6C713ECC2E81A96A0072D26B /* FirebaseAuth in Frameworks */,
+				6C713ECE2E81A96A0072D26B /* FirebaseCore in Frameworks */,
+				6C713ED02E81A96A0072D26B /* FirebaseFirestore in Frameworks */,
+				6C713ECA2E81A6E90072D26B /* FirebaseAnalyticsCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +125,11 @@
 			);
 			name = GoTravel;
 			packageProductDependencies = (
+				6C713EC02E81A3AC0072D26B /* FirebaseAnalytics */,
+				6C713EC92E81A6E90072D26B /* FirebaseAnalyticsCore */,
+				6C713ECB2E81A96A0072D26B /* FirebaseAuth */,
+				6C713ECD2E81A96A0072D26B /* FirebaseCore */,
+				6C713ECF2E81A96A0072D26B /* FirebaseFirestore */,
 			);
 			productName = GoTravel;
 			productReference = 6C713E402E80F8240072D26B /* GoTravel.app */;
@@ -195,6 +213,9 @@
 			);
 			mainGroup = 6C713E372E80F8240072D26B;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				6C713EBF2E81A35F0072D26B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 6C713E412E80F8240072D26B /* Products */;
 			projectDirPath = "";
@@ -570,6 +591,45 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		6C713EBF2E81A35F0072D26B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/firebase/firebase-ios-sdk";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 12.3.0;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		6C713EC02E81A3AC0072D26B /* FirebaseAnalytics */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6C713EBF2E81A35F0072D26B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalytics;
+		};
+		6C713EC92E81A6E90072D26B /* FirebaseAnalyticsCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6C713EBF2E81A35F0072D26B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAnalyticsCore;
+		};
+		6C713ECB2E81A96A0072D26B /* FirebaseAuth */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6C713EBF2E81A35F0072D26B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseAuth;
+		};
+		6C713ECD2E81A96A0072D26B /* FirebaseCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6C713EBF2E81A35F0072D26B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseCore;
+		};
+		6C713ECF2E81A96A0072D26B /* FirebaseFirestore */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6C713EBF2E81A35F0072D26B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseFirestore;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 6C713E382E80F8240072D26B /* Project object */;
 }
