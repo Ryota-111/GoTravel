@@ -1,50 +1,79 @@
 import SwiftUI
 
 struct PasswordResetView: View {
-    @EnvironmentObject var auth: AuthViewModel
-    @Environment(\.presentationMode) var presentationMode
-    @State private var email = ""
+    @EnvironmentObject var auth: AuthViewModel         // ← 初期化子を付けない
+    @Environment(\.presentationMode) private var presentationMode
+
+    @State private var email: String = ""
+    @State private var isLoading: Bool = false
     @State private var message: String?
+    @State private var isSuccess: Bool = false
 
     var body: some View {
         NavigationView {
-            VStack(spacing: 16) {
-                TextField("登録したメールアドレス", text: $email)
-                    .autocapitalization(.none)
-                    .keyboardType(.emailAddress)
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(8)
-
-                if let m = message {
-                    Text(m)
-                        .foregroundColor(.secondary)
+            Form {
+                Section(header: Text("パスワードリセット")) {
+                    TextField("登録済みのメールアドレス", text: $email)
+                        .autocapitalization(.none)
+                        .keyboardType(.emailAddress)
                 }
 
-                Button("パスワードリセットメールを送信") {
-                    auth.sendPasswordReset(email: email) { success, error in
-                        if success {
-                            message = "リセットメールを送信しました。メールを確認してください。"
+                if let msg = message {
+                    Section { Text(msg).foregroundColor(isSuccess ? .green : .red) }
+                }
+
+                Section {
+                    Button(action: sendReset) {
+                        if isLoading {
+                            HStack { ProgressView(); Text("送信中...") }
                         } else {
-                            message = error
+                            Text("リセットメールを送信")
                         }
                     }
+                    .disabled(isLoading || email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(Color.blue)
-                .foregroundColor(.white)
-                .cornerRadius(8)
-
-                Spacer()
             }
-            .padding()
-            .navigationTitle("パスワードをリセット")
+            .navigationTitle("パスワード再設定")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("閉じる") { presentationMode.wrappedValue.dismiss() }
                 }
             }
         }
+    }
+
+    private func sendReset() {
+        message = nil
+        isSuccess = false
+        let mail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !mail.isEmpty else {
+            message = "メールアドレスを入力してください"
+            return
+        }
+
+        isLoading = true
+        // 重要: Binding (e.g. $email) を渡さず、plain String を渡す
+        auth.resetPassword(email: mail) { result in
+            isLoading = false
+            switch result {
+            case .success():
+                isSuccess = true
+                message = "リセット用のメールを送信しました。メールを確認してください。"
+                // 必要なら自動で閉じる:
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                    presentationMode.wrappedValue.dismiss()
+                }
+            case .failure(let err):
+                isSuccess = false
+                message = err.localizedDescription
+            }
+        }
+    }
+}
+
+struct PasswordResetView_Previews: PreviewProvider {
+    static var previews: some View {
+        PasswordResetView()
+            .environmentObject(AuthViewModel())
     }
 }

@@ -2,17 +2,15 @@ import SwiftUI
 import FirebaseCore
 
 @main
-struct GoTravelApp_LoginExample: App {
+struct GoTravelApp: App {
+    @StateObject private var auth = AuthViewModel()
+
     init() {
-        let isPreview = ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] == "1"
-        if isPreview {
-            print("[App] Running in Preview - skip Firebase configure")
-        } else {
-            if let _ = Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") {
+        if ProcessInfo.processInfo.environment["XCODE_RUNNING_FOR_PREVIEWS"] != "1" {
+            if Bundle.main.path(forResource: "GoogleService-Info", ofType: "plist") != nil {
                 FirebaseApp.configure()
-                print("[App] Firebase configured")
             } else {
-                print("[App] WARNING: GoogleService-Info.plist not found - skipping Firebase")
+                print("GoogleService-Info.plist not found - running without Firebase")
             }
         }
     }
@@ -20,6 +18,7 @@ struct GoTravelApp_LoginExample: App {
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .environmentObject(auth) // ここで注入
         }
     }
 }

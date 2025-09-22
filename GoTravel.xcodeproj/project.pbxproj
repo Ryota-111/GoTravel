@@ -12,6 +12,8 @@
 		6C713ECC2E81A96A0072D26B /* FirebaseAuth in Frameworks */ = {isa = PBXBuildFile; productRef = 6C713ECB2E81A96A0072D26B /* FirebaseAuth */; };
 		6C713ECE2E81A96A0072D26B /* FirebaseCore in Frameworks */ = {isa = PBXBuildFile; productRef = 6C713ECD2E81A96A0072D26B /* FirebaseCore */; };
 		6C713ED02E81A96A0072D26B /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 6C713ECF2E81A96A0072D26B /* FirebaseFirestore */; };
+		6C713EDE2E81B4040072D26B /* FirebaseFirestoreCombine-Community in Frameworks */ = {isa = PBXBuildFile; productRef = 6C713EDD2E81B4040072D26B /* FirebaseFirestoreCombine-Community */; };
+		6C713EE02E81B4040072D26B /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 6C713EDF2E81B4040072D26B /* FirebaseStorage */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -63,6 +65,8 @@
 				6C713EC12E81A3AC0072D26B /* FirebaseAnalytics in Frameworks */,
 				6C713ECC2E81A96A0072D26B /* FirebaseAuth in Frameworks */,
 				6C713ECE2E81A96A0072D26B /* FirebaseCore in Frameworks */,
+				6C713EDE2E81B4040072D26B /* FirebaseFirestoreCombine-Community in Frameworks */,
+				6C713EE02E81B4040072D26B /* FirebaseStorage in Frameworks */,
 				6C713ED02E81A96A0072D26B /* FirebaseFirestore in Frameworks */,
 				6C713ECA2E81A6E90072D26B /* FirebaseAnalyticsCore in Frameworks */,
 			);
@@ -130,6 +134,8 @@
 				6C713ECB2E81A96A0072D26B /* FirebaseAuth */,
 				6C713ECD2E81A96A0072D26B /* FirebaseCore */,
 				6C713ECF2E81A96A0072D26B /* FirebaseFirestore */,
+				6C713EDD2E81B4040072D26B /* FirebaseFirestoreCombine-Community */,
+				6C713EDF2E81B4040072D26B /* FirebaseStorage */,
 			);
 			productName = GoTravel;
 			productReference = 6C713E402E80F8240072D26B /* GoTravel.app */;
@@ -628,6 +634,16 @@
 			isa = XCSwiftPackageProductDependency;
 			package = 6C713EBF2E81A35F0072D26B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
 			productName = FirebaseFirestore;
+		};
+		6C713EDD2E81B4040072D26B /* FirebaseFirestoreCombine-Community */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6C713EBF2E81A35F0072D26B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = "FirebaseFirestoreCombine-Community";
+		};
+		6C713EDF2E81B4040072D26B /* FirebaseStorage */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = 6C713EBF2E81A35F0072D26B /* XCRemoteSwiftPackageReference "firebase-ios-sdk" */;
+			productName = FirebaseStorage;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

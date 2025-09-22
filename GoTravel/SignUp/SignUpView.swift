@@ -1,58 +1,87 @@
 import SwiftUI
 
 struct SignUpView: View {
-    @EnvironmentObject var auth: AuthViewModel
-    @Environment(\.presentationMode) var presentationMode
-    @State private var email = ""
-    @State private var password = ""
-    @State private var errorLocal: String?
+    @EnvironmentObject var auth: AuthViewModel        // ← 初期化子を付けないこと
+    @Environment(\.presentationMode) private var presentationMode
+
+    @State private var email: String = ""
+    @State private var password: String = ""
+    @State private var confirmPassword: String = ""
+    @State private var errorMessage: String?
+    @State private var isLoading: Bool = false
 
     var body: some View {
         NavigationView {
-            VStack(spacing: 16) {
-                TextField("メールアドレス", text: $email)
-                    .autocapitalization(.none)
-                    .keyboardType(.emailAddress)
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(8)
-
-                SecureField("パスワード（6文字以上）", text: $password)
-                    .padding()
-                    .background(Color(.systemGray6))
-                    .cornerRadius(8)
-
-                if let e = errorLocal ?? auth.errorMessage {
-                    Text(e)
-                        .foregroundColor(.red)
-                        .multilineTextAlignment(.center)
-                        .padding(.horizontal)
+            Form {
+                Section(header: Text("アカウント")) {
+                    TextField("メールアドレス", text: $email)
+                        .autocapitalization(.none)
+                        .keyboardType(.emailAddress)
+                    SecureField("パスワード", text: $password)
+                    SecureField("パスワード（確認）", text: $confirmPassword)
                 }
 
-                Button("登録") {
-                    auth.signUp(email: email, password: password) { success, error in
-                        if success {
-                            presentationMode.wrappedValue.dismiss()
-                        } else {
-                            errorLocal = error
-                        }
+                if let err = errorMessage {
+                    Section {
+                        Text(err)
+                            .foregroundColor(.red)
+                            .font(.subheadline)
                     }
                 }
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(Color.blue)
-                .foregroundColor(.white)
-                .cornerRadius(8)
 
-                Spacer()
+                Section {
+                    Button(action: signUpTapped) {
+                        if isLoading {
+                            HStack {
+                                ProgressView()
+                                Text("登録中...")
+                            }
+                        } else {
+                            Text("新規登録")
+                        }
+                    }
+                    .disabled(isLoading || email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || password.isEmpty)
+                }
             }
-            .padding()
-            .navigationTitle("新規登録")
+            .navigationTitle("サインアップ")
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
-                    Button("閉じる") { presentationMode.wrappedValue.dismiss() }
+                    Button("キャンセル") {
+                        presentationMode.wrappedValue.dismiss()
+                    }
                 }
             }
         }
+    }
+
+    private func signUpTapped() {
+        // バリデーション
+        errorMessage = nil
+        let mail = email.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !mail.isEmpty else { errorMessage = "メールアドレスを入力してください"; return }
+        guard !password.isEmpty else { errorMessage = "パスワードを入力してください"; return }
+        guard password == confirmPassword else { errorMessage = "パスワードが一致しません"; return }
+
+        isLoading = true
+        auth.signUp(email: mail, password: password) { result in
+            DispatchQueue.main.async {
+                isLoading = false
+                switch result {
+                case .success():
+                    // AuthViewModel のリスナーが isSignedIn を更新するのでここでは dismiss するだけで OK
+                    presentationMode.wrappedValue.dismiss()
+                case .failure(let err):
+                    errorMessage = err.localizedDescription
+                }
+            }
+        }
+    }
+}
+
+struct SignUpView_Previews: PreviewProvider {
+    static var previews: some View {
+        // Preview では環境注入が必要 → ダミーの AuthViewModel を環境に注入する例
+        SignUpView()
+            .environmentObject(AuthViewModel())
     }
 }

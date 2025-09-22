@@ -1,25 +1,17 @@
 import SwiftUI
 
 struct ContentView: View {
-    @StateObject private var auth = AuthViewModel()
-    
+    @EnvironmentObject var auth: AuthViewModel
+
     var body: some View {
         Group {
-            if auth.isLoggedIn {
-                HomeView()
-                    .environmentObject(auth)
+            if auth.isSignedIn {
+                MainTabView() // ログイン済みユーザーが見るメイン画面（マップ / リスト等）
             } else {
-                LoginView()
-                    .environmentObject(auth)
+                LoginView()   // 未ログインはログイン画面
             }
         }
-        .environmentObject(auth)
-        .animation(.easeInOut, value: auth.isLoggedIn)
-    }
-}
-
-struct ContentView_Previews: PreviewProvider {
-    static var previews: some View {
-        ContentView()
+        .animation(.easeInOut, value: auth.isSignedIn)
+        .transition(.opacity)
     }
 }
