@@ -2,7 +2,6 @@ import SwiftUI
 import PhotosUI
 import UIKit
 
-// iOS14+ PHPicker ベース。sourceType == .camera のときは UIImagePickerController を利用します。
 struct ImagePickerView: UIViewControllerRepresentable {
     var sourceType: UIImagePickerController.SourceType = .photoLibrary
     @Binding var image: UIImage?
