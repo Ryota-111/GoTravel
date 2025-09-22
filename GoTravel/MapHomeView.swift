@@ -26,8 +26,8 @@ struct MapHomeView: View {
         ZStack(alignment: .bottomTrailing) {
             MapViewRepresentable(centerCoordinate: $centerCoordinate, selectedCoordinate: $selectedCoordinate, annotations: mkAnnotations())
                 .edgesIgnoringSafeArea(.all)
-                .onChange(of: selectedCoordinate) { new in
-                    if new != nil {
+                .onChange(of: selectedCoordinate) { oldValue, newValue in
+                    if newValue != nil {
                         showingSaveSheet = true
                     }
                 }

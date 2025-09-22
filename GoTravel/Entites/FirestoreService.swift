@@ -12,15 +12,11 @@ final class FirestoreService {
     private let storage: Storage
 
     private init() {
-        // 注意: FirebaseApp.configure() は App 起動時に実行しておくこと。
-        // 例: App の init() で FirebaseApp.configure() を呼ぶ
         db = Firestore.firestore()
         storage = Storage.storage()
 
-        // 永続化（ローカルキャッシュ）を有効にする安全な設定方法
-        // 既存の settings を取得して変更し、再代入します。
-        var settings = db.settings
-        settings.isPersistenceEnabled = true
+        let settings = db.settings
+        settings.cacheSettings = PersistentCacheSettings()
         db.settings = settings
 
         // 必要であればキャッシュサイズをカスタマイズ
@@ -32,7 +28,6 @@ final class FirestoreService {
         db.collection("users").document(uid).collection("places")
     }
 
-    // 保存（画像があれば先に Storage にアップロードしてから Firestore に辞書で setData）
     func save(place: VisitedPlace, image: UIImage?, completion: @escaping (Result<VisitedPlace, Error>) -> Void) {
         guard let uid = Auth.auth().currentUser?.uid else {
             completion(.failure(NSError(domain: "Auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "ログインしていません"])))
@@ -89,7 +84,6 @@ final class FirestoreService {
         }
     }
 
-    // 取得（リアルタイム監視）
     func observePlaces(completion: @escaping (Result<[VisitedPlace], Error>) -> Void) -> ListenerRegistration? {
         guard let uid = Auth.auth().currentUser?.uid else {
             completion(.failure(NSError(domain: "Auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "ログインしていません"])))

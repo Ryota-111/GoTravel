@@ -29,7 +29,19 @@ struct PlaceDetailView: View {
                 if let addr = place.address {
                     Text(addr).font(.subheadline).foregroundColor(.secondary)
                 }
-                Map(coordinateRegion: .constant(MKCoordinateRegion(center: place.coordinate, latitudinalMeters: 500, longitudinalMeters: 500)), interactionModes: [])
+                Map(
+                    position: .constant(
+                        MapCameraPosition.region(
+                            MKCoordinateRegion(
+                                center: place.coordinate,
+                                latitudinalMeters: 500,
+                                longitudinalMeters: 500
+                            )
+                        )
+                    )
+                ) {
+                    Marker("ここ", coordinate: place.coordinate)
+                }
                     .frame(height: 200)
                     .cornerRadius(8)
                 Spacer()
