@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct LoginView: View {
-    @EnvironmentObject var auth: AuthViewModel          // 注: 初期化子を付けない
+    @EnvironmentObject var auth: AuthViewModel
     @Environment(\.presentationMode) private var presentationMode
 
     @State private var email: String = ""
@@ -12,7 +12,6 @@ struct LoginView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                // 背景の飛行機画像（アセット名 "airplane" を用意してください）
                 Group {
                     if UIImage(named: "airplane") != nil {
                         Image("airplane")
@@ -20,7 +19,6 @@ struct LoginView: View {
                             .scaledToFill()
                             .ignoresSafeArea()
                     } else {
-                        // フォールバック：システムアイコンを背景に薄く置く
                         Color("Background")
                             .opacity(0.6)
                             .ignoresSafeArea()
@@ -33,14 +31,11 @@ struct LoginView: View {
                             .offset(x: 40, y: -80)
                     }
                 }
-
-                // 半透明オーバーレイで文字が見やすく
+                
                 Color.black.opacity(0.25).ignoresSafeArea()
 
                 VStack(spacing: 24) {
                     Spacer().frame(height: 40)
-
-                    // ロゴ / タイトル
                     VStack(spacing: 8) {
                         Text("GoTravel")
                             .font(.largeTitle)
@@ -53,7 +48,6 @@ struct LoginView: View {
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
 
-                    // 入力カード
                     VStack(spacing: 16) {
                         if let err = errorMessage {
                             Text(err)
@@ -97,8 +91,6 @@ struct LoginView: View {
 
                         HStack {
                             Button(action: {
-                                // パスワードリセット画面へ
-                                // モーダルで表示したいなら sheet を使う等、親で扱ってください。
                             }) {
                                 NavigationLink(destination: PasswordResetView().environmentObject(auth)) {
                                     Text("パスワードを忘れた場合")
@@ -152,7 +144,6 @@ struct LoginView: View {
     }
 }
 
-// simple blur helper
 fileprivate struct BlurView: UIViewRepresentable {
     let style: UIBlurEffect.Style
     func makeUIView(context: Context) -> UIVisualEffectView {

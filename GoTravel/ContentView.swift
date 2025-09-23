@@ -6,9 +6,9 @@ struct ContentView: View {
     var body: some View {
         Group {
             if auth.isSignedIn {
-                MainTabView() // ログイン済みユーザーが見るメイン画面（マップ / リスト等）
+                MainTabView()
             } else {
-                LoginView()   // 未ログインはログイン画面
+                LoginView()
             }
         }
         .animation(.easeInOut, value: auth.isSignedIn)
