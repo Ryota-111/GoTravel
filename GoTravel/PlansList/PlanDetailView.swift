@@ -5,14 +5,13 @@ struct PlanDetailView: View {
     @State var plan: Plan
     var onUpdate: ((Plan) -> Void)?
     @State private var region: MKCoordinateRegion = MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 35.681236, longitude: 139.767125),
-        span: MKCoordinateSpan(latitudeDelta: 0.5, longitudeDelta: 0.5)
+        center: CLLocationCoordinate2D(latitude: 39.2048, longitude: 138.2529),
+        span: MKCoordinateSpan(latitudeDelta: 14, longitudeDelta: 14)
     )
     @State private var cameraPosition: MapCameraPosition = .region(
         MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: 35.0, longitude: 135.0),
-            latitudinalMeters: 500,
-            longitudinalMeters: 500
+            center: CLLocationCoordinate2D(latitude: 39.2048, longitude: 138.2529),
+            span: MKCoordinateSpan(latitudeDelta: 14, longitudeDelta: 14)
         )
     )
 
@@ -28,7 +27,6 @@ struct PlanDetailView: View {
                     }
                     .frame(height: 300)
                     .onAppear {
-                        // center around first place or fit region
                         if let first = plan.places.first {
                             region = MKCoordinateRegion(center: first.coordinate, latitudinalMeters: 2000, longitudinalMeters: 2000)
                         }

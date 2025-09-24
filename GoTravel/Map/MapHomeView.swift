@@ -1,53 +1,60 @@
 import SwiftUI
 import MapKit
-import CoreLocation
-
-extension CLLocationCoordinate2D: @retroactive Equatable {
-    public static func == (lhs: CLLocationCoordinate2D, rhs: CLLocationCoordinate2D) -> Bool {
-        return lhs.latitude == rhs.latitude && lhs.longitude == rhs.longitude
-    }
-}
-
-extension CLLocationCoordinate2D: @retroactive Hashable {
-    public func hash(into hasher: inout Hasher) {
-        hasher.combine(latitude)
-        hasher.combine(longitude)
-    }
-}
 
 struct MapHomeView: View {
     @EnvironmentObject var auth: AuthViewModel
     @StateObject private var vm = PlacesViewModel()
-    @State private var centerCoordinate = CLLocationCoordinate2D(latitude: 35.681236, longitude: 139.767125)
+    @State private var centerCoordinate = CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529)
     @State private var selectedCoordinate: CLLocationCoordinate2D?
     @State private var showingSaveSheet: Bool = false
+    @State private var searchText = ""
+    @State private var searchResults: [MKMapItem] = []
+    @State private var zoomLevel: Double?
+    @State private var searchWorkItem: DispatchWorkItem?
 
     var body: some View {
-        ZStack(alignment: .bottomTrailing) {
-            MapViewRepresentable(centerCoordinate: $centerCoordinate, selectedCoordinate: $selectedCoordinate, annotations: mkAnnotations())
-                .edgesIgnoringSafeArea(.all)
-                .onChange(of: selectedCoordinate) { oldValue, newValue in
-                    if newValue != nil {
-                        showingSaveSheet = true
-                    }
-                }
-
+        ZStack(alignment: .top) {
+            MapViewRepresentable(
+                centerCoordinate: $centerCoordinate,
+                selectedCoordinate: $selectedCoordinate,
+                annotations: mkAnnotations(),
+                zoomLevel: zoomLevel
+            )
+            .edgesIgnoringSafeArea(.all)
+            
             VStack {
-                Spacer()
                 HStack {
-                    Spacer()
-                    Button(action: {
-                        if let first = vm.places.first {
-                            centerCoordinate = first.coordinate
+                    TextField("場所を検索", text: $searchText)
+                        .textFieldStyle(RoundedBorderTextFieldStyle())
+                        .background(Color.white.opacity(0.8))
+                        .cornerRadius(10)
+                        .onChange(of: searchText) { oldValue, newValue in
+                            searchWorkItem?.cancel()
+                            
+                            let workItem = DispatchWorkItem { [self] in
+                                if !newValue.isEmpty && newValue.count >= 3 {
+                                    performSearch()
+                                } else {
+                                    searchResults = []
+                                }
+                            }
+                            
+                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
+                            searchWorkItem = workItem
                         }
-                    }) {
-                        Image(systemName: "location.fill")
-                            .padding()
-                            .background(Color.white.opacity(0.9))
-                            .clipShape(Circle())
-                    }
-                    .padding()
+                        .onSubmit {
+                            performSearch()
+                        }
                 }
+                .padding()
+                .background(Color.white.opacity(0.5))
+                
+                Spacer()
+            }
+        }
+        .onChange(of: selectedCoordinate) { _, newValue in
+            if let _ = newValue {
+                showingSaveSheet = true
             }
         }
         .sheet(isPresented: $showingSaveSheet, onDismiss: {
@@ -56,11 +63,49 @@ struct MapHomeView: View {
             if let coord = selectedCoordinate {
                 SavePlaceView(vm: SavePlaceViewModel(coord: coord))
                     .environmentObject(auth)
-            } else {
-                Text("座標が取得できませんでした").padding()
             }
         }
         .navigationTitle("マップ")
+    }
+    
+    private func performSearch() {
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = searchText
+        
+        let region = MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
+            span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
+        )
+        request.region = region
+        
+        let search = MKLocalSearch(request: request)
+        
+        search.start { [self] response, error in
+            guard let response = response, !response.mapItems.isEmpty else {
+                print("検索エラー: \(error?.localizedDescription ?? "不明なエラー")")
+                return
+            }
+            
+            if let firstItem = response.mapItems.first {
+                DispatchQueue.main.async {
+                    zoomToLocation(firstItem.placemark.coordinate)
+                    searchText = ""
+                }
+            }
+        }
+    }
+    
+    private func zoomToLocation(_ coordinate: CLLocationCoordinate2D) {
+        withAnimation {
+            centerCoordinate = coordinate
+            zoomLevel = 0.01
+
+        }
+        
+        let region = MKCoordinateRegion(
+            center: coordinate,
+            span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+        )
     }
 
     private func mkAnnotations() -> [MKPointAnnotation] {
@@ -70,5 +115,11 @@ struct MapHomeView: View {
             ann.coordinate = place.coordinate
             return ann
         }
+    }
+}
+
+extension CLLocationCoordinate2D: @retroactive Equatable {
+    public static func == (lhs: CLLocationCoordinate2D, rhs: CLLocationCoordinate2D) -> Bool {
+        return lhs.latitude == rhs.latitude && lhs.longitude == rhs.longitude
     }
 }

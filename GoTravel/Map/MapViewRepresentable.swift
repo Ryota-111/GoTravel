@@ -5,6 +5,7 @@ struct MapViewRepresentable: UIViewRepresentable {
     @Binding var centerCoordinate: CLLocationCoordinate2D
     @Binding var selectedCoordinate: CLLocationCoordinate2D?
     var annotations: [MKPointAnnotation]
+    var zoomLevel: Double?  // 新しく追加
 
     func makeUIView(context: Context) -> MKMapView {
         let map = MKMapView(frame: .zero)
@@ -19,7 +20,14 @@ struct MapViewRepresentable: UIViewRepresentable {
     func updateUIView(_ uiView: MKMapView, context: Context) {
         uiView.removeAnnotations(uiView.annotations.filter { !($0 is MKUserLocation) })
         uiView.addAnnotations(annotations)
-        let region = MKCoordinateRegion(center: centerCoordinate, latitudinalMeters: 2000, longitudinalMeters: 2000)
+        
+        // zoomLevelが指定されている場合はそれを使用
+        let region = MKCoordinateRegion(
+            center: centerCoordinate,
+            span: zoomLevel != nil
+                ? MKCoordinateSpan(latitudeDelta: zoomLevel!, longitudeDelta: zoomLevel!)
+                : MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
+        )
         uiView.setRegion(region, animated: true)
     }
 
