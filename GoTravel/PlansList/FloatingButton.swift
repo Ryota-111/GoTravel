@@ -5,7 +5,6 @@ struct FloatingButton: View {
     var systemImageName: String = "plus"
     var size: CGFloat = 56
     var backgroundColor: Color = Color.accentColor
-
     var body: some View {
         Button(action: action) {
             ZStack {

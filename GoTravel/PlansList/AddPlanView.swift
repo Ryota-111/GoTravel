@@ -3,13 +3,13 @@ import MapKit
 
 struct AddPlanView: View {
     @Environment(\.presentationMode) var presentationMode
+    
     var onSave: (Plan) -> Void
 
     @State private var title: String = ""
     @State private var startDate: Date = Date()
     @State private var endDate: Date = Date()
     @State private var places: [PlannedPlace] = []
-
     @State private var showMapPicker: Bool = false
     @State private var newPlaceCoordinate: CLLocationCoordinate2D?
     @State private var newPlaceName: String = ""
@@ -35,7 +35,7 @@ struct AddPlanView: View {
                                     if let addr = p.address { Text(addr).font(.caption).foregroundColor(.secondary) }
                                 }
                                 Spacer()
-                                Text("") // spacing
+                                Text("")
                             }
                         }
                         .onDelete { idx in
@@ -82,7 +82,6 @@ struct AddPlanView: View {
                                 HStack {
                                     Spacer()
                                     Button("現在位置を中心に移動") {
-                                        // no-op here; MapPicker shows user location if allowed
                                     }
                                     Spacer()
                                 }

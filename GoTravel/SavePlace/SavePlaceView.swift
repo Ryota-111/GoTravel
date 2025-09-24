@@ -4,8 +4,6 @@ import MapKit
 struct SavePlaceView: View {
     @Environment(\.presentationMode) var presentationMode
     @ObservedObject var vm: SavePlaceViewModel
-
-    // UI 用にローカルで管理するもの（画像ピッカー表示フラグ等）
     @State private var showImagePicker: Bool = false
     @State private var showPhotoSourceActionSheet: Bool = false
     @State private var pickerSource: UIImagePickerController.SourceType = .photoLibrary

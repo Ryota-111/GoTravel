@@ -18,7 +18,7 @@ extension CLLocationCoordinate2D: @retroactive Hashable {
 struct MapHomeView: View {
     @EnvironmentObject var auth: AuthViewModel
     @StateObject private var vm = PlacesViewModel()
-    @State private var centerCoordinate = CLLocationCoordinate2D(latitude: 35.681236, longitude: 139.767125) // 初期は東京駅など
+    @State private var centerCoordinate = CLLocationCoordinate2D(latitude: 35.681236, longitude: 139.767125)
     @State private var selectedCoordinate: CLLocationCoordinate2D?
     @State private var showingSaveSheet: Bool = false
 
@@ -37,8 +37,6 @@ struct MapHomeView: View {
                 HStack {
                     Spacer()
                     Button(action: {
-                        // 現在地を中心にする（ユーザー位置取得は MKMapView の user location 等で強化可能）
-                        // ここでは最新の places の最初を中心にする例（無ければ既定のまま）
                         if let first = vm.places.first {
                             centerCoordinate = first.coordinate
                         }
@@ -59,7 +57,6 @@ struct MapHomeView: View {
                 SavePlaceView(vm: SavePlaceViewModel(coord: coord))
                     .environmentObject(auth)
             } else {
-                // 安全策
                 Text("座標が取得できませんでした").padding()
             }
         }

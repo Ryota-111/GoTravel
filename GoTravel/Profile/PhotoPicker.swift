@@ -2,7 +2,6 @@ import SwiftUI
 import PhotosUI
 import UIKit
 
-// PHPicker を使ったシンプルなラッパー (iOS14+)
 struct PhotoPicker: UIViewControllerRepresentable {
     @Environment(\.presentationMode) var presentationMode
     var onComplete: (UIImage) -> Void

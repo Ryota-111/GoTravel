@@ -2,7 +2,6 @@ import SwiftUI
 import MapKit
 import CoreLocation
 
-// A simple MKMapView wrapper that lets the user tap to place a pin.
 struct MapPickerView: UIViewRepresentable {
     @Binding var coordinate: CLLocationCoordinate2D?
     var showsUserLocation: Bool = true

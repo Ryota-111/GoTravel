@@ -1,7 +1,6 @@
 import SwiftUI
 import MapKit
 
-// タップで座標を取得できる MKMapView ラッパー
 struct MapViewRepresentable: UIViewRepresentable {
     @Binding var centerCoordinate: CLLocationCoordinate2D
     @Binding var selectedCoordinate: CLLocationCoordinate2D?
@@ -18,10 +17,8 @@ struct MapViewRepresentable: UIViewRepresentable {
     }
 
     func updateUIView(_ uiView: MKMapView, context: Context) {
-        // annotations を差し替え
         uiView.removeAnnotations(uiView.annotations.filter { !($0 is MKUserLocation) })
         uiView.addAnnotations(annotations)
-        // 中心をセット（アニメーションは不要なら false）
         let region = MKCoordinateRegion(center: centerCoordinate, latitudinalMeters: 2000, longitudinalMeters: 2000)
         uiView.setRegion(region, animated: true)
     }

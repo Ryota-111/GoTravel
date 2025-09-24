@@ -24,7 +24,8 @@ final class SavePlaceViewModel: ObservableObject {
             return
         }
         isSaving = true
-        let place = VisitedPlace(
+
+        var place = VisitedPlace(
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
             latitude: coord.latitude,
@@ -33,7 +34,19 @@ final class SavePlaceViewModel: ObservableObject {
             visitedAt: visitedAt
         )
 
-        FirestoreService.shared.save(place: place, image: image) { result in
+        // 画像がある場合はまずローカルに保存して fileName を place にセットする
+        if let image = image, let data = image.jpegData(compressionQuality: 0.85) {
+            let fileName = "place_\(UUID().uuidString).jpg"
+            do {
+                try FileManager.saveImageDataToDocuments(data: data, named: fileName)
+                place.localPhotoFileName = fileName
+            } catch {
+                print("Failed to save image locally:", error)
+                // ローカル保存に失敗しても場所自体は保存する選択：localPhotoFileName は nil
+            }
+        }
+
+        FirestoreService.shared.save(place: place, image: nil) { result in
             DispatchQueue.main.async {
                 self.isSaving = false
                 switch result {

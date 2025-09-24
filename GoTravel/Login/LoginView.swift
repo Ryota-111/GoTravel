@@ -3,7 +3,6 @@ import SwiftUI
 struct LoginView: View {
     @EnvironmentObject var auth: AuthViewModel
     @Environment(\.presentationMode) private var presentationMode
-
     @State private var email: String = ""
     @State private var password: String = ""
     @State private var isLoading: Bool = false
@@ -134,7 +133,6 @@ struct LoginView: View {
                 isLoading = false
                 switch result {
                 case .success():
-                    // ログイン成功: 親のルートが状態を監視して画面を切り替える想定
                     presentationMode.wrappedValue.dismiss()
                 case .failure(let err):
                     errorMessage = err.localizedDescription

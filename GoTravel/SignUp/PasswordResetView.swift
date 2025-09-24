@@ -1,9 +1,8 @@
 import SwiftUI
 
 struct PasswordResetView: View {
-    @EnvironmentObject var auth: AuthViewModel         // ← 初期化子を付けない
+    @EnvironmentObject var auth: AuthViewModel
     @Environment(\.presentationMode) private var presentationMode
-
     @State private var email: String = ""
     @State private var isLoading: Bool = false
     @State private var message: String?
@@ -52,14 +51,12 @@ struct PasswordResetView: View {
         }
 
         isLoading = true
-        // 重要: Binding (e.g. $email) を渡さず、plain String を渡す
         auth.resetPassword(email: mail) { result in
             isLoading = false
             switch result {
             case .success():
                 isSuccess = true
                 message = "リセット用のメールを送信しました。メールを確認してください。"
-                // 必要なら自動で閉じる:
                 DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
                     presentationMode.wrappedValue.dismiss()
                 }

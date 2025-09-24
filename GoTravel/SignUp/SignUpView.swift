@@ -1,9 +1,8 @@
 import SwiftUI
 
 struct SignUpView: View {
-    @EnvironmentObject var auth: AuthViewModel        // ← 初期化子を付けないこと
+    @EnvironmentObject var auth: AuthViewModel
     @Environment(\.presentationMode) private var presentationMode
-
     @State private var email: String = ""
     @State private var password: String = ""
     @State private var confirmPassword: String = ""
@@ -55,7 +54,6 @@ struct SignUpView: View {
     }
 
     private func signUpTapped() {
-        // バリデーション
         errorMessage = nil
         let mail = email.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !mail.isEmpty else { errorMessage = "メールアドレスを入力してください"; return }
@@ -68,7 +66,6 @@ struct SignUpView: View {
                 isLoading = false
                 switch result {
                 case .success():
-                    // AuthViewModel のリスナーが isSignedIn を更新するのでここでは dismiss するだけで OK
                     presentationMode.wrappedValue.dismiss()
                 case .failure(let err):
                     errorMessage = err.localizedDescription
@@ -80,7 +77,6 @@ struct SignUpView: View {
 
 struct SignUpView_Previews: PreviewProvider {
     static var previews: some View {
-        // Preview では環境注入が必要 → ダミーの AuthViewModel を環境に注入する例
         SignUpView()
             .environmentObject(AuthViewModel())
     }

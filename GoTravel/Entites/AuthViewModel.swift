@@ -54,7 +54,6 @@ final class AuthViewModel: ObservableObject {
         }
     }
 
-    // 追加: パスワードリセット
     func resetPassword(email: String, completion: ((Result<Void, Error>) -> Void)? = nil) {
         Auth.auth().sendPasswordReset(withEmail: email) { error in
             DispatchQueue.main.async {

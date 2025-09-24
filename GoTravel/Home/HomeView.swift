@@ -9,7 +9,6 @@ struct HomeView: View {
     var body: some View {
         NavigationView {
             VStack(spacing: 18) {
-                // Avatar
                 ZStack(alignment: .bottomTrailing) {
                     Group {
                         if let ui = vm.avatarImage {
@@ -17,7 +16,6 @@ struct HomeView: View {
                                 .resizable()
                                 .scaledToFill()
                         } else {
-                            // default placeholder
                             Image(systemName: "person.crop.circle.fill")
                                 .resizable()
                                 .scaledToFill()
@@ -29,7 +27,6 @@ struct HomeView: View {
                     .shadow(radius: 6)
                     .overlay(Circle().stroke(Color.white, lineWidth: 2))
                     
-                    // edit button
                     Menu {
                         Button("写真を選択") { showImagePicker = true }
                         if vm.avatarImage != nil {
@@ -50,7 +47,6 @@ struct HomeView: View {
                 }
                 .padding(.top, 20)
                 
-                // Fields
                 Form {
                     Section(header: Text("プロフィール")) {
                         TextField("名前", text: $vm.profile.name)
@@ -75,6 +71,7 @@ struct HomeView: View {
                                         Text("保存")
                                             .fontWeight(.semibold)
                                     }
+                                    
                                     Spacer()
                                 }
                             }
@@ -83,14 +80,12 @@ struct HomeView: View {
                 }
                 
                 Spacer()
-                
             }
             .navigationTitle("マイページ")
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(isEditing ? "キャンセル" : "編集") {
                         if isEditing {
-                            // cancel: reload from saved profile
                             let reloaded = ProfileViewModel()
                             vm.profile = reloaded.profile
                             vm.avatarImage = reloaded.avatarImage

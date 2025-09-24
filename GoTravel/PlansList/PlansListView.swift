@@ -36,7 +36,6 @@ struct PlansListView: View {
                         .listStyle(PlainListStyle())
                     }
                 }
-                // FloatingButton を画面右下に重ねる
                 VStack {
                     Spacer()
                     HStack {
@@ -44,21 +43,10 @@ struct PlansListView: View {
                         FloatingButton {
                             showAddPlanSheet = true
                         }
-                        // Safe area 下の余白を加える
                         .padding(.trailing, 20)
                         .padding(.bottom, 20)
                     }
                 }
-                // もし「マイページの上のあたり」に置きたい場合は上の VStack を以下のように変更してください:
-                // VStack {
-                //     HStack {
-                //         Spacer()
-                //         FloatingButton { showAddPlanSheet = true }
-                //             .padding(.trailing, 20)
-                //             .padding(.top, 90) // 調整して「マイページの上あたり」に配置
-                //     }
-                //     Spacer()
-                // }
             }
             .navigationTitle("予定一覧")
             .toolbar {
@@ -67,7 +55,6 @@ struct PlansListView: View {
                         EditButton()
                     }
                 }
-                // 左上や右上のツールバーは不要になったので削除しています（元の＋ボタンを移動）
             }
             .sheet(isPresented: $showAddPlanSheet) {
                 AddPlanView { plan in

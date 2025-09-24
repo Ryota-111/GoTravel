@@ -21,7 +21,8 @@ struct PlacesListView: View {
                             NavigationLink(destination: PlaceDetailView(place: place)) {
                                 HStack {
                                     VStack(alignment: .leading) {
-                                        Text(place.title).font(.headline)
+                                        Text(place.title)
+                                            .font(.headline)
                                         if let visited = place.visitedAt {
                                             Text(DateFormatter.localizedString(from: visited, dateStyle: .medium, timeStyle: .none))
                                                 .font(.subheadline)
@@ -33,8 +34,6 @@ struct PlacesListView: View {
                                         }
                                     }
                                     Spacer()
-                                    Image(systemName: "chevron.right")
-                                        .foregroundColor(.secondary)
                                 }
                                 .padding(.vertical, 8)
                             }

@@ -24,9 +24,7 @@ struct ImagePickerView: UIViewControllerRepresentable {
         }
     }
 
-    func updateUIViewController(_ uiViewController: UIViewController, context: Context) {
-        // no-op
-    }
+    func updateUIViewController(_ uiViewController: UIViewController, context: Context) { }
 
     func makeCoordinator() -> Coordinator { Coordinator(self) }
 
@@ -34,7 +32,6 @@ struct ImagePickerView: UIViewControllerRepresentable {
         let parent: ImagePickerView
         init(_ parent: ImagePickerView) { self.parent = parent }
 
-        // PHPicker
         func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
             parent.presentationMode.wrappedValue.dismiss()
             guard let item = results.first else { return }
@@ -47,7 +44,6 @@ struct ImagePickerView: UIViewControllerRepresentable {
             }
         }
 
-        // UIImagePicker (camera)
         func imagePickerController(_ picker: UIImagePickerController, didFinishPickingMediaWithInfo info: [UIImagePickerController.InfoKey : Any]) {
             parent.presentationMode.wrappedValue.dismiss()
             if let img = info[.originalImage] as? UIImage {
