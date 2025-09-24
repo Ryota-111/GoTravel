@@ -16,13 +16,6 @@ struct SavePlaceView: View {
                 Section(header: Text("場所")) {
                     TextField("タイトル", text: $vm.title)
                     TextField("メモ", text: $vm.notes)
-                    if let coord = vm.coordinate {
-                        Text("座標: \(coord.latitude), \(coord.longitude)")
-                            .font(.footnote)
-                            .foregroundColor(.secondary)
-                    } else {
-                        Text("座標がありません").font(.footnote).foregroundColor(.red)
-                    }
                     DatePicker("訪問日", selection: $vm.visitedAt, displayedComponents: .date)
                 }
 
