@@ -5,7 +5,7 @@ struct MapViewRepresentable: UIViewRepresentable {
     @Binding var centerCoordinate: CLLocationCoordinate2D
     @Binding var selectedCoordinate: CLLocationCoordinate2D?
     var annotations: [MKPointAnnotation]
-    var zoomLevel: Double?  // 新しく追加
+    var zoomLevel: Double?
 
     func makeUIView(context: Context) -> MKMapView {
         let map = MKMapView(frame: .zero)

@@ -8,8 +8,12 @@ struct PlansListView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                LinearGradient(gradient: Gradient(colors: [.blue, .black]), startPoint: .top, endPoint: .bottom)
-                    .ignoresSafeArea()
+                LinearGradient(
+                    gradient: Gradient(colors: [.blue.opacity(0.8), .black]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
                 
                 ScrollView {
                     VStack(spacing: 20) {
@@ -140,7 +144,7 @@ struct PlanCardView: View {
             .padding()
             .background(
                 LinearGradient(
-                    gradient: Gradient(colors: [Color.blue.opacity(0.8), Color.blue.opacity(0.6)]),
+                    gradient: Gradient(colors: [.black.opacity(0.6), .blue.opacity(0.7)]),
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )

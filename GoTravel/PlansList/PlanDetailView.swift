@@ -4,99 +4,157 @@ import MapKit
 struct PlanDetailView: View {
     @State var plan: Plan
     var onUpdate: ((Plan) -> Void)?
-    @State private var region: MKCoordinateRegion = MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 39.2048, longitude: 138.2529),
-        span: MKCoordinateSpan(latitudeDelta: 14, longitudeDelta: 14)
-    )
-    @State private var cameraPosition: MapCameraPosition = .region(
-        MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: 39.2048, longitude: 138.2529),
-            span: MKCoordinateSpan(latitudeDelta: 14, longitudeDelta: 14)
-        )
-    )
-
+    
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                if !plan.places.isEmpty {
-                    Map(position: $cameraPosition) {
-                        ForEach(plan.places) { place in
-                            Marker("場所", coordinate: place.coordinate)
-                                .tint(.red)
-                        }
-                    }
-                    .frame(height: 300)
-                    .onAppear {
-                        if let first = plan.places.first {
-                            region = MKCoordinateRegion(center: first.coordinate, latitudinalMeters: 2000, longitudinalMeters: 2000)
-                        }
-                    }
-                } else {
-                    Color.gray.frame(height: 200).overlay(Text("場所がありません").foregroundColor(.white))
-                }
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(plan.title).font(.title2).bold()
-                    Text("\(dateString(plan.startDate)) 〜 \(dateString(plan.endDate))").foregroundColor(.secondary)
-                }
-                .padding(.horizontal)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("行きたい場所").font(.headline).padding(.horizontal)
-                    if plan.places.isEmpty {
-                        Text("まだ登録されていません").foregroundColor(.secondary).padding(.horizontal)
-                    } else {
-                        ForEach(plan.places) { p in
-                            HStack {
-                                VStack(alignment: .leading) {
-                                    Text(p.name).font(.body)
-                                    if let a = p.address { Text(a).font(.caption).foregroundColor(.secondary) }
-                                }
-                                Spacer()
-                                NavigationLink(destination: MapViewForPlace(place: p)) {
-                                    Image(systemName: "map")
-                                }
-                            }
-                            .padding(.horizontal)
-                        }
-                    }
-                }
-
-                Spacer(minLength: 20)
+            VStack(alignment: .leading, spacing: 16) {
+                mapSection
+                
+                basicInfoSection
+                
+                placesSection
+                
+                Spacer()
             }
+            .padding()
         }
-        .navigationTitle("予定詳細")
+        .navigationTitle("旅行プラン")
         .navigationBarTitleDisplayMode(.inline)
     }
-
-    private func dateString(_ d: Date) -> String {
-        DateFormatter.localizedString(from: d, dateStyle: .medium, timeStyle: .none)
+    
+    private var mapSection: some View {
+        Group {
+            if !plan.places.isEmpty {
+                Map(initialPosition: .region(calculateMapRegion())) {
+                    ForEach(plan.places) { place in
+                        Marker(place.name, coordinate: place.coordinate)
+                            .tint(.red)
+                    }
+                }
+                .frame(height: 250)
+                .clipShape(RoundedRectangle(cornerRadius: 12))
+            } else {
+                EmptyMapPlaceholder()
+            }
+        }
+    }
+    
+    private var basicInfoSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(plan.title)
+                .font(.title2)
+                .fontWeight(.bold)
+            
+            HStack {
+                Image(systemName: "calendar")
+                Text("\(dateRangeString(plan.startDate, plan.endDate))")
+                    .foregroundColor(.secondary)
+            }
+        }
+    }
+    
+    private var placesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("訪問予定の場所")
+                .font(.headline)
+            
+            if plan.places.isEmpty {
+                Text("まだ場所が追加されていません")
+                    .foregroundColor(.secondary)
+            } else {
+                ForEach(plan.places) { place in
+                    PlaceRow(place: place)
+                }
+            }
+        }
+    }
+    
+    private func calculateMapRegion() -> MKCoordinateRegion {
+        guard let firstPlace = plan.places.first else {
+            return MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
+                span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
+            )
+        }
+        
+        return MKCoordinateRegion(
+            center: firstPlace.coordinate,
+            latitudinalMeters: CLLocationDistance(max(plan.places.count * 1000, 2000)),
+            longitudinalMeters: CLLocationDistance(max(plan.places.count * 1000, 2000))
+        )
+    }
+    
+    private func dateRangeString(_ start: Date, _ end: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .medium
+        formatter.timeStyle = .none
+        
+        return "\(formatter.string(from: start)) 〜 \(formatter.string(from: end))"
     }
 }
 
-struct MapViewForPlace: View {
+struct PlaceRow: View {
     let place: PlannedPlace
-    @State private var region: MKCoordinateRegion
-    @State private var cameraPosition: MapCameraPosition
+    
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 4) {
+                Text(place.name)
+                    .font(.headline)
+                
+                if let address = place.address {
+                    Text(address)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+            }
+            
+            Spacer()
+            
+            NavigationLink(destination: PlaceDetailMapView(place: place)) {
+                Image(systemName: "map.fill")
+                    .foregroundColor(.blue)
+            }
+        }
+        .padding()
+        .background(Color.gray.opacity(0.1))
+        .cornerRadius(8)
+    }
+}
 
-    init(place: PlannedPlace) {
-        self.place = place
-        _region = State(initialValue: MKCoordinateRegion(center: place.coordinate, latitudinalMeters: 800, longitudinalMeters: 800))
-        _cameraPosition = State(initialValue: .region(
+struct EmptyMapPlaceholder: View {
+    var body: some View {
+        ZStack {
+            Color.gray.opacity(0.2)
+            VStack {
+                Image(systemName: "map")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 80, height: 80)
+                    .foregroundColor(.gray)
+                
+                Text("マップが利用できません")
+                    .foregroundColor(.secondary)
+            }
+        }
+        .frame(height: 250)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+struct PlaceDetailMapView: View {
+    let place: PlannedPlace
+    
+    var body: some View {
+        Map(initialPosition: .region(
             MKCoordinateRegion(
                 center: place.coordinate,
-                latitudinalMeters: 500,
-                longitudinalMeters: 500
+                latitudinalMeters: 1000,
+                longitudinalMeters: 1000
             )
-        ))
-    }
-
-    var body: some View {
-        Map(position: $cameraPosition) {
-            ForEach([place]) { p in
-                Marker("場所", coordinate: p.coordinate)
-                    .tint(.red)
-            }
+        )) {
+            Marker(place.name, coordinate: place.coordinate)
+                .tint(.red)
         }
         .edgesIgnoringSafeArea(.all)
         .navigationTitle(place.name)

@@ -13,7 +13,7 @@ struct SavePlaceView: View {
             Form {
                 Section(header: Text("場所")) {
                     TextField("タイトル", text: $vm.title)
-                    TextField("メモ", text: $vm.notes)
+                    TextField("思い出", text: $vm.notes)
                     DatePicker("訪問日", selection: $vm.visitedAt, displayedComponents: .date)
                 }
 
