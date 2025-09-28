@@ -17,6 +17,7 @@ struct AddPlanView: View {
     @State private var searchText: String = ""
     @State private var searchResults: [MKMapItem] = []
     @State private var searchWorkItem: DispatchWorkItem?
+    @State private var selectedCardColor: Color = .blue
 
     var body: some View {
         ZStack {
@@ -67,6 +68,29 @@ struct AddPlanView: View {
         .background(Color.black.opacity(0.2))
     }
     
+//    private var basicInfoSection: some View {
+//        VStack(alignment: .leading, spacing: 15) {
+//            Text("旅行の詳細")
+//                .font(.title2)
+//                .fontWeight(.bold)
+//                .foregroundColor(.white)
+//            
+//            customTextField(
+//                icon: "text.alignleft",
+//                placeholder: "タイトル",
+//                text: $title
+//            )
+//            
+//            HStack {
+//                datePickerCard(title: "開始日", date: $startDate)
+//                datePickerCard(title: "終了日", date: $endDate)
+//            }
+//        }
+//        .padding()
+//        .background(Color.white.opacity(0.1))
+//        .cornerRadius(15)
+//    }
+    
     private var basicInfoSection: some View {
         VStack(alignment: .leading, spacing: 15) {
             Text("旅行の詳細")
@@ -84,10 +108,37 @@ struct AddPlanView: View {
                 datePickerCard(title: "開始日", date: $startDate)
                 datePickerCard(title: "終了日", date: $endDate)
             }
+            
+            // 新しい色選択セクション
+            colorSelectionSection
         }
         .padding()
         .background(Color.white.opacity(0.1))
         .cornerRadius(15)
+    }
+
+    private var colorSelectionSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("カードの色")
+                .foregroundColor(.white)
+            
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack {
+                    ForEach([Color.blue, Color.green, Color.purple, Color.orange, Color.red, Color.pink], id: \.self) { color in
+                        Circle()
+                            .fill(color)
+                            .frame(width: 40, height: 40)
+                            .overlay(
+                                Circle()
+                                    .stroke(selectedCardColor == color ? Color.white : Color.clear, lineWidth: 3)
+                            )
+                            .onTapGesture {
+                                selectedCardColor = color
+                            }
+                    }
+                }
+            }
+        }
     }
     
     private var placesSection: some View {
@@ -225,7 +276,6 @@ struct AddPlanView: View {
         .background(Color.white.opacity(0.1))
         .cornerRadius(10)
     }
-
     
     private func savePlan() {
         let normalizedEnd = endDate < startDate ? startDate : endDate
@@ -233,7 +283,8 @@ struct AddPlanView: View {
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             startDate: startDate,
             endDate: normalizedEnd,
-            places: places
+            places: places,
+            cardColor: selectedCardColor
         )
         onSave(plan)
         presentationMode.wrappedValue.dismiss()

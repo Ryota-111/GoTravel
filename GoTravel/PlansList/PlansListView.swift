@@ -105,6 +105,7 @@ struct PlanSectionView: View {
 struct PlanCardView: View {
     let plan: Plan
     var onDelete: (() -> Void)? = nil
+    
     var body: some View {
         NavigationLink(destination: PlanDetailView(plan: plan)) {
             VStack(alignment: .leading, spacing: 10) {
@@ -144,7 +145,7 @@ struct PlanCardView: View {
             .padding()
             .background(
                 LinearGradient(
-                    gradient: Gradient(colors: [.black.opacity(0.6), .blue.opacity(0.7)]),
+                    gradient: Gradient(colors: [.black.opacity(0.6), (plan.cardColor ?? Color.blue).opacity(0.7)]),
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -158,6 +159,7 @@ struct PlanCardView: View {
         DateFormatter.localizedString(from: d, dateStyle: .medium, timeStyle: .none)
     }
 }
+
 
 extension PlansViewModel {
     func delete(_ plan: Plan) {
