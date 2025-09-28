@@ -2,7 +2,7 @@ import Foundation
 import CoreLocation
 
 struct PlannedPlace: Identifiable, Codable, Hashable {
-    var id: UUID = UUID()
+    var id: String?
     var name: String
     var latitude: Double
     var longitude: Double

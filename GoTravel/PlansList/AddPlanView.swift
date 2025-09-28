@@ -166,7 +166,6 @@ struct AddPlanView: View {
         }
     }
     
-    // カスタムテキストフィールド
     private func customTextField(icon: String, placeholder: String, text: Binding<String>) -> some View {
         HStack {
             Image(systemName: icon)
@@ -179,7 +178,6 @@ struct AddPlanView: View {
         .cornerRadius(10)
     }
     
-    // 日付ピッカーカード
     private func datePickerCard(title: String, date: Binding<Date>) -> some View {
         VStack {
             Text(title)
@@ -193,7 +191,6 @@ struct AddPlanView: View {
         .cornerRadius(10)
     }
     
-    // 場所アイテムビュー
     private func placeItemView(_ place: PlannedPlace) -> some View {
         HStack {
             VStack(alignment: .leading) {
@@ -208,7 +205,16 @@ struct AddPlanView: View {
             Spacer()
             Button(action: {
                 if let index = places.firstIndex(where: { $0.id == place.id }) {
-                    places.remove(at: index)
+                    let placeToDelete = places[index]
+                    FirestoreService.shared.deletePlannedPlace(place: placeToDelete) { err in
+                        if let err = err {
+                            print("Firestore削除エラー: \(err.localizedDescription)")
+                        } else {
+                            DispatchQueue.main.async {
+                                places.remove(at: index)
+                            }
+                        }
+                    }
                 }
             }) {
                 Image(systemName: "trash")
@@ -288,7 +294,6 @@ struct AddPlanView: View {
                 .cornerRadius(10)
             }
         }
-
     }
     
     private var mapSection: some View {

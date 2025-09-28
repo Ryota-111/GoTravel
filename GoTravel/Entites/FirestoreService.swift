@@ -6,21 +6,21 @@ import CoreLocation
 
 final class FirestoreService {
     static let shared = FirestoreService()
-
+    
     private let db: Firestore
-
+    
     private init() {
         db = Firestore.firestore()
-
+        
         let settings = db.settings
         settings.cacheSettings = PersistentCacheSettings()
         db.settings = settings
     }
-
+    
     private func placesCollectionRef(for uid: String) -> CollectionReference {
         db.collection("users").document(uid).collection("places")
     }
-
+    
     func save(place: VisitedPlace, image: UIImage?, completion: @escaping (Result<VisitedPlace, Error>) -> Void) {
         guard let uid = Auth.auth().currentUser?.uid else {
             DispatchQueue.main.async {
@@ -28,11 +28,11 @@ final class FirestoreService {
             }
             return
         }
-
+        
         let docRef = placesCollectionRef(for: uid).document(place.id ?? UUID().uuidString)
         var placeToSave = place
         placeToSave.id = docRef.documentID
-
+        
         func saveDocument(withLocalFileName localFileName: String?) {
             var dict: [String: Any] = [
                 "title": placeToSave.title,
@@ -40,14 +40,14 @@ final class FirestoreService {
                 "longitude": placeToSave.longitude,
                 "createdAt": Timestamp(date: placeToSave.createdAt)
             ]
-
+            
             if let notes = placeToSave.notes { dict["notes"] = notes }
             if let visited = placeToSave.visitedAt { dict["visitedAt"] = Timestamp(date: visited) }
             if let url = placeToSave.photoURL { dict["photoURL"] = url }
             if let local = localFileName { dict["localPhotoFileName"] = local }
             if let address = placeToSave.address { dict["address"] = address }
             if let tags = placeToSave.tags { dict["tags"] = tags }
-
+            
             docRef.setData(dict) { err in
                 DispatchQueue.main.async {
                     if let err = err {
@@ -62,7 +62,7 @@ final class FirestoreService {
         }
         saveDocument(withLocalFileName: placeToSave.localPhotoFileName)
     }
-
+    
     func observePlaces(completion: @escaping (Result<[VisitedPlace], Error>) -> Void) -> ListenerRegistration? {
         guard let uid = Auth.auth().currentUser?.uid else {
             DispatchQueue.main.async {
@@ -70,7 +70,7 @@ final class FirestoreService {
             }
             return nil
         }
-
+        
         return placesCollectionRef(for: uid)
             .order(by: "createdAt", descending: true)
             .addSnapshotListener { snapshot, error in
@@ -95,27 +95,41 @@ final class FirestoreService {
                     let localFileName = d["localPhotoFileName"] as? String
                     let address = d["address"] as? String
                     let tags = d["tags"] as? [String]
-
+                    
                     return VisitedPlace(id: id,
-                                       title: title,
-                                       notes: notes,
-                                       latitude: latitude,
-                                       longitude: longitude,
-                                       createdAt: createdAt,
-                                       visitedAt: visitedAt,
-                                       photoURL: photoURL,
-                                       localPhotoFileName: localFileName,
-                                       address: address,
-                                       tags: tags)
+                                        title: title,
+                                        notes: notes,
+                                        latitude: latitude,
+                                        longitude: longitude,
+                                        createdAt: createdAt,
+                                        visitedAt: visitedAt,
+                                        photoURL: photoURL,
+                                        localPhotoFileName: localFileName,
+                                        address: address,
+                                        tags: tags)
                 }
                 completion(.success(places))
             }
     }
-
+    
     func delete(place: VisitedPlace, completion: @escaping (Error?) -> Void) {
-        guard let uid = Auth.auth().currentUser?.uid, let id = place.id else { completion(NSError(domain: "Firestore", code: -1, userInfo: nil)); return }
+        guard let uid = Auth.auth().currentUser?.uid,
+              let id = place.id else { completion(NSError(domain: "Firestore", code: -1, userInfo: nil)); return }
         placesCollectionRef(for: uid).document(id).delete { err in
             completion(err)
         }
     }
+    
+    private func plansCollectionRef(for uid: String) -> CollectionReference {
+        db.collection("users").document(uid).collection("plans")
+    }
+
+    func deletePlannedPlace(place: PlannedPlace, completion: @escaping (Error?) -> Void) {
+        guard let uid = Auth.auth().currentUser?.uid,
+              let id = place.id else { completion(NSError(domain: "Firestore", code: -2, userInfo: nil)); return }
+        plansCollectionRef(for: uid).document(id).delete { err in
+            completion(err)
+        }
+    }
+
 }
