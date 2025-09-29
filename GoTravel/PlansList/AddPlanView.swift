@@ -34,6 +34,7 @@ struct AddPlanView: View {
                     VStack(spacing: 20) {
                         basicInfoSection
                         placesSection
+                        colorSelectionSection
                     }
                     .padding()
                 }
@@ -85,8 +86,6 @@ struct AddPlanView: View {
                 datePickerCard(title: "開始日", date: $startDate)
                 datePickerCard(title: "終了日", date: $endDate)
             }
-            
-            colorSelectionSection
         }
         .padding()
         .background(Color.white.opacity(0.1))
@@ -96,25 +95,32 @@ struct AddPlanView: View {
     private var colorSelectionSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("カードの色")
+                .font(.title2)
+                .fontWeight(.bold)
                 .foregroundColor(.white)
             
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack {
                     ForEach([Color.blue, Color.green, Color.purple, Color.orange, Color.red, Color.pink], id: \.self) { color in
-                        Circle()
-                            .fill(color)
-                            .frame(width: 40, height: 40)
-                            .overlay(
-                                Circle()
-                                    .stroke(selectedCardColor == color ? Color.white : Color.clear, lineWidth: 3)
-                            )
-                            .onTapGesture {
-                                selectedCardColor = color
-                            }
+                        AnyView (
+                            Circle()
+                                .fill(color)
+                                .frame(width: 40, height: 40)
+                                .overlay(
+                                    Circle()
+                                        .stroke(selectedCardColor == color ? Color.white : Color.clear, lineWidth: 3)
+                                )
+                                .onTapGesture {
+                                    selectedCardColor = color
+                                }
+                        )
                     }
                 }
             }
         }
+        .padding()
+        .background(Color.white.opacity(0.1))
+        .cornerRadius(15)
     }
     
     private var placesSection: some View {
