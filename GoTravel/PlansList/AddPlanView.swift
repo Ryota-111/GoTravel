@@ -68,29 +68,6 @@ struct AddPlanView: View {
         .background(Color.black.opacity(0.2))
     }
     
-//    private var basicInfoSection: some View {
-//        VStack(alignment: .leading, spacing: 15) {
-//            Text("旅行の詳細")
-//                .font(.title2)
-//                .fontWeight(.bold)
-//                .foregroundColor(.white)
-//            
-//            customTextField(
-//                icon: "text.alignleft",
-//                placeholder: "タイトル",
-//                text: $title
-//            )
-//            
-//            HStack {
-//                datePickerCard(title: "開始日", date: $startDate)
-//                datePickerCard(title: "終了日", date: $endDate)
-//            }
-//        }
-//        .padding()
-//        .background(Color.white.opacity(0.1))
-//        .cornerRadius(15)
-//    }
-    
     private var basicInfoSection: some View {
         VStack(alignment: .leading, spacing: 15) {
             Text("旅行の詳細")
@@ -109,7 +86,6 @@ struct AddPlanView: View {
                 datePickerCard(title: "終了日", date: $endDate)
             }
             
-            // 新しい色選択セクション
             colorSelectionSection
         }
         .padding()

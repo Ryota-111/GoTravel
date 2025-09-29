@@ -1,6 +1,7 @@
 import SwiftUI
 import Combine
 import UIKit
+import FirebaseAuth
 
 final class ProfileViewModel: ObservableObject {
     @Published var profile: Profile
@@ -59,4 +60,28 @@ final class ProfileViewModel: ObservableObject {
         avatarImage = nil
         saveProfile()
     }
+    
+    func signOut(completion: @escaping (Result<Void, Error>) -> Void) {
+            do {
+                try Auth.auth().signOut()
+                print("✅ Signed out")
+            } catch {
+                print("❌ Sign out failed: \(error.localizedDescription)")
+            }
+        }
+
+        func deleteAccount(completion: @escaping (Result<Void, Error>) -> Void) {
+            guard let user = Auth.auth().currentUser else {
+                completion(.failure(NSError(domain: "Auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "No user logged in"])))
+                return
+            }
+
+            user.delete { error in
+                if let error = error {
+                    completion(.failure(error))
+                } else {
+                    completion(.success(()))
+                }
+            }
+        }
 }
