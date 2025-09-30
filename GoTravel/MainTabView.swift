@@ -4,7 +4,7 @@ import MapKit
 struct MainTabView: View {
     var body: some View {
         TabView {
-            PlansListView()
+            EnjoyWorldView()
                 .tabItem{ Label("予定", systemImage: "calendar") }
             MapHomeView()
                 .tabItem { Label("マップ", systemImage: "map") }

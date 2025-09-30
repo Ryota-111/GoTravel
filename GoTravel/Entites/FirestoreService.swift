@@ -1,17 +1,21 @@
 import Foundation
+import SwiftUI
 import FirebaseFirestore
 import FirebaseAuth
+import FirebaseStorage
 import UIKit
 import CoreLocation
 
 final class FirestoreService {
     static let shared = FirestoreService()
-    
+
     private let db: Firestore
+    private let storage: Storage
     
     private init() {
         db = Firestore.firestore()
-        
+        storage = Storage.storage()
+
         let settings = db.settings
         settings.cacheSettings = PersistentCacheSettings()
         db.settings = settings
@@ -129,6 +133,162 @@ final class FirestoreService {
               let id = place.id else { completion(NSError(domain: "Firestore", code: -2, userInfo: nil)); return }
         plansCollectionRef(for: uid).document(id).delete { err in
             completion(err)
+        }
+    }
+
+    // MARK: - TravelPlan Methods
+
+    private func travelPlansCollectionRef(for uid: String) -> CollectionReference {
+        db.collection("users").document(uid).collection("travelPlans")
+    }
+
+    func saveTravelPlan(_ plan: TravelPlan, completion: @escaping (Result<TravelPlan, Error>) -> Void) {
+        print("🔵 FirestoreService: saveTravelPlan開始")
+        guard let uid = Auth.auth().currentUser?.uid else {
+            print("❌ FirestoreService: ユーザーが認証されていません")
+            DispatchQueue.main.async {
+                completion(.failure(NSError(domain: "Auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "ログインしていません"])))
+            }
+            return
+        }
+        print("✅ FirestoreService: ユーザー認証OK - UID: \(uid)")
+
+        let docRef = travelPlansCollectionRef(for: uid).document(plan.id ?? UUID().uuidString)
+        var planToSave = plan
+        planToSave.id = docRef.documentID
+        planToSave.userId = uid
+
+        print("📝 FirestoreService: ドキュメントID: \(docRef.documentID)")
+
+        var dict: [String: Any] = [
+            "title": planToSave.title,
+            "startDate": Timestamp(date: planToSave.startDate),
+            "endDate": Timestamp(date: planToSave.endDate),
+            "destination": planToSave.destination,
+            "createdAt": Timestamp(date: planToSave.createdAt),
+            "userId": uid
+        ]
+
+        if let localImageFileName = planToSave.localImageFileName { dict["localImageFileName"] = localImageFileName }
+        if let colorHex = planToSave.cardColorHex { dict["cardColorHex"] = colorHex }
+
+        print("📦 FirestoreService: 保存するデータ: \(dict)")
+
+        docRef.setData(dict) { err in
+            DispatchQueue.main.async {
+                if let err = err {
+                    print("❌ FirestoreService: 保存失敗 - \(err.localizedDescription)")
+                    completion(.failure(err))
+                } else {
+                    print("✅ FirestoreService: Firestore保存成功")
+                    completion(.success(planToSave))
+                }
+            }
+        }
+    }
+
+    func observeTravelPlans(completion: @escaping (Result<[TravelPlan], Error>) -> Void) -> ListenerRegistration? {
+        guard let uid = Auth.auth().currentUser?.uid else {
+            DispatchQueue.main.async {
+                completion(.failure(NSError(domain: "Auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "ログインしていません"])))
+            }
+            return nil
+        }
+
+        return travelPlansCollectionRef(for: uid)
+            .order(by: "createdAt", descending: true)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    completion(.failure(error))
+                    return
+                }
+                guard let docs = snapshot?.documents else {
+                    completion(.success([]))
+                    return
+                }
+
+                let plans: [TravelPlan] = docs.compactMap { doc in
+                    let d = doc.data()
+                    let id = doc.documentID
+                    let title = d["title"] as? String ?? ""
+                    let destination = d["destination"] as? String ?? ""
+                    let localImageFileName = d["localImageFileName"] as? String
+                    let userId = d["userId"] as? String
+
+                    var startDate = Date()
+                    if let ts = d["startDate"] as? Timestamp { startDate = ts.dateValue() }
+
+                    var endDate = Date()
+                    if let ts = d["endDate"] as? Timestamp { endDate = ts.dateValue() }
+
+                    var createdAt = Date()
+                    if let ts = d["createdAt"] as? Timestamp { createdAt = ts.dateValue() }
+
+                    var cardColor: Color? = nil
+                    if let hex = d["cardColorHex"] as? String {
+                        cardColor = Color(hex: hex)
+                    }
+
+                    return TravelPlan(
+                        id: id,
+                        title: title,
+                        startDate: startDate,
+                        endDate: endDate,
+                        destination: destination,
+                        localImageFileName: localImageFileName,
+                        cardColor: cardColor,
+                        createdAt: createdAt,
+                        userId: userId
+                    )
+                }
+                completion(.success(plans))
+            }
+    }
+
+    func deleteTravelPlan(_ plan: TravelPlan, completion: @escaping (Error?) -> Void) {
+        guard let uid = Auth.auth().currentUser?.uid,
+              let id = plan.id else {
+            completion(NSError(domain: "Firestore", code: -1, userInfo: nil))
+            return
+        }
+
+        travelPlansCollectionRef(for: uid).document(id).delete { err in
+            DispatchQueue.main.async {
+                completion(err)
+            }
+        }
+    }
+
+    // MARK: - Local Image Storage Methods
+
+    func saveTravelPlanImageLocally(_ image: UIImage, completion: @escaping (Result<String, Error>) -> Void) {
+        print("💾 FirestoreService: ローカル画像保存開始")
+
+        guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+            print("❌ FirestoreService: 画像データの変換に失敗")
+            completion(.failure(NSError(domain: "Image", code: -1, userInfo: [NSLocalizedDescriptionKey: "画像データの変換に失敗しました"])))
+            return
+        }
+
+        let fileName = "travelPlan_\(UUID().uuidString).jpg"
+
+        do {
+            try FileManager.saveImageDataToDocuments(data: imageData, named: fileName)
+            print("✅ FirestoreService: ローカル画像保存成功 - \(fileName)")
+            completion(.success(fileName))
+        } catch {
+            print("❌ FirestoreService: ローカル画像保存失敗 - \(error.localizedDescription)")
+            completion(.failure(error))
+        }
+    }
+
+    func deleteTravelPlanImageLocally(_ fileName: String) {
+        print("🗑️ FirestoreService: ローカル画像削除 - \(fileName)")
+        do {
+            try FileManager.removeDocumentFile(named: fileName)
+            print("✅ FirestoreService: ローカル画像削除成功")
+        } catch {
+            print("❌ FirestoreService: ローカル画像削除失敗 - \(error.localizedDescription)")
         }
     }
 
