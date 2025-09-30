@@ -9,7 +9,7 @@ struct PlansListView: View {
         NavigationView {
             ZStack {
                 LinearGradient(
-                    gradient: Gradient(colors: [.blue.opacity(0.8), .black]),
+                    gradient: Gradient(colors: [.blue.opacity(0.8), .white]),
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -54,6 +54,7 @@ struct PlansListView: View {
                 }
             }
             .navigationTitle("予定一覧")
+            .toolbarColorScheme(.dark)
             .sheet(isPresented: $showAddPlanSheet) {
                 AddPlanView { plan in
                     vm.add(plan)
@@ -145,7 +146,8 @@ struct PlanCardView: View {
             .padding()
             .background(
                 LinearGradient(
-                    gradient: Gradient(colors: [.black.opacity(0.6), (plan.cardColor ?? Color.blue).opacity(0.7)]),
+                    gradient: Gradient(colors: [(plan.cardColor ?? Color.blue).opacity(0.7), .black.opacity(0.1)]),
+//                    gradient: Gradient(colors: [.black.opacity(0.2), (plan.cardColor ?? Color.blue).opacity(0.7)]),
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )

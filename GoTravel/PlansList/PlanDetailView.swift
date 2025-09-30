@@ -3,15 +3,14 @@ import MapKit
 
 struct PlanDetailView: View {
     @State var plan: Plan
-    var onUpdate: ((Plan) -> Void)?
     
+    var onUpdate: ((Plan) -> Void)?
+
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 mapSection
-                
                 basicInfoSection
-                
                 placesSection
                 
                 Spacer()
