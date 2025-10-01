@@ -1,48 +1,82 @@
 import SwiftUI
 import Foundation
 import Combine
+import FirebaseFirestore
 
 final class PlansViewModel: ObservableObject {
     @Published var plans: [Plan] = []
-
-    private let defaultsKey = "plans_v1"
+    private var listener: ListenerRegistration?
 
     init() {
-        load()
+        startListening()
     }
 
-    func load() {
-        guard let data = UserDefaults.standard.data(forKey: defaultsKey) else { return }
-        if let decoded = try? JSONDecoder().decode([Plan].self, from: data) {
-            self.plans = decoded
+    deinit {
+        stopListening()
+    }
+
+    func startListening() {
+        print("🔵 PlansViewModel: リスナーを開始")
+        listener = FirestoreService.shared.observePlans { [weak self] result in
+            switch result {
+            case .success(let plans):
+                print("✅ PlansViewModel: \(plans.count)件の予定を取得")
+                DispatchQueue.main.async {
+                    self?.plans = plans
+                    print("🔄 PlansViewModel: UIを更新 - \(plans.count)件")
+                }
+            case .failure(let error):
+                print("❌ PlansViewModel: 取得失敗 - \(error.localizedDescription)")
+                DispatchQueue.main.async {
+                    self?.plans = []
+                }
+            }
         }
     }
 
-    func save() {
-        if let encoded = try? JSONEncoder().encode(plans) {
-            UserDefaults.standard.set(encoded, forKey: defaultsKey)
-        }
+    func stopListening() {
+        listener?.remove()
+        listener = nil
     }
 
     func add(_ plan: Plan) {
-        plans.insert(plan, at: 0)
-        save()
+        print("💾 PlansViewModel: 保存開始 - \(plan.title)")
+        FirestoreService.shared.savePlan(plan) { [weak self] result in
+            switch result {
+            case .success(let savedPlan):
+                print("✅ PlansViewModel: 保存成功 - \(savedPlan.title), ID: \(savedPlan.id)")
+            case .failure(let error):
+                print("❌ PlansViewModel: 保存失敗 - \(error.localizedDescription)")
+            }
+        }
     }
 
     func update(_ plan: Plan) {
-        if let idx = plans.firstIndex(where: { $0.id == plan.id }) {
-            plans[idx] = plan
-            save()
+        print("🔄 PlansViewModel: 更新開始 - \(plan.title)")
+        FirestoreService.shared.savePlan(plan) { [weak self] result in
+            switch result {
+            case .success(let updatedPlan):
+                print("✅ PlansViewModel: 更新成功 - \(updatedPlan.title)")
+            case .failure(let error):
+                print("❌ PlansViewModel: 更新失敗 - \(error.localizedDescription)")
+            }
         }
     }
 
     func delete(at offsets: IndexSet) {
-        plans.remove(atOffsets: offsets)
-        save()
+        for index in offsets {
+           let plan = plans[index]
+           deletePlan(plan)
+        }
     }
 
-    func move(from source: IndexSet, to destination: Int) {
-        plans.move(fromOffsets: source, toOffset: destination)
-        save()
+    func deletePlan(_ plan: Plan) {
+        FirestoreService.shared.deletePlan(plan) { error in
+            if let error = error {
+                print("❌ PlansViewModel: 削除失敗 - \(error.localizedDescription)")
+            } else {
+                print("✅ PlansViewModel: 削除成功 - \(plan.title)")
+            }
+        }
     }
 }

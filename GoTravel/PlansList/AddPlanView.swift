@@ -18,6 +18,10 @@ struct AddPlanView: View {
     @State private var searchResults: [MKMapItem] = []
     @State private var searchWorkItem: DispatchWorkItem?
     @State private var selectedCardColor: Color = .blue
+    @State private var selectedImage: UIImage? = nil
+    @State private var showImagePicker = false
+    @State private var imageSourceType: UIImagePickerController.SourceType = .photoLibrary
+    @State private var isUploading = false
 
     var body: some View {
         ZStack {
@@ -33,6 +37,7 @@ struct AddPlanView: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         basicInfoSection
+                        imagePickerSection
                         placesSection
                         colorSelectionSection
                     }
@@ -90,6 +95,60 @@ struct AddPlanView: View {
         .padding()
         .background(Color.white.opacity(0.1))
         .cornerRadius(15)
+    }
+
+    private var imagePickerSection: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            Text("カード表紙の写真")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+
+            if let image = selectedImage {
+                ZStack(alignment: .topTrailing) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                        .frame(height: 200)
+                        .cornerRadius(15)
+                        .clipped()
+
+                    Button(action: {
+                        selectedImage = nil
+                    }) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 30))
+                            .foregroundColor(.white)
+                            .background(Circle().fill(Color.black.opacity(0.5)))
+                    }
+                    .padding(8)
+                }
+            } else {
+                Button(action: {
+                    showImagePicker = true
+                }) {
+                    VStack(spacing: 10) {
+                        Image(systemName: "photo.fill")
+                            .font(.system(size: 50))
+                            .foregroundColor(.white.opacity(0.7))
+
+                        Text("写真を選択")
+                            .foregroundColor(.white)
+                            .font(.headline)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .frame(height: 200)
+                    .background(Color.white.opacity(0.2))
+                    .cornerRadius(15)
+                }
+            }
+        }
+        .padding()
+        .background(Color.white.opacity(0.1))
+        .cornerRadius(15)
+        .sheet(isPresented: $showImagePicker) {
+            ImagePickerView(sourceType: imageSourceType, image: $selectedImage)
+        }
     }
 
     private var colorSelectionSection: some View {
@@ -162,22 +221,31 @@ struct AddPlanView: View {
     
     private var saveButton: some View {
         Button(action: savePlan) {
-            Text("旅行計画を保存")
-                .foregroundColor(.white)
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(
-                    LinearGradient(
-                        gradient: Gradient(colors: [Color.blue, Color.purple]),
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
+            HStack {
+                if isUploading {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    Text("保存中...")
+                        .foregroundColor(.white)
+                } else {
+                    Text("旅行計画を保存")
+                        .foregroundColor(.white)
+                }
+            }
+            .padding()
+            .frame(maxWidth: .infinity)
+            .background(
+                LinearGradient(
+                    gradient: Gradient(colors: [Color.blue, Color.purple]),
+                    startPoint: .leading,
+                    endPoint: .trailing
                 )
-                .cornerRadius(10)
-                .shadow(radius: 10)
+            )
+            .cornerRadius(10)
+            .shadow(radius: 10)
         }
         .padding()
-        .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || startDate > endDate)
+        .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || startDate > endDate || isUploading)
     }
     
     private var mapPickerView: some View {
@@ -260,16 +328,67 @@ struct AddPlanView: View {
     }
     
     private func savePlan() {
+        print("🎯 AddPlanView: 保存処理開始")
+        print("   タイトル: \(title)")
+        print("   画像: \(selectedImage != nil ? "あり" : "なし")")
+
+        isUploading = true
         let normalizedEnd = endDate < startDate ? startDate : endDate
-        let plan = Plan(
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            startDate: startDate,
-            endDate: normalizedEnd,
-            places: places,
-            cardColor: selectedCardColor
-        )
-        onSave(plan)
-        presentationMode.wrappedValue.dismiss()
+
+        // 画像がある場合はローカルに保存
+        if let image = selectedImage {
+            print("📸 AddPlanView: 画像ローカル保存開始")
+            FirestoreService.shared.savePlanImageLocally(image) { result in
+                DispatchQueue.main.async {
+                    switch result {
+                    case .success(let fileName):
+                        print("✅ AddPlanView: 画像保存成功 - \(fileName)")
+                        let plan = Plan(
+                            title: self.title.trimmingCharacters(in: .whitespacesAndNewlines),
+                            startDate: self.startDate,
+                            endDate: normalizedEnd,
+                            places: self.places,
+                            cardColor: self.selectedCardColor,
+                            localImageFileName: fileName
+                        )
+                        print("📤 AddPlanView: onSave呼び出し")
+                        self.onSave(plan)
+                        self.isUploading = false
+                        self.presentationMode.wrappedValue.dismiss()
+
+                    case .failure(let error):
+                        print("❌ AddPlanView: 画像保存エラー - \(error.localizedDescription)")
+                        self.isUploading = false
+                        // エラーでも画像なしで保存
+                        let plan = Plan(
+                            title: self.title.trimmingCharacters(in: .whitespacesAndNewlines),
+                            startDate: self.startDate,
+                            endDate: normalizedEnd,
+                            places: self.places,
+                            cardColor: self.selectedCardColor,
+                            localImageFileName: nil
+                        )
+                        self.onSave(plan)
+                        self.presentationMode.wrappedValue.dismiss()
+                    }
+                }
+            }
+        } else {
+            // 画像がない場合はそのまま保存
+            print("⚪️ AddPlanView: 画像なしで保存")
+            let plan = Plan(
+                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                startDate: startDate,
+                endDate: normalizedEnd,
+                places: places,
+                cardColor: selectedCardColor,
+                localImageFileName: nil
+            )
+            print("📤 AddPlanView: onSave呼び出し（画像なし）")
+            onSave(plan)
+            isUploading = false
+            presentationMode.wrappedValue.dismiss()
+        }
     }
     
     private var searchBar: some View {

@@ -17,10 +17,13 @@ struct Plan: Identifiable, Codable {
     var endDate: Date
     var places: [PlannedPlace]
     var cardColor: Color?
+    var localImageFileName: String?
+    var userId: String?
+    var createdAt: Date
 
     // Codable用のキー
     enum CodingKeys: String, CodingKey {
-        case id, title, startDate, endDate, places, cardColorHex
+        case id, title, startDate, endDate, places, cardColorHex, localImageFileName, userId, createdAt
     }
 
     // Color → Hex
@@ -38,13 +41,19 @@ struct Plan: Identifiable, Codable {
          startDate: Date,
          endDate: Date,
          places: [PlannedPlace],
-         cardColor: Color? = nil) {
+         cardColor: Color? = nil,
+         localImageFileName: String? = nil,
+         userId: String? = nil,
+         createdAt: Date = Date()) {
         self.id = id
         self.title = title
         self.startDate = startDate
         self.endDate = endDate
         self.places = places
         self.cardColor = cardColor
+        self.localImageFileName = localImageFileName
+        self.userId = userId
+        self.createdAt = createdAt
     }
 
     // デコード
@@ -55,6 +64,9 @@ struct Plan: Identifiable, Codable {
         startDate = try container.decode(Date.self, forKey: .startDate)
         endDate = try container.decode(Date.self, forKey: .endDate)
         places = try container.decode([PlannedPlace].self, forKey: .places)
+        localImageFileName = try container.decodeIfPresent(String.self, forKey: .localImageFileName)
+        userId = try container.decodeIfPresent(String.self, forKey: .userId)
+        createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         if let hex = try container.decodeIfPresent(String.self, forKey: .cardColorHex) {
             cardColor = Color(hex: hex)
         } else {
@@ -70,7 +82,10 @@ struct Plan: Identifiable, Codable {
         try container.encode(startDate, forKey: .startDate)
         try container.encode(endDate, forKey: .endDate)
         try container.encode(places, forKey: .places)
-        try container.encode(cardColorHex, forKey: .cardColorHex)
+        try container.encodeIfPresent(cardColorHex, forKey: .cardColorHex)
+        try container.encodeIfPresent(localImageFileName, forKey: .localImageFileName)
+        try container.encodeIfPresent(userId, forKey: .userId)
+        try container.encode(createdAt, forKey: .createdAt)
     }
 }
 

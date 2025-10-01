@@ -13,7 +13,6 @@ struct AddTravelPlanView: View {
     @State private var selectedImage: UIImage? = nil
     @State private var showImagePicker = false
     @State private var imageSourceType: UIImagePickerController.SourceType = .photoLibrary
-    @State private var selectedCardColor: Color = .blue
     @State private var showDetailSheet = false
     @State private var isUploading = false
 
@@ -33,7 +32,6 @@ struct AddTravelPlanView: View {
                     VStack(spacing: 20) {
                         basicInfoSection
                         imagePickerSection
-                        colorSelectionSection
                         detailSection
                     }
                     .padding()
@@ -86,7 +84,7 @@ struct AddTravelPlanView: View {
                 text: $destination
             )
 
-            HStack {
+            VStack(spacing: 15) {
                 datePickerCard(title: "開始日", date: $startDate)
                 datePickerCard(title: "終了日", date: $endDate)
             }
@@ -185,34 +183,6 @@ struct AddTravelPlanView: View {
         }
     }
 
-    private var colorSelectionSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("カードの色")
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundColor(.white)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack {
-                    ForEach([Color.blue, Color.green, Color.purple, Color.orange, Color.red, Color.pink], id: \.self) { color in
-                        Circle()
-                            .fill(color)
-                            .frame(width: 40, height: 40)
-                            .overlay(
-                                Circle()
-                                    .stroke(selectedCardColor == color ? Color.white : Color.clear, lineWidth: 3)
-                            )
-                            .onTapGesture {
-                                selectedCardColor = color
-                            }
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(Color.white.opacity(0.1))
-        .cornerRadius(15)
-    }
 
     private var saveButton: some View {
         Button(action: saveTravelPlan) {
@@ -258,15 +228,17 @@ struct AddTravelPlanView: View {
     }
 
     private func datePickerCard(title: String, date: Binding<Date>) -> some View {
-        VStack {
+        VStack(alignment: .leading, spacing: 10) {
             Text(title)
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(.white)
+                .font(.headline)
             DatePicker("", selection: date, displayedComponents: .date)
                 .datePickerStyle(CompactDatePickerStyle())
-                .foregroundColor(.white)
+                .labelsHidden()
+                .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding()
-        .background(Color.white.opacity(0.1))
+        .background(Color.white.opacity(0.2))
         .cornerRadius(10)
     }
 
@@ -279,7 +251,6 @@ struct AddTravelPlanView: View {
         isUploading = true
         let normalizedEnd = endDate < startDate ? startDate : endDate
 
-        // 画像がある場合はローカルに保存
         if let image = selectedImage {
             print("📸 AddTravelPlanView: 画像ローカル保存開始")
             FirestoreService.shared.saveTravelPlanImageLocally(image) { result in
@@ -293,7 +264,7 @@ struct AddTravelPlanView: View {
                             endDate: normalizedEnd,
                             destination: self.destination.trimmingCharacters(in: .whitespacesAndNewlines),
                             localImageFileName: fileName,
-                            cardColor: self.selectedCardColor
+                            cardColor: Color.blue
                         )
                         print("📤 AddTravelPlanView: onSave呼び出し")
                         self.onSave(plan)
@@ -310,7 +281,7 @@ struct AddTravelPlanView: View {
                             endDate: normalizedEnd,
                             destination: self.destination.trimmingCharacters(in: .whitespacesAndNewlines),
                             localImageFileName: nil,
-                            cardColor: self.selectedCardColor
+                            cardColor: Color.blue
                         )
                         self.onSave(plan)
                         self.presentationMode.wrappedValue.dismiss()
@@ -318,7 +289,6 @@ struct AddTravelPlanView: View {
                 }
             }
         } else {
-            // 画像がない場合はそのまま保存
             print("⚪️ AddTravelPlanView: 画像なしで保存")
             let plan = TravelPlan(
                 title: title.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -326,7 +296,7 @@ struct AddTravelPlanView: View {
                 endDate: normalizedEnd,
                 destination: destination.trimmingCharacters(in: .whitespacesAndNewlines),
                 localImageFileName: nil,
-                cardColor: selectedCardColor
+                cardColor: Color.blue
             )
             print("📤 AddTravelPlanView: onSave呼び出し（画像なし）")
             onSave(plan)
