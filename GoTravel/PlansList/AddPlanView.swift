@@ -528,9 +528,23 @@ struct AddPlanView: View {
             newPlaceCoordinate = location.coordinate
         }
         newPlaceName = item.name ?? ""
-        if let address = item.placemark.address {
-            newPlaceAddress = address.formattedAddress
+
+        // 住所を従来のプロパティから組み立て
+        var addressComponents: [String] = []
+        if let subThoroughfare = item.placemark.subThoroughfare {
+            addressComponents.append(subThoroughfare)
         }
+        if let thoroughfare = item.placemark.thoroughfare {
+            addressComponents.append(thoroughfare)
+        }
+        if let locality = item.placemark.locality {
+            addressComponents.append(locality)
+        }
+        if let administrativeArea = item.placemark.administrativeArea {
+            addressComponents.append(administrativeArea)
+        }
+        newPlaceAddress = addressComponents.joined(separator: " ")
+
         searchResults.removeAll()
     }
 
