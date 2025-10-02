@@ -1,19 +1,33 @@
 import SwiftUI
-import PhotosUI
 
-struct AddTravelPlanView: View {
+struct EditTravelPlanBasicInfoView: View {
 
     // MARK: - Properties
     @Environment(\.presentationMode) var presentationMode
-    var onSave: (TravelPlan) -> Void
+    @StateObject private var viewModel = TravelPlanViewModel()
 
-    @State private var title: String = ""
-    @State private var destination: String = ""
-    @State private var startDate: Date = Date()
-    @State private var endDate: Date = Date()
+    let plan: TravelPlan
+    @State private var title: String
+    @State private var destination: String
+    @State private var startDate: Date
+    @State private var endDate: Date
     @State private var selectedImage: UIImage?
     @State private var showImagePicker = false
     @State private var isUploading = false
+
+    // MARK: - Initialization
+    init(plan: TravelPlan) {
+        self.plan = plan
+        _title = State(initialValue: plan.title)
+        _destination = State(initialValue: plan.destination)
+        _startDate = State(initialValue: plan.startDate)
+        _endDate = State(initialValue: plan.endDate)
+
+        if let localImageFileName = plan.localImageFileName,
+           let image = FileManager.documentsImage(named: localImageFileName) {
+            _selectedImage = State(initialValue: image)
+        }
+    }
 
     // MARK: - Computed Properties
     private var isFormValid: Bool {
@@ -35,6 +49,14 @@ struct AddTravelPlanView: View {
         .ignoresSafeArea()
     }
 
+    private var saveButtonGradient: some View {
+        LinearGradient(
+            gradient: Gradient(colors: [Color.blue, Color.purple]),
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
+
     // MARK: - Body
     var body: some View {
         ZStack {
@@ -42,7 +64,7 @@ struct AddTravelPlanView: View {
 
             VStack {
                 headerView
-                contentView
+                scrollContent
                 saveButton
             }
         }
@@ -56,7 +78,7 @@ struct AddTravelPlanView: View {
 
             Spacer()
 
-            Text("新しい旅行計画")
+            Text("基本情報を編集")
                 .font(.headline)
                 .foregroundColor(.white)
 
@@ -78,7 +100,7 @@ struct AddTravelPlanView: View {
         }
     }
 
-    private var contentView: some View {
+    private var scrollContent: some View {
         ScrollView {
             VStack(spacing: 20) {
                 basicInfoSection
@@ -136,18 +158,25 @@ struct AddTravelPlanView: View {
         .sheet(isPresented: $showImagePicker) {
             ImageCropPickerView(image: $selectedImage, aspectRatio: 1.0)
         }
+        .onChange(of: selectedImage) { newImage in
+            logImageChange(newImage)
+        }
     }
 
     private func selectedImageView(image: UIImage) -> some View {
-        ZStack(alignment: .topTrailing) {
-            Image(uiImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(height: 200)
-                .cornerRadius(15)
-                .clipped()
+        VStack(spacing: 10) {
+            ZStack(alignment: .topTrailing) {
+                Image(uiImage: image)
+                    .resizable()
+                    .aspectRatio(contentMode: .fill)
+                    .frame(height: 200)
+                    .cornerRadius(15)
+                    .clipped()
 
-            removeImageButton
+                removeImageButton
+            }
+
+            changeImageButton
         }
     }
 
@@ -161,6 +190,22 @@ struct AddTravelPlanView: View {
                 .background(Circle().fill(Color.black.opacity(0.5)))
         }
         .padding(8)
+    }
+
+    private var changeImageButton: some View {
+        Button(action: {
+            showImagePicker = true
+        }) {
+            HStack {
+                Image(systemName: "photo")
+                Text("写真を変更")
+            }
+            .foregroundColor(.white)
+            .padding(.vertical, 10)
+            .frame(maxWidth: .infinity)
+            .background(Color.blue.opacity(0.5))
+            .cornerRadius(10)
+        }
     }
 
     private var imagePickerButton: some View {
@@ -192,7 +237,7 @@ struct AddTravelPlanView: View {
                     Text("保存中...")
                         .foregroundColor(.white)
                 } else {
-                    Text("旅行計画を保存")
+                    Text("保存")
                         .foregroundColor(.white)
                 }
             }
@@ -204,14 +249,6 @@ struct AddTravelPlanView: View {
         }
         .padding()
         .disabled(!isFormValid || isUploading)
-    }
-
-    private var saveButtonGradient: some View {
-        LinearGradient(
-            gradient: Gradient(colors: [Color.blue, Color.purple]),
-            startPoint: .leading,
-            endPoint: .trailing
-        )
     }
 
     // MARK: - Helper Views
@@ -242,63 +279,73 @@ struct AddTravelPlanView: View {
         .cornerRadius(10)
     }
 
-    // MARK: - Actions
-    private func saveTravelPlan() {
-        print("🎯 AddTravelPlanView: 保存処理開始")
-        print("   タイトル: \(title)")
-        print("   目的地: \(destination)")
-        print("   画像: \(selectedImage != nil ? "あり" : "なし")")
-
-        isUploading = true
-
-        if let image = selectedImage {
-            saveWithImage(image)
+    // MARK: - Helper Methods
+    private func logImageChange(_ newImage: UIImage?) {
+        if let img = newImage {
+            print("✅ EditTravelPlanBasicInfoView: 画像が更新されました - サイズ: \(img.size)")
         } else {
-            saveWithoutImage()
+            print("⚪️ EditTravelPlanBasicInfoView: 画像がnilになりました")
         }
     }
 
-    private func saveWithImage(_ image: UIImage) {
-        print("📸 AddTravelPlanView: 画像ローカル保存開始")
+    // MARK: - Actions
+    private func saveTravelPlan() {
+        isUploading = true
+
+        if let image = selectedImage {
+            handleImageSave(image)
+        } else {
+            handleNoImageSave()
+        }
+    }
+
+    private func handleImageSave(_ image: UIImage) {
+        if let existingFileName = plan.localImageFileName,
+           FileManager.documentsImage(named: existingFileName) == image {
+            saveUpdatedPlan(with: existingFileName)
+        } else {
+            saveNewImage(image)
+        }
+    }
+
+    private func saveNewImage(_ image: UIImage) {
         FirestoreService.shared.saveTravelPlanImageLocally(image) { result in
             DispatchQueue.main.async {
                 switch result {
                 case .success(let fileName):
-                    print("✅ AddTravelPlanView: 画像保存成功 - \(fileName)")
-                    createAndSavePlan(withImageFileName: fileName)
-
-                case .failure(let error):
-                    print("❌ AddTravelPlanView: 画像保存エラー - \(error.localizedDescription)")
-                    // エラーでも画像なしで保存
-                    createAndSavePlan(withImageFileName: nil)
+                    deleteOldImageIfExists()
+                    saveUpdatedPlan(with: fileName)
+                case .failure:
+                    saveUpdatedPlan(with: plan.localImageFileName)
                 }
             }
         }
     }
 
-    private func saveWithoutImage() {
-        print("⚪️ AddTravelPlanView: 画像なしで保存")
-        createAndSavePlan(withImageFileName: nil)
+    private func handleNoImageSave() {
+        deleteOldImageIfExists()
+        saveUpdatedPlan(with: nil)
     }
 
-    private func createAndSavePlan(withImageFileName fileName: String?) {
-        let plan = TravelPlan(
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            startDate: startDate,
-            endDate: normalizedEndDate,
-            destination: destination.trimmingCharacters(in: .whitespacesAndNewlines),
-            localImageFileName: fileName,
-            cardColor: Color.blue
-        )
-
-        print("📤 AddTravelPlanView: onSave呼び出し")
-        onSave(plan)
-        isUploading = false
-        presentationMode.wrappedValue.dismiss()
+    private func deleteOldImageIfExists() {
+        if let oldFileName = plan.localImageFileName {
+            FirestoreService.shared.deleteTravelPlanImageLocally(oldFileName)
+        }
     }
-}
 
-// MARK: - Preview
-#Preview {
-    AddTravelPlanView { _ in }
+    private func saveUpdatedPlan(with fileName: String?) {
+        var updatedPlan = plan
+        updatedPlan.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        updatedPlan.destination = destination.trimmingCharacters(in: .whitespacesAndNewlines)
+        updatedPlan.startDate = startDate
+        updatedPlan.endDate = normalizedEndDate
+        updatedPlan.localImageFileName = fileName
+
+        viewModel.update(updatedPlan)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
+            isUploading = false
+            presentationMode.wrappedValue.dismiss()
+        }
+    }
 }

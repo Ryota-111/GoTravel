@@ -2,8 +2,10 @@ import SwiftUI
 import MapKit
 
 struct AddPlanView: View {
+
+    // MARK: - Properties
     @Environment(\.presentationMode) var presentationMode
-    
+
     var onSave: (Plan) -> Void
 
     @State private var title: String = ""
@@ -23,26 +25,40 @@ struct AddPlanView: View {
     @State private var imageSourceType: UIImagePickerController.SourceType = .photoLibrary
     @State private var isUploading = false
 
+    // MARK: - Computed Properties
+    private var isFormValid: Bool {
+        !title.trimmingCharacters(in: .whitespaces).isEmpty && startDate <= endDate
+    }
+
+    private var normalizedEndDate: Date {
+        endDate < startDate ? startDate : endDate
+    }
+
+    private var backgroundGradient: some View {
+        LinearGradient(
+            gradient: Gradient(colors: [Color.blue.opacity(0.9), Color.black]),
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .ignoresSafeArea()
+    }
+
+    private var saveButtonGradient: some View {
+        LinearGradient(
+            gradient: Gradient(colors: [Color.blue, Color.purple]),
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+    }
+
+    // MARK: - Body
     var body: some View {
         ZStack {
-            LinearGradient(
-                gradient: Gradient(colors: [Color.blue.opacity(0.9), Color.black]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .ignoresSafeArea()
-            
+            backgroundGradient
+
             VStack {
                 headerView
-                ScrollView {
-                    VStack(spacing: 20) {
-                        basicInfoSection
-                        imagePickerSection
-                        placesSection
-                        colorSelectionSection
-                    }
-                    .padding()
-                }
+                scrollContent
                 saveButton
             }
         }
@@ -51,42 +67,61 @@ struct AddPlanView: View {
         }
         .navigationBarHidden(true)
     }
-    
+
+    // MARK: - View Components
+    private var scrollContent: some View {
+        ScrollView {
+            VStack(spacing: 20) {
+                basicInfoSection
+                imagePickerSection
+                placesSection
+                colorSelectionSection
+            }
+            .padding()
+        }
+    }
+
     private var headerView: some View {
         HStack {
-            Button(action: { presentationMode.wrappedValue.dismiss() }) {
+            backButton
+
+            Spacer()
+
+            Text("新しい旅行計画")
+                .font(.headline)
+                .foregroundColor(.white)
+
+            Spacer()
+        }
+        .padding()
+        .background(Color.black.opacity(0.2))
+    }
+
+    private var backButton: some View {
+        Button(action: { presentationMode.wrappedValue.dismiss() }) {
+            HStack {
                 Image(systemName: "chevron.left")
                     .foregroundColor(.white)
                     .imageScale(.large)
                 Text("戻る")
                     .foregroundColor(.white)
             }
-            
-            Spacer()
-            
-            Text("新しい旅行計画")
-                .font(.headline)
-                .foregroundColor(.white)
-            
-            Spacer()
         }
-        .padding()
-        .background(Color.black.opacity(0.2))
     }
-    
+
     private var basicInfoSection: some View {
         VStack(alignment: .leading, spacing: 15) {
             Text("旅行の詳細")
                 .font(.title2)
                 .fontWeight(.bold)
                 .foregroundColor(.white)
-            
+
             customTextField(
                 icon: "text.alignleft",
                 placeholder: "タイトル",
                 text: $title
             )
-            
+
             HStack {
                 datePickerCard(title: "開始日", date: $startDate)
                 datePickerCard(title: "終了日", date: $endDate)
@@ -105,42 +140,9 @@ struct AddPlanView: View {
                 .foregroundColor(.white)
 
             if let image = selectedImage {
-                ZStack(alignment: .topTrailing) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                        .frame(height: 200)
-                        .cornerRadius(15)
-                        .clipped()
-
-                    Button(action: {
-                        selectedImage = nil
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .font(.system(size: 30))
-                            .foregroundColor(.white)
-                            .background(Circle().fill(Color.black.opacity(0.5)))
-                    }
-                    .padding(8)
-                }
+                selectedImageView(image: image)
             } else {
-                Button(action: {
-                    showImagePicker = true
-                }) {
-                    VStack(spacing: 10) {
-                        Image(systemName: "photo.fill")
-                            .font(.system(size: 50))
-                            .foregroundColor(.white.opacity(0.7))
-
-                        Text("写真を選択")
-                            .foregroundColor(.white)
-                            .font(.headline)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 200)
-                    .background(Color.white.opacity(0.2))
-                    .cornerRadius(15)
-                }
+                imagePickerButton
             }
         }
         .padding()
@@ -151,28 +153,62 @@ struct AddPlanView: View {
         }
     }
 
+    private func selectedImageView(image: UIImage) -> some View {
+        ZStack(alignment: .topTrailing) {
+            Image(uiImage: image)
+                .resizable()
+                .aspectRatio(contentMode: .fill)
+                .frame(height: 200)
+                .cornerRadius(15)
+                .clipped()
+
+            removeImageButton
+        }
+    }
+
+    private var removeImageButton: some View {
+        Button(action: {
+            selectedImage = nil
+        }) {
+            Image(systemName: "xmark.circle.fill")
+                .font(.system(size: 30))
+                .foregroundColor(.white)
+                .background(Circle().fill(Color.black.opacity(0.5)))
+        }
+        .padding(8)
+    }
+
+    private var imagePickerButton: some View {
+        Button(action: {
+            showImagePicker = true
+        }) {
+            VStack(spacing: 10) {
+                Image(systemName: "photo.fill")
+                    .font(.system(size: 50))
+                    .foregroundColor(.white.opacity(0.7))
+
+                Text("写真を選択")
+                    .foregroundColor(.white)
+                    .font(.headline)
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 200)
+            .background(Color.white.opacity(0.2))
+            .cornerRadius(15)
+        }
+    }
+
     private var colorSelectionSection: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("カードの色")
                 .font(.title2)
                 .fontWeight(.bold)
                 .foregroundColor(.white)
-            
+
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack {
                     ForEach([Color.blue, Color.green, Color.purple, Color.orange, Color.red, Color.pink], id: \.self) { color in
-                        AnyView (
-                            Circle()
-                                .fill(color)
-                                .frame(width: 40, height: 40)
-                                .overlay(
-                                    Circle()
-                                        .stroke(selectedCardColor == color ? Color.white : Color.clear, lineWidth: 3)
-                                )
-                                .onTapGesture {
-                                    selectedCardColor = color
-                                }
-                        )
+                        colorCircle(color: color)
                     }
                 }
             }
@@ -181,44 +217,65 @@ struct AddPlanView: View {
         .background(Color.white.opacity(0.1))
         .cornerRadius(15)
     }
-    
+
+    private func colorCircle(color: Color) -> some View {
+        Circle()
+            .fill(color)
+            .frame(width: 40, height: 40)
+            .overlay(
+                Circle()
+                    .stroke(selectedCardColor == color ? Color.white : Color.clear, lineWidth: 3)
+            )
+            .onTapGesture {
+                selectedCardColor = color
+            }
+    }
+
     private var placesSection: some View {
         VStack(alignment: .leading, spacing: 15) {
             Text("行きたい場所")
                 .font(.title2)
                 .fontWeight(.bold)
                 .foregroundColor(.white)
-            
+
             if places.isEmpty {
-                Text("まだ場所が追加されていません")
-                    .foregroundColor(.white.opacity(0.7))
-                    .padding()
-                    .frame(maxWidth: .infinity)
-                    .background(Color.white.opacity(0.1))
-                    .cornerRadius(10)
+                emptyPlacesView
             } else {
                 ForEach(places) { place in
                     placeItemView(place)
                 }
             }
-            
-            Button(action: { showMapPicker = true }) {
-                HStack {
-                    Image(systemName: "plus.circle.fill")
-                    Text("場所を追加")
-                }
-                .foregroundColor(.white)
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(Color.blue.opacity(0.5))
-                .cornerRadius(10)
-            }
+
+            addPlaceButton
         }
         .padding()
         .background(Color.white.opacity(0.1))
         .cornerRadius(15)
     }
-    
+
+    private var emptyPlacesView: some View {
+        Text("まだ場所が追加されていません")
+            .foregroundColor(.white.opacity(0.7))
+            .padding()
+            .frame(maxWidth: .infinity)
+            .background(Color.white.opacity(0.1))
+            .cornerRadius(10)
+    }
+
+    private var addPlaceButton: some View {
+        Button(action: { showMapPicker = true }) {
+            HStack {
+                Image(systemName: "plus.circle.fill")
+                Text("場所を追加")
+            }
+            .foregroundColor(.white)
+            .padding()
+            .frame(maxWidth: .infinity)
+            .background(Color.blue.opacity(0.5))
+            .cornerRadius(10)
+        }
+    }
+
     private var saveButton: some View {
         Button(action: savePlan) {
             HStack {
@@ -234,39 +291,171 @@ struct AddPlanView: View {
             }
             .padding()
             .frame(maxWidth: .infinity)
-            .background(
-                LinearGradient(
-                    gradient: Gradient(colors: [Color.blue, Color.purple]),
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
+            .background(saveButtonGradient)
             .cornerRadius(10)
             .shadow(radius: 10)
         }
         .padding()
-        .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty || startDate > endDate || isUploading)
+        .disabled(!isFormValid || isUploading)
     }
-    
+
+    // MARK: - Map Picker View
     private var mapPickerView: some View {
         NavigationView {
             VStack(spacing: 0) {
                 searchBar
-                
+
                 if !searchResults.isEmpty {
                     searchResultsList
                 }
-                
+
                 mapSection
-                
                 placeInfoSection
-                
                 actionButtons
             }
             .navigationBarHidden(true)
         }
     }
-    
+
+    private var searchBar: some View {
+        HStack {
+            Image(systemName: "magnifyingglass")
+                .foregroundColor(.black.opacity(0.7))
+
+            TextField("場所を検索", text: $searchText)
+                .foregroundColor(.white)
+                .onChange(of: searchText) { oldValue, newValue in
+                    handleSearchTextChange(newValue)
+                }
+
+            if !searchText.isEmpty {
+                clearSearchButton
+            }
+        }
+        .padding()
+        .background(Color.white.opacity(0.2))
+        .cornerRadius(10)
+        .padding()
+    }
+
+    private var clearSearchButton: some View {
+        Button(action: { searchText = "" }) {
+            Image(systemName: "xmark.circle.fill")
+                .foregroundColor(.black.opacity(0.7))
+        }
+    }
+
+    private var searchResultsList: some View {
+        ForEach(searchResults, id: \.placemark) { item in
+            searchResultButton(item: item)
+        }
+    }
+
+    private func searchResultButton(item: MKMapItem) -> some View {
+        Button {
+            selectSearchResult(item)
+        } label: {
+            VStack(alignment: .leading, spacing: 5) {
+                Text(item.name ?? "名称不明")
+                    .font(.headline)
+                    .foregroundColor(.white)
+                Text(item.placemark.title ?? "住所不明")
+                    .font(.subheadline)
+                    .foregroundColor(.white.opacity(0.7))
+            }
+            .padding()
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.white.opacity(0.1))
+            .cornerRadius(10)
+        }
+    }
+
+    private var mapSection: some View {
+        ZStack(alignment: .center) {
+            MapPickerView(coordinate: $newPlaceCoordinate)
+                .frame(height: 300)
+                .cornerRadius(15)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 15)
+                        .stroke(Color.white.opacity(0.5), lineWidth: 2)
+                )
+        }
+        .padding()
+    }
+
+    private var placeInfoSection: some View {
+        VStack(spacing: 15) {
+            placeNameField
+
+            if let coordinate = newPlaceCoordinate {
+                coordinateInfo(coordinate: coordinate)
+            }
+        }
+        .padding()
+    }
+
+    private var placeNameField: some View {
+        VStack(alignment: .leading) {
+            Text("場所の名前")
+                .font(.caption)
+                .foregroundColor(.white.opacity(0.7))
+
+            TextField("名前を入力", text: $newPlaceName)
+                .foregroundColor(.white)
+                .padding()
+                .background(Color.white.opacity(0.2))
+                .cornerRadius(10)
+        }
+    }
+
+    private func coordinateInfo(coordinate: CLLocationCoordinate2D) -> some View {
+        VStack(alignment: .leading) {
+            Text("座標")
+                .font(.caption)
+                .foregroundColor(.white.opacity(0.7))
+
+            Text("緯度: \(coordinate.latitude, specifier: "%.4f")")
+                .foregroundColor(.white)
+            Text("経度: \(coordinate.longitude, specifier: "%.4f")")
+                .foregroundColor(.white)
+        }
+        .padding()
+        .background(Color.white.opacity(0.1))
+        .cornerRadius(10)
+    }
+
+    private var actionButtons: some View {
+        VStack(spacing: 20) {
+            addLocationButton
+            cancelButton
+        }
+        .padding()
+    }
+
+    private var addLocationButton: some View {
+        Button(action: addPlace) {
+            Text("追加")
+                .foregroundColor(.white)
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(saveButtonGradient)
+                .cornerRadius(10)
+        }
+        .disabled(newPlaceCoordinate == nil)
+    }
+
+    private var cancelButton: some View {
+        Button(action: { showMapPicker = false }) {
+            Text("キャンセル")
+                .foregroundColor(.red)
+                .padding()
+                .frame(maxWidth: .infinity)
+                .background(Color.white.opacity(0.2))
+                .cornerRadius(10)
+        }
+    }
+
+    // MARK: - Helper Views
     private func customTextField(icon: String, placeholder: String, text: Binding<String>) -> some View {
         HStack {
             Image(systemName: icon)
@@ -278,7 +467,7 @@ struct AddPlanView: View {
         .background(Color.white.opacity(0.2))
         .cornerRadius(10)
     }
-    
+
     private func datePickerCard(title: String, date: Binding<Date>) -> some View {
         VStack {
             Text(title)
@@ -291,7 +480,7 @@ struct AddPlanView: View {
         .background(Color.white.opacity(0.1))
         .cornerRadius(10)
     }
-    
+
     private func placeItemView(_ place: PlannedPlace) -> some View {
         HStack {
             VStack(alignment: .leading) {
@@ -304,236 +493,43 @@ struct AddPlanView: View {
                 }
             }
             Spacer()
-            Button(action: {
-                if let index = places.firstIndex(where: { $0.id == place.id }) {
-                    let placeToDelete = places[index]
-                    FirestoreService.shared.deletePlannedPlace(place: placeToDelete) { err in
-                        if let err = err {
-                            print("Firestore削除エラー: \(err.localizedDescription)")
-                        } else {
-                            DispatchQueue.main.async {
-                                places.remove(at: index)
-                            }
-                        }
-                    }
-                }
-            }) {
-                Image(systemName: "trash")
-                    .foregroundColor(.red)
-            }
+            deletePlaceButton(place: place)
         }
         .padding()
         .background(Color.white.opacity(0.1))
         .cornerRadius(10)
     }
-    
-    private func savePlan() {
-        print("🎯 AddPlanView: 保存処理開始")
-        print("   タイトル: \(title)")
-        print("   画像: \(selectedImage != nil ? "あり" : "なし")")
 
-        isUploading = true
-        let normalizedEnd = endDate < startDate ? startDate : endDate
-
-        // 画像がある場合はローカルに保存
-        if let image = selectedImage {
-            print("📸 AddPlanView: 画像ローカル保存開始")
-            FirestoreService.shared.savePlanImageLocally(image) { result in
-                DispatchQueue.main.async {
-                    switch result {
-                    case .success(let fileName):
-                        print("✅ AddPlanView: 画像保存成功 - \(fileName)")
-                        let plan = Plan(
-                            title: self.title.trimmingCharacters(in: .whitespacesAndNewlines),
-                            startDate: self.startDate,
-                            endDate: normalizedEnd,
-                            places: self.places,
-                            cardColor: self.selectedCardColor,
-                            localImageFileName: fileName
-                        )
-                        print("📤 AddPlanView: onSave呼び出し")
-                        self.onSave(plan)
-                        self.isUploading = false
-                        self.presentationMode.wrappedValue.dismiss()
-
-                    case .failure(let error):
-                        print("❌ AddPlanView: 画像保存エラー - \(error.localizedDescription)")
-                        self.isUploading = false
-                        // エラーでも画像なしで保存
-                        let plan = Plan(
-                            title: self.title.trimmingCharacters(in: .whitespacesAndNewlines),
-                            startDate: self.startDate,
-                            endDate: normalizedEnd,
-                            places: self.places,
-                            cardColor: self.selectedCardColor,
-                            localImageFileName: nil
-                        )
-                        self.onSave(plan)
-                        self.presentationMode.wrappedValue.dismiss()
-                    }
-                }
-            }
-        } else {
-            // 画像がない場合はそのまま保存
-            print("⚪️ AddPlanView: 画像なしで保存")
-            let plan = Plan(
-                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-                startDate: startDate,
-                endDate: normalizedEnd,
-                places: places,
-                cardColor: selectedCardColor,
-                localImageFileName: nil
-            )
-            print("📤 AddPlanView: onSave呼び出し（画像なし）")
-            onSave(plan)
-            isUploading = false
-            presentationMode.wrappedValue.dismiss()
+    private func deletePlaceButton(place: PlannedPlace) -> some View {
+        Button(action: {
+            deletePlace(place)
+        }) {
+            Image(systemName: "trash")
+                .foregroundColor(.red)
         }
     }
-    
-    private var searchBar: some View {
-        HStack {
-            Image(systemName: "magnifyingglass")
-                .foregroundColor(.black.opacity(0.7))
-            
-            TextField("場所を検索", text: $searchText)
-                .foregroundColor(.white)
-                .onChange(of: searchText) { oldValue, newValue in
-                    searchWorkItem?.cancel()
-                    let workItem = DispatchWorkItem {
-                        if !newValue.isEmpty && newValue.count >= 3 {
-                            performSearch()
-                        } else {
-                            searchResults = []
-                        }
-                    }
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
-                    searchWorkItem = workItem
-                }
-            
-            if !searchText.isEmpty {
-                Button(action: { searchText = "" }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.black.opacity(0.7))
-                }
+
+    // MARK: - Helper Methods
+    private func handleSearchTextChange(_ newValue: String) {
+        searchWorkItem?.cancel()
+        let workItem = DispatchWorkItem {
+            if !newValue.isEmpty && newValue.count >= 3 {
+                performSearch()
+            } else {
+                searchResults = []
             }
         }
-        .padding()
-        .background(Color.white.opacity(0.2))
-        .cornerRadius(10)
-        .padding()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
+        searchWorkItem = workItem
     }
-    
-    private var searchResultsList: some View {
-        ForEach(searchResults, id: \.placemark) { item in
-            Button {
-                newPlaceCoordinate = item.placemark.coordinate
-                newPlaceName = item.name ?? ""
-                newPlaceAddress = item.placemark.title ?? ""
-                searchResults.removeAll()
-            } label: {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(item.name ?? "名称不明")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                    Text(item.placemark.title ?? "住所不明")
-                        .font(.subheadline)
-                        .foregroundColor(.white.opacity(0.7))
-                }
-                .padding()
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(Color.white.opacity(0.1))
-                .cornerRadius(10)
-            }
-        }
+
+    private func selectSearchResult(_ item: MKMapItem) {
+        newPlaceCoordinate = item.placemark.coordinate
+        newPlaceName = item.name ?? ""
+        newPlaceAddress = item.placemark.title ?? ""
+        searchResults.removeAll()
     }
-    
-    private var mapSection: some View {
-            ZStack(alignment: .center) {
-                MapPickerView(coordinate: $newPlaceCoordinate)
-                    .frame(height: 300)
-                    .cornerRadius(15)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 15)
-                            .stroke(Color.white.opacity(0.5), lineWidth: 2)
-                    )
-            }
-            .padding()
-        }
-    
-    private var placeInfoSection: some View {
-            VStack(spacing: 15) {
-                VStack(alignment: .leading) {
-                    Text("場所の名前")
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.7))
-                    
-                    TextField("名前を入力", text: $newPlaceName)
-                        .foregroundColor(.white)
-                        .padding()
-                        .background(Color.white.opacity(0.2))
-                        .cornerRadius(10)
-                }
-                
-                if let coordinate = newPlaceCoordinate {
-                    VStack(alignment: .leading) {
-                        Text("座標")
-                            .font(.caption)
-                            .foregroundColor(.white.opacity(0.7))
-                        
-                        Text("緯度: \(coordinate.latitude, specifier: "%.4f")")
-                            .foregroundColor(.white)
-                        Text("経度: \(coordinate.longitude, specifier: "%.4f")")
-                            .foregroundColor(.white)
-                    }
-                    .padding()
-                    .background(Color.white.opacity(0.1))
-                    .cornerRadius(10)
-                }
-            }
-            .padding()
-        }
-    
-    private var actionButtons: some View {
-            VStack(spacing: 20) {
-                Button(action: {
-                    guard let coord = newPlaceCoordinate else { return }
-                    let p = PlannedPlace(
-                        name: newPlaceName.isEmpty ? "無題の場所" : newPlaceName,
-                        latitude: coord.latitude,
-                        longitude: coord.longitude,
-                        address: newPlaceAddress.isEmpty ? nil : newPlaceAddress
-                    )
-                    places.append(p)
-                    showMapPicker = false
-                }) {
-                    Text("追加")
-                        .foregroundColor(.white)
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(
-                            LinearGradient(
-                                gradient: Gradient(colors: [Color.blue, Color.purple]),
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .cornerRadius(10)
-                }
-                .disabled(newPlaceCoordinate == nil)
-                
-                Button(action: { showMapPicker = false }) {
-                    Text("キャンセル")
-                        .foregroundColor(.red)
-                        .padding()
-                        .frame(maxWidth: .infinity)
-                        .background(Color.white.opacity(0.2))
-                        .cornerRadius(10)
-                }
-            }
-            .padding()
-        }
-    
+
     private func performSearch() {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = searchText
@@ -554,5 +550,85 @@ struct AddPlanView: View {
                 searchResults = response.mapItems
             }
         }
+    }
+
+    // MARK: - Actions
+    private func addPlace() {
+        guard let coord = newPlaceCoordinate else { return }
+        let p = PlannedPlace(
+            name: newPlaceName.isEmpty ? "無題の場所" : newPlaceName,
+            latitude: coord.latitude,
+            longitude: coord.longitude,
+            address: newPlaceAddress.isEmpty ? nil : newPlaceAddress
+        )
+        places.append(p)
+        showMapPicker = false
+    }
+
+    private func deletePlace(_ place: PlannedPlace) {
+        if let index = places.firstIndex(where: { $0.id == place.id }) {
+            let placeToDelete = places[index]
+            FirestoreService.shared.deletePlannedPlace(place: placeToDelete) { err in
+                if let err = err {
+                    print("Firestore削除エラー: \(err.localizedDescription)")
+                } else {
+                    DispatchQueue.main.async {
+                        places.remove(at: index)
+                    }
+                }
+            }
+        }
+    }
+
+    private func savePlan() {
+        print("🎯 AddPlanView: 保存処理開始")
+        print("   タイトル: \(title)")
+        print("   画像: \(selectedImage != nil ? "あり" : "なし")")
+
+        isUploading = true
+
+        if let image = selectedImage {
+            saveWithImage(image)
+        } else {
+            saveWithoutImage()
+        }
+    }
+
+    private func saveWithImage(_ image: UIImage) {
+        print("📸 AddPlanView: 画像ローカル保存開始")
+        FirestoreService.shared.savePlanImageLocally(image) { result in
+            DispatchQueue.main.async {
+                switch result {
+                case .success(let fileName):
+                    print("✅ AddPlanView: 画像保存成功 - \(fileName)")
+                    createAndSavePlan(with: fileName)
+
+                case .failure(let error):
+                    print("❌ AddPlanView: 画像保存エラー - \(error.localizedDescription)")
+                    isUploading = false
+                    createAndSavePlan(with: nil)
+                }
+            }
+        }
+    }
+
+    private func saveWithoutImage() {
+        print("⚪️ AddPlanView: 画像なしで保存")
+        createAndSavePlan(with: nil)
+    }
+
+    private func createAndSavePlan(with fileName: String?) {
+        let plan = Plan(
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            startDate: startDate,
+            endDate: normalizedEndDate,
+            places: places,
+            cardColor: selectedCardColor,
+            localImageFileName: fileName
+        )
+        print("📤 AddPlanView: onSave呼び出し")
+        onSave(plan)
+        isUploading = false
+        presentationMode.wrappedValue.dismiss()
     }
 }

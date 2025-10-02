@@ -50,6 +50,18 @@ final class TravelPlanViewModel: ObservableObject {
         }
     }
 
+    func update(_ plan: TravelPlan) {
+        print("🔄 TravelPlanViewModel: 更新開始 - \(plan.title)")
+        FirestoreService.shared.saveTravelPlan(plan) { [weak self] result in
+            switch result {
+            case .success(let updatedPlan):
+                print("✅ TravelPlanViewModel: 更新成功 - \(updatedPlan.title)")
+            case .failure(let error):
+                print("❌ TravelPlanViewModel: 更新失敗 - \(error.localizedDescription)")
+            }
+        }
+    }
+
     func delete(_ plan: TravelPlan) {
         FirestoreService.shared.deleteTravelPlan(plan) { error in
             if let error = error {

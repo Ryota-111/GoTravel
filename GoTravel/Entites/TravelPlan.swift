@@ -11,9 +11,10 @@ struct TravelPlan: Identifiable, Codable {
     var cardColor: Color?
     var createdAt: Date
     var userId: String?
+    var daySchedules: [DaySchedule]
 
     enum CodingKeys: String, CodingKey {
-        case id, title, startDate, endDate, destination, localImageFileName, cardColorHex, createdAt, userId
+        case id, title, startDate, endDate, destination, localImageFileName, cardColorHex, createdAt, userId, daySchedules
     }
 
     var cardColorHex: String? {
@@ -32,7 +33,8 @@ struct TravelPlan: Identifiable, Codable {
          localImageFileName: String? = nil,
          cardColor: Color? = nil,
          createdAt: Date = Date(),
-         userId: String? = nil) {
+         userId: String? = nil,
+         daySchedules: [DaySchedule] = []) {
         self.id = id
         self.title = title
         self.startDate = startDate
@@ -42,6 +44,7 @@ struct TravelPlan: Identifiable, Codable {
         self.cardColor = cardColor
         self.createdAt = createdAt
         self.userId = userId
+        self.daySchedules = daySchedules
     }
 
     init(from decoder: Decoder) throws {
@@ -54,6 +57,7 @@ struct TravelPlan: Identifiable, Codable {
         localImageFileName = try container.decodeIfPresent(String.self, forKey: .localImageFileName)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         userId = try container.decodeIfPresent(String.self, forKey: .userId)
+        daySchedules = try container.decodeIfPresent([DaySchedule].self, forKey: .daySchedules) ?? []
 
         if let hex = try container.decodeIfPresent(String.self, forKey: .cardColorHex) {
             cardColor = Color(hex: hex)
@@ -73,5 +77,6 @@ struct TravelPlan: Identifiable, Codable {
         try container.encodeIfPresent(cardColorHex, forKey: .cardColorHex)
         try container.encode(createdAt, forKey: .createdAt)
         try container.encodeIfPresent(userId, forKey: .userId)
+        try container.encode(daySchedules, forKey: .daySchedules)
     }
 }
