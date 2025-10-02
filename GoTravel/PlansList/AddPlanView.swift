@@ -528,9 +528,27 @@ struct AddPlanView: View {
             newPlaceCoordinate = location.coordinate
         }
         newPlaceName = item.name ?? ""
-        if let address = item.placemark.address {
-            newPlaceAddress = address.formattedAddress
+
+        // iOS 26+ではaddressRepresentationsを使用、それ以前はthoroughfareなどから組み立て
+        if #available(iOS 26.0, *) {
+            if let addressRep = item.placemark.addressRepresentations.first {
+                newPlaceAddress = addressRep.formattedAddress
+            }
+        } else {
+            // フォールバック: 従来の方法で住所を組み立て
+            var addressComponents: [String] = []
+            if let thoroughfare = item.placemark.thoroughfare {
+                addressComponents.append(thoroughfare)
+            }
+            if let subThoroughfare = item.placemark.subThoroughfare {
+                addressComponents.append(subThoroughfare)
+            }
+            if let locality = item.placemark.locality {
+                addressComponents.append(locality)
+            }
+            newPlaceAddress = addressComponents.joined(separator: " ")
         }
+
         searchResults.removeAll()
     }
 
