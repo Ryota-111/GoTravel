@@ -198,7 +198,7 @@ struct ImageCropperView: View {
         )
 
         // 5) 切り抜き枠が表示画像内での相対位置（表示画像の左上を(0,0)とした座標）
-        var relativeOriginInDisplayed = CGPoint(
+        let relativeOriginInDisplayed = CGPoint(
             x: cropRectInContainer.origin.x - imageOrigin.x,
             y: cropRectInContainer.origin.y - imageOrigin.y
         )

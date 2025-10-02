@@ -158,7 +158,7 @@ struct EditTravelPlanBasicInfoView: View {
         .sheet(isPresented: $showImagePicker) {
             ImageCropPickerView(image: $selectedImage, aspectRatio: 1.0)
         }
-        .onChange(of: selectedImage) { newImage in
+        .onChange(of: selectedImage) { _, newImage in
             logImageChange(newImage)
         }
     }

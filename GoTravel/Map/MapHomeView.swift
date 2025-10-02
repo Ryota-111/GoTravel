@@ -86,9 +86,10 @@ struct MapHomeView: View {
                 return
             }
             
-            if let firstItem = response.mapItems.first {
+            if let firstItem = response.mapItems.first,
+               let location = firstItem.placemark.location {
                 DispatchQueue.main.async {
-                    zoomToLocation(firstItem.placemark.coordinate)
+                    zoomToLocation(location.coordinate)
                     searchText = ""
                 }
             }
@@ -99,13 +100,7 @@ struct MapHomeView: View {
         withAnimation {
             centerCoordinate = coordinate
             zoomLevel = 0.01
-
         }
-        
-        let region = MKCoordinateRegion(
-            center: coordinate,
-            span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
-        )
     }
 
     private func mkAnnotations() -> [MKPointAnnotation] {

@@ -53,7 +53,7 @@ final class PlansViewModel: ObservableObject {
 
     func update(_ plan: Plan) {
         print("🔄 PlansViewModel: 更新開始 - \(plan.title)")
-        FirestoreService.shared.savePlan(plan) { [weak self] result in
+        FirestoreService.shared.savePlan(plan) { result in
             switch result {
             case .success(let updatedPlan):
                 print("✅ PlansViewModel: 更新成功 - \(updatedPlan.title)")

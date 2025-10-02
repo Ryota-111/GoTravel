@@ -346,8 +346,8 @@ struct AddPlanView: View {
     }
 
     private var searchResultsList: some View {
-        ForEach(searchResults, id: \.placemark) { item in
-            searchResultButton(item: item)
+        ForEach(searchResults.indices, id: \.self) { index in
+            searchResultButton(item: searchResults[index])
         }
     }
 
@@ -524,9 +524,13 @@ struct AddPlanView: View {
     }
 
     private func selectSearchResult(_ item: MKMapItem) {
-        newPlaceCoordinate = item.placemark.coordinate
+        if let location = item.placemark.location {
+            newPlaceCoordinate = location.coordinate
+        }
         newPlaceName = item.name ?? ""
-        newPlaceAddress = item.placemark.title ?? ""
+        if let address = item.placemark.address {
+            newPlaceAddress = address.formattedAddress
+        }
         searchResults.removeAll()
     }
 
