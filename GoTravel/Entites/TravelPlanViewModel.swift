@@ -40,7 +40,7 @@ final class TravelPlanViewModel: ObservableObject {
 
     func add(_ plan: TravelPlan) {
         print("💾 TravelPlanViewModel: 保存開始 - \(plan.title)")
-        FirestoreService.shared.saveTravelPlan(plan) { [weak self] result in
+        FirestoreService.shared.saveTravelPlan(plan) { result in
             switch result {
             case .success(let savedPlan):
                 print("✅ TravelPlanViewModel: 保存成功 - \(savedPlan.title), ID: \(savedPlan.id ?? "なし")")

@@ -43,7 +43,7 @@ struct ImageCropPickerView: View {
         }) {
             ImagePickerView(sourceType: .photoLibrary, image: $selectedImage)
         }
-        .onChange(of: selectedImage) { newValue in
+        .onChange(of: selectedImage) { _, newValue in
             if let img = newValue {
                 print("📸 ImageCropPickerView: selectedImage更新 - サイズ: \(img.size)")
             } else if isPickerDismissed && newValue == nil {
