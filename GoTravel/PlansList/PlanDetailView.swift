@@ -9,41 +9,36 @@ struct PlanDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
-                mapSection
                 basicInfoSection
-                placesSection
-                
-                Spacer()
+
+                if !plan.places.isEmpty {
+                    mapSection
+                    placesSection
+                }
             }
             .padding()
         }
         .navigationTitle("旅行プラン")
         .navigationBarTitleDisplayMode(.inline)
     }
-    
+
     private var mapSection: some View {
-        Group {
-            if !plan.places.isEmpty {
-                Map(initialPosition: .region(calculateMapRegion())) {
-                    ForEach(plan.places) { place in
-                        Marker(place.name, coordinate: place.coordinate)
-                            .tint(.red)
-                    }
-                }
-                .frame(height: 250)
-                .clipShape(RoundedRectangle(cornerRadius: 12))
-            } else {
-                EmptyMapPlaceholder()
+        Map(initialPosition: .region(calculateMapRegion())) {
+            ForEach(plan.places) { place in
+                Marker(place.name, coordinate: place.coordinate)
+                    .tint(.red)
             }
         }
+        .frame(height: 250)
+        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
-    
+
     private var basicInfoSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(plan.title)
                 .font(.title2)
                 .fontWeight(.bold)
-            
+
             HStack {
                 Image(systemName: "calendar")
                 Text("\(dateRangeString(plan.startDate, plan.endDate))")
@@ -51,19 +46,14 @@ struct PlanDetailView: View {
             }
         }
     }
-    
+
     private var placesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("訪問予定の場所")
                 .font(.headline)
-            
-            if plan.places.isEmpty {
-                Text("まだ場所が追加されていません")
-                    .foregroundColor(.secondary)
-            } else {
-                ForEach(plan.places) { place in
-                    PlaceRow(place: place)
-                }
+
+            ForEach(plan.places) { place in
+                PlaceRow(place: place)
             }
         }
     }
@@ -118,26 +108,6 @@ struct PlaceRow: View {
         .padding()
         .background(Color.gray.opacity(0.1))
         .cornerRadius(8)
-    }
-}
-
-struct EmptyMapPlaceholder: View {
-    var body: some View {
-        ZStack {
-            Color.gray.opacity(0.2)
-            VStack {
-                Image(systemName: "map")
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 80, height: 80)
-                    .foregroundColor(.gray)
-                
-                Text("マップが利用できません")
-                    .foregroundColor(.secondary)
-            }
-        }
-        .frame(height: 250)
-        .clipShape(RoundedRectangle(cornerRadius: 12))
     }
 }
 

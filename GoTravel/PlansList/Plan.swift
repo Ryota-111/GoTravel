@@ -1,15 +1,6 @@
 import Foundation
 import SwiftUI
 
-//struct Plan: Identifiable, Codable, Hashable {
-//    var id: UUID = UUID()
-//    var title: String
-//    var startDate: Date
-//    var endDate: Date
-//    var places: [PlannedPlace]
-//    var createdAt: Date = Date()
-//}
-
 struct Plan: Identifiable, Codable {
     var id: String = UUID().uuidString
     var title: String

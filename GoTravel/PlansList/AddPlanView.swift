@@ -87,7 +87,7 @@ struct AddPlanView: View {
 
             Spacer()
 
-            Text("新しい旅行計画")
+            Text("新しい予定計画")
                 .font(.headline)
                 .foregroundColor(.white)
 
@@ -111,7 +111,7 @@ struct AddPlanView: View {
 
     private var basicInfoSection: some View {
         VStack(alignment: .leading, spacing: 15) {
-            Text("旅行の詳細")
+            Text("予定の詳細")
                 .font(.title2)
                 .fontWeight(.bold)
                 .foregroundColor(.white)

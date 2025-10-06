@@ -77,10 +77,6 @@ struct LoginView: View {
             Text("Welcome Back")
                 .font(.system(size: 36, weight: .bold))
                 .foregroundColor(.white)
-
-            Text("How was your day?")
-                .font(.system(size: 18))
-                .foregroundColor(.white.opacity(0.8))
         }
         .padding(.bottom, 30)
     }
