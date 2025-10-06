@@ -15,16 +15,11 @@ struct LoginView: View {
         isLoading || email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || password.isEmpty
     }
 
-    private var signInButtonText: String {
-        isLoading ? "サインイン中..." : "サインイン"
-    }
-
     // MARK: - Body
     var body: some View {
         NavigationView {
             ZStack {
                 backgroundView
-                Color.black.opacity(0.25).ignoresSafeArea()
                 contentView
             }
             .navigationBarHidden(true)
@@ -33,55 +28,61 @@ struct LoginView: View {
 
     // MARK: - View Components
     private var backgroundView: some View {
-        Group {
-            if UIImage(named: "airplane") != nil {
-                Image("airplane")
-                    .resizable()
-                    .scaledToFill()
-                    .ignoresSafeArea()
-            } else {
-                fallbackBackground
-            }
-        }
-    }
-
-    private var fallbackBackground: some View {
-        ZStack {
-            Color("Background")
-                .opacity(0.6)
-                .ignoresSafeArea()
-            Image(systemName: "airplane")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 200, height: 200)
-                .foregroundColor(.white.opacity(0.08))
-                .rotationEffect(.degrees(-15))
-                .offset(x: 40, y: -80)
-        }
+        LinearGradient(
+            gradient: Gradient(colors: [Color.orange.opacity(0.8), Color.brown.opacity(0.6)]),
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .ignoresSafeArea()
     }
 
     private var contentView: some View {
-        VStack(spacing: 24) {
-            Spacer().frame(height: 40)
+        VStack(spacing: 0) {
+            Spacer()
+
             headerSection
+
+            Spacer()
+                .frame(height: 60)
+
+            welcomeSection
             loginFormSection
+            actionLinksSection
+
             Spacer()
         }
-        .padding(.bottom, 40)
     }
 
     private var headerSection: some View {
-        VStack(spacing: 8) {
-            Text("GoTravel")
-                .font(.largeTitle)
-                .fontWeight(.bold)
+        VStack(spacing: 12) {
+            Image(systemName: "paperplane.circle.fill")
+                .resizable()
+                .scaledToFit()
+                .frame(width: 80, height: 80)
                 .foregroundColor(.white)
-            Text("旅の記録を、いつでもどこでも")
-                .font(.subheadline)
-                .foregroundColor(.white.opacity(0.9))
+
+            Text("Design Your")
+                .font(.system(size: 32, weight: .semibold))
+                .foregroundColor(.white)
+
+            Text("Travel in Autumn")
+                .font(.system(size: 32, weight: .semibold))
+                .foregroundColor(.white)
         }
-        .multilineTextAlignment(.center)
         .padding(.horizontal)
+    }
+
+    private var welcomeSection: some View {
+        VStack(spacing: 8) {
+            Text("Welcome Back")
+                .font(.system(size: 36, weight: .bold))
+                .foregroundColor(.white)
+
+            Text("How was your day?")
+                .font(.system(size: 18))
+                .foregroundColor(.white.opacity(0.8))
+        }
+        .padding(.bottom, 30)
     }
 
     private var loginFormSection: some View {
@@ -90,14 +91,11 @@ struct LoginView: View {
                 errorMessageView(err)
             }
 
-            inputFieldsSection
+            emailField
+            passwordField
             signInButton
-            actionLinksSection
         }
-        .padding()
-        .background(BlurView(style: .systemThinMaterialDark).opacity(0.85))
-        .cornerRadius(14)
-        .padding(.horizontal, 20)
+        .padding(.horizontal, 40)
     }
 
     private func errorMessageView(_ message: String) -> some View {
@@ -105,32 +103,35 @@ struct LoginView: View {
             .foregroundColor(.red)
             .font(.subheadline)
             .multilineTextAlignment(.center)
-            .padding(.top, 6)
-    }
-
-    private var inputFieldsSection: some View {
-        Group {
-            emailField
-            passwordField
-        }
+            .padding(.bottom, 8)
     }
 
     private var emailField: some View {
-        TextField("メールアドレス", text: $email)
-            .keyboardType(.emailAddress)
-            .autocapitalization(.none)
-            .textContentType(.emailAddress)
-            .padding()
-            .background(Color(.systemBackground).opacity(0.9))
-            .cornerRadius(8)
+        HStack {
+            Image(systemName: "envelope.fill")
+                .foregroundColor(.gray)
+            TextField("", text: $email)
+                .keyboardType(.emailAddress)
+                .autocapitalization(.none)
+                .textContentType(.emailAddress)
+                .foregroundColor(.black)
+        }
+        .padding()
+        .background(Color.white)
+        .cornerRadius(12)
     }
 
     private var passwordField: some View {
-        SecureField("パスワード", text: $password)
-            .textContentType(.password)
-            .padding()
-            .background(Color(.systemBackground).opacity(0.9))
-            .cornerRadius(8)
+        HStack {
+            Image(systemName: "lock.fill")
+                .foregroundColor(.gray)
+            SecureField("", text: $password)
+                .textContentType(.password)
+                .foregroundColor(.black)
+        }
+        .padding()
+        .background(Color.white)
+        .cornerRadius(12)
     }
 
     private var signInButton: some View {
@@ -138,44 +139,45 @@ struct LoginView: View {
             HStack {
                 if isLoading {
                     ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                } else {
+                    Text("SIGN IN")
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(.white)
                 }
-                Text(signInButtonText)
-                    .fontWeight(.semibold)
             }
             .frame(maxWidth: .infinity)
             .padding()
-            .background(Color.accentColor)
-            .foregroundColor(.white)
-            .cornerRadius(8)
+            .background(Color.black.opacity(0.7))
+            .cornerRadius(12)
         }
         .disabled(isSignInDisabled)
+        .padding(.top, 8)
     }
 
     private var actionLinksSection: some View {
-        HStack {
-            passwordResetLink
-            Spacer()
-            signUpLink
-        }
-        .padding(.top, 6)
-    }
+        VStack(spacing: 12) {
+            Button(action: {}) {
+                NavigationLink(destination: PasswordResetView().environmentObject(auth)) {
+                    Text("Forgot your password?")
+                        .font(.system(size: 14))
+                        .foregroundColor(.white.opacity(0.9))
+                }
+            }
 
-    private var passwordResetLink: some View {
-        Button(action: {}) {
-            NavigationLink(destination: PasswordResetView().environmentObject(auth)) {
-                Text("パスワードを忘れた場合")
-                    .font(.footnote)
+            HStack(spacing: 4) {
+                Text("Don't have an account?")
+                    .font(.system(size: 14))
                     .foregroundColor(.white.opacity(0.9))
+
+                NavigationLink(destination: SignUpView().environmentObject(auth)) {
+                    Text("Sign Up?")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(.white)
+                }
             }
         }
-    }
-
-    private var signUpLink: some View {
-        NavigationLink(destination: SignUpView().environmentObject(auth)) {
-            Text("新規登録")
-                .font(.footnote)
-                .foregroundColor(.white.opacity(0.9))
-        }
+        .padding(.top, 20)
     }
 
     // MARK: - Actions

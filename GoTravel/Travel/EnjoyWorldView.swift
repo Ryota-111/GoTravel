@@ -84,7 +84,6 @@ struct EnjoyWorldView: View {
                     tabSelectionSection
                     travelPlansSection
                     planEventsTitleSection
-                    eventTypeSelectionSection
                     planEventsListSection
                 }
             }
@@ -175,39 +174,9 @@ struct EnjoyWorldView: View {
         HStack {
             Text("予定計画")
                 .font(.title.weight(.semibold))
-
-            Spacer()
-
-            Button(action: {}) {
-                Text("See All")
-                    .font(.body)
-                    .foregroundColor(.orange)
-            }
         }
         .padding(.horizontal, 20)
         .padding(.top, 10)
-    }
-
-    private var eventTypeSelectionSection: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 20) {
-                ForEach(EventType.allCases) { eventType in
-                    horizontalEventsCard(
-                        menuName: eventType.displayName,
-                        menuImage: eventType.iconName,
-                        rectColor: selectedEventType == eventType ? .orange : Color.white,
-                        imageColors: selectedEventType == eventType ? .white : .orange,
-                        textColor: selectedEventType == eventType ? .orange : .gray
-                    )
-                    .onTapGesture {
-                        withAnimation(.spring()) {
-                            selectedEventType = eventType
-                        }
-                    }
-                }
-            }
-            .padding(.horizontal, 20)
-        }
     }
 
     private var planEventsListSection: some View {

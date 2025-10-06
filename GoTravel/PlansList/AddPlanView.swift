@@ -386,10 +386,6 @@ struct AddPlanView: View {
     private var placeInfoSection: some View {
         VStack(spacing: 15) {
             placeNameField
-
-            if let coordinate = newPlaceCoordinate {
-                coordinateInfo(coordinate: coordinate)
-            }
         }
         .padding()
     }
@@ -406,22 +402,6 @@ struct AddPlanView: View {
                 .background(Color.white.opacity(0.2))
                 .cornerRadius(10)
         }
-    }
-
-    private func coordinateInfo(coordinate: CLLocationCoordinate2D) -> some View {
-        VStack(alignment: .leading) {
-            Text("座標")
-                .font(.caption)
-                .foregroundColor(.white.opacity(0.7))
-
-            Text("緯度: \(coordinate.latitude, specifier: "%.4f")")
-                .foregroundColor(.white)
-            Text("経度: \(coordinate.longitude, specifier: "%.4f")")
-                .foregroundColor(.white)
-        }
-        .padding()
-        .background(Color.white.opacity(0.1))
-        .cornerRadius(10)
     }
 
     private var actionButtons: some View {

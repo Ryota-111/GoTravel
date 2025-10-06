@@ -4,6 +4,7 @@ struct PlacesListView: View {
 
     // MARK: - Properties
     @StateObject private var vm = PlacesViewModel()
+    @State private var selectedEventType: EventType? = .hotel
 
     // MARK: - Computed Properties
     private var backgroundGradient: some View {
@@ -28,10 +29,14 @@ struct PlacesListView: View {
         NavigationView {
             ZStack {
                 backgroundGradient
-                contentView
+                VStack {
+                    planEventsTitleSection
+                    eventTypeSelectionSection
+                    contentView
+                }
+                .navigationTitle("保存済みの場所")
+                .navigationBarTitleDisplayMode(.inline)
             }
-            .navigationTitle("保存済みの場所")
-            .navigationBarTitleDisplayMode(.inline)
         }
     }
 
@@ -123,6 +128,45 @@ struct PlacesListView: View {
             deletePlace(place)
         } label: {
             Label("削除", systemImage: "trash")
+        }
+    }
+    
+    private var planEventsTitleSection: some View {
+        HStack {
+            Text("予定計画")
+                .font(.title.weight(.semibold))
+
+            Spacer()
+
+            Button(action: {}) {
+                Text("See All")
+                    .font(.body)
+                    .foregroundColor(.orange)
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 10)
+    }
+    
+    private var eventTypeSelectionSection: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 20) {
+                ForEach(EventType.allCases) { eventType in
+                    horizontalEventsCard(
+                        menuName: eventType.displayName,
+                        menuImage: eventType.iconName,
+                        rectColor: selectedEventType == eventType ? .orange : Color.white,
+                        imageColors: selectedEventType == eventType ? .white : .orange,
+                        textColor: selectedEventType == eventType ? .orange : .gray
+                    )
+                    .onTapGesture {
+                        withAnimation(.spring()) {
+                            selectedEventType = eventType
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
         }
     }
 
