@@ -317,7 +317,7 @@ struct DayScheduleView: View {
     @EnvironmentObject var viewModel: TravelPlanViewModel
     let daySchedule: DaySchedule
     let plan: TravelPlan
-    @State private var showAddScheduleItem = false
+    @State private var showScheduleEditor = false
     @State private var editingItem: ScheduleItem?
 
     // MARK: - Computed Properties
@@ -334,9 +334,8 @@ struct DayScheduleView: View {
         .padding()
         .background(Color.white.opacity(0.2))
         .cornerRadius(15)
-        .sheet(isPresented: $showAddScheduleItem) {
-            AddScheduleItemView(plan: plan, daySchedule: daySchedule)
-                .environmentObject(viewModel)
+        .sheet(isPresented: $showScheduleEditor) {
+            ScheduleEditorView(plan: plan)
         }
         .sheet(item: $editingItem) { item in
             EditScheduleItemView(plan: plan, daySchedule: daySchedule, item: item)
@@ -354,7 +353,7 @@ struct DayScheduleView: View {
 
             Spacer()
 
-            Button(action: { showAddScheduleItem = true }) {
+            Button(action: { showScheduleEditor = true }) {
                 Image(systemName: "plus.circle.fill")
                     .foregroundColor(.orange)
                     .imageScale(.large)
