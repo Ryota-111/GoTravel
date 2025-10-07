@@ -69,23 +69,35 @@ struct MapHomeView: View {
     }
     
     private func performSearch() {
+        // まずURLから座標を抽出を試みる
+        if let coordinate = MapURLParser.extractCoordinate(from: searchText) {
+            print("📍 URLから座標を抽出: \(coordinate.latitude), \(coordinate.longitude)")
+            DispatchQueue.main.async {
+                zoomToLocation(coordinate)
+                selectedCoordinate = coordinate
+                searchText = ""
+            }
+            return
+        }
+
+        // URLでなければ通常の検索を実行
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = searchText
-        
+
         let region = MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
             span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
         )
         request.region = region
-        
+
         let search = MKLocalSearch(request: request)
-        
+
         search.start { [self] response, error in
             guard let response = response, !response.mapItems.isEmpty else {
                 print("検索エラー: \(error?.localizedDescription ?? "不明なエラー")")
                 return
             }
-            
+
             if let firstItem = response.mapItems.first,
                let location = firstItem.placemark.location {
                 DispatchQueue.main.async {

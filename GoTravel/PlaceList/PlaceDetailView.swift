@@ -8,6 +8,11 @@ struct PlaceDetailView: View {
     var body: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
+                // デバッグ情報
+                Text("座標: \(place.latitude), \(place.longitude)")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+
                 if let notes = place.notes, !notes.isEmpty {
                     Text(notes).font(.body)
                 }
