@@ -190,3 +190,35 @@ struct PlacesListView: View {
         }
     }
 }
+
+// MARK: - Event Type
+enum EventType: String, CaseIterable, Identifiable {
+    case hotel
+    case camp
+    case ship
+    case flight
+    case mountain
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .hotel: return "Hotel"
+        case .camp: return "Camp"
+        case .ship: return "Ship"
+        case .flight: return "Flight"
+        case .mountain: return "Mountain"
+        }
+    }
+
+    var iconName: String {
+        switch self {
+        case .hotel: return "house.fill"
+        case .camp: return "tent.fill"
+        case .ship: return "ferry.fill"
+        case .flight: return "airplane"
+        case .mountain: return "mountain.2.fill"
+        }
+    }
+}
+

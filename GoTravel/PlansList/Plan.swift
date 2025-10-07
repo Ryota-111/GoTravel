@@ -1,6 +1,12 @@
 import Foundation
 import SwiftUI
 
+// MARK: - Plan Type
+enum PlanType: String, Codable {
+    case outing    // おでかけ用
+    case daily     // 日常用
+}
+
 struct Plan: Identifiable, Codable {
     var id: String = UUID().uuidString
     var title: String
@@ -12,9 +18,16 @@ struct Plan: Identifiable, Codable {
     var userId: String?
     var createdAt: Date
 
+    // 新規追加フィールド
+    var planType: PlanType = .outing
+    var time: Date?              // 日常用の時間
+    var description: String?     // 日常用の「何をするのか」
+    var linkURL: String?         // 日常用のリンク
+
     // Codable用のキー
     enum CodingKeys: String, CodingKey {
         case id, title, startDate, endDate, places, cardColorHex, localImageFileName, userId, createdAt
+        case planType, time, description, linkURL
     }
 
     // Color → Hex
@@ -35,7 +48,11 @@ struct Plan: Identifiable, Codable {
          cardColor: Color? = nil,
          localImageFileName: String? = nil,
          userId: String? = nil,
-         createdAt: Date = Date()) {
+         createdAt: Date = Date(),
+         planType: PlanType = .outing,
+         time: Date? = nil,
+         description: String? = nil,
+         linkURL: String? = nil) {
         self.id = id
         self.title = title
         self.startDate = startDate
@@ -45,6 +62,10 @@ struct Plan: Identifiable, Codable {
         self.localImageFileName = localImageFileName
         self.userId = userId
         self.createdAt = createdAt
+        self.planType = planType
+        self.time = time
+        self.description = description
+        self.linkURL = linkURL
     }
 
     // デコード
@@ -58,6 +79,10 @@ struct Plan: Identifiable, Codable {
         localImageFileName = try container.decodeIfPresent(String.self, forKey: .localImageFileName)
         userId = try container.decodeIfPresent(String.self, forKey: .userId)
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
+        planType = try container.decodeIfPresent(PlanType.self, forKey: .planType) ?? .outing
+        time = try container.decodeIfPresent(Date.self, forKey: .time)
+        description = try container.decodeIfPresent(String.self, forKey: .description)
+        linkURL = try container.decodeIfPresent(String.self, forKey: .linkURL)
         if let hex = try container.decodeIfPresent(String.self, forKey: .cardColorHex) {
             cardColor = Color(hex: hex)
         } else {
@@ -77,6 +102,10 @@ struct Plan: Identifiable, Codable {
         try container.encodeIfPresent(localImageFileName, forKey: .localImageFileName)
         try container.encodeIfPresent(userId, forKey: .userId)
         try container.encode(createdAt, forKey: .createdAt)
+        try container.encode(planType, forKey: .planType)
+        try container.encodeIfPresent(time, forKey: .time)
+        try container.encodeIfPresent(description, forKey: .description)
+        try container.encodeIfPresent(linkURL, forKey: .linkURL)
     }
 }
 

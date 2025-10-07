@@ -242,13 +242,17 @@ final class FirestoreService {
             "startDate": Timestamp(date: planToSave.startDate),
             "endDate": Timestamp(date: planToSave.endDate),
             "createdAt": Timestamp(date: planToSave.createdAt),
-            "userId": uid
+            "userId": uid,
+            "planType": planToSave.planType.rawValue
         ]
 
         dict["places"] = serializePlaces(planToSave.places)
 
         if let localImageFileName = planToSave.localImageFileName { dict["localImageFileName"] = localImageFileName }
         if let colorHex = planToSave.cardColorHex { dict["cardColorHex"] = colorHex }
+        if let time = planToSave.time { dict["time"] = Timestamp(date: time) }
+        if let description = planToSave.description { dict["description"] = description }
+        if let linkURL = planToSave.linkURL { dict["linkURL"] = linkURL }
 
         print("📦 FirestoreService: 保存するデータ: \(dict)")
 
@@ -548,6 +552,15 @@ final class FirestoreService {
             places = placesArray.compactMap { parsePlannedPlace(from: $0) }
         }
 
+        let planTypeStr = d["planType"] as? String ?? "outing"
+        let planType = PlanType(rawValue: planTypeStr) ?? .outing
+
+        var time: Date? = nil
+        if let ts = d["time"] as? Timestamp { time = ts.dateValue() }
+
+        let description = d["description"] as? String
+        let linkURL = d["linkURL"] as? String
+
         return Plan(
             id: id,
             title: title,
@@ -557,7 +570,11 @@ final class FirestoreService {
             cardColor: cardColor,
             localImageFileName: localImageFileName,
             userId: userId,
-            createdAt: createdAt
+            createdAt: createdAt,
+            planType: planType,
+            time: time,
+            description: description,
+            linkURL: linkURL
         )
     }
 

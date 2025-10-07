@@ -18,7 +18,7 @@ struct EnjoyWorldView: View {
     @StateObject private var travelPlanViewModel = TravelPlanViewModel()
     @StateObject private var plansViewModel = PlansViewModel()
     @State private var selectedTab: TabType = .all
-    @State private var selectedEventType: EventType? = .hotel
+    @State private var selectedPlanTab: PlanTabType = .all
     @State private var showAddTravelPlan = false
     @State private var showAddPlan = false
     @State private var planToDelete: TravelPlan?
@@ -27,6 +27,7 @@ struct EnjoyWorldView: View {
     @State private var showPlanDeleteConfirmation = false
     @Environment(\.colorScheme) var colorScheme
     @Namespace private var animation
+    @Namespace private var planAnimation
 
     // MARK: - Computed Properties
     private var travelPlansState: ViewState {
@@ -41,8 +42,52 @@ struct EnjoyWorldView: View {
         if plansViewModel.plans.isEmpty {
             return .empty
         } else {
-            return .content(plansViewModel.plans)
+            return .content(filteredPlans)
         }
+    }
+
+    private var filteredPlans: [Plan] {
+        let filtered: [Plan]
+        switch selectedPlanTab {
+        case .all:
+            filtered = plansViewModel.plans
+        case .goingout:
+            filtered = plansViewModel.plans.filter { $0.planType == .outing }
+        case .everyday:
+            filtered = plansViewModel.plans.filter { $0.planType == .daily }
+        }
+        return filtered
+    }
+
+    private var currentFilteredPlans: [Plan] {
+        filteredPlans.filter { plan in
+            let calendar = Calendar.current
+            let now = Date()
+            let todayStart = calendar.startOfDay(for: now)
+            let planStart = calendar.startOfDay(for: plan.startDate)
+            let planEnd = calendar.startOfDay(for: plan.endDate)
+            return planStart <= todayStart && planEnd >= todayStart
+        }.sorted { $0.endDate < $1.endDate }
+    }
+
+    private var futureFilteredPlans: [Plan] {
+        filteredPlans.filter { plan in
+            let calendar = Calendar.current
+            let now = Date()
+            let todayStart = calendar.startOfDay(for: now)
+            let planStart = calendar.startOfDay(for: plan.startDate)
+            return planStart > todayStart
+        }.sorted { $0.startDate < $1.startDate }
+    }
+
+    private var pastFilteredPlans: [Plan] {
+        filteredPlans.filter { plan in
+            let calendar = Calendar.current
+            let now = Date()
+            let todayStart = calendar.startOfDay(for: now)
+            let planEnd = calendar.startOfDay(for: plan.endDate)
+            return planEnd < todayStart
+        }.sorted { $0.endDate > $1.endDate }
     }
 
     private var filteredTravelPlans: [TravelPlan] {
@@ -84,6 +129,7 @@ struct EnjoyWorldView: View {
                     tabSelectionSection
                     travelPlansSection
                     planEventsTitleSection
+                    planTabSelectionSection
                     planEventsListSection
                 }
             }
@@ -179,6 +225,16 @@ struct EnjoyWorldView: View {
         .padding(.top, 10)
     }
 
+    private var planTabSelectionSection: some View {
+        HStack(spacing: 8) {
+            ForEach(PlanTabType.allCases) { tab in
+                planTabButton(for: tab)
+            }
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+    }
+
     private var planEventsListSection: some View {
         VStack(spacing: 15) {
             switch planListState {
@@ -210,6 +266,29 @@ struct EnjoyWorldView: View {
                     .font(.caption)
                     .fontWeight(selectedTab == tab ? .semibold : .regular)
                     .foregroundColor(selectedTab == tab ? .white : .gray)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+            }
+        }
+    }
+
+    private func planTabButton(for tab: PlanTabType) -> some View {
+        Button(action: {
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+                selectedPlanTab = tab
+            }
+        }) {
+            ZStack {
+                if selectedPlanTab == tab {
+                    Capsule()
+                        .fill(.orange)
+                        .matchedGeometryEffect(id: "PLAN_TAB", in: planAnimation)
+                }
+
+                Text(tab.displayName)
+                    .font(.caption)
+                    .fontWeight(selectedPlanTab == tab ? .semibold : .regular)
+                    .foregroundColor(selectedPlanTab == tab ? .white : .gray)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
             }
@@ -309,26 +388,38 @@ struct EnjoyWorldView: View {
     }
 
     private func planEventsListView(plans: [Plan]) -> some View {
-        Group {
-            ForEach(plans.prefix(3)) { plan in
-                NavigationLink(destination: PlanDetailView(plan: plan)) {
-                    PlanEventCard(
-                        plan: plan,
-                        onTap: {},
-                        onDelete: {
-                            planEventToDelete = plan
-                            showPlanDeleteConfirmation = true
-                        }
-                    )
+        VStack(spacing: 20) {
+            PlanEventSectionView(
+                title: "現在の予定",
+                plans: currentFilteredPlans,
+                viewModel: plansViewModel,
+                onDelete: { plan in
+                    planEventToDelete = plan
+                    showPlanDeleteConfirmation = true
                 }
-                .buttonStyle(PlainButtonStyle())
-            }
+            )
+
+            PlanEventSectionView(
+                title: "今後の予定",
+                plans: futureFilteredPlans,
+                viewModel: plansViewModel,
+                onDelete: { plan in
+                    planEventToDelete = plan
+                    showPlanDeleteConfirmation = true
+                }
+            )
+
+            PlanEventSectionView(
+                title: "過去の予定",
+                plans: pastFilteredPlans,
+                viewModel: plansViewModel,
+                onDelete: { plan in
+                    planEventToDelete = plan
+                    showPlanDeleteConfirmation = true
+                }
+            )
 
             addPlanButton
-
-            if plans.count > 3 {
-                seeAllPlansButton
-            }
         }
     }
 
@@ -351,17 +442,6 @@ struct EnjoyWorldView: View {
         }
     }
 
-    private var seeAllPlansButton: some View {
-        NavigationLink(destination: PlansListView()) {
-            HStack {
-                Text("すべての予定を見る")
-                    .font(.headline)
-                Image(systemName: "arrow.right")
-            }
-            .foregroundColor(.orange)
-            .padding(.vertical, 10)
-        }
-    }
 
     private var backgroundGradient: some View {
         LinearGradient(
@@ -424,6 +504,16 @@ extension EnjoyWorldView {
         case ongoing = "Ongoing"
         case upcoming = "Upcoming"
         case past = "Past"
+
+        var id: String { rawValue }
+
+        var displayName: String { rawValue }
+    }
+
+    enum PlanTabType: String, CaseIterable, Identifiable {
+        case all = "All"
+        case goingout = "おでかけ"
+        case everyday = "日常"
 
         var id: String { rawValue }
 
@@ -545,7 +635,122 @@ struct TravelPlanCard: View {
     }
 }
 
-// MARK: - Plan Event Card
+// MARK: - Plan Event Section View
+struct PlanEventSectionView: View {
+    let title: String
+    let plans: [Plan]
+    let viewModel: PlansViewModel
+    let onDelete: (Plan) -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if !plans.isEmpty {
+                Text(title)
+                    .font(.headline)
+                    .foregroundColor(.primary)
+
+                ForEach(plans) { plan in
+                    NavigationLink(destination: PlanDetailView(plan: plan)) {
+                        PlanEventCardView(plan: plan, onDelete: {
+                            onDelete(plan)
+                        })
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+        }
+    }
+}
+
+// MARK: - Plan Event Card View
+struct PlanEventCardView: View {
+    let plan: Plan
+    var onDelete: (() -> Void)? = nil
+    @Environment(\.colorScheme) var colorScheme
+
+    var body: some View {
+        let textColor = colorScheme == .dark ? Color.white : Color.black
+        let secondaryTextColor = colorScheme == .dark ? Color.white.opacity(0.9) : Color.black.opacity(0.7)
+
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                VStack(alignment: .leading, spacing: 5) {
+                    Text(plan.title)
+                        .font(.headline)
+                        .foregroundColor(textColor)
+
+                    HStack {
+                        Image(systemName: "calendar")
+                            .font(.caption)
+                            .foregroundColor(secondaryTextColor)
+                        Text("\(dateString(plan.startDate)) 〜 \(dateString(plan.endDate))")
+                            .font(.subheadline)
+                            .foregroundColor(secondaryTextColor)
+                    }
+
+                    if plan.planType == .daily, let time = plan.time {
+                        HStack {
+                            Image(systemName: "clock")
+                                .font(.caption)
+                                .foregroundColor(secondaryTextColor)
+                            Text(formatTime(time))
+                                .font(.subheadline)
+                                .foregroundColor(secondaryTextColor)
+                        }
+                    }
+                }
+
+                Spacer()
+
+                if let onDelete = onDelete {
+                    Button(action: onDelete) {
+                        Image(systemName: "trash")
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                            .padding(8)
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+
+            if !plan.places.isEmpty {
+                Divider()
+                    .background(colorScheme == .dark ? Color.white.opacity(0.5) : Color.black.opacity(0.3))
+
+                HStack {
+                    Image(systemName: "mappin.circle.fill")
+                        .foregroundColor(plan.planType == .daily ? .orange : .blue)
+
+                    Text("\(plan.places.count) 件の場所")
+                        .font(.caption)
+                        .foregroundColor(secondaryTextColor)
+                }
+            }
+        }
+        .padding()
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: plan.planType == .daily ? [.orange.opacity(0.8), colorScheme == .dark ? .black.opacity(0.1) : .white.opacity(0.1)] : [.blue.opacity(0.8), colorScheme == .dark ? .black.opacity(0.1) : .white.opacity(0.1)]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        )
+        .cornerRadius(15)
+        .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+    }
+
+    private func dateString(_ d: Date) -> String {
+        DateFormatter.localizedString(from: d, dateStyle: .medium, timeStyle: .none)
+    }
+
+    private func formatTime(_ time: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.dateStyle = .none
+        formatter.timeStyle = .short
+        return formatter.string(from: time)
+    }
+}
+
+// MARK: - Plan Event Card (Old - for reference, can be removed)
 struct PlanEventCard: View {
     let plan: Plan
     let onTap: () -> Void
@@ -657,36 +862,5 @@ struct PlanEventCard: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "MM/dd"
         return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
-    }
-}
-
-// MARK: - Event Type
-enum EventType: String, CaseIterable, Identifiable {
-    case hotel
-    case camp
-    case ship
-    case flight
-    case mountain
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .hotel: return "Hotel"
-        case .camp: return "Camp"
-        case .ship: return "Ship"
-        case .flight: return "Flight"
-        case .mountain: return "Mountain"
-        }
-    }
-
-    var iconName: String {
-        switch self {
-        case .hotel: return "house.fill"
-        case .camp: return "tent.fill"
-        case .ship: return "ferry.fill"
-        case .flight: return "airplane"
-        case .mountain: return "mountain.2.fill"
-        }
     }
 }

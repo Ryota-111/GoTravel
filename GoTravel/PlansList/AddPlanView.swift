@@ -8,7 +8,13 @@ struct AddPlanView: View {
 
     var onSave: (Plan) -> Void
 
+    @State private var selectedPlanType: PlanType = .outing
     @State private var title: String = ""
+    @State private var selectedCardColor: Color = .blue
+    @State private var selectedImage: UIImage? = nil
+    @State private var showImagePicker = false
+    @State private var imageSourceType: UIImagePickerController.SourceType = .photoLibrary
+    @State private var isUploading = false
     @State private var startDate: Date = Date()
     @State private var endDate: Date = Date()
     @State private var places: [PlannedPlace] = []
@@ -19,24 +25,44 @@ struct AddPlanView: View {
     @State private var searchText: String = ""
     @State private var searchResults: [MKMapItem] = []
     @State private var searchWorkItem: DispatchWorkItem?
-    @State private var selectedCardColor: Color = .blue
-    @State private var selectedImage: UIImage? = nil
-    @State private var showImagePicker = false
-    @State private var imageSourceType: UIImagePickerController.SourceType = .photoLibrary
-    @State private var isUploading = false
+    @State private var dailyDate: Date = Date()
+    @State private var dailyTime: Date = Date()
+    @State private var description: String = ""
+    @State private var linkURL: String = ""
 
     // MARK: - Computed Properties
     private var isFormValid: Bool {
-        !title.trimmingCharacters(in: .whitespaces).isEmpty && startDate <= endDate
+        let titleValid = !title.trimmingCharacters(in: .whitespaces).isEmpty
+        if selectedPlanType == .outing {
+            return titleValid && startDate <= endDate
+        } else {
+            return titleValid
+        }
     }
 
     private var normalizedEndDate: Date {
         endDate < startDate ? startDate : endDate
     }
 
+    private var primaryTextColor: Color {
+        selectedPlanType == .outing ? .white : .black
+    }
+
+    private var secondaryTextColor: Color {
+        selectedPlanType == .outing ? .white.opacity(0.7) : .black.opacity(0.7)
+    }
+
+    private var sectionBackgroundColor: Color {
+        selectedPlanType == .outing ? Color.white.opacity(0.1) : Color.black.opacity(0.15)
+    }
+
+    private var fieldBackgroundColor: Color {
+        selectedPlanType == .outing ? Color.white.opacity(0.2) : Color.black.opacity(0.25)
+    }
+
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: [Color.blue.opacity(0.9), Color.black]),
+            gradient: Gradient(colors: selectedPlanType == .outing ? [Color.blue.opacity(0.9), Color.black] : [Color.white, Color.orange]),
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -72,12 +98,30 @@ struct AddPlanView: View {
     private var scrollContent: some View {
         ScrollView {
             VStack(spacing: 20) {
-                basicInfoSection
-                imagePickerSection
-                placesSection
-                colorSelectionSection
+                planTypeSelectionSection
+
+                if selectedPlanType == .outing {
+                    outingFormSections
+                } else {
+                    dailyFormSections
+                }
             }
             .padding()
+        }
+    }
+
+    private var outingFormSections: some View {
+        Group {
+            basicInfoSection
+            placesSection
+        }
+    }
+
+    private var dailyFormSections: some View {
+        Group {
+            dailyBasicInfoSection
+            dailyDescriptionSection
+            dailyLinkSection
         }
     }
 
@@ -89,7 +133,7 @@ struct AddPlanView: View {
 
             Text("新しい予定計画")
                 .font(.headline)
-                .foregroundColor(.white)
+                .foregroundColor(primaryTextColor)
 
             Spacer()
         }
@@ -101,20 +145,72 @@ struct AddPlanView: View {
         Button(action: { presentationMode.wrappedValue.dismiss() }) {
             HStack {
                 Image(systemName: "chevron.left")
-                    .foregroundColor(.white)
+                    .foregroundColor(primaryTextColor)
                     .imageScale(.large)
                 Text("戻る")
-                    .foregroundColor(.white)
+                    .foregroundColor(primaryTextColor)
             }
         }
     }
 
-    private var basicInfoSection: some View {
+    private var planTypeSelectionSection: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            Text("プランの種類")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(primaryTextColor)
+
+            HStack(spacing: 15) {
+                planTypeButton(type: .outing, title: "おでかけ用", icon: "airplane")
+                planTypeButton(type: .daily, title: "日常用", icon: "house.fill")
+            }
+        }
+        .padding()
+        .background(sectionBackgroundColor)
+        .cornerRadius(15)
+    }
+
+    private func planTypeButton(type: PlanType, title: String, icon: String) -> some View {
+        let isSelected = selectedPlanType == type
+        let textColor: Color = {
+            if isSelected {
+                return .white
+            } else {
+                return selectedPlanType == .outing ? .white.opacity(0.5) : .black.opacity(0.5)
+            }
+        }()
+
+        return Button(action: {
+            withAnimation {
+                selectedPlanType = type
+            }
+        }) {
+            VStack(spacing: 10) {
+                Image(systemName: icon)
+                    .font(.system(size: 30))
+                    .foregroundColor(textColor)
+
+                Text(title)
+                    .font(.headline)
+                    .foregroundColor(textColor)
+            }
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(
+                isSelected
+                    ? (type == .outing ? Color.blue.opacity(0.5) : Color.orange.opacity(0.9))
+                    : Color.white.opacity(0.2)
+            )
+            .cornerRadius(10)
+        }
+    }
+
+    private var dailyBasicInfoSection: some View {
         VStack(alignment: .leading, spacing: 15) {
             Text("予定の詳細")
                 .font(.title2)
                 .fontWeight(.bold)
-                .foregroundColor(.white)
+                .foregroundColor(primaryTextColor)
 
             customTextField(
                 icon: "text.alignleft",
@@ -123,12 +219,119 @@ struct AddPlanView: View {
             )
 
             HStack {
-                datePickerCard(title: "開始日", date: $startDate)
-                datePickerCard(title: "終了日", date: $endDate)
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("日付")
+                        .foregroundColor(primaryTextColor)
+                        .font(.headline)
+                    DatePicker("", selection: $dailyDate, displayedComponents: .date)
+                        .datePickerStyle(CompactDatePickerStyle())
+                        .labelsHidden()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding()
+                .background(fieldBackgroundColor)
+                .cornerRadius(10)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("時間")
+                        .foregroundColor(primaryTextColor)
+                        .font(.headline)
+                    DatePicker("", selection: $dailyTime, displayedComponents: .hourAndMinute)
+                        .datePickerStyle(CompactDatePickerStyle())
+                        .labelsHidden()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding()
+                .background(fieldBackgroundColor)
+                .cornerRadius(10)
             }
         }
         .padding()
-        .background(Color.white.opacity(0.1))
+        .background(sectionBackgroundColor)
+        .cornerRadius(15)
+    }
+
+    private var dailyDescriptionSection: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            Text("何をするのか")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(primaryTextColor)
+
+            TextEditor(text: $description)
+                .frame(height: 120)
+                .foregroundColor(primaryTextColor)
+                .scrollContentBackground(.hidden)
+                .padding()
+                .background(fieldBackgroundColor)
+                .cornerRadius(10)
+        }
+        .padding()
+        .background(sectionBackgroundColor)
+        .cornerRadius(15)
+    }
+
+    private var dailyLinkSection: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            Text("リンク（任意）")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(primaryTextColor)
+
+            customTextField(
+                icon: "link",
+                placeholder: "https://example.com",
+                text: $linkURL
+            )
+        }
+        .padding()
+        .background(sectionBackgroundColor)
+        .cornerRadius(15)
+    }
+
+    private var basicInfoSection: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            Text("予定の詳細")
+                .font(.title2)
+                .fontWeight(.bold)
+                .foregroundColor(primaryTextColor)
+
+            customTextField(
+                icon: "text.alignleft",
+                placeholder: "タイトル",
+                text: $title
+            )
+
+            HStack {
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("開始日")
+                        .foregroundColor(primaryTextColor)
+                        .font(.headline)
+                    DatePicker("", selection: $startDate, displayedComponents: .date)
+                        .datePickerStyle(CompactDatePickerStyle())
+                        .labelsHidden()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding()
+                .background(fieldBackgroundColor)
+                .cornerRadius(10)
+
+                VStack(alignment: .leading, spacing: 10) {
+                    Text("終了日")
+                        .foregroundColor(primaryTextColor)
+                        .font(.headline)
+                    DatePicker("", selection: $endDate, displayedComponents: .date)
+                        .datePickerStyle(CompactDatePickerStyle())
+                        .labelsHidden()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .padding()
+                .background(fieldBackgroundColor)
+                .cornerRadius(10)
+            }
+        }
+        .padding()
+        .background(sectionBackgroundColor)
         .cornerRadius(15)
     }
 
@@ -137,7 +340,7 @@ struct AddPlanView: View {
             Text("カード表紙の写真")
                 .font(.title2)
                 .fontWeight(.bold)
-                .foregroundColor(.white)
+                .foregroundColor(primaryTextColor)
 
             if let image = selectedImage {
                 selectedImageView(image: image)
@@ -146,7 +349,7 @@ struct AddPlanView: View {
             }
         }
         .padding()
-        .background(Color.white.opacity(0.1))
+        .background(sectionBackgroundColor)
         .cornerRadius(15)
         .sheet(isPresented: $showImagePicker) {
             ImagePickerView(sourceType: imageSourceType, image: $selectedImage)
@@ -185,15 +388,15 @@ struct AddPlanView: View {
             VStack(spacing: 10) {
                 Image(systemName: "photo.fill")
                     .font(.system(size: 50))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(secondaryTextColor)
 
                 Text("写真を選択")
-                    .foregroundColor(.white)
+                    .foregroundColor(primaryTextColor)
                     .font(.headline)
             }
             .frame(maxWidth: .infinity)
             .frame(height: 200)
-            .background(Color.white.opacity(0.2))
+            .background(fieldBackgroundColor)
             .cornerRadius(15)
         }
     }
@@ -203,7 +406,7 @@ struct AddPlanView: View {
             Text("カードの色")
                 .font(.title2)
                 .fontWeight(.bold)
-                .foregroundColor(.white)
+                .foregroundColor(primaryTextColor)
 
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack {
@@ -214,7 +417,7 @@ struct AddPlanView: View {
             }
         }
         .padding()
-        .background(Color.white.opacity(0.1))
+        .background(sectionBackgroundColor)
         .cornerRadius(15)
     }
 
@@ -236,7 +439,7 @@ struct AddPlanView: View {
             Text("行きたい場所")
                 .font(.title2)
                 .fontWeight(.bold)
-                .foregroundColor(.white)
+                .foregroundColor(primaryTextColor)
 
             if places.isEmpty {
                 emptyPlacesView
@@ -249,16 +452,16 @@ struct AddPlanView: View {
             addPlaceButton
         }
         .padding()
-        .background(Color.white.opacity(0.1))
+        .background(sectionBackgroundColor)
         .cornerRadius(15)
     }
 
     private var emptyPlacesView: some View {
         Text("まだ場所が追加されていません")
-            .foregroundColor(.white.opacity(0.7))
+            .foregroundColor(secondaryTextColor)
             .padding()
             .frame(maxWidth: .infinity)
-            .background(Color.white.opacity(0.1))
+            .background(fieldBackgroundColor)
             .cornerRadius(10)
     }
 
@@ -439,25 +642,25 @@ struct AddPlanView: View {
     private func customTextField(icon: String, placeholder: String, text: Binding<String>) -> some View {
         HStack {
             Image(systemName: icon)
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(secondaryTextColor)
             TextField(placeholder, text: text)
-                .foregroundColor(.white)
+                .foregroundColor(primaryTextColor)
         }
         .padding()
-        .background(Color.white.opacity(0.2))
+        .background(fieldBackgroundColor)
         .cornerRadius(10)
     }
 
     private func datePickerCard(title: String, date: Binding<Date>) -> some View {
         VStack {
             Text(title)
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(secondaryTextColor)
             DatePicker("", selection: date, displayedComponents: .date)
                 .datePickerStyle(CompactDatePickerStyle())
-                .foregroundColor(.white)
+                .foregroundColor(primaryTextColor)
         }
         .padding()
-        .background(Color.white.opacity(0.1))
+        .background(fieldBackgroundColor)
         .cornerRadius(10)
     }
 
@@ -465,18 +668,18 @@ struct AddPlanView: View {
         HStack {
             VStack(alignment: .leading) {
                 Text(place.name)
-                    .foregroundColor(.white)
+                    .foregroundColor(primaryTextColor)
                 if let address = place.address {
                     Text(address)
                         .font(.caption)
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(secondaryTextColor)
                 }
             }
             Spacer()
             deletePlaceButton(place: place)
         }
         .padding()
-        .background(Color.white.opacity(0.1))
+        .background(fieldBackgroundColor)
         .cornerRadius(10)
     }
 
@@ -581,50 +784,40 @@ struct AddPlanView: View {
     private func savePlan() {
         print("🎯 AddPlanView: 保存処理開始")
         print("   タイトル: \(title)")
-        print("   画像: \(selectedImage != nil ? "あり" : "なし")")
 
         isUploading = true
+        createAndSavePlan()
+    }
 
-        if let image = selectedImage {
-            saveWithImage(image)
+    private func createAndSavePlan() {
+        let plan: Plan
+
+        if selectedPlanType == .outing {
+            plan = Plan(
+                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                startDate: startDate,
+                endDate: normalizedEndDate,
+                places: places,
+                planType: .outing
+            )
         } else {
-            saveWithoutImage()
+            plan = Plan(
+                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                startDate: dailyDate,
+                endDate: dailyDate,
+                places: [],
+                planType: .daily,
+                time: dailyTime,
+                description: description.trimmingCharacters(in: .whitespacesAndNewlines),
+                linkURL: linkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : linkURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            )
         }
-    }
 
-    private func saveWithImage(_ image: UIImage) {
-        print("📸 AddPlanView: 画像ローカル保存開始")
-        FirestoreService.shared.savePlanImageLocally(image) { result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success(let fileName):
-                    print("✅ AddPlanView: 画像保存成功 - \(fileName)")
-                    createAndSavePlan(with: fileName)
-
-                case .failure(let error):
-                    print("❌ AddPlanView: 画像保存エラー - \(error.localizedDescription)")
-                    isUploading = false
-                    createAndSavePlan(with: nil)
-                }
-            }
-        }
-    }
-
-    private func saveWithoutImage() {
-        print("⚪️ AddPlanView: 画像なしで保存")
-        createAndSavePlan(with: nil)
-    }
-
-    private func createAndSavePlan(with fileName: String?) {
-        let plan = Plan(
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            startDate: startDate,
-            endDate: normalizedEndDate,
-            places: places,
-            cardColor: selectedCardColor,
-            localImageFileName: fileName
-        )
         print("📤 AddPlanView: onSave呼び出し")
+        print("   プランタイプ: \(plan.planType.rawValue)")
+        print("   時間: \(plan.time?.description ?? "なし")")
+        print("   説明: \(plan.description ?? "なし")")
+        print("   リンク: \(plan.linkURL ?? "なし")")
         onSave(plan)
         isUploading = false
         presentationMode.wrappedValue.dismiss()
