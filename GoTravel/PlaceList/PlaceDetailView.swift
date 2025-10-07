@@ -3,6 +3,7 @@ import MapKit
 
 struct PlaceDetailView: View {
     let place: VisitedPlace
+    @State private var showEditSheet = false
 
     var body: some View {
         ScrollView {
@@ -50,5 +51,17 @@ struct PlaceDetailView: View {
             .padding()
         }
         .navigationTitle(place.title)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button(action: {
+                    showEditSheet = true
+                }) {
+                    Text("編集")
+                }
+            }
+        }
+        .sheet(isPresented: $showEditSheet) {
+            EditVisitedPlaceView(place: place)
+        }
     }
 }

@@ -56,7 +56,9 @@ final class FirestoreService {
                 "title": placeToSave.title,
                 "latitude": placeToSave.latitude,
                 "longitude": placeToSave.longitude,
-                "createdAt": Timestamp(date: placeToSave.createdAt)
+                "createdAt": Timestamp(date: placeToSave.createdAt),
+                "category": placeToSave.category.rawValue,
+                "userId": uid
             ]
 
             if let notes = placeToSave.notes { dict["notes"] = notes }
@@ -65,6 +67,7 @@ final class FirestoreService {
             if let local = localFileName { dict["localPhotoFileName"] = local }
             if let address = placeToSave.address { dict["address"] = address }
             if let tags = placeToSave.tags { dict["tags"] = tags }
+            if let travelPlanId = placeToSave.travelPlanId { dict["travelPlanId"] = travelPlanId }
 
             docRef.setData(dict) { err in
                 DispatchQueue.main.async {
@@ -73,6 +76,7 @@ final class FirestoreService {
                     } else {
                         var resultPlace = placeToSave
                         resultPlace.localPhotoFileName = localFileName
+                        resultPlace.userId = uid
                         completion(.success(resultPlace))
                     }
                 }
@@ -105,6 +109,42 @@ final class FirestoreService {
                 }
                 completion(.success(places))
             }
+    }
+
+    func update(place: VisitedPlace, completion: @escaping (Result<VisitedPlace, Error>) -> Void) {
+        guard let uid = Auth.auth().currentUser?.uid,
+              let id = place.id else {
+            DispatchQueue.main.async {
+                completion(.failure(APIClientError.authenticationError))
+            }
+            return
+        }
+
+        var dict: [String: Any] = [
+            "title": place.title,
+            "latitude": place.latitude,
+            "longitude": place.longitude,
+            "category": place.category.rawValue,
+            "userId": uid
+        ]
+
+        if let notes = place.notes { dict["notes"] = notes }
+        if let visited = place.visitedAt { dict["visitedAt"] = Timestamp(date: visited) }
+        if let photoURL = place.photoURL { dict["photoURL"] = photoURL }
+        if let localFileName = place.localPhotoFileName { dict["localPhotoFileName"] = localFileName }
+        if let address = place.address { dict["address"] = address }
+        if let tags = place.tags { dict["tags"] = tags }
+        if let travelPlanId = place.travelPlanId { dict["travelPlanId"] = travelPlanId }
+
+        placesCollectionRef(for: uid).document(id).updateData(dict) { err in
+            DispatchQueue.main.async {
+                if let err = err {
+                    completion(.failure(APIClientError.firestoreError(err)))
+                } else {
+                    completion(.success(place))
+                }
+            }
+        }
     }
 
     func delete(place: VisitedPlace, completion: @escaping (Error?) -> Void) {
@@ -421,6 +461,10 @@ final class FirestoreService {
         let localFileName = d["localPhotoFileName"] as? String
         let address = d["address"] as? String
         let tags = d["tags"] as? [String]
+        let categoryStr = d["category"] as? String ?? "other"
+        let category = PlaceCategory(rawValue: categoryStr) ?? .other
+        let travelPlanId = d["travelPlanId"] as? String
+        let userId = d["userId"] as? String
 
         return VisitedPlace(
             id: id,
@@ -433,7 +477,10 @@ final class FirestoreService {
             photoURL: photoURL,
             localPhotoFileName: localFileName,
             address: address,
-            tags: tags
+            tags: tags,
+            category: category,
+            travelPlanId: travelPlanId,
+            userId: userId
         )
     }
 

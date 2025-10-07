@@ -4,9 +4,13 @@ struct PlacesListView: View {
 
     // MARK: - Properties
     @StateObject private var vm = PlacesViewModel()
-    @State private var selectedEventType: EventType? = .hotel
+    @State private var selectedCategory: PlaceCategory = .hotel
 
     // MARK: - Computed Properties
+    private var filteredPlaces: [VisitedPlace] {
+        vm.places.filter { $0.category == selectedCategory }
+    }
+
     private var backgroundGradient: some View {
         LinearGradient(
             gradient: Gradient(colors: [.blue.opacity(0.7), .black]),
@@ -43,7 +47,7 @@ struct PlacesListView: View {
     // MARK: - View Components
     private var contentView: some View {
         VStack {
-            if vm.places.isEmpty {
+            if filteredPlaces.isEmpty {
                 emptyStateView
             } else {
                 placesListView
@@ -73,7 +77,7 @@ struct PlacesListView: View {
     private var placesListView: some View {
         ScrollView {
             VStack(spacing: 15) {
-                ForEach(vm.places) { place in
+                ForEach(filteredPlaces) { place in
                     placeCardView(place)
                 }
             }
@@ -103,7 +107,7 @@ struct PlacesListView: View {
 
     private func placeHeader(place: VisitedPlace) -> some View {
         HStack {
-            Image(systemName: "mappin.circle.fill")
+            Image(systemName: place.category.iconName)
                 .foregroundColor(.white)
 
             Text(place.title)
@@ -151,17 +155,17 @@ struct PlacesListView: View {
     private var eventTypeSelectionSection: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 20) {
-                ForEach(EventType.allCases) { eventType in
+                ForEach(PlaceCategory.allCases) { category in
                     horizontalEventsCard(
-                        menuName: eventType.displayName,
-                        menuImage: eventType.iconName,
-                        rectColor: selectedEventType == eventType ? .orange : Color.white,
-                        imageColors: selectedEventType == eventType ? .white : .orange,
-                        textColor: selectedEventType == eventType ? .orange : .gray
+                        menuName: category.displayName,
+                        menuImage: category.iconName,
+                        rectColor: selectedCategory == category ? .orange : Color.white,
+                        imageColors: selectedCategory == category ? .white : .orange,
+                        textColor: selectedCategory == category ? .orange : .gray
                     )
                     .onTapGesture {
                         withAnimation(.spring()) {
-                            selectedEventType = eventType
+                            selectedCategory = category
                         }
                     }
                 }
@@ -191,34 +195,4 @@ struct PlacesListView: View {
     }
 }
 
-// MARK: - Event Type
-enum EventType: String, CaseIterable, Identifiable {
-    case hotel
-    case camp
-    case ship
-    case flight
-    case mountain
-
-    var id: String { rawValue }
-
-    var displayName: String {
-        switch self {
-        case .hotel: return "Hotel"
-        case .camp: return "Camp"
-        case .ship: return "Ship"
-        case .flight: return "Flight"
-        case .mountain: return "Mountain"
-        }
-    }
-
-    var iconName: String {
-        switch self {
-        case .hotel: return "house.fill"
-        case .camp: return "tent.fill"
-        case .ship: return "ferry.fill"
-        case .flight: return "airplane"
-        case .mountain: return "mountain.2.fill"
-        }
-    }
-}
 

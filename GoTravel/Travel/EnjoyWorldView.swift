@@ -624,8 +624,10 @@ struct TravelPlanCard: View {
                         .foregroundStyle(.white)
                 }
             }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding()
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func dateRangeString(from start: Date, to end: Date) -> String {
