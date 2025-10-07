@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreLocation
 
 struct SaveAsVisitedFromScheduleView: View {
     let scheduleItem: ScheduleItem
@@ -76,15 +77,48 @@ struct SaveAsVisitedFromScheduleView: View {
                         .frame(minHeight: 100)
                 }
 
-                if scheduleItem.latitude != nil && scheduleItem.longitude != nil {
-                    Section(header: Text("位置情報")) {
+                Section(header: Text("位置情報")) {
+                    if let mapURL = scheduleItem.mapURL, !mapURL.isEmpty {
                         HStack {
-                            Text("座標")
+                            Text("地図URL")
+                                .foregroundColor(.secondary)
+                            Spacer()
+                            Link(destination: URL(string: mapURL)!) {
+                                Image(systemName: "map.fill")
+                                    .foregroundColor(.blue)
+                            }
+                        }
+
+                        if let coordinate = MapURLParser.extractCoordinate(from: mapURL) {
+                            HStack {
+                                Text("座標 (URL)")
+                                    .foregroundColor(.secondary)
+                                Spacer()
+                                Text(String(format: "%.4f, %.4f", coordinate.latitude, coordinate.longitude))
+                                    .font(.caption)
+                                    .multilineTextAlignment(.trailing)
+                                    .foregroundColor(.green)
+                            }
+                        }
+                    }
+
+                    if scheduleItem.latitude != nil && scheduleItem.longitude != nil {
+                        HStack {
+                            Text("座標 (直接)")
                                 .foregroundColor(.secondary)
                             Spacer()
                             Text(String(format: "%.4f, %.4f", scheduleItem.latitude ?? 0, scheduleItem.longitude ?? 0))
                                 .font(.caption)
                                 .multilineTextAlignment(.trailing)
+                        }
+                    }
+
+                    if scheduleItem.mapURL == nil && scheduleItem.latitude == nil {
+                        HStack {
+                            Image(systemName: "exclamationmark.triangle")
+                                .foregroundColor(.orange)
+                            Text("位置情報がありません")
+                                .foregroundColor(.secondary)
                         }
                     }
                 }
@@ -118,18 +152,33 @@ struct SaveAsVisitedFromScheduleView: View {
     private func saveVisitedPlace() {
         isSaving = true
 
+        // mapURLから座標を取得する試み
+        var latitude = scheduleItem.latitude ?? 0
+        var longitude = scheduleItem.longitude ?? 0
+
+        // latitude/longitudeが設定されていない場合、mapURLから抽出
+        if (latitude == 0 && longitude == 0), let mapURL = scheduleItem.mapURL {
+            if let coordinate = MapURLParser.extractCoordinate(from: mapURL) {
+                latitude = coordinate.latitude
+                longitude = coordinate.longitude
+                print("📍 mapURLから座標を抽出: \(latitude), \(longitude)")
+            } else {
+                print("⚠️ mapURLから座標を抽出できませんでした: \(mapURL)")
+            }
+        }
+
         let visitedPlace = VisitedPlace(
-            from: scheduleItem,
-            travelPlanTitle: travelPlanTitle,
-            travelPlanId: travelPlanId,
-            visitedDate: visitedDate,
-            category: selectedCategory
+            title: travelPlanTitle + " - " + scheduleItem.title,
+            notes: notes.trimmingCharacters(in: .whitespaces).isEmpty ? scheduleItem.notes : notes.trimmingCharacters(in: .whitespaces),
+            latitude: latitude,
+            longitude: longitude,
+            createdAt: Date(),
+            visitedAt: visitedDate,
+            category: selectedCategory,
+            travelPlanId: travelPlanId
         )
 
-        var finalPlace = visitedPlace
-        finalPlace.notes = notes.trimmingCharacters(in: .whitespaces).isEmpty ? visitedPlace.notes : notes.trimmingCharacters(in: .whitespaces)
-
-        FirestoreService.shared.save(place: finalPlace, image: nil) { result in
+        FirestoreService.shared.save(place: visitedPlace, image: nil) { result in
             DispatchQueue.main.async {
                 isSaving = false
                 switch result {
