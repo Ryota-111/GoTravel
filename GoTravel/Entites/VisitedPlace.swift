@@ -74,6 +74,28 @@ struct VisitedPlace: Identifiable, Codable, Hashable {
         self.travelPlanId = travelPlanId
         self.userId = nil
     }
+
+    // ScheduleItemから作成
+    init(from scheduleItem: ScheduleItem,
+         travelPlanTitle: String,
+         travelPlanId: String?,
+         visitedDate: Date = Date(),
+         category: PlaceCategory = .other) {
+        self.id = nil
+        self.title = travelPlanTitle + " - " + scheduleItem.title
+        self.notes = scheduleItem.notes
+        self.latitude = scheduleItem.latitude ?? 0
+        self.longitude = scheduleItem.longitude ?? 0
+        self.createdAt = Date()
+        self.visitedAt = visitedDate
+        self.photoURL = nil
+        self.localPhotoFileName = nil
+        self.address = scheduleItem.location
+        self.tags = nil
+        self.category = category
+        self.travelPlanId = travelPlanId
+        self.userId = nil
+    }
 }
 
 // MARK: - Place Category

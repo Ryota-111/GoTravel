@@ -50,6 +50,17 @@ struct SavePlaceView: View {
             TextField("タイトル", text: $vm.title)
             TextField("思い出", text: $vm.notes)
             DatePicker("訪問日", selection: $vm.visitedAt, displayedComponents: .date)
+
+            Picker("カテゴリー", selection: $vm.category) {
+                ForEach(PlaceCategory.allCases) { category in
+                    HStack {
+                        Image(systemName: category.iconName)
+                        Text(category.displayName)
+                    }
+                    .tag(category)
+                }
+            }
+            .pickerStyle(.menu)
         }
     }
 

@@ -8,6 +8,7 @@ final class SavePlaceViewModel: ObservableObject {
     @Published var notes: String = ""
     @Published var image: UIImage?
     @Published var visitedAt: Date = Date()
+    @Published var category: PlaceCategory = .other
     @Published var isSaving: Bool = false
     @Published var error: String?
 
@@ -31,7 +32,8 @@ final class SavePlaceViewModel: ObservableObject {
             latitude: coord.latitude,
             longitude: coord.longitude,
             createdAt: Date(),
-            visitedAt: visitedAt
+            visitedAt: visitedAt,
+            category: category
         )
 
         // 画像がある場合はまずローカルに保存して fileName を place にセットする

@@ -182,6 +182,7 @@ struct ScheduleEditorView: View {
                         ScheduleItemEditCard(
                             item: item,
                             colorScheme: colorScheme,
+                            plan: plan,
                             onDelete: {
                                 deleteScheduleItem(item)
                             },
@@ -263,8 +264,11 @@ struct ScheduleEditorView: View {
 struct ScheduleItemEditCard: View {
     let item: ScheduleItem
     let colorScheme: ColorScheme
+    let plan: TravelPlan
     let onDelete: () -> Void
     let onEdit: () -> Void
+
+    @State private var showSaveAsVisited = false
 
     var body: some View {
         HStack(spacing: 15) {
@@ -305,15 +309,30 @@ struct ScheduleItemEditCard: View {
 
             Spacer()
 
-            Button(action: onDelete) {
-                Image(systemName: "trash.circle.fill")
-                    .font(.system(size: 24))
-                    .foregroundColor(.red.opacity(0.8))
+            VStack(spacing: 10) {
+                Button(action: { showSaveAsVisited = true }) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.green.opacity(0.8))
+                }
+
+                Button(action: onDelete) {
+                    Image(systemName: "trash.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(.red.opacity(0.8))
+                }
             }
         }
         .padding()
         .background(Color.white.opacity(0.2))
         .cornerRadius(15)
+        .sheet(isPresented: $showSaveAsVisited) {
+            SaveAsVisitedFromScheduleView(
+                scheduleItem: item,
+                travelPlanTitle: plan.title,
+                travelPlanId: plan.id
+            )
+        }
     }
 
     private func formatTime(_ date: Date) -> String {
