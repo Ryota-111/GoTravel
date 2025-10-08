@@ -21,7 +21,7 @@ struct MapHomeView: View {
                 zoomLevel: zoomLevel
             )
             .edgesIgnoringSafeArea(.all)
-            
+
             VStack {
                 HStack {
                     TextField("場所を検索", text: $searchText)
@@ -30,7 +30,7 @@ struct MapHomeView: View {
                         .cornerRadius(10)
                         .onChange(of: searchText) { oldValue, newValue in
                             searchWorkItem?.cancel()
-                            
+
                             let workItem = DispatchWorkItem { [self] in
                                 if !newValue.isEmpty && newValue.count >= 3 {
                                     performSearch()
@@ -38,7 +38,7 @@ struct MapHomeView: View {
                                     searchResults = []
                                 }
                             }
-                            
+
                             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
                             searchWorkItem = workItem
                         }
@@ -48,7 +48,7 @@ struct MapHomeView: View {
                 }
                 .padding()
                 .background(Color.white.opacity(0.5))
-                
+
                 Spacer()
             }
         }
@@ -69,18 +69,6 @@ struct MapHomeView: View {
     }
     
     private func performSearch() {
-        // まずURLから座標を抽出を試みる
-        if let coordinate = MapURLParser.extractCoordinate(from: searchText) {
-            print("📍 URLから座標を抽出: \(coordinate.latitude), \(coordinate.longitude)")
-            DispatchQueue.main.async {
-                zoomToLocation(coordinate)
-                selectedCoordinate = coordinate
-                searchText = ""
-            }
-            return
-        }
-
-        // URLでなければ通常の検索を実行
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = searchText
 

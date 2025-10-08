@@ -55,15 +55,6 @@ struct EditVisitedPlaceView: View {
                                 .multilineTextAlignment(.trailing)
                         }
                     }
-
-                    HStack {
-                        Text("座標")
-                            .foregroundColor(.secondary)
-                        Spacer()
-                        Text(String(format: "%.4f, %.4f", place.latitude, place.longitude))
-                            .font(.caption)
-                            .multilineTextAlignment(.trailing)
-                    }
                 }
             }
             .navigationTitle("訪問地を編集")

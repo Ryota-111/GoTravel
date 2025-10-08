@@ -44,6 +44,8 @@ final class TravelPlanViewModel: ObservableObject {
             switch result {
             case .success(let savedPlan):
                 print("✅ TravelPlanViewModel: 保存成功 - \(savedPlan.title), ID: \(savedPlan.id ?? "なし")")
+                // 通知をスケジュール
+                NotificationService.shared.scheduleTravelPlanNotifications(for: savedPlan)
             case .failure(let error):
                 print("❌ TravelPlanViewModel: 保存失敗 - \(error.localizedDescription)")
             }
@@ -56,6 +58,8 @@ final class TravelPlanViewModel: ObservableObject {
             switch result {
             case .success(let updatedPlan):
                 print("✅ TravelPlanViewModel: 更新成功 - \(updatedPlan.title)")
+                // 通知を再スケジュール
+                NotificationService.shared.scheduleTravelPlanNotifications(for: updatedPlan)
             case .failure(let error):
                 print("❌ TravelPlanViewModel: 更新失敗 - \(error.localizedDescription)")
             }
@@ -63,6 +67,11 @@ final class TravelPlanViewModel: ObservableObject {
     }
 
     func delete(_ plan: TravelPlan) {
+        // 通知をキャンセル
+        if let planId = plan.id {
+            NotificationService.shared.cancelTravelPlanNotifications(for: planId)
+        }
+
         FirestoreService.shared.deleteTravelPlan(plan) { error in
             if let error = error {
                 print("Failed to delete travel plan:", error.localizedDescription)

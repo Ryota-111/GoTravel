@@ -1,6 +1,5 @@
 import Foundation
 import CoreLocation
-import MapKit
 
 struct VisitedPlace: Identifiable, Codable, Hashable {
     var id: String?
@@ -25,8 +24,8 @@ struct VisitedPlace: Identifiable, Codable, Hashable {
     init(id: String? = nil,
          title: String,
          notes: String? = nil,
-         latitude: Double,
-         longitude: Double,
+         latitude: Double = 0,
+         longitude: Double = 0,
          createdAt: Date = Date(),
          visitedAt: Date? = nil,
          photoURL: String? = nil,
@@ -69,28 +68,6 @@ struct VisitedPlace: Identifiable, Codable, Hashable {
         self.photoURL = nil
         self.localPhotoFileName = nil
         self.address = plannedPlace.address
-        self.tags = nil
-        self.category = category
-        self.travelPlanId = travelPlanId
-        self.userId = nil
-    }
-
-    // ScheduleItemから作成
-    init(from scheduleItem: ScheduleItem,
-         travelPlanTitle: String,
-         travelPlanId: String?,
-         visitedDate: Date = Date(),
-         category: PlaceCategory = .other) {
-        self.id = nil
-        self.title = travelPlanTitle + " - " + scheduleItem.title
-        self.notes = scheduleItem.notes
-        self.latitude = scheduleItem.latitude ?? 0
-        self.longitude = scheduleItem.longitude ?? 0
-        self.createdAt = Date()
-        self.visitedAt = visitedDate
-        self.photoURL = nil
-        self.localPhotoFileName = nil
-        self.address = scheduleItem.location
         self.tags = nil
         self.category = category
         self.travelPlanId = travelPlanId

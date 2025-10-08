@@ -43,9 +43,8 @@ struct LoginView: View {
             headerSection
 
             Spacer()
-                .frame(height: 60)
+                .frame(height: 100)
 
-            welcomeSection
             loginFormSection
             actionLinksSection
 
@@ -61,24 +60,15 @@ struct LoginView: View {
                 .frame(width: 80, height: 80)
                 .foregroundColor(.white)
 
-            Text("Design Your")
+            Text("旅も日常も")
                 .font(.system(size: 32, weight: .semibold))
                 .foregroundColor(.white)
 
-            Text("Travel in Autumn")
+            Text("ひとつのアプリで")
                 .font(.system(size: 32, weight: .semibold))
                 .foregroundColor(.white)
         }
         .padding(.horizontal)
-    }
-
-    private var welcomeSection: some View {
-        VStack(spacing: 8) {
-            Text("Welcome Back")
-                .font(.system(size: 36, weight: .bold))
-                .foregroundColor(.white)
-        }
-        .padding(.bottom, 30)
     }
 
     private var loginFormSection: some View {
@@ -106,7 +96,7 @@ struct LoginView: View {
         HStack {
             Image(systemName: "envelope.fill")
                 .foregroundColor(.gray)
-            TextField("", text: $email)
+            TextField("メールアドレス", text: $email)
                 .keyboardType(.emailAddress)
                 .autocapitalization(.none)
                 .textContentType(.emailAddress)
@@ -121,7 +111,7 @@ struct LoginView: View {
         HStack {
             Image(systemName: "lock.fill")
                 .foregroundColor(.gray)
-            SecureField("", text: $password)
+            SecureField("パスワード", text: $password)
                 .textContentType(.password)
                 .foregroundColor(.black)
         }
@@ -137,7 +127,7 @@ struct LoginView: View {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                 } else {
-                    Text("SIGN IN")
+                    Text("サインイン")
                         .font(.system(size: 18, weight: .bold))
                         .foregroundColor(.white)
                 }
@@ -155,19 +145,19 @@ struct LoginView: View {
         VStack(spacing: 12) {
             Button(action: {}) {
                 NavigationLink(destination: PasswordResetView().environmentObject(auth)) {
-                    Text("Forgot your password?")
+                    Text("パスワードをお忘れですか？")
                         .font(.system(size: 14))
                         .foregroundColor(.white.opacity(0.9))
                 }
             }
 
             HStack(spacing: 4) {
-                Text("Don't have an account?")
+                Text("アカウントをお持ちでない方は")
                     .font(.system(size: 14))
                     .foregroundColor(.white.opacity(0.9))
 
                 NavigationLink(destination: SignUpView().environmentObject(auth)) {
-                    Text("Sign Up?")
+                    Text("アカウント作成")
                         .font(.system(size: 14, weight: .semibold))
                         .foregroundColor(.white)
                 }

@@ -75,7 +75,7 @@ struct HomeView: View {
             Text("アカウント")
                 .font(.headline)
                 .foregroundColor(.white)
-            
+
             NavigationLink(destination: AccountActionView(vm: vm)) {
                 HStack {
                     Text("サインアウト / アカウント削除")

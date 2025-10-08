@@ -5,6 +5,7 @@ struct PlacesListView: View {
     // MARK: - Properties
     @StateObject private var vm = PlacesViewModel()
     @State private var selectedCategory: PlaceCategory = .hotel
+    @Environment(\.colorScheme) var colorScheme
 
     // MARK: - Computed Properties
     private var filteredPlaces: [VisitedPlace] {
@@ -13,7 +14,7 @@ struct PlacesListView: View {
 
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: [.blue.opacity(0.7), .black]),
+            gradient: Gradient(colors: colorScheme == .dark ? [.blue.opacity(0.7), .black] : [.blue.opacity(0.6), .white]),
             startPoint: .top,
             endPoint: .bottom
         )
@@ -22,10 +23,18 @@ struct PlacesListView: View {
 
     private var cardGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: [.black.opacity(0.6), .blue.opacity(0.7)]),
+            gradient: Gradient(colors: colorScheme == .dark ? [.black.opacity(0.6), .orange.opacity(0.7)] : [.white.opacity(0.5), .orange.opacity(0.7)]),
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
+    }
+
+    private var textColor: Color {
+        colorScheme == .dark ? .white : .black
+    }
+
+    private var secondaryTextColor: Color {
+        colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.6)
     }
 
     // MARK: - Body
@@ -46,7 +55,7 @@ struct PlacesListView: View {
 
     // MARK: - View Components
     private var contentView: some View {
-        VStack {
+        Group {
             if filteredPlaces.isEmpty {
                 emptyStateView
             } else {
@@ -56,22 +65,28 @@ struct PlacesListView: View {
     }
 
     private var emptyStateView: some View {
-        VStack(spacing: 20) {
-            Image(systemName: "map.fill")
-                .resizable()
-                .scaledToFit()
-                .frame(width: 100, height: 100)
-                .foregroundColor(.white.opacity(0.7))
+        VStack {
+            Spacer()
 
-            Text("まだ保存された場所はありません")
-                .font(.headline)
-                .foregroundColor(.white)
+            VStack(spacing: 20) {
+                Image(systemName: "map.fill")
+                    .resizable()
+                    .scaledToFit()
+                    .frame(width: 100, height: 100)
+                    .foregroundColor(secondaryTextColor)
 
-            Text("マップをタップして場所を追加しましょう")
-                .font(.subheadline)
-                .foregroundColor(.white.opacity(0.7))
+                Text("まだ保存された場所はありません")
+                    .font(.headline)
+                    .foregroundColor(textColor)
+
+                Text("マップをタップして場所を追加しましょう")
+                    .font(.subheadline)
+                    .foregroundColor(secondaryTextColor)
+            }
+            .padding()
+
+            Spacer()
         }
-        .padding()
     }
 
     private var placesListView: some View {
@@ -91,14 +106,14 @@ struct PlacesListView: View {
                 placeHeader(place: place)
 
                 Divider()
-                    .background(Color.white.opacity(0.5))
+                    .background(secondaryTextColor)
 
                 placeDate(place: place)
             }
             .padding()
             .background(cardGradient)
             .cornerRadius(15)
-            .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 5)
+            .shadow(color: colorScheme == .dark ? .black.opacity(0.3) : .gray.opacity(0.2), radius: 10, x: 0, y: 5)
         }
         .contextMenu {
             deleteButton(place: place)
@@ -108,22 +123,22 @@ struct PlacesListView: View {
     private func placeHeader(place: VisitedPlace) -> some View {
         HStack {
             Image(systemName: place.category.iconName)
-                .foregroundColor(.white)
+                .foregroundColor(textColor)
 
             Text(place.title)
                 .font(.headline)
-                .foregroundColor(.white)
+                .foregroundColor(textColor)
         }
     }
 
     private func placeDate(place: VisitedPlace) -> some View {
         HStack {
             Image(systemName: "calendar")
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(secondaryTextColor)
 
             Text(formattedDate(place))
                 .font(.subheadline)
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(secondaryTextColor)
         }
     }
 

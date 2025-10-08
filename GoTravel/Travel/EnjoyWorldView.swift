@@ -390,7 +390,7 @@ struct EnjoyWorldView: View {
     private func planEventsListView(plans: [Plan]) -> some View {
         VStack(spacing: 20) {
             PlanEventSectionView(
-                title: "現在の予定",
+                title: "今日の予定",
                 plans: currentFilteredPlans,
                 viewModel: plansViewModel,
                 onDelete: { plan in
@@ -445,7 +445,7 @@ struct EnjoyWorldView: View {
 
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ? [.blue.opacity(0.7), .black] : [.blue.opacity(0.8), .white]),
+            gradient: Gradient(colors: colorScheme == .dark ? [.blue.opacity(0.7), .black] : [.blue.opacity(0.6), .white]),
             startPoint: .top,
             endPoint: .bottom
         )
