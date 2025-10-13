@@ -23,7 +23,7 @@ struct PlacesListView: View {
 
     private var cardGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ? [.black.opacity(0.6), .orange.opacity(0.7)] : [.white.opacity(0.5), .orange.opacity(0.7)]),
+            gradient: Gradient(colors: colorScheme == .dark ? [.orange.opacity(0.7), .black.opacity(0.6)] : [.orange.opacity(0.7), .white.opacity(0.5)]),
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -47,8 +47,6 @@ struct PlacesListView: View {
                     eventTypeSelectionSection
                     contentView
                 }
-                .navigationTitle("保存済みの場所")
-                .navigationBarTitleDisplayMode(.inline)
             }
         }
     }
@@ -82,6 +80,16 @@ struct PlacesListView: View {
                 Text("マップをタップして場所を追加しましょう")
                     .font(.subheadline)
                     .foregroundColor(secondaryTextColor)
+
+                NavigationLink(destination: MapHomeView()) {
+                    Text("場所を追加")
+                        .font(.headline)
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 30)
+                        .padding(.vertical, 12)
+                        .background(.orange)
+                        .cornerRadius(25)
+                }
             }
             .padding()
 
@@ -95,6 +103,21 @@ struct PlacesListView: View {
                 ForEach(filteredPlaces) { place in
                     placeCardView(place)
                 }
+
+                NavigationLink(destination: MapHomeView()) {
+                    HStack {
+                        Image(systemName: "plus.circle.fill")
+                            .foregroundColor(.orange)
+                        Text("場所を追加")
+                            .font(.headline)
+                            .foregroundColor(textColor)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding()
+                    .background(Color.white.opacity(0.2))
+                    .cornerRadius(15)
+                }
+                .padding(.top, 10)
             }
             .padding()
         }
@@ -152,16 +175,11 @@ struct PlacesListView: View {
     
     private var planEventsTitleSection: some View {
         HStack {
-            Text("予定計画")
+            Text("保存した場所")
                 .font(.title.weight(.semibold))
+                .foregroundColor(textColor)
 
             Spacer()
-
-            Button(action: {}) {
-                Text("See All")
-                    .font(.body)
-                    .foregroundColor(.orange)
-            }
         }
         .padding(.horizontal, 20)
         .padding(.top, 10)

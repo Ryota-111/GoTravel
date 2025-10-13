@@ -67,7 +67,7 @@ struct MapHomeView: View {
         }
         .navigationTitle("マップ")
     }
-    
+
     private func performSearch() {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = searchText
@@ -95,7 +95,7 @@ struct MapHomeView: View {
             }
         }
     }
-    
+
     private func zoomToLocation(_ coordinate: CLLocationCoordinate2D) {
         withAnimation {
             centerCoordinate = coordinate

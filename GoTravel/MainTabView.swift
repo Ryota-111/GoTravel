@@ -9,11 +9,11 @@ struct MainTabView: View {
             EnjoyWorldView()
                 .tabItem{ Label("予定", systemImage: "calendar") }
                 .tag(0)
-            MapHomeView()
-                .tabItem { Label("マップ", systemImage: "map") }
-                .tag(1)
             PlacesListView()
                 .tabItem { Label("場所保存", systemImage: "list.bullet") }
+                .tag(1)
+            JapanPhotoView()
+                .tabItem { Label("全国フォトマップ", systemImage: "photo.artframe") }
                 .tag(2)
             HomeView()
                 .tabItem { Label("マイページ", systemImage: "person") }

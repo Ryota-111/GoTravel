@@ -390,13 +390,9 @@ struct DayScheduleView: View {
     private var scheduleList: some View {
         List {
             ForEach(sortedScheduleItems) { item in
-                ScheduleItemCard(item: item)
+                ScheduleItemCard(item: item, editingItem: $editingItem)
                     .listRowBackground(Color.clear)
                     .listRowInsets(EdgeInsets(top: 5, leading: 0, bottom: 5, trailing: 0))
-                    .contentShape(Rectangle())
-                    .onTapGesture {
-                        editingItem = item
-                    }
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
                             deleteScheduleItem(item)
@@ -429,6 +425,7 @@ struct ScheduleItemCard: View {
     // MARK: - Properties
     @Environment(\.colorScheme) var colorScheme
     let item: ScheduleItem
+    @Binding var editingItem: ScheduleItem?
     @State private var showMapView = false
     @State private var showLink = false
 
@@ -445,6 +442,10 @@ struct ScheduleItemCard: View {
         .padding()
         .background(Color.white.opacity(0.2))
         .cornerRadius(15)
+        .contentShape(Rectangle())
+        .onTapGesture {
+            editingItem = item
+        }
         .sheet(isPresented: $showMapView) {
             if let mapURL = item.mapURL, let url = URL(string: mapURL) {
                 SafariView(url: url)
@@ -550,6 +551,7 @@ struct ScheduleItemCard: View {
                     .foregroundColor(.blue)
             }
         }
+        .buttonStyle(PlainButtonStyle())
     }
 
     // MARK: - Helper Methods

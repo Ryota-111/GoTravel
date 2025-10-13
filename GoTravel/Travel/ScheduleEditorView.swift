@@ -309,12 +309,12 @@ struct ScheduleItemEditCard: View {
 
             Spacer()
 
-            VStack(spacing: 10) {
-                Button(action: { showSaveAsVisited = true }) {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(.green.opacity(0.8))
+            VStack(spacing: 15) {
+                Button("場所保存") {
+                    showSaveAsVisited = true
                 }
+                .font(.system(size: 12))
+                .foregroundColor(.blue)
 
                 Button(action: onDelete) {
                     Image(systemName: "trash.circle.fill")

@@ -575,13 +575,31 @@ struct AddPlanView: View {
 
     private var mapSection: some View {
         ZStack(alignment: .center) {
-            MapPickerView(coordinate: $newPlaceCoordinate)
+            if let coordinate = newPlaceCoordinate {
+                Map(position: .constant(.region(MKCoordinateRegion(
+                    center: coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+                )))) {
+                    Marker("選択した場所", coordinate: coordinate)
+                        .tint(.red)
+                }
                 .frame(height: 300)
                 .cornerRadius(15)
                 .overlay(
                     RoundedRectangle(cornerRadius: 15)
                         .stroke(Color.white.opacity(0.5), lineWidth: 2)
                 )
+                .disabled(true)
+            } else {
+                Rectangle()
+                    .fill(Color.gray.opacity(0.3))
+                    .frame(height: 300)
+                    .cornerRadius(15)
+                    .overlay(
+                        Text("地図が選択されていません")
+                            .foregroundColor(.white)
+                    )
+            }
         }
         .padding()
     }
