@@ -800,8 +800,8 @@ struct AddPlanView: View {
     }
 
     private func savePlan() {
-        print("🎯 AddPlanView: 保存処理開始")
-        print("   タイトル: \(title)")
+        print("AddPlanView: 保存処理開始")
+        print("タイトル: \(title)")
 
         isUploading = true
         createAndSavePlan()
@@ -831,11 +831,11 @@ struct AddPlanView: View {
             )
         }
 
-        print("📤 AddPlanView: onSave呼び出し")
-        print("   プランタイプ: \(plan.planType.rawValue)")
-        print("   時間: \(plan.time?.description ?? "なし")")
-        print("   説明: \(plan.description ?? "なし")")
-        print("   リンク: \(plan.linkURL ?? "なし")")
+        print("AddPlanView: onSave呼び出し")
+        print("プランタイプ: \(plan.planType.rawValue)")
+        print("時間: \(plan.time?.description ?? "なし")")
+        print("説明: \(plan.description ?? "なし")")
+        print("リンク: \(plan.linkURL ?? "なし")")
         onSave(plan)
         isUploading = false
         presentationMode.wrappedValue.dismiss()

@@ -21,7 +21,6 @@ struct MapViewRepresentable: UIViewRepresentable {
         uiView.removeAnnotations(uiView.annotations.filter { !($0 is MKUserLocation) })
         uiView.addAnnotations(annotations)
         
-        // zoomLevelが指定されている場合はそれを使用
         let region = MKCoordinateRegion(
             center: centerCoordinate,
             span: zoomLevel != nil

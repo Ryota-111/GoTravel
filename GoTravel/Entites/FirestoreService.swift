@@ -171,22 +171,22 @@ final class FirestoreService {
 
     // MARK: - Travel Plan Methods
     func saveTravelPlan(_ plan: TravelPlan, completion: @escaping (Result<TravelPlan, Error>) -> Void) {
-        print("🔵 FirestoreService: saveTravelPlan開始")
+        print("FirestoreService: saveTravelPlan開始")
         guard let uid = Auth.auth().currentUser?.uid else {
-            print("❌ FirestoreService: ユーザーが認証されていません")
+            print("FirestoreService: ユーザーが認証されていません")
             DispatchQueue.main.async {
                 completion(.failure(APIClientError.authenticationError))
             }
             return
         }
-        print("✅ FirestoreService: ユーザー認証OK - UID: \(uid)")
+        print("FirestoreService: ユーザー認証OK - UID: \(uid)")
 
         let docRef = travelPlansCollectionRef(for: uid).document(plan.id ?? UUID().uuidString)
         var planToSave = plan
         planToSave.id = docRef.documentID
         planToSave.userId = uid
 
-        print("📝 FirestoreService: ドキュメントID: \(docRef.documentID)")
+        print("FirestoreService: ドキュメントID: \(docRef.documentID)")
 
         var dict: [String: Any] = [
             "title": planToSave.title,
@@ -202,15 +202,15 @@ final class FirestoreService {
 
         dict["daySchedules"] = serializeDaySchedules(planToSave.daySchedules)
 
-        print("📦 FirestoreService: 保存するデータ: \(dict)")
+        print("FirestoreService: 保存するデータ: \(dict)")
 
         docRef.setData(dict) { err in
             DispatchQueue.main.async {
                 if let err = err {
-                    print("❌ FirestoreService: 保存失敗 - \(err.localizedDescription)")
+                    print("FirestoreService: 保存失敗 - \(err.localizedDescription)")
                     completion(.failure(APIClientError.firestoreError(err)))
                 } else {
-                    print("✅ FirestoreService: Firestore保存成功")
+                    print("FirestoreService: Firestore保存成功")
                     completion(.success(planToSave))
                 }
             }
@@ -260,22 +260,22 @@ final class FirestoreService {
 
     // MARK: - Plan Methods (予定計画)
     func savePlan(_ plan: Plan, completion: @escaping (Result<Plan, Error>) -> Void) {
-        print("🔵 FirestoreService: savePlan開始")
+        print("FirestoreService: savePlan開始")
         guard let uid = Auth.auth().currentUser?.uid else {
-            print("❌ FirestoreService: ユーザーが認証されていません")
+            print("FirestoreService: ユーザーが認証されていません")
             DispatchQueue.main.async {
                 completion(.failure(APIClientError.authenticationError))
             }
             return
         }
-        print("✅ FirestoreService: ユーザー認証OK - UID: \(uid)")
+        print("FirestoreService: ユーザー認証OK - UID: \(uid)")
 
         let docRef = plansCollectionRef(for: uid).document(plan.id)
         var planToSave = plan
         planToSave.id = docRef.documentID
         planToSave.userId = uid
 
-        print("📝 FirestoreService: ドキュメントID: \(docRef.documentID)")
+        print("FirestoreService: ドキュメントID: \(docRef.documentID)")
 
         var dict: [String: Any] = [
             "title": planToSave.title,
@@ -294,15 +294,15 @@ final class FirestoreService {
         if let description = planToSave.description { dict["description"] = description }
         if let linkURL = planToSave.linkURL { dict["linkURL"] = linkURL }
 
-        print("📦 FirestoreService: 保存するデータ: \(dict)")
+        print("FirestoreService: 保存するデータ: \(dict)")
 
         docRef.setData(dict) { err in
             DispatchQueue.main.async {
                 if let err = err {
-                    print("❌ FirestoreService: 保存失敗 - \(err.localizedDescription)")
+                    print("FirestoreService: 保存失敗 - \(err.localizedDescription)")
                     completion(.failure(APIClientError.firestoreError(err)))
                 } else {
-                    print("✅ FirestoreService: Firestore保存成功")
+                    print("FirestoreService: Firestore保存成功")
                     completion(.success(planToSave))
                 }
             }
@@ -351,10 +351,10 @@ final class FirestoreService {
 
     // MARK: - Local Image Storage Methods
     func saveTravelPlanImageLocally(_ image: UIImage, completion: @escaping (Result<String, Error>) -> Void) {
-        print("💾 FirestoreService: ローカル画像保存開始")
+        print("FirestoreService: ローカル画像保存開始")
 
         guard let imageData = image.jpegData(compressionQuality: 0.7) else {
-            print("❌ FirestoreService: 画像データの変換に失敗")
+            print("FirestoreService: 画像データの変換に失敗")
             completion(.failure(APIClientError.parseError))
             return
         }
@@ -363,29 +363,29 @@ final class FirestoreService {
 
         do {
             try FileManager.saveImageDataToDocuments(data: imageData, named: fileName)
-            print("✅ FirestoreService: ローカル画像保存成功 - \(fileName)")
+            print("FirestoreService: ローカル画像保存成功 - \(fileName)")
             completion(.success(fileName))
         } catch {
-            print("❌ FirestoreService: ローカル画像保存失敗 - \(error.localizedDescription)")
+            print("FirestoreService: ローカル画像保存失敗 - \(error.localizedDescription)")
             completion(.failure(APIClientError.storageError(error)))
         }
     }
 
     func deleteTravelPlanImageLocally(_ fileName: String) {
-        print("🗑️ FirestoreService: ローカル画像削除 - \(fileName)")
+        print("FirestoreService: ローカル画像削除 - \(fileName)")
         do {
             try FileManager.removeDocumentFile(named: fileName)
-            print("✅ FirestoreService: ローカル画像削除成功")
+            print("FirestoreService: ローカル画像削除成功")
         } catch {
-            print("❌ FirestoreService: ローカル画像削除失敗 - \(error.localizedDescription)")
+            print("FirestoreService: ローカル画像削除失敗 - \(error.localizedDescription)")
         }
     }
 
     func savePlanImageLocally(_ image: UIImage, completion: @escaping (Result<String, Error>) -> Void) {
-        print("💾 FirestoreService: ローカル画像保存開始")
+        print("FirestoreService: ローカル画像保存開始")
 
         guard let imageData = image.jpegData(compressionQuality: 0.7) else {
-            print("❌ FirestoreService: 画像データの変換に失敗")
+            print("FirestoreService: 画像データの変換に失敗")
             completion(.failure(APIClientError.parseError))
             return
         }
@@ -394,10 +394,10 @@ final class FirestoreService {
 
         do {
             try FileManager.saveImageDataToDocuments(data: imageData, named: fileName)
-            print("✅ FirestoreService: ローカル画像保存成功 - \(fileName)")
+            print("FirestoreService: ローカル画像保存成功 - \(fileName)")
             completion(.success(fileName))
         } catch {
-            print("❌ FirestoreService: ローカル画像保存失敗 - \(error.localizedDescription)")
+            print("FirestoreService: ローカル画像保存失敗 - \(error.localizedDescription)")
             completion(.failure(APIClientError.storageError(error)))
         }
     }

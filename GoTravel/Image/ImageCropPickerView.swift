@@ -19,13 +19,13 @@ struct ImageCropPickerView: View {
                     image: selectedImage,
                     aspectRatio: aspectRatio,
                     onCrop: { croppedImage in
-                        print("🖼️ ImageCropPickerView: トリミング完了 - サイズ: \(croppedImage.size)")
+                        print("ImageCropPickerView: トリミング完了 - サイズ: \(croppedImage.size)")
                         image = croppedImage
-                        print("🖼️ ImageCropPickerView: 画像をバインディングに設定")
+                        print("ImageCropPickerView: 画像をバインディングに設定")
                         presentationMode.wrappedValue.dismiss()
                     },
                     onCancel: {
-                        print("❌ ImageCropPickerView: キャンセル")
+                        print("ImageCropPickerView: キャンセル")
                         self.selectedImage = nil
                         presentationMode.wrappedValue.dismiss()
                     }
@@ -38,17 +38,16 @@ struct ImageCropPickerView: View {
             }
         }
         .sheet(isPresented: $showImagePicker, onDismiss: {
-            print("📷 ImagePickerView閉じた")
+            print("ImagePickerView閉じた")
             isPickerDismissed = true
         }) {
             ImagePickerView(sourceType: .photoLibrary, image: $selectedImage)
         }
         .onChange(of: selectedImage) { _, newValue in
             if let img = newValue {
-                print("📸 ImageCropPickerView: selectedImage更新 - サイズ: \(img.size)")
+                print("ImageCropPickerView: selectedImage更新 - サイズ: \(img.size)")
             } else if isPickerDismissed && newValue == nil {
-                // Pickerが閉じられて、画像がnilの場合のみ親を閉じる
-                print("⚠️ ImageCropPickerView: 画像が選択されなかったので閉じます")
+                print("ImageCropPickerView: 画像が選択されなかったので閉じます")
                 presentationMode.wrappedValue.dismiss()
             }
         }
@@ -85,7 +84,6 @@ struct ImageCropperView: View {
                     .gesture(
                         MagnificationGesture()
                             .onChanged { value in
-                                // 相対値を使ってスムーズに
                                 let newScale = lastScale * value
                                 scale = min(max(newScale, minScale), maxScale)
                             }
@@ -104,17 +102,14 @@ struct ImageCropperView: View {
                             }
                     )
 
-                // 切り抜き枠（中央）
                 Rectangle()
                     .stroke(Color.white, lineWidth: 2)
                     .frame(width: cropSize.width, height: cropSize.height)
                     .allowsHitTesting(false)
 
-                // 暗いオーバーレイ
                 CropOverlay(cropSize: cropSize)
                     .allowsHitTesting(false)
 
-                // ボタン
                 VStack {
                     Spacer()
                     HStack(spacing: 40) {
@@ -153,7 +148,6 @@ struct ImageCropperView: View {
             let size = min(maxWidth, maxHeight)
             return CGSize(width: size, height: size)
         } else {
-            // 横長 or 縦長に合わせる
             let width = min(maxWidth, maxHeight * aspectRatio)
             let height = width / aspectRatio
             return CGSize(width: width, height: height)
@@ -162,34 +156,26 @@ struct ImageCropperView: View {
 
     private func cropImage(geometry: GeometryProxy, cropSize: CGSize) {
         let containerSize = geometry.size
-        let imgSize = image.size // UIImageの"ポイント"単位
+        let imgSize = image.size
         let imgAspect = imgSize.width / imgSize.height
         let containerAspect = containerSize.width / containerSize.height
-
-        // 1) scaledToFit によるフィットサイズ（scaleEffect前）
         let fittedSize: CGSize
         if imgAspect > containerAspect {
-            // 画像が横長 -> containerの幅に合わせる
             let w = containerSize.width
             let h = w / imgAspect
             fittedSize = CGSize(width: w, height: h)
         } else {
-            // 画像が縦長 -> containerの高さに合わせる
             let h = containerSize.height
             let w = h * imgAspect
             fittedSize = CGSize(width: w, height: h)
         }
 
-        // 2) 実際に表示されているサイズ（scaleEffect を反映）
         let displayedSize = CGSize(width: fittedSize.width * scale, height: fittedSize.height * scale)
-
-        // 3) 表示中画像の左上座標（コンテナ座標系）
         let imageOrigin = CGPoint(
             x: (containerSize.width - displayedSize.width) / 2 + offset.width,
             y: (containerSize.height - displayedSize.height) / 2 + offset.height
         )
 
-        // 4) 切り抜き枠（コンテナ座標系：中央に配置）
         let cropRectInContainer = CGRect(
             x: (containerSize.width - cropSize.width) / 2,
             y: (containerSize.height - cropSize.height) / 2,
@@ -197,42 +183,33 @@ struct ImageCropperView: View {
             height: cropSize.height
         )
 
-        // 5) 切り抜き枠が表示画像内での相対位置（表示画像の左上を(0,0)とした座標）
         let relativeOriginInDisplayed = CGPoint(
             x: cropRectInContainer.origin.x - imageOrigin.x,
             y: cropRectInContainer.origin.y - imageOrigin.y
         )
 
-        // 6) 表示 -> 画像（ポイント）へのスケール係数
-        // displayedSize.width は view 上のポイント、imgSize.width は画像のポイント
         let displayToImageScale = imgSize.width / displayedSize.width
-
-        // 切り抜き領域（画像のポイント座標系）
         var cropRectInImagePoints = CGRect(
             x: relativeOriginInDisplayed.x * displayToImageScale,
             y: relativeOriginInDisplayed.y * displayToImageScale,
             width: cropRectInContainer.width * displayToImageScale,
             height: cropRectInContainer.height * displayToImageScale
         )
-
-        // 7) 画像の bounds と交差させてクリップ（範囲外ははみ出さないように）
+        
         let imageBounds = CGRect(origin: .zero, size: imgSize)
         cropRectInImagePoints = cropRectInImagePoints.intersection(imageBounds)
 
         if cropRectInImagePoints.isNull || cropRectInImagePoints.width <= 0 || cropRectInImagePoints.height <= 0 {
-            // 切り抜き範囲が無効なら（全部はみ出してる等） → 元画像を返す
             onCrop(image)
             return
         }
 
-        // 8) UIGraphicsImageRenderer を用いて、UIImage の回転/向きも考慮して切り抜く
         let format = UIGraphicsImageRendererFormat()
-        format.scale = image.scale // ピクセル単位を保つ
+        format.scale = image.scale
         format.opaque = false
 
         let renderer = UIGraphicsImageRenderer(size: cropRectInImagePoints.size, format: format)
         let cropped = renderer.image { _ in
-            // 描画するときに、切り取り領域が (0,0) に来るように画像をマイナスオフセットで描画する
             let drawOrigin = CGPoint(x: -cropRectInImagePoints.origin.x, y: -cropRectInImagePoints.origin.y)
             image.draw(at: drawOrigin)
         }
@@ -241,7 +218,6 @@ struct ImageCropperView: View {
     }
 }
 
-// Overlay（切り抜き領域以外を暗くする）
 struct CropOverlay: View {
     let cropSize: CGSize
 
@@ -249,10 +225,7 @@ struct CropOverlay: View {
         GeometryReader { geometry in
             let container = geometry.size
             ZStack {
-                // 黒半透明全体
                 Color.black.opacity(0.6)
-
-                // 中央に透明枠をくり抜く
                 Rectangle()
                     .frame(width: cropSize.width, height: cropSize.height)
                     .blendMode(.destinationOut)

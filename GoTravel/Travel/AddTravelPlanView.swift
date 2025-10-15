@@ -244,10 +244,10 @@ struct AddTravelPlanView: View {
 
     // MARK: - Actions
     private func saveTravelPlan() {
-        print("🎯 AddTravelPlanView: 保存処理開始")
-        print("   タイトル: \(title)")
-        print("   目的地: \(destination)")
-        print("   画像: \(selectedImage != nil ? "あり" : "なし")")
+        print("AddTravelPlanView: 保存処理開始")
+        print("タイトル: \(title)")
+        print("目的地: \(destination)")
+        print("画像: \(selectedImage != nil ? "あり" : "なし")")
 
         isUploading = true
 
@@ -259,17 +259,16 @@ struct AddTravelPlanView: View {
     }
 
     private func saveWithImage(_ image: UIImage) {
-        print("📸 AddTravelPlanView: 画像ローカル保存開始")
+        print("AddTravelPlanView: 画像ローカル保存開始")
         FirestoreService.shared.saveTravelPlanImageLocally(image) { result in
             DispatchQueue.main.async {
                 switch result {
                 case .success(let fileName):
-                    print("✅ AddTravelPlanView: 画像保存成功 - \(fileName)")
+                    print("AddTravelPlanView: 画像保存成功 - \(fileName)")
                     createAndSavePlan(withImageFileName: fileName)
 
                 case .failure(let error):
-                    print("❌ AddTravelPlanView: 画像保存エラー - \(error.localizedDescription)")
-                    // エラーでも画像なしで保存
+                    print("AddTravelPlanView: 画像保存エラー - \(error.localizedDescription)")
                     createAndSavePlan(withImageFileName: nil)
                 }
             }
@@ -277,7 +276,7 @@ struct AddTravelPlanView: View {
     }
 
     private func saveWithoutImage() {
-        print("⚪️ AddTravelPlanView: 画像なしで保存")
+        print("AddTravelPlanView: 画像なしで保存")
         createAndSavePlan(withImageFileName: nil)
     }
 
@@ -291,7 +290,7 @@ struct AddTravelPlanView: View {
             cardColor: Color.blue
         )
 
-        print("📤 AddTravelPlanView: onSave呼び出し")
+        print("AddTravelPlanView: onSave呼び出し")
         onSave(plan)
         isUploading = false
         presentationMode.wrappedValue.dismiss()

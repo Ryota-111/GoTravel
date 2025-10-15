@@ -16,10 +16,10 @@ struct GoTravelApp: App {
         // 通知の権限をリクエスト
         NotificationService.shared.requestAuthorization { granted in
             if granted {
-                print("✅ 通知権限が許可されました")
+                print("通知権限が許可されました")
                 // 詳細なステータスを確認
                 NotificationService.shared.checkAuthorizationStatus { status in
-                    print("📱 通知ステータス: \(status.rawValue)")
+                    print("通知ステータス: \(status.rawValue)")
                     switch status {
                     case .authorized:
                         print("   → 許可済み")
@@ -45,6 +45,7 @@ struct GoTravelApp: App {
         WindowGroup {
             SplashScreenView()
                 .environmentObject(authViewModel)
+                .environment(\.locale, Locale(identifier: "ja_JP"))
         }
     }
 }

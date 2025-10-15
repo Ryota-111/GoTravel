@@ -64,9 +64,9 @@ final class ProfileViewModel: ObservableObject {
     func signOut(completion: @escaping (Result<Void, Error>) -> Void) {
             do {
                 try Auth.auth().signOut()
-                print("✅ Signed out")
+                print("Signed out")
             } catch {
-                print("❌ Sign out failed: \(error.localizedDescription)")
+                print("Sign out failed: \(error.localizedDescription)")
             }
         }
 

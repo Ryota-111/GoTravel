@@ -345,9 +345,8 @@ struct EditTravelPlanView: View {
     }
 
     private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MM/dd (E)"
-        formatter.locale = Locale(identifier: "ja_JP")
+        let formatter = DateFormatter.japanese
+        formatter.dateFormat = "M月d日(E)"
         return formatter.string(from: date)
     }
 
@@ -500,9 +499,7 @@ struct DayScheduleEditorView: View {
     }
 
     private func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: date)
+        DateFormatter.japaneseTime.string(from: date)
     }
 }
 

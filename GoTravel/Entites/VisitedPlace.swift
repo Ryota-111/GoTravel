@@ -51,7 +51,6 @@ struct VisitedPlace: Identifiable, Codable, Hashable {
         self.userId = userId
     }
 
-    // PlannedPlaceから作成
     init(from plannedPlace: PlannedPlace,
          travelPlanTitle: String,
          travelPlanId: String?,

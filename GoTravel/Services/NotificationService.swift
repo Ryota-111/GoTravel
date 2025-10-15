@@ -22,8 +22,8 @@ class NotificationService {
     func scheduleTravelPlanNotifications(for plan: TravelPlan) {
         guard let planId = plan.id else { return }
 
-        print("🔔 旅行計画の通知をスケジュール: \(plan.title)")
-        print("   開始日: \(plan.startDate)")
+        print("旅行計画の通知をスケジュール: \(plan.title)")
+        print("開始日: \(plan.startDate)")
 
         cancelTravelPlanNotifications(for: planId)
 
@@ -36,7 +36,7 @@ class NotificationService {
             components.minute = 0
 
             if let scheduledDate = calendar.date(from: components), scheduledDate > now {
-                print("   📅 1週間前の通知をスケジュール: \(scheduledDate)")
+                print("1週間前の通知をスケジュール: \(scheduledDate)")
                 scheduleNotification(
                     id: "\(planId)_week",
                     title: "旅行が1週間後に迫っています",
@@ -46,17 +46,17 @@ class NotificationService {
                     minute: 0
                 )
             } else {
-                print("   ⏭️ 1週間前の通知は過去のためスキップ")
+                print("1週間前の通知は過去のためスキップ")
             }
         }
 
         if let oneDayBefore = calendar.date(byAdding: .day, value: -1, to: plan.startDate) {
             var components = calendar.dateComponents([.year, .month, .day], from: oneDayBefore)
-            components.hour = 18
+            components.hour = 7
             components.minute = 0
 
             if let scheduledDate = calendar.date(from: components), scheduledDate > now {
-                print("   📅 1日前の通知をスケジュール: \(scheduledDate)")
+                print("1日前の通知をスケジュール: \(scheduledDate)")
                 scheduleNotification(
                     id: "\(planId)_day",
                     title: "旅行が明日です",
@@ -66,7 +66,7 @@ class NotificationService {
                     minute: 0
                 )
             } else {
-                print("   ⏭️ 1日前の通知は過去のためスキップ")
+                print("1日前の通知は過去のためスキップ")
             }
         }
 
@@ -98,7 +98,7 @@ class NotificationService {
                     title: "おでかけが明日です",
                     body: "\(plan.title)が明日です。楽しみですね！",
                     date: oneDayBefore,
-                    hour: 18,
+                    hour: 7,
                     minute: 0
                 )
             }
@@ -110,7 +110,7 @@ class NotificationService {
                     title: "予定が明日です",
                     body: "\(plan.title)が明日です。準備をお忘れなく！",
                     date: oneDayBefore,
-                    hour: 18,
+                    hour: 7,
                     minute: 0
                 )
             }
@@ -171,7 +171,7 @@ class NotificationService {
             if let error = error {
                 print("通知スケジュールエラー (\(id)): \(error.localizedDescription)")
             } else {
-                print("✅ 通知をスケジュール: \(id) - \(title)")
+                print("通知をスケジュール: \(id) - \(title)")
             }
         }
     }
@@ -179,14 +179,14 @@ class NotificationService {
     // MARK: - Debug
     func listPendingNotifications(completion: @escaping () -> Void = {}) {
         UNUserNotificationCenter.current().getPendingNotificationRequests { requests in
-            print("📱 保留中の通知: \(requests.count)件")
+            print("保留中の通知: \(requests.count)件")
             for request in requests {
                 print("  - \(request.identifier): \(request.content.title)")
                 if let trigger = request.trigger as? UNCalendarNotificationTrigger,
                    let nextTriggerDate = trigger.nextTriggerDate() {
-                    print("    実行予定: \(nextTriggerDate)")
+                    print("実行予定: \(nextTriggerDate)")
                 } else {
-                    print("    トリガー情報なし")
+                    print("トリガー情報なし")
                 }
             }
             completion()

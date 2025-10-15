@@ -2,16 +2,12 @@ import SwiftUI
 
 struct HomeView: View {
     @StateObject private var vm = ProfileViewModel()
+    @Environment(\.colorScheme) var colorScheme
     
     var body: some View {
         NavigationView {
             ZStack {
-                LinearGradient(
-                    gradient: Gradient(colors: [.blue.opacity(0.8), .black]),
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
+                backgroundGradient
                 
                 ScrollView {
                     VStack(spacing: 20) {
@@ -89,6 +85,15 @@ struct HomeView: View {
         .padding()
         .background(Color.white.opacity(0.1))
         .cornerRadius(15)
+    }
+    
+    private var backgroundGradient: some View {
+        LinearGradient(
+            gradient: Gradient(colors: colorScheme == .dark ? [.blue.opacity(0.7), .black] : [.blue.opacity(0.6), .white]),
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
     }
 }
 

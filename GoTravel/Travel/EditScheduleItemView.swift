@@ -222,9 +222,8 @@ struct EditScheduleItemView: View {
 
     // MARK: - Helper Methods
     private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MM/dd (E)"
-        formatter.locale = Locale(identifier: "ja_JP")
+        let formatter = DateFormatter.japanese
+        formatter.dateFormat = "M月d日(E)"
         return formatter.string(from: date)
     }
 

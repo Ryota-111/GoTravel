@@ -16,7 +16,7 @@ struct BudgetSummaryView: View {
         let costsArray = allItems.compactMap { $0.cost }
         let total = costsArray.reduce(0, +)
 
-        print("💵 BudgetSummaryView: 合計金額: \(total)")
+        print("BudgetSummaryView: 合計金額: \(total)")
         return total
     }
 
@@ -248,16 +248,16 @@ struct BudgetSummaryView: View {
     }
 
     private func logBudgetDetails(allItems: [ScheduleItem]) {
-        print("💵 BudgetSummaryView: 全スケジュール数: \(allItems.count)")
-        print("💵 BudgetSummaryView: Plan ID: \(plan.id ?? "nil")")
-        print("💵 BudgetSummaryView: スケジュール詳細:")
+        print("BudgetSummaryView: 全スケジュール数: \(allItems.count)")
+        print("BudgetSummaryView: Plan ID: \(plan.id ?? "nil")")
+        print("BudgetSummaryView: スケジュール詳細:")
         for (index, item) in allItems.enumerated() {
             print("  [\(index)] \(item.title) - 金額: \(item.cost?.description ?? "nil")")
         }
 
         let costsArray = allItems.compactMap { $0.cost }
-        print("💵 BudgetSummaryView: 金額がある項目数: \(costsArray.count)")
-        print("💵 BudgetSummaryView: 金額の配列: \(costsArray)")
+        print("BudgetSummaryView: 金額がある項目数: \(costsArray.count)")
+        print("BudgetSummaryView: 金額の配列: \(costsArray)")
     }
 
     private func formatCurrency(_ amount: Double) -> String {
@@ -268,9 +268,8 @@ struct BudgetSummaryView: View {
     }
 
     private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MM/dd (E)"
-        formatter.locale = Locale(identifier: "ja_JP")
+        let formatter = DateFormatter.japanese
+        formatter.dateFormat = "M月d日(E)"
         return formatter.string(from: date)
     }
 }

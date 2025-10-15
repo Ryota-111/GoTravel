@@ -251,7 +251,7 @@ struct EnjoyWorldView: View {
     // MARK: - Helper Views
     private func tabButton(for tab: TabType) -> some View {
         Button(action: {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+            withAnimation(.spring(response: 0.7, dampingFraction: 0.7)) {
                 selectedTab = tab
             }
         }) {
@@ -274,7 +274,7 @@ struct EnjoyWorldView: View {
 
     private func planTabButton(for tab: PlanTabType) -> some View {
         Button(action: {
-            withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {
+            withAnimation(.spring(response: 0.7, dampingFraction: 0.7)) {
                 selectedPlanTab = tab
             }
         }) {
@@ -333,12 +333,17 @@ struct EnjoyWorldView: View {
                         }
                     )
                     .environmentObject(travelPlanViewModel)
+                    .transition(.asymmetric(
+                        insertion: .scale(scale: 0.3).combined(with: .opacity),
+                        removal: .opacity
+                    ))
                 }
 
                 addTravelPlanButton
             }
             .padding(.horizontal, 20)
         }
+        .animation(.spring(response: 0.7, dampingFraction: 0.6), value: plans.count)
     }
 
     private var addTravelPlanButton: some View {
@@ -398,6 +403,7 @@ struct EnjoyWorldView: View {
                     showPlanDeleteConfirmation = true
                 }
             )
+            .animation(.spring(response: 0.7, dampingFraction: 0.6), value: currentFilteredPlans.count)
 
             PlanEventSectionView(
                 title: "今後の予定",
@@ -408,6 +414,7 @@ struct EnjoyWorldView: View {
                     showPlanDeleteConfirmation = true
                 }
             )
+            .animation(.spring(response: 0.7, dampingFraction: 0.6), value: futureFilteredPlans.count)
 
             PlanEventSectionView(
                 title: "過去の予定",
@@ -418,6 +425,7 @@ struct EnjoyWorldView: View {
                     showPlanDeleteConfirmation = true
                 }
             )
+            .animation(.spring(response: 0.7, dampingFraction: 0.6), value: pastFilteredPlans.count)
 
             addPlanButton
         }
@@ -631,8 +639,8 @@ struct TravelPlanCard: View {
     }
 
     private func dateRangeString(from start: Date, to end: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MM/dd"
+        let formatter = DateFormatter.japanese
+        formatter.dateFormat = "M/d"
         return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
     }
 }
@@ -658,6 +666,10 @@ struct PlanEventSectionView: View {
                         })
                     }
                     .buttonStyle(PlainButtonStyle())
+                    .transition(.asymmetric(
+                        insertion: .scale(scale: 0.3).combined(with: .opacity),
+                        removal: .opacity
+                    ))
                 }
             }
         }
@@ -741,14 +753,11 @@ struct PlanEventCardView: View {
     }
 
     private func dateString(_ d: Date) -> String {
-        DateFormatter.localizedString(from: d, dateStyle: .medium, timeStyle: .none)
+        DateFormatter.japaneseDate.string(from: d)
     }
 
     private func formatTime(_ time: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .none
-        formatter.timeStyle = .short
-        return formatter.string(from: time)
+        DateFormatter.japaneseTime.string(from: time)
     }
 }
 
@@ -861,8 +870,8 @@ struct PlanEventCard: View {
     }
 
     private func dateRangeString(from start: Date, to end: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MM/dd"
+        let formatter = DateFormatter.japanese
+        formatter.dateFormat = "M/d"
         return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
     }
 }

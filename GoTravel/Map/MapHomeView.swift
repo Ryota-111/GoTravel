@@ -1,115 +1,282 @@
 import SwiftUI
 import MapKit
+import Combine
+
+extension CLLocationCoordinate2D {
+    static let tokyoStation = CLLocationCoordinate2D(latitude: 35.6812, longitude: 139.7671)
+}
+
+// MARK: - Location Manager
+class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
+    private let manager = CLLocationManager()
+    @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
+
+    override init() {
+        super.init()
+        manager.delegate = self
+        manager.desiredAccuracy = kCLLocationAccuracyBest
+        authorizationStatus = manager.authorizationStatus
+    }
+
+    func requestPermission() {
+        manager.requestWhenInUseAuthorization()
+    }
+
+    func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
+        authorizationStatus = manager.authorizationStatus
+    }
+}
 
 struct MapHomeView: View {
     @EnvironmentObject var auth: AuthViewModel
     @StateObject private var vm = PlacesViewModel()
-    @State private var centerCoordinate = CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529)
-    @State private var selectedCoordinate: CLLocationCoordinate2D?
-    @State private var showingSaveSheet: Bool = false
-    @State private var searchText = ""
+    @StateObject private var locationManager = LocationManager()
+    @State private var inputText = ""
     @State private var searchResults: [MKMapItem] = []
-    @State private var zoomLevel: Double?
-    @State private var searchWorkItem: DispatchWorkItem?
-
+    @State private var location: CLLocationCoordinate2D = .tokyoStation
+    @State private var position: MapCameraPosition = .region(MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529), // 日本の中心
+        span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
+    ))
+    @State private var visibleRegion: MKCoordinateRegion?
+    @State private var selectedResult: MKMapItem?
+    @State private var showingSaveSheet: Bool = false
+    
     var body: some View {
-        ZStack(alignment: .top) {
-            MapViewRepresentable(
-                centerCoordinate: $centerCoordinate,
-                selectedCoordinate: $selectedCoordinate,
-                annotations: mkAnnotations(),
-                zoomLevel: zoomLevel
-            )
-            .edgesIgnoringSafeArea(.all)
-
-            VStack {
-                HStack {
-                    TextField("場所を検索", text: $searchText)
-                        .textFieldStyle(RoundedBorderTextFieldStyle())
-                        .background(Color.white.opacity(0.8))
-                        .cornerRadius(10)
-                        .onChange(of: searchText) { oldValue, newValue in
-                            searchWorkItem?.cancel()
-
-                            let workItem = DispatchWorkItem { [self] in
-                                if !newValue.isEmpty && newValue.count >= 3 {
-                                    performSearch()
-                                } else {
-                                    searchResults = []
-                                }
-                            }
-
-                            DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
-                            searchWorkItem = workItem
-                        }
-                        .onSubmit {
-                            performSearch()
-                        }
+        Map(position: $position, selection: $selectedResult) {
+            UserAnnotation(anchor: .top) { userLocation in
+                EmptyView()
+                    .onAppear {
+                        location = userLocation.location?.coordinate ?? .tokyoStation
+                    }
+            }
+            
+            ForEach(searchResults, id: \.self) { result in
+                Marker(item: result)
+                    .tint(.red)
+            }
+            
+            ForEach(vm.places) { place in
+                Annotation(place.title, coordinate: place.coordinate) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.red.opacity(0.3))
+                            .frame(width: 32, height: 32)
+                        
+                        Image(systemName: "mappin.circle.fill")
+                            .foregroundStyle(.red)
+                            .font(.title2)
+                    }
                 }
-                .padding()
-                .background(Color.white.opacity(0.5))
-
-                Spacer()
             }
         }
-        .onChange(of: selectedCoordinate) { _, newValue in
-            if let _ = newValue {
-                showingSaveSheet = true
+        .safeAreaInset(edge: .top) {
+            searchBarView
+        }
+        .safeAreaInset(edge: .bottom) {
+            if let selectedResult {
+                selectedResultDetailView(selectedResult)
             }
+        }
+        .onMapCameraChange { context in
+            visibleRegion = context.region
         }
         .sheet(isPresented: $showingSaveSheet, onDismiss: {
-            selectedCoordinate = nil
+            selectedResult = nil
         }) {
-            if let coord = selectedCoordinate {
-                SavePlaceView(vm: SavePlaceViewModel(coord: coord))
-                    .environmentObject(auth)
+            if let result = selectedResult {
+                SavePlaceView(vm: {
+                    let vm = SavePlaceViewModel(coord: result.placemark.coordinate)
+                    vm.title = result.name ?? ""
+                    return vm
+                }())
+                .environmentObject(auth)
             }
         }
         .navigationTitle("マップ")
+        .onAppear {
+            locationManager.requestPermission()
+        }
     }
 
-    private func performSearch() {
-        let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = searchText
+    // MARK: - Search Bar View
+    private var searchBarView: some View {
+        TextField("場所を検索", text: $inputText)
+            .textFieldStyle(.plain)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(Color(.systemBackground))
+            .cornerRadius(10)
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial)
+            .onSubmit {
+                Task {
+                    searchResults = await searchLocations(searchText: inputText)
+                    if let firstResult = searchResults.first {
+                        withAnimation {
+                            position = .region(MKCoordinateRegion(
+                                center: firstResult.placemark.coordinate,
+                                span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                            ))
+                        }
+                    }
+                    inputText = ""
+                }
+            }
+    }
 
-        let region = MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
-            span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
-        )
-        request.region = region
+    // MARK: - Selected Result Detail View
+    private func selectedResultDetailView(_ result: MKMapItem) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(result.name ?? "名称なし")
+                        .font(.title2)
+                        .fontWeight(.bold)
 
-        let search = MKLocalSearch(request: request)
+                    if let category = result.pointOfInterestCategory?.rawValue {
+                        Text(category)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
 
-        search.start { [self] response, error in
-            guard let response = response, !response.mapItems.isEmpty else {
-                print("検索エラー: \(error?.localizedDescription ?? "不明なエラー")")
-                return
+                Spacer()
             }
 
-            if let firstItem = response.mapItems.first,
-               let location = firstItem.placemark.location {
-                DispatchQueue.main.async {
-                    zoomToLocation(location.coordinate)
-                    searchText = ""
+            if let address = result.placemark.title {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "mappin.circle.fill")
+                        .foregroundStyle(.red)
+                        .font(.title3)
+                    Text(address)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let phoneNumber = result.phoneNumber {
+                HStack(spacing: 8) {
+                    Image(systemName: "phone.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.title3)
+                    Text(phoneNumber)
+                        .font(.subheadline)
+                    Spacer()
+                    Button {
+                        if let url = URL(string: "tel:\(phoneNumber.replacingOccurrences(of: " ", with: ""))") {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        Text("電話")
+                            .font(.caption)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.green)
+                            .foregroundStyle(.white)
+                            .cornerRadius(8)
+                    }
+                }
+            }
+
+            if let url = result.url {
+                HStack(spacing: 8) {
+                    Image(systemName: "safari.fill")
+                        .foregroundStyle(.blue)
+                        .font(.title3)
+                    Text(url.host ?? "Website")
+                        .font(.subheadline)
+                        .lineLimit(1)
+                    Spacer()
+                    Button {
+                        UIApplication.shared.open(url)
+                    } label: {
+                        Text("開く")
+                            .font(.caption)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.blue)
+                            .foregroundStyle(.white)
+                            .cornerRadius(8)
+                    }
+                }
+            }
+
+            Divider()
+
+            HStack(spacing: 12) {
+                Button {
+                    result.openInMaps()
+                } label: {
+                    Label("経路", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.blue.opacity(0.1))
+                        .foregroundStyle(.blue)
+                        .cornerRadius(10)
+                }
+
+                Button {
+                    showingSaveSheet = true
+                } label: {
+                    Label("保存", systemImage: "bookmark.fill")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.orange.opacity(0.1))
+                        .foregroundStyle(.orange)
+                        .cornerRadius(10)
                 }
             }
         }
+        .padding(20)
+        .background(.ultraThinMaterial)
+        .cornerRadius(20)
+        .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: -4)
+        .padding(.horizontal)
+        .padding(.bottom, 12)
     }
 
-    private func zoomToLocation(_ coordinate: CLLocationCoordinate2D) {
-        withAnimation {
-            centerCoordinate = coordinate
-            zoomLevel = 0.01
+    // MARK: - Search Locations
+    private func searchLocations(searchText: String) async -> [MKMapItem] {
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = searchText
+        request.resultTypes = .pointOfInterest
+        request.region = visibleRegion ?? MKCoordinateRegion(
+            center: location,
+            span: MKCoordinateSpan(latitudeDelta: 0.0125, longitudeDelta: 0.0125)
+        )
+
+        do {
+            let search = MKLocalSearch(request: request)
+            let response = try await search.start().mapItems
+            return response
+        } catch {
+            print("検索エラー: \(error.localizedDescription)")
+            return []
         }
     }
+}
 
-    private func mkAnnotations() -> [MKPointAnnotation] {
-        vm.places.map { place in
-            let ann = MKPointAnnotation()
-            ann.title = place.title
-            ann.coordinate = place.coordinate
-            return ann
+// MARK: - Info Chip Component
+struct InfoChip: View {
+    let icon: String
+    let text: String
+    let color: Color
+
+    var body: some View {
+        HStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.caption)
+            Text(text)
+                .font(.caption)
+                .lineLimit(1)
         }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(color)
+        .cornerRadius(12)
     }
 }
 

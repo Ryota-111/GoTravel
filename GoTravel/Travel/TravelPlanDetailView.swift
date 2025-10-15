@@ -297,14 +297,14 @@ struct TravelPlanDetailView: View {
     }
 
     private func dateRangeString(plan: TravelPlan) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MM/dd"
+        let formatter = DateFormatter.japanese
+        formatter.dateFormat = "M/d"
         return "\(formatter.string(from: plan.startDate)) - \(formatter.string(from: plan.endDate))"
     }
 
     private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "MM/dd"
+        let formatter = DateFormatter.japanese
+        formatter.dateFormat = "M月d日"
         return formatter.string(from: date)
     }
 }
@@ -556,9 +556,7 @@ struct ScheduleItemCard: View {
 
     // MARK: - Helper Methods
     private func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: date)
+        DateFormatter.japaneseTime.string(from: date)
     }
 
     private func formatCurrency(_ amount: Double) -> String {

@@ -19,7 +19,6 @@ struct AlbamHomeView: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 10) {
                         titleSection
-                        
                         JapanHomeCard
                     }
                 }
@@ -40,11 +39,20 @@ struct AlbamHomeView: View {
                 Text("日本地図アルバム")
                     .foregroundColor(.gray)
             }
-            NavigationLink(destination: JapanPhotoView()) {
-                Image("GoTravel_background")
+            
+            ZStack {
+                Image("prefecture_japan")
                     .resizable()
-                    .frame(width: 330, height: 150)
+                    .scaledToFill()
+                    .frame(width: 340, height: 170)
+                    .clipShape(Rectangle())
                     .cornerRadius(25)
+                
+                NavigationLink(destination: JapanPhotoView()) {
+                    RoundedRectangle(cornerRadius: 25)
+                        .fill(Color.black.opacity(0.3))
+                        .frame(width: 340, height: 170)
+                }
             }
         }
     }

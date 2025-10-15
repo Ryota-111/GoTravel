@@ -99,10 +99,10 @@ struct SaveAsVisitedView: View {
                 isSaving = false
                 switch result {
                 case .success:
-                    print("✅ 訪問地として保存成功")
+                    print("訪問地として保存成功")
                     presentationMode.wrappedValue.dismiss()
                 case .failure(let error):
-                    print("❌ 訪問地の保存エラー: \(error.localizedDescription)")
+                    print("訪問地の保存エラー: \(error.localizedDescription)")
                 }
             }
         }

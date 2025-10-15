@@ -106,24 +106,22 @@ struct SaveAsVisitedFromScheduleView: View {
     private func saveVisitedPlace() {
         isSaving = true
 
-        print("🔍 SaveAsVisitedFromScheduleView: 保存開始")
-        print("   scheduleItem.mapURL: \(scheduleItem.mapURL ?? "なし")")
+        print("SaveAsVisitedFromScheduleView: 保存開始")
+        print("scheduleItem.mapURL: \(scheduleItem.mapURL ?? "なし")")
 
-        // バックグラウンドスレッドで住所抽出を実行（短縮URL展開が含まれるため）
         DispatchQueue.global(qos: .userInitiated).async {
             var address: String? = scheduleItem.location
 
-            // mapURLから住所を抽出
             if let mapURL = scheduleItem.mapURL {
                 if let extractedAddress = MapURLParser.extractAddress(from: mapURL) {
                     address = extractedAddress
-                    print("📍 mapURLから住所を抽出: \(extractedAddress)")
+                    print("mapURLから住所を抽出: \(extractedAddress)")
                 } else {
-                    print("⚠️ mapURLから住所を抽出できませんでした")
+                    print("mapURLから住所を抽出できませんでした")
                 }
             }
 
-            print("💾 保存する住所: \(address ?? "なし")")
+            print("保存する住所: \(address ?? "なし")")
 
             let visitedPlace = VisitedPlace(
                 title: travelPlanTitle + " - " + scheduleItem.title,
@@ -140,10 +138,10 @@ struct SaveAsVisitedFromScheduleView: View {
                     isSaving = false
                     switch result {
                     case .success:
-                        print("✅ 訪問地として保存成功")
+                        print("訪問地として保存成功")
                         presentationMode.wrappedValue.dismiss()
                     case .failure(let error):
-                        print("❌ 訪問地の保存エラー: \(error.localizedDescription)")
+                        print("訪問地の保存エラー: \(error.localizedDescription)")
                     }
                 }
             }

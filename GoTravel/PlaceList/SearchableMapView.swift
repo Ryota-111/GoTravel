@@ -56,7 +56,7 @@ struct SearchableMapView: View {
                 point.title = item.name ?? query
                 annotation = point
 
-                print("✅ 検索成功: \(coordinate.latitude), \(coordinate.longitude)")
+                print("検索成功: \(coordinate.latitude), \(coordinate.longitude)")
             }
         }
     }

@@ -34,21 +34,21 @@ struct ImagePickerView: UIViewControllerRepresentable {
 
         func picker(_ picker: PHPickerViewController, didFinishPicking results: [PHPickerResult]) {
             parent.presentationMode.wrappedValue.dismiss()
-            print("📱 ImagePickerView: PHPicker終了 - results count: \(results.count)")
+            print("ImagePickerView: PHPicker終了 - results count: \(results.count)")
             guard let item = results.first else {
-                print("⚠️ ImagePickerView: 画像が選択されませんでした")
+                print("ImagePickerView: 画像が選択されませんでした")
                 return
             }
             if item.itemProvider.canLoadObject(ofClass: UIImage.self) {
                 item.itemProvider.loadObject(ofClass: UIImage.self) { (obj, error) in
                     if let img = obj as? UIImage {
-                        print("✅ ImagePickerView: 画像ロード成功 - サイズ: \(img.size)")
+                        print("ImagePickerView: 画像ロード成功 - サイズ: \(img.size)")
                         DispatchQueue.main.async {
                             self.parent.image = img
-                            print("🔄 ImagePickerView: バインディングに画像を設定")
+                            print("ImagePickerView: バインディングに画像を設定")
                         }
                     } else {
-                        print("❌ ImagePickerView: 画像ロード失敗 - error: \(error?.localizedDescription ?? "不明")")
+                        print("ImagePickerView: 画像ロード失敗 - error: \(error?.localizedDescription ?? "不明")")
                     }
                 }
             }

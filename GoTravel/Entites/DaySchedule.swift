@@ -1,7 +1,6 @@
 import Foundation
 import SwiftUI
 
-// 1日のスケジュール
 struct DaySchedule: Identifiable, Codable {
     var id: String = UUID().uuidString
     var dayNumber: Int // 1, 2, 3...
@@ -16,18 +15,17 @@ struct DaySchedule: Identifiable, Codable {
     }
 }
 
-// スケジュールアイテム（時間ごとの予定）
 struct ScheduleItem: Identifiable, Codable {
     var id: String = UUID().uuidString
-    var time: Date // 時刻
-    var title: String // タイトル（例：「浅草寺観光」）
-    var location: String? // 場所
-    var notes: String? // メモ
+    var time: Date
+    var title: String
+    var location: String?
+    var notes: String?
     var latitude: Double?
     var longitude: Double?
-    var cost: Double? // 金額（オプショナル）
-    var mapURL: String? // 地図URL（Google Maps等）
-    var linkURL: String? // 関連リンク
+    var cost: Double?
+    var mapURL: String?
+    var linkURL: String?
 
     enum CodingKeys: String, CodingKey {
         case id, time, title, location, notes, latitude, longitude, cost, mapURL, linkURL

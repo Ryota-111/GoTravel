@@ -3,8 +3,8 @@ import SwiftUI
 
 // MARK: - Plan Type
 enum PlanType: String, Codable {
-    case outing    // おでかけ用
-    case daily     // 日常用
+    case outing
+    case daily
 }
 
 struct Plan: Identifiable, Codable {
@@ -17,20 +17,16 @@ struct Plan: Identifiable, Codable {
     var localImageFileName: String?
     var userId: String?
     var createdAt: Date
-
-    // 新規追加フィールド
     var planType: PlanType = .outing
-    var time: Date?              // 日常用の時間
-    var description: String?     // 日常用の「何をするのか」
-    var linkURL: String?         // 日常用のリンク
+    var time: Date?
+    var description: String?
+    var linkURL: String?
 
-    // Codable用のキー
     enum CodingKeys: String, CodingKey {
         case id, title, startDate, endDate, places, cardColorHex, localImageFileName, userId, createdAt
         case planType, time, description, linkURL
     }
 
-    // Color → Hex
     var cardColorHex: String? {
         guard let color = cardColor else { return nil }
         let uiColor = UIColor(color)
@@ -39,7 +35,6 @@ struct Plan: Identifiable, Codable {
         return String(format: "#%02X%02X%02X", Int(r*255), Int(g*255), Int(b*255))
     }
 
-    // 初期化
     init(id: String = UUID().uuidString,
          title: String,
          startDate: Date,
@@ -68,7 +63,6 @@ struct Plan: Identifiable, Codable {
         self.linkURL = linkURL
     }
 
-    // デコード
     init(from decoder: Decoder) throws {
         let container = try decoder.container(keyedBy: CodingKeys.self)
         id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
@@ -90,7 +84,6 @@ struct Plan: Identifiable, Codable {
         }
     }
 
-    // エンコード
     func encode(to encoder: Encoder) throws {
         var container = encoder.container(keyedBy: CodingKeys.self)
         try container.encode(id, forKey: .id)
@@ -109,7 +102,6 @@ struct Plan: Identifiable, Codable {
     }
 }
 
-// Color拡張
 extension Color {
     init?(hex: String) {
         let r, g, b: CGFloat
@@ -131,7 +123,6 @@ extension Color {
         return nil
     }
 
-    // Color → Hex変換
     func toHex() -> String? {
         let uiColor = UIColor(self)
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0

@@ -209,10 +209,7 @@ struct PlacesListView: View {
 
     // MARK: - Helper Methods
     private func formattedDate(_ place: VisitedPlace) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
-
+        let formatter = DateFormatter.japaneseDate
         return place.visitedAt != nil
             ? formatter.string(from: place.visitedAt!)
             : formatter.string(from: place.createdAt)

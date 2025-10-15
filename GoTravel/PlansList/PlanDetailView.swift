@@ -165,25 +165,16 @@ struct PlanDetailView: View {
     }
     
     private func dateRangeString(_ start: Date, _ end: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
-
+        let formatter = DateFormatter.japaneseDate
         return "\(formatter.string(from: start)) 〜 \(formatter.string(from: end))"
     }
 
     private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .medium
-        formatter.timeStyle = .none
-        return formatter.string(from: date)
+        DateFormatter.japaneseDate.string(from: date)
     }
 
     private func formatTime(_ time: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .none
-        formatter.timeStyle = .short
-        return formatter.string(from: time)
+        DateFormatter.japaneseTime.string(from: time)
     }
 }
 

@@ -12,7 +12,7 @@ struct MainTabView: View {
             PlacesListView()
                 .tabItem { Label("場所保存", systemImage: "list.bullet") }
                 .tag(1)
-            JapanPhotoView()
+            AlbamHomeView()
                 .tabItem { Label("アルバム", systemImage: "photo.artframe") }
                 .tag(2)
             HomeView()
