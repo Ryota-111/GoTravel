@@ -13,11 +13,9 @@ struct GoTravelApp: App {
         let avm = AuthViewModel()
         _authViewModel = StateObject(wrappedValue: avm)
 
-        // 通知の権限をリクエスト
         NotificationService.shared.requestAuthorization { granted in
             if granted {
                 print("通知権限が許可されました")
-                // 詳細なステータスを確認
                 NotificationService.shared.checkAuthorizationStatus { status in
                     print("通知ステータス: \(status.rawValue)")
                     switch status {
@@ -36,7 +34,7 @@ struct GoTravelApp: App {
                     }
                 }
             } else {
-                print("⚠️ 通知権限が拒否されました")
+                print("通知権限が拒否されました")
             }
         }
     }

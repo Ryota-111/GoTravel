@@ -90,9 +90,12 @@ class NotificationService {
 
         let calendar = Calendar.current
 
+        // 日付の時刻部分を00:00:00に正規化
+        let normalizedStartDate = calendar.startOfDay(for: plan.startDate)
+
         switch plan.planType {
         case .outing:
-            if let oneDayBefore = calendar.date(byAdding: .day, value: -1, to: plan.startDate) {
+            if let oneDayBefore = calendar.date(byAdding: .day, value: -1, to: normalizedStartDate) {
                 scheduleNotification(
                     id: "\(plan.id)_day",
                     title: "おでかけが明日です",
@@ -104,7 +107,7 @@ class NotificationService {
             }
 
         case .daily:
-            if let oneDayBefore = calendar.date(byAdding: .day, value: -1, to: plan.startDate) {
+            if let oneDayBefore = calendar.date(byAdding: .day, value: -1, to: normalizedStartDate) {
                 scheduleNotification(
                     id: "\(plan.id)_day",
                     title: "予定が明日です",
