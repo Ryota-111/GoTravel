@@ -7,16 +7,16 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             EnjoyWorldView()
-                .tabItem{ Label("予定", systemImage: "calendar") }
+                .tabItem{ Label("計画", systemImage: "calendar") }
                 .tag(0)
+            CalendarView()
+                .tabItem { Label("カレンダー", systemImage: "person") }
+                .tag(1)
             PlacesListView()
                 .tabItem { Label("場所保存", systemImage: "list.bullet") }
-                .tag(1)
+                .tag(2)
             AlbamHomeView()
                 .tabItem { Label("アルバム", systemImage: "photo.artframe") }
-                .tag(2)
-            HomeView()
-                .tabItem { Label("マイページ", systemImage: "person") }
                 .tag(3)
         }
         .onChange(of: selectedTab) { oldValue, newValue in

@@ -823,7 +823,7 @@ struct AddPlanView: View {
                 title: title.trimmingCharacters(in: .whitespacesAndNewlines),
                 startDate: dailyDate,
                 endDate: dailyDate,
-                places: [],
+                places: places,
                 planType: .daily,
                 time: dailyTime,
                 description: description.trimmingCharacters(in: .whitespacesAndNewlines),
