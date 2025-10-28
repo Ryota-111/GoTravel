@@ -19,6 +19,7 @@ struct MainTabView: View {
                 .tabItem { Label("アルバム", systemImage: "photo.artframe") }
                 .tag(3)
         }
+        .accentColor(.orange)
         .onChange(of: selectedTab) { oldValue, newValue in
             if oldValue != newValue {
                 let impact = UIImpactFeedbackGenerator(style: .light)

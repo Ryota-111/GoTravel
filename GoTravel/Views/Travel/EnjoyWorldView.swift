@@ -124,7 +124,7 @@ struct EnjoyWorldView: View {
         NavigationView {
             ScrollView(.vertical, showsIndicators: false) {
                 VStack(alignment: .leading, spacing: 20) {
-                    headerSection
+                    Spacer()
                     titleSection
                     tabSelectionSection
                     travelPlansSection
@@ -173,23 +173,20 @@ struct EnjoyWorldView: View {
     }
 
     // MARK: - View Components
-    private var headerSection: some View {
+    private var titleSection: some View {
         HStack {
-            Button(action: {}) {
-                Image(systemName: "line.3.horizontal")
-                    .font(.system(size: 24))
+            Text("旅行計画")
+                .font(.title.weight(.bold))
+            
+            Spacer()
+            
+            NavigationLink(destination: HomeView()) {
+                Image(systemName: "person.crop.circle")
+                    .font(.system(size: 30))
                     .foregroundColor(.black)
             }
-            Spacer()
         }
         .padding(.horizontal, 20)
-        .padding(.top, 10)
-    }
-
-    private var titleSection: some View {
-        Text("旅行計画")
-            .font(.title.weight(.semibold))
-            .padding(.horizontal, 20)
     }
 
     private var tabSelectionSection: some View {
@@ -313,7 +310,7 @@ struct EnjoyWorldView: View {
                     .foregroundColor(.gray)
                     .multilineTextAlignment(.center)
             }
-            .frame(width: 250, height: 250)
+            .frame(width: 200, height: 200)
             .background(Color.white)
             .cornerRadius(25)
             .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
@@ -359,8 +356,8 @@ struct EnjoyWorldView: View {
                     .font(.headline)
                     .foregroundColor(.orange)
             }
-            .frame(width: 150, height: 250)
-            .background(Color.white)
+            .frame(width: 150, height: 200)
+            .background(Color.white.opacity(0.7))
             .cornerRadius(25)
             .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
         }
@@ -444,7 +441,7 @@ struct EnjoyWorldView: View {
             }
             .padding(.vertical, 15)
             .frame(maxWidth: .infinity)
-            .background(Color.white)
+            .background(Color.white.opacity(0.7))
             .cornerRadius(15)
             .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
         }
@@ -526,238 +523,6 @@ extension EnjoyWorldView {
         var id: String { rawValue }
 
         var displayName: String { rawValue }
-    }
-}
-
-// MARK: - Travel Plan Card
-struct TravelPlanCard: View {
-    @EnvironmentObject var viewModel: TravelPlanViewModel
-    let plan: TravelPlan
-    let onDelete: () -> Void
-
-    var body: some View {
-        NavigationLink(destination: TravelPlanDetailView(plan: plan).environmentObject(viewModel)) {
-            ZStack {
-                cardBackground
-                cardOverlay
-                cardContent
-            }
-            .frame(width: 250, height: 250)
-            .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-
-    private var cardBackground: some View {
-        ZStack {
-            if let localImageFileName = plan.localImageFileName,
-               let image = FileManager.documentsImage(named: localImageFileName) {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(width: 250, height: 250)
-                    .cornerRadius(25)
-            } else {
-                RoundedRectangle(cornerRadius: 25)
-                    .fill(
-                        LinearGradient(
-                            colors: [
-                                plan.cardColor?.opacity(0.8) ?? Color.blue.opacity(0.8),
-                                plan.cardColor?.opacity(0.4) ?? Color.blue.opacity(0.4)
-                            ],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 250, height: 250)
-            }
-
-            RoundedRectangle(cornerRadius: 25)
-                .fill(Color.black.opacity(0.3))
-                .frame(width: 250, height: 250)
-        }
-    }
-
-    private var cardOverlay: some View {
-        VStack(alignment: .leading) {
-            HStack {
-                deleteButton
-                Spacer()
-            }
-            Spacer()
-        }
-        .padding()
-    }
-
-    private var deleteButton: some View {
-        Button(action: onDelete) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(.white)
-                    .frame(width: 40, height: 40)
-                Image(systemName: "trash")
-                    .resizable()
-                    .frame(width: 20, height: 20)
-                    .foregroundColor(.red)
-            }
-        }
-        .buttonStyle(BorderlessButtonStyle())
-        .zIndex(1)
-    }
-
-    private var cardContent: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Spacer()
-
-            VStack(alignment: .leading, spacing: 5) {
-                Text(plan.title)
-                    .font(.headline)
-                    .foregroundStyle(.white)
-                    .lineLimit(2)
-
-                HStack(spacing: 5) {
-                    Image(systemName: "mappin.and.ellipse")
-                        .foregroundColor(.white)
-                    Text(plan.destination)
-                        .font(.subheadline)
-                        .foregroundStyle(.white)
-                        .lineLimit(1)
-                }
-
-                HStack(spacing: 5) {
-                    Image(systemName: "calendar")
-                        .foregroundColor(.white)
-                    Text(dateRangeString(from: plan.startDate, to: plan.endDate))
-                        .font(.subheadline)
-                        .foregroundStyle(.white)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding()
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    private func dateRangeString(from start: Date, to end: Date) -> String {
-        let formatter = DateFormatter.japanese
-        formatter.dateFormat = "M/d"
-        return "\(formatter.string(from: start)) - \(formatter.string(from: end))"
-    }
-}
-
-// MARK: - Plan Event Section View
-struct PlanEventSectionView: View {
-    let title: String
-    let plans: [Plan]
-    let viewModel: PlansViewModel
-    let onDelete: (Plan) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if !plans.isEmpty {
-                Text(title)
-                    .font(.headline)
-                    .foregroundColor(.primary)
-
-                ForEach(plans) { plan in
-                    NavigationLink(destination: PlanDetailView(plan: plan)) {
-                        PlanEventCardView(plan: plan, onDelete: {
-                            onDelete(plan)
-                        })
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                    .transition(.asymmetric(
-                        insertion: .scale(scale: 0.3).combined(with: .opacity),
-                        removal: .opacity
-                    ))
-                }
-            }
-        }
-    }
-}
-
-// MARK: - Plan Event Card View
-struct PlanEventCardView: View {
-    let plan: Plan
-    var onDelete: (() -> Void)? = nil
-    @Environment(\.colorScheme) var colorScheme
-
-    var body: some View {
-        let textColor = colorScheme == .dark ? Color.white : Color.black
-        let secondaryTextColor = colorScheme == .dark ? Color.white.opacity(0.9) : Color.black.opacity(0.7)
-
-        return VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                VStack(alignment: .leading, spacing: 5) {
-                    Text(plan.title)
-                        .font(.headline)
-                        .foregroundColor(textColor)
-
-                    HStack {
-                        Image(systemName: "calendar")
-                            .font(.caption)
-                            .foregroundColor(secondaryTextColor)
-                        Text("\(dateString(plan.startDate)) 〜 \(dateString(plan.endDate))")
-                            .font(.subheadline)
-                            .foregroundColor(secondaryTextColor)
-                    }
-
-                    if plan.planType == .daily, let time = plan.time {
-                        HStack {
-                            Image(systemName: "clock")
-                                .font(.caption)
-                                .foregroundColor(secondaryTextColor)
-                            Text(formatTime(time))
-                                .font(.subheadline)
-                                .foregroundColor(secondaryTextColor)
-                        }
-                    }
-                }
-
-                Spacer()
-
-                if let onDelete = onDelete {
-                    Button(action: onDelete) {
-                        Image(systemName: "trash")
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
-                            .padding(8)
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-            }
-
-            if !plan.places.isEmpty {
-                Divider()
-                    .background(colorScheme == .dark ? Color.white.opacity(0.5) : Color.black.opacity(0.3))
-
-                HStack {
-                    Image(systemName: "mappin.circle.fill")
-                        .foregroundColor(plan.planType == .daily ? .orange : .blue)
-
-                    Text("\(plan.places.count) 件の場所")
-                        .font(.caption)
-                        .foregroundColor(secondaryTextColor)
-                }
-            }
-        }
-        .padding()
-        .background(
-            LinearGradient(
-                gradient: Gradient(colors: plan.planType == .daily ? [.orange.opacity(0.8), colorScheme == .dark ? .black.opacity(0.1) : .white.opacity(0.1)] : [.blue.opacity(0.8), colorScheme == .dark ? .black.opacity(0.1) : .white.opacity(0.1)]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-        )
-        .cornerRadius(15)
-        .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
-    }
-
-    private func dateString(_ d: Date) -> String {
-        DateFormatter.japaneseDate.string(from: d)
-    }
-
-    private func formatTime(_ time: Date) -> String {
-        DateFormatter.japaneseTime.string(from: time)
     }
 }
 

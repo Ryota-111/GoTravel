@@ -19,12 +19,8 @@ struct AddPlanView: View {
     @State private var endDate: Date = Date()
     @State private var places: [PlannedPlace] = []
     @State private var showMapPicker: Bool = false
-    @State private var newPlaceCoordinate: CLLocationCoordinate2D?
-    @State private var newPlaceName: String = ""
-    @State private var newPlaceAddress: String = ""
     @State private var searchText: String = ""
     @State private var searchResults: [MKMapItem] = []
-    @State private var searchWorkItem: DispatchWorkItem?
     @State private var dailyDate: Date = Date()
     @State private var dailyTime: Date = Date()
     @State private var description: String = ""
@@ -53,28 +49,44 @@ struct AddPlanView: View {
     }
 
     private var sectionBackgroundColor: Color {
-        selectedPlanType == .outing ? Color.white.opacity(0.1) : Color.black.opacity(0.15)
+        selectedPlanType == .outing ? Color.white.opacity(0.1) : Color.white.opacity(0.3)
     }
 
     private var fieldBackgroundColor: Color {
-        selectedPlanType == .outing ? Color.white.opacity(0.2) : Color.black.opacity(0.25)
+        selectedPlanType == .outing ? Color.white.opacity(0.2) : Color.white.opacity(0.4)
     }
 
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: selectedPlanType == .outing ? [Color.blue.opacity(0.9), Color.black] : [Color.white, Color.orange]),
+            gradient: Gradient(colors: selectedPlanType == .outing ? [Color.blue.opacity(0.9), Color.black] : [Color.orange.opacity(0.9), Color.white.opacity(0.8)]),
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
         .ignoresSafeArea()
     }
 
-    private var saveButtonGradient: some View {
-        LinearGradient(
-            gradient: Gradient(colors: [Color.blue, Color.purple]),
-            startPoint: .leading,
-            endPoint: .trailing
-        )
+    private var saveButtonGradient: LinearGradient {
+        if selectedPlanType == .outing {
+            return LinearGradient(
+                gradient: Gradient(colors: [Color.blue.opacity(0.8), Color.black.opacity(0.8)]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        } else {
+            return LinearGradient(
+                gradient: Gradient(colors: [Color.orange.opacity(0.8), Color.red.opacity(0.6)]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+        }
+    }
+    
+    private var addPlaceButtonColor: Color {
+        if selectedPlanType == .outing {
+            return Color.blue
+        } else {
+            return Color.orange
+        }
     }
 
     // MARK: - Body
@@ -120,6 +132,7 @@ struct AddPlanView: View {
     private var dailyFormSections: some View {
         Group {
             dailyBasicInfoSection
+            placesSection
             dailyDescriptionSection
             dailyLinkSection
         }
@@ -335,105 +348,6 @@ struct AddPlanView: View {
         .cornerRadius(15)
     }
 
-    private var imagePickerSection: some View {
-        VStack(alignment: .leading, spacing: 15) {
-            Text("カード表紙の写真")
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundColor(primaryTextColor)
-
-            if let image = selectedImage {
-                selectedImageView(image: image)
-            } else {
-                imagePickerButton
-            }
-        }
-        .padding()
-        .background(sectionBackgroundColor)
-        .cornerRadius(15)
-        .sheet(isPresented: $showImagePicker) {
-            ImagePickerView(sourceType: imageSourceType, image: $selectedImage)
-        }
-    }
-
-    private func selectedImageView(image: UIImage) -> some View {
-        ZStack(alignment: .topTrailing) {
-            Image(uiImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(height: 200)
-                .cornerRadius(15)
-                .clipped()
-
-            removeImageButton
-        }
-    }
-
-    private var removeImageButton: some View {
-        Button(action: {
-            selectedImage = nil
-        }) {
-            Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 30))
-                .foregroundColor(.white)
-                .background(Circle().fill(Color.black.opacity(0.5)))
-        }
-        .padding(8)
-    }
-
-    private var imagePickerButton: some View {
-        Button(action: {
-            showImagePicker = true
-        }) {
-            VStack(spacing: 10) {
-                Image(systemName: "photo.fill")
-                    .font(.system(size: 50))
-                    .foregroundColor(secondaryTextColor)
-
-                Text("写真を選択")
-                    .foregroundColor(primaryTextColor)
-                    .font(.headline)
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 200)
-            .background(fieldBackgroundColor)
-            .cornerRadius(15)
-        }
-    }
-
-    private var colorSelectionSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("カードの色")
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundColor(primaryTextColor)
-
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack {
-                    ForEach([Color.blue, Color.green, Color.purple, Color.orange, Color.red, Color.pink], id: \.self) { color in
-                        colorCircle(color: color)
-                    }
-                }
-            }
-        }
-        .padding()
-        .background(sectionBackgroundColor)
-        .cornerRadius(15)
-    }
-
-    private func colorCircle(color: Color) -> some View {
-        Circle()
-            .fill(color)
-            .frame(width: 40, height: 40)
-            .overlay(
-                Circle()
-                    .stroke(selectedCardColor == color ? Color.white : Color.clear, lineWidth: 3)
-            )
-            .onTapGesture {
-                selectedCardColor = color
-            }
-    }
-
     private var placesSection: some View {
         VStack(alignment: .leading, spacing: 15) {
             Text("行きたい場所")
@@ -474,7 +388,7 @@ struct AddPlanView: View {
             .foregroundColor(.white)
             .padding()
             .frame(maxWidth: .infinity)
-            .background(Color.blue.opacity(0.5))
+            .background(addPlaceButtonColor)
             .cornerRadius(10)
         }
     }
@@ -487,173 +401,221 @@ struct AddPlanView: View {
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                     Text("保存中...")
                         .foregroundColor(.white)
+                        .fontWeight(.semibold)
                 } else {
-                    Text("旅行計画を保存")
+                    Image(systemName: selectedPlanType == .outing ? "airplane.departure" : "calendar.badge.clock")
                         .foregroundColor(.white)
+                    Text(selectedPlanType == .outing ? "おでかけプランを保存" : "日常プランを保存")
+                        .foregroundColor(.white)
+                        .fontWeight(.bold)
                 }
             }
-            .padding()
+            .padding(.vertical, 16)
             .frame(maxWidth: .infinity)
             .background(saveButtonGradient)
-            .cornerRadius(10)
-            .shadow(radius: 10)
+            .cornerRadius(15)
+            .shadow(color: selectedPlanType == .outing ? Color.blue.opacity(0.4) : Color.orange.opacity(0.8), radius: 10, x: 0, y: 5)
         }
         .padding()
         .disabled(!isFormValid || isUploading)
     }
 
     // MARK: - Map Picker View
+    @State private var mapPosition: MapCameraPosition = .region(MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
+        span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
+    ))
+    @State private var selectedMapResult: MKMapItem?
+    @State private var mapVisibleRegion: MKCoordinateRegion?
+
     private var mapPickerView: some View {
-        NavigationView {
-            VStack(spacing: 0) {
-                searchBar
-
-                if !searchResults.isEmpty {
-                    searchResultsList
-                }
-
-                mapSection
-                placeInfoSection
-                actionButtons
-            }
-            .navigationBarHidden(true)
-        }
-    }
-
-    private var searchBar: some View {
-        HStack {
-            Image(systemName: "magnifyingglass")
-                .foregroundColor(.black.opacity(0.7))
-
-            TextField("場所を検索", text: $searchText)
-                .foregroundColor(.white)
-                .onChange(of: searchText) { oldValue, newValue in
-                    handleSearchTextChange(newValue)
-                }
-
-            if !searchText.isEmpty {
-                clearSearchButton
-            }
-        }
-        .padding()
-        .background(Color.white.opacity(0.2))
-        .cornerRadius(10)
-        .padding()
-    }
-
-    private var clearSearchButton: some View {
-        Button(action: { searchText = "" }) {
-            Image(systemName: "xmark.circle.fill")
-                .foregroundColor(.black.opacity(0.7))
-        }
-    }
-
-    private var searchResultsList: some View {
-        ForEach(searchResults.indices, id: \.self) { index in
-            searchResultButton(item: searchResults[index])
-        }
-    }
-
-    private func searchResultButton(item: MKMapItem) -> some View {
-        Button {
-            selectSearchResult(item)
-        } label: {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(item.name ?? "名称不明")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                Text(item.placemark.title ?? "住所不明")
-                    .font(.subheadline)
-                    .foregroundColor(.white.opacity(0.7))
-            }
-            .padding()
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(Color.white.opacity(0.1))
-            .cornerRadius(10)
-        }
-    }
-
-    private var mapSection: some View {
-        ZStack(alignment: .center) {
-            if let coordinate = newPlaceCoordinate {
-                Map(position: .constant(.region(MKCoordinateRegion(
-                    center: coordinate,
-                    span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
-                )))) {
-                    Marker("選択した場所", coordinate: coordinate)
+        ZStack {
+            Map(position: $mapPosition, selection: $selectedMapResult) {
+                ForEach(searchResults, id: \.self) { result in
+                    Marker(item: result)
                         .tint(.red)
                 }
-                .frame(height: 300)
-                .cornerRadius(15)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 15)
-                        .stroke(Color.white.opacity(0.5), lineWidth: 2)
-                )
-                .disabled(true)
-            } else {
-                Rectangle()
-                    .fill(Color.gray.opacity(0.3))
-                    .frame(height: 300)
-                    .cornerRadius(15)
-                    .overlay(
-                        Text("地図が選択されていません")
-                            .foregroundColor(.white)
-                    )
+            }
+            .safeAreaInset(edge: .top) {
+                mapSearchBarView
+            }
+            .safeAreaInset(edge: .bottom) {
+                if let selectedResult = selectedMapResult {
+                    mapSelectedResultDetailView(selectedResult)
+                }
+            }
+            .onMapCameraChange { context in
+                mapVisibleRegion = context.region
             }
         }
-        .padding()
     }
 
-    private var placeInfoSection: some View {
-        VStack(spacing: 15) {
-            placeNameField
-        }
-        .padding()
+    // MARK: - Map Search Bar
+    private var mapSearchBarView: some View {
+        TextField("場所を検索", text: $searchText)
+            .textFieldStyle(.plain)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(Color(.systemBackground))
+            .cornerRadius(10)
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial)
+            .onSubmit {
+                Task {
+                    await performMapSearch()
+                }
+            }
     }
 
-    private var placeNameField: some View {
-        VStack(alignment: .leading) {
-            Text("場所の名前")
-                .font(.caption)
-                .foregroundColor(.white.opacity(0.7))
+    private func performMapSearch() async {
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = searchText
+        request.resultTypes = .pointOfInterest
+        request.region = mapVisibleRegion ?? MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
+            span: MKCoordinateSpan(latitudeDelta: 0.0125, longitudeDelta: 0.0125)
+        )
 
-            TextField("名前を入力", text: $newPlaceName)
-                .foregroundColor(.white)
-                .padding()
-                .background(Color.white.opacity(0.2))
-                .cornerRadius(10)
+        let search = MKLocalSearch(request: request)
+        do {
+            let response = try await search.start()
+            searchResults = response.mapItems
+            if let firstResult = searchResults.first {
+                withAnimation {
+                    mapPosition = .region(MKCoordinateRegion(
+                        center: firstResult.placemark.coordinate,
+                        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                    ))
+                }
+            }
+            searchText = ""
+        } catch {
+            print("検索エラー: \(error)")
         }
     }
 
-    private var actionButtons: some View {
-        VStack(spacing: 20) {
-            addLocationButton
-            cancelButton
+    // MARK: - Map Selected Result Detail View
+    private func mapSelectedResultDetailView(_ result: MKMapItem) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(result.name ?? "名称なし")
+                        .font(.title2)
+                        .fontWeight(.bold)
+
+                    if let category = result.pointOfInterestCategory?.rawValue {
+                        Text(category)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Spacer()
+            }
+
+            if let address = result.placemark.title {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "mappin.circle.fill")
+                        .foregroundStyle(.red)
+                        .font(.title3)
+                    Text(address)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let phoneNumber = result.phoneNumber {
+                HStack(spacing: 8) {
+                    Image(systemName: "phone.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.title3)
+                    Text(phoneNumber)
+                        .font(.subheadline)
+                    Spacer()
+                    Button {
+                        if let url = URL(string: "tel:\(phoneNumber.replacingOccurrences(of: " ", with: ""))") {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        Text("電話")
+                            .font(.caption)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.green)
+                            .foregroundStyle(.white)
+                            .cornerRadius(8)
+                    }
+                }
+            }
+
+            if let url = result.url {
+                HStack(spacing: 8) {
+                    Image(systemName: "safari.fill")
+                        .foregroundStyle(.blue)
+                        .font(.title3)
+                    Text(url.host ?? "Website")
+                        .font(.subheadline)
+                        .lineLimit(1)
+                    Spacer()
+                    Button {
+                        UIApplication.shared.open(url)
+                    } label: {
+                        Text("開く")
+                            .font(.caption)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.blue)
+                            .foregroundStyle(.white)
+                            .cornerRadius(8)
+                    }
+                }
+            }
+
+            Divider()
+
+            HStack(spacing: 12) {
+                Button {
+                    result.openInMaps()
+                } label: {
+                    Label("経路", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.blue.opacity(0.1))
+                        .foregroundStyle(.blue)
+                        .cornerRadius(10)
+                }
+
+                Button {
+                    addPlaceFromMapResult(result)
+                } label: {
+                    Label("追加", systemImage: "plus.circle.fill")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.orange.opacity(0.1))
+                        .foregroundStyle(.orange)
+                        .cornerRadius(10)
+                }
+            }
         }
-        .padding()
+        .padding(20)
+        .background(.ultraThinMaterial)
+        .cornerRadius(20)
+        .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: -4)
+        .padding(.horizontal)
+        .padding(.bottom, 12)
     }
 
-    private var addLocationButton: some View {
-        Button(action: addPlace) {
-            Text("追加")
-                .foregroundColor(.white)
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(saveButtonGradient)
-                .cornerRadius(10)
-        }
-        .disabled(newPlaceCoordinate == nil)
-    }
-
-    private var cancelButton: some View {
-        Button(action: { showMapPicker = false }) {
-            Text("キャンセル")
-                .foregroundColor(.red)
-                .padding()
-                .frame(maxWidth: .infinity)
-                .background(Color.white.opacity(0.2))
-                .cornerRadius(10)
-        }
+    private func addPlaceFromMapResult(_ result: MKMapItem) {
+        let place = PlannedPlace(
+            name: result.name ?? "名称不明",
+            latitude: result.placemark.coordinate.latitude,
+            longitude: result.placemark.coordinate.longitude,
+            address: result.placemark.title
+        )
+        places.append(place)
+        selectedMapResult = nil
+        showMapPicker = false
     }
 
     // MARK: - Helper Views
@@ -711,78 +673,6 @@ struct AddPlanView: View {
     }
 
     // MARK: - Helper Methods
-    private func handleSearchTextChange(_ newValue: String) {
-        searchWorkItem?.cancel()
-        let workItem = DispatchWorkItem {
-            if !newValue.isEmpty && newValue.count >= 3 {
-                performSearch()
-            } else {
-                searchResults = []
-            }
-        }
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5, execute: workItem)
-        searchWorkItem = workItem
-    }
-
-    private func selectSearchResult(_ item: MKMapItem) {
-        if let location = item.placemark.location {
-            newPlaceCoordinate = location.coordinate
-        }
-        newPlaceName = item.name ?? ""
-
-        // 住所を従来のプロパティから組み立て
-        var addressComponents: [String] = []
-        if let subThoroughfare = item.placemark.subThoroughfare {
-            addressComponents.append(subThoroughfare)
-        }
-        if let thoroughfare = item.placemark.thoroughfare {
-            addressComponents.append(thoroughfare)
-        }
-        if let locality = item.placemark.locality {
-            addressComponents.append(locality)
-        }
-        if let administrativeArea = item.placemark.administrativeArea {
-            addressComponents.append(administrativeArea)
-        }
-        newPlaceAddress = addressComponents.joined(separator: " ")
-
-        searchResults.removeAll()
-    }
-
-    private func performSearch() {
-        let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = searchText
-
-        let region = MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
-            span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
-        )
-        request.region = region
-
-        let search = MKLocalSearch(request: request)
-        search.start { response, error in
-            guard let response = response, !response.mapItems.isEmpty else {
-                print("検索エラー: \(error?.localizedDescription ?? "不明なエラー")")
-                return
-            }
-            DispatchQueue.main.async {
-                searchResults = response.mapItems
-            }
-        }
-    }
-
-    // MARK: - Actions
-    private func addPlace() {
-        guard let coord = newPlaceCoordinate else { return }
-        let p = PlannedPlace(
-            name: newPlaceName.isEmpty ? "無題の場所" : newPlaceName,
-            latitude: coord.latitude,
-            longitude: coord.longitude,
-            address: newPlaceAddress.isEmpty ? nil : newPlaceAddress
-        )
-        places.append(p)
-        showMapPicker = false
-    }
 
     private func deletePlace(_ place: PlannedPlace) {
         if let index = places.firstIndex(where: { $0.id == place.id }) {
