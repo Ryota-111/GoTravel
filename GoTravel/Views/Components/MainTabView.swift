@@ -7,13 +7,13 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $selectedTab) {
             EnjoyWorldView()
-                .tabItem{ Label("計画", systemImage: "calendar") }
+                .tabItem{ Label("計画", systemImage: "text.pad.header.badge.clock") }
                 .tag(0)
             CalendarView()
-                .tabItem { Label("カレンダー", systemImage: "person") }
+                .tabItem { Label("カレンダー", systemImage: "calendar") }
                 .tag(1)
             PlacesListView()
-                .tabItem { Label("場所保存", systemImage: "list.bullet") }
+                .tabItem { Label("場所保存", systemImage: "figure.walk.suitcase.rolling") }
                 .tag(2)
             AlbamHomeView()
                 .tabItem { Label("アルバム", systemImage: "photo.artframe") }

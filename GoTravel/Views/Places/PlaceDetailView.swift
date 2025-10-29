@@ -6,20 +6,16 @@ struct PlaceDetailView: View {
     @State private var showEditSheet = false
     @State private var searchQuery: String = ""
     @State private var lookAroundScene: MKLookAroundScene?
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         ZStack {
-            LinearGradient(
-                gradient: Gradient(colors: [.blue.opacity(0.3), .white]),
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            backgroundGradient
+                .ignoresSafeArea()
 
-            ScrollView {
-                VStack(spacing: 20) {
-                    categoryBadge
-                    titleSection
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 24) {
+                    headerSection
 
                     if let addr = place.address {
                         addressSection(addr)
@@ -41,8 +37,9 @@ struct PlaceDetailView: View {
 
                     visitDateSection
                 }
-                .padding(.horizontal)
-                .padding(.vertical, 24)
+                .padding(.horizontal, 20)
+                .padding(.top, 20)
+                .padding(.bottom, 40)
             }
         }
         .navigationBarTitleDisplayMode(.inline)
@@ -53,7 +50,7 @@ struct PlaceDetailView: View {
                 }) {
                     Image(systemName: "pencil.circle.fill")
                         .font(.title3)
-                        .foregroundColor(.blue)
+                        .foregroundColor(.orange)
                 }
             }
         }
@@ -65,106 +62,148 @@ struct PlaceDetailView: View {
         }
     }
 
-    // MARK: - Category Badge
-    private var categoryBadge: some View {
-        HStack {
-            Image(systemName: place.category.iconName)
-            Text(place.category.displayName)
-        }
-        .font(.caption)
-        .fontWeight(.semibold)
-        .foregroundStyle(.white)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 6)
-        .background(
-            Capsule()
-                .fill(Color.blue.opacity(0.8))
+    // MARK: - Background Gradient
+    private var backgroundGradient: some View {
+        LinearGradient(
+            gradient: Gradient(colors: colorScheme == .dark ?
+                [Color.orange.opacity(0.3), Color.black] :
+                [Color.orange.opacity(0.2), Color.white]),
+            startPoint: .top,
+            endPoint: .bottom
         )
-        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: - Title Section
-    private var titleSection: some View {
-        Text(place.title)
-            .font(.system(size: 28, weight: .bold))
-            .frame(maxWidth: .infinity, alignment: .leading)
+    // MARK: - Header Section
+    private var headerSection: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            // Category badge
+            HStack {
+                Image(systemName: place.category.iconName)
+                    .font(.subheadline)
+                Text(place.category.displayName)
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+            }
+            .foregroundStyle(.white)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 8)
+            .background(
+                Capsule()
+                    .fill(Color.orange.opacity(0.9))
+            )
+
+            // Title
+            Text(place.title)
+                .font(.system(size: 32, weight: .bold))
+                .foregroundColor(.primary)
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 20)
+                .fill(Color(.secondarySystemBackground))
+        )
+        .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 4)
     }
 
     // MARK: - Address Section
     private func addressSection(_ address: String) -> some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 12) {
             Image(systemName: "mappin.circle.fill")
-                .foregroundStyle(.red)
+                .font(.title3)
+                .foregroundStyle(.orange)
             Text(address)
                 .font(.subheadline)
-                .foregroundStyle(.gray)
+                .foregroundStyle(.secondary)
         }
-        .padding()
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white)
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.secondarySystemBackground))
+        )
+        .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 2)
     }
 
     // MARK: - Notes Section
     private func notesSection(_ notes: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("メモ", systemImage: "note.text")
-                .font(.headline)
-                .foregroundStyle(.black)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "note.text")
+                    .font(.headline)
+                    .foregroundStyle(.orange)
+                Text("メモ")
+                    .font(.headline.bold())
+                    .foregroundStyle(.primary)
+            }
 
             Text(notes)
                 .font(.body)
-                .foregroundStyle(.gray)
+                .foregroundStyle(.secondary)
                 .lineSpacing(4)
+                .fixedSize(horizontal: false, vertical: true)
         }
-        .padding()
+        .padding(20)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white)
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.secondarySystemBackground))
+        )
+        .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 2)
     }
 
     // MARK: - Look Around Section
     private func lookAroundSection(_ scene: MKLookAroundScene) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("ストリートビュー", systemImage: "eye.circle.fill")
-                .font(.headline)
-                .foregroundStyle(.black)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "eye.circle.fill")
+                    .font(.headline)
+                    .foregroundStyle(.orange)
+                Text("ストリートビュー")
+                    .font(.headline.bold())
+                    .foregroundStyle(.primary)
+            }
 
             LookAroundPreview(initialScene: scene,
                               allowsNavigation: true,
                               showsRoadLabels: true,
                               pointsOfInterest: .all,
                               badgePosition: .topLeading)
-            .frame(height: 250)
-            .cornerRadius(12)
+            .frame(height: 280)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
             .overlay(alignment: .bottomTrailing) {
-                HStack {
+                HStack(spacing: 6) {
                     Image(systemName: "mappin.circle.fill")
+                        .font(.caption)
                     Text(place.title)
+                        .font(.caption.weight(.medium))
                 }
-                .font(.caption)
-                .fontWeight(.medium)
                 .foregroundStyle(.white)
-                .padding(10)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
                 .background(.ultraThinMaterial)
-                .cornerRadius(8)
-                .padding(10)
+                .clipShape(Capsule())
+                .padding(12)
             }
         }
-        .padding()
-        .background(Color.white)
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.secondarySystemBackground))
+        )
+        .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 2)
     }
 
     // MARK: - Map Section
     private var mapSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("マップ", systemImage: "map.fill")
-                .font(.headline)
-                .foregroundStyle(.black)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "map.fill")
+                    .font(.headline)
+                    .foregroundStyle(.orange)
+                Text("マップ")
+                    .font(.headline.bold())
+                    .foregroundStyle(.primary)
+            }
 
             Map(
                 position: .constant(
@@ -175,58 +214,72 @@ struct PlaceDetailView: View {
                 interactionModes: .all
             ) {
                 Marker(place.title, coordinate: place.coordinate)
-                    .tint(.red)
+                    .tint(.orange)
             }
-            .frame(height: 250)
-            .cornerRadius(12)
+            .frame(height: 280)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
         }
-        .padding()
-        .background(Color.white)
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.secondarySystemBackground))
+        )
+        .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 2)
     }
 
     // MARK: - Searchable Map Section
     private func searchableMapSection(_ address: String) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Label("マップ", systemImage: "map.fill")
-                .font(.headline)
-                .foregroundStyle(.black)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "map.fill")
+                    .font(.headline)
+                    .foregroundStyle(.orange)
+                Text("マップ")
+                    .font(.headline.bold())
+                    .foregroundStyle(.primary)
+            }
 
             SearchableMapView(searchQuery: $searchQuery, initialQuery: address)
-                .frame(height: 250)
-                .cornerRadius(12)
+                .frame(height: 280)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
         }
-        .padding()
-        .background(Color.white)
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.secondarySystemBackground))
+        )
+        .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 2)
     }
 
     // MARK: - Visit Date Section
     private var visitDateSection: some View {
-        HStack(spacing: 8) {
-            Image(systemName: "calendar")
-                .foregroundStyle(.blue)
-            Text("訪問日:")
-                .font(.subheadline)
-                .fontWeight(.semibold)
-                .foregroundStyle(.black)
-            if let visitedAt = place.visitedAt {
-                Text(visitedAt.japaneseYearMonthDay())
-                    .font(.subheadline)
-                    .foregroundStyle(.gray)
-            } else {
-                Text("未設定")
-                    .font(.subheadline)
-                    .foregroundStyle(.gray)
+        HStack(spacing: 12) {
+            Image(systemName: "calendar.circle.fill")
+                .font(.title3)
+                .foregroundStyle(.orange)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("訪問日")
+                    .font(.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+                if let visitedAt = place.visitedAt {
+                    Text(visitedAt.japaneseYearMonthDay())
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(.primary)
+                } else {
+                    Text("未設定")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
             }
         }
-        .padding()
+        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(Color.white)
-        .cornerRadius(12)
-        .shadow(color: .black.opacity(0.05), radius: 8, x: 0, y: 2)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.secondarySystemBackground))
+        )
+        .shadow(color: .black.opacity(0.04), radius: 8, x: 0, y: 2)
     }
 
     func loadLookAroundScene() async {

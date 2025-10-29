@@ -174,7 +174,7 @@ struct AddPlanView: View {
                 .foregroundColor(primaryTextColor)
 
             HStack(spacing: 15) {
-                planTypeButton(type: .outing, title: "おでかけ用", icon: "airplane")
+                planTypeButton(type: .outing, title: "おでかけ用", icon: "figure.walk")
                 planTypeButton(type: .daily, title: "日常用", icon: "house.fill")
             }
         }

@@ -152,7 +152,7 @@ struct PlanDetailView: View {
                               LinearGradient(gradient: Gradient(colors: [.blue, .blue.opacity(0.7)]), startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 50, height: 50)
 
-                    Image(systemName: schedulePlan.planType == .outing ? "airplane" : "calendar")
+                    Image(systemName: schedulePlan.planType == .outing ? "airplane" : "house.fill")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(.white)
                 }
@@ -233,7 +233,7 @@ struct PlanDetailView: View {
         VStack(alignment: .leading, spacing: 16) {
             // Plan type badge
             HStack {
-                Image(systemName: plan.planType == .outing ? "airplane.circle.fill" : "calendar.circle.fill")
+                Image(systemName: plan.planType == .outing ? "figure.walk" : "house.fill")
                     .font(.title3)
                     .foregroundColor(plan.planType == .daily ? .orange : .blue)
 
