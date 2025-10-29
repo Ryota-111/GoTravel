@@ -7,7 +7,7 @@ enum PlanType: String, Codable {
     case daily
 }
 
-struct Plan: Identifiable, Codable {
+struct Plan: Identifiable, Codable, Equatable {
     var id: String = UUID().uuidString
     var title: String
     var startDate: Date

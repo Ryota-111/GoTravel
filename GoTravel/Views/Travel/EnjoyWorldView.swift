@@ -27,7 +27,6 @@ struct EnjoyWorldView: View {
     @State private var showPlanDeleteConfirmation = false
     @Environment(\.colorScheme) var colorScheme
     @Namespace private var animation
-    @Namespace private var planAnimation
 
     // MARK: - Computed Properties
     private var travelPlansState: ViewState {
@@ -279,7 +278,7 @@ struct EnjoyWorldView: View {
                 if selectedPlanTab == tab {
                     Capsule()
                         .fill(.orange)
-                        .matchedGeometryEffect(id: "PLAN_TAB", in: planAnimation)
+                        .matchedGeometryEffect(id: "PLAN_TAB", in: animation)
                 }
 
                 Text(tab.displayName)

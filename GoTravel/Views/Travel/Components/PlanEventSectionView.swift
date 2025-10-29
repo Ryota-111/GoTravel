@@ -15,7 +15,7 @@ struct PlanEventSectionView: View {
                     .foregroundColor(.primary)
 
                 ForEach(plans) { plan in
-                    NavigationLink(destination: PlanDetailView(plan: plan)) {
+                    NavigationLink(destination: PlanDetailView(plan: plan).environmentObject(viewModel)) {
                         PlanEventCardView(plan: plan, onDelete: {
                             onDelete(plan)
                         })

@@ -119,7 +119,18 @@ class NotificationService {
             }
 
             if let time = plan.time {
-                if let oneHourBefore = calendar.date(byAdding: .hour, value: -1, to: time) {
+                // plan.timeから時刻情報を取得
+                let timeComponents = calendar.dateComponents([.hour, .minute], from: time)
+
+                // plan.startDateと時刻を組み合わせて正確な日時を作成
+                var eventDateComponents = calendar.dateComponents([.year, .month, .day], from: normalizedStartDate)
+                eventDateComponents.hour = timeComponents.hour
+                eventDateComponents.minute = timeComponents.minute
+
+                guard let eventDate = calendar.date(from: eventDateComponents) else { return }
+
+                // 1時間前の通知
+                if let oneHourBefore = calendar.date(byAdding: .hour, value: -1, to: eventDate) {
                     let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: oneHourBefore)
                     scheduleNotificationWithComponents(
                         id: "\(plan.id)_hour",
@@ -129,7 +140,8 @@ class NotificationService {
                     )
                 }
 
-                if let tenMinutesBefore = calendar.date(byAdding: .minute, value: -10, to: time) {
+                // 10分前の通知
+                if let tenMinutesBefore = calendar.date(byAdding: .minute, value: -10, to: eventDate) {
                     let components = calendar.dateComponents([.year, .month, .day, .hour, .minute], from: tenMinutesBefore)
                     scheduleNotificationWithComponents(
                         id: "\(plan.id)_10min",

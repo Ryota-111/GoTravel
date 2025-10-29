@@ -100,7 +100,7 @@ struct AddPlanView: View {
                 saveButton
             }
         }
-        .sheet(isPresented: $showMapPicker) {
+        .fullScreenCover(isPresented: $showMapPicker) {
             mapPickerView
         }
         .navigationBarHidden(true)
@@ -429,23 +429,33 @@ struct AddPlanView: View {
     @State private var mapVisibleRegion: MKCoordinateRegion?
 
     private var mapPickerView: some View {
-        ZStack {
-            Map(position: $mapPosition, selection: $selectedMapResult) {
-                ForEach(searchResults, id: \.self) { result in
-                    Marker(item: result)
-                        .tint(.red)
+        NavigationView {
+            ZStack {
+                Map(position: $mapPosition, selection: $selectedMapResult) {
+                    ForEach(searchResults, id: \.self) { result in
+                        Marker(item: result)
+                            .tint(.red)
+                    }
+                }
+                .safeAreaInset(edge: .top) {
+                    mapSearchBarView
+                }
+                .safeAreaInset(edge: .bottom) {
+                    if let selectedResult = selectedMapResult {
+                        mapSelectedResultDetailView(selectedResult)
+                    }
+                }
+                .onMapCameraChange { context in
+                    mapVisibleRegion = context.region
                 }
             }
-            .safeAreaInset(edge: .top) {
-                mapSearchBarView
-            }
-            .safeAreaInset(edge: .bottom) {
-                if let selectedResult = selectedMapResult {
-                    mapSelectedResultDetailView(selectedResult)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("閉じる") {
+                        showMapPicker = false
+                    }
                 }
-            }
-            .onMapCameraChange { context in
-                mapVisibleRegion = context.region
             }
         }
     }
