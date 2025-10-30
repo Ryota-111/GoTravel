@@ -7,19 +7,10 @@ struct BottomTimelineCard: View {
 
     @Environment(\.colorScheme) var colorScheme
     @State private var dragOffset: CGFloat = 0
-    @State private var screenHeight: CGFloat = 800
-
-    private var minHeight: CGFloat {
-        screenHeight * 0.40
-    }
-
-    private var maxHeight: CGFloat {
-        screenHeight * 0.88
-    }
 
     var body: some View {
         GeometryReader { geometry in
-            VStack {
+            VStack(spacing: 0) {
                 Spacer()
 
                 VStack(spacing: 0) {
@@ -35,12 +26,13 @@ struct BottomTimelineCard: View {
 
                     if timelineItems.isEmpty {
                         emptyStateView
-                            .frame(height: minHeight - 80)
+                            .frame(height: minHeight(for: geometry) - 80)
                     } else {
                         timelineScrollView
                     }
                 }
-                .frame(height: currentHeight)
+                .frame(height: currentHeight(for: geometry))
+                .frame(maxWidth: .infinity)
                 .background(
                     RoundedRectangle(cornerRadius: 24)
                         .fill(.ultraThinMaterial)
@@ -51,14 +43,19 @@ struct BottomTimelineCard: View {
             .gesture(dragGesture)
             .animation(.spring(response: 0.4, dampingFraction: 0.8), value: isExpanded)
             .animation(.spring(response: 0.3, dampingFraction: 0.9), value: dragOffset)
-            .onAppear {
-                screenHeight = geometry.size.height
-            }
         }
     }
 
-    private var currentHeight: CGFloat {
-        isExpanded ? maxHeight : minHeight
+    private func minHeight(for geometry: GeometryProxy) -> CGFloat {
+        geometry.size.height * 0.35
+    }
+
+    private func maxHeight(for geometry: GeometryProxy) -> CGFloat {
+        geometry.size.height * 0.88
+    }
+
+    private func currentHeight(for geometry: GeometryProxy) -> CGFloat {
+        isExpanded ? maxHeight(for: geometry) : minHeight(for: geometry)
     }
 
     // MARK: - Grip Bar

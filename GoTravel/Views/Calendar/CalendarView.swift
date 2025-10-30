@@ -65,14 +65,13 @@ struct CalendarView: View {
                             }
                         }
                 }
-
                 // Bottom timeline card
                 BottomTimelineCard(
                     selectedDate: selectedDate,
                     timelineItems: dailyTimeline,
                     isExpanded: $isTimelineExpanded
                 )
-                .edgesIgnoringSafeArea(.bottom)
+                .ignoresSafeArea(.keyboard, edges: .bottom)
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
