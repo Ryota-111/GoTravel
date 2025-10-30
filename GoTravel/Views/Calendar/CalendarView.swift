@@ -24,8 +24,7 @@ struct CalendarView: View {
     @State private var currentMonth = Date()
     @State private var showAddSheet = false
     @State private var dragOffset: CGFloat = 0
-    @State private var timelineHeight: CGFloat = 250
-    @State private var scrollOffset: CGFloat = 0
+    @State private var isTimelineExpanded = false
     @Environment(\.colorScheme) var colorScheme
     @Namespace private var animation
 
@@ -34,7 +33,8 @@ struct CalendarView: View {
 
     var body: some View {
         NavigationView {
-            ZStack {
+            ZStack(alignment: .bottom) {
+                // Background gradient
                 LinearGradient(
                     gradient: Gradient(colors: colorScheme == .dark ? [.blue.opacity(0.7), .black] : [.blue.opacity(0.6), .white]),
                     startPoint: .top,
@@ -42,6 +42,7 @@ struct CalendarView: View {
                 )
                 .ignoresSafeArea()
 
+                // Calendar content
                 VStack(spacing: 0) {
                     monthNavigationHeader
 
@@ -49,10 +50,29 @@ struct CalendarView: View {
                         .padding(.horizontal, 16)
                         .padding(.bottom, 20)
 
-                    Divider()
-
-                    scheduleListSection
+                    Spacer()
                 }
+                .blur(radius: isTimelineExpanded ? 4 : 0)
+                .opacity(isTimelineExpanded ? 0.6 : 1.0)
+
+                // Dimming overlay when sheet is expanded
+                if isTimelineExpanded {
+                    Color.black.opacity(0.2)
+                        .ignoresSafeArea()
+                        .onTapGesture {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                                isTimelineExpanded = false
+                            }
+                        }
+                }
+
+                // Bottom timeline card
+                BottomTimelineCard(
+                    selectedDate: selectedDate,
+                    timelineItems: dailyTimeline,
+                    isExpanded: $isTimelineExpanded
+                )
+                .edgesIgnoringSafeArea(.bottom)
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -378,281 +398,6 @@ struct CalendarView: View {
         return hasPlans || hasTravelPlans
     }
 
-    // MARK: - Schedule List Section
-    private var scheduleListSection: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            HStack {
-                Text(selectedDateString)
-                    .font(.headline.bold())
-                    .foregroundColor(.primary)
-
-                Spacer()
-
-                Text("\(dailyTimeline.count)件の予定")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .background(Color(.secondarySystemBackground))
-
-            if dailyTimeline.isEmpty {
-                emptyScheduleView
-                    .transition(.opacity.combined(with: .slide))
-            } else {
-                timelineView
-                    .transition(.opacity.combined(with: .slide))
-            }
-        }
-    }
-
-    // MARK: - Timeline View
-    private var timelineView: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                GeometryReader { geometry in
-                    Color.clear
-                        .preference(key: ScrollOffsetPreferenceKey.self, value: geometry.frame(in: .named("scrollView")).minY)
-                }
-                .frame(height: 0)
-
-                ForEach(Array(dailyTimeline.enumerated()), id: \.element.id) { index, item in
-                    timelineItemView(item: item, isLast: index == dailyTimeline.count - 1)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 20)
-        }
-        .frame(height: timelineHeight)
-        .coordinateSpace(name: "scrollView")
-        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
-            // スクロールオフセットに基づいてタイムライン高さを調整
-            // 負の値（上方向スクロール）が大きいほど高さを増やす
-            if offset < 20 {
-                let scrollAmount = abs(min(0, offset - 20))
-                let newHeight = min(500, 250 + scrollAmount * 1.2)
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    timelineHeight = newHeight
-                }
-            } else {
-                // 元の位置に戻る時は最小値に戻す
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                    timelineHeight = 250
-                }
-            }
-        }
-    }
-
-    private func timelineItemView(item: CalendarTimelineItem, isLast: Bool) -> some View {
-        let iconColor: Color = {
-            switch item.type {
-            case .dailyPlan: return .orange
-            case .outingPlan: return .blue
-            case .travel: return .green
-            }
-        }()
-
-        let iconName: String = {
-            switch item.type {
-            case .dailyPlan: return "house.fill"
-            case .outingPlan: return "figure.walk"
-            case .travel: return "airplane"
-            }
-        }()
-
-        return HStack(alignment: .top, spacing: 16) {
-            // Timeline indicator
-            VStack(spacing: 0) {
-                // Icon circle
-                ZStack {
-                    Circle()
-                        .fill(iconColor)
-                        .frame(width: 50, height: 50)
-                        .shadow(color: iconColor.opacity(0.3), radius: 4, x: 0, y: 2)
-
-                    Image(systemName: iconName)
-                        .font(.title3)
-                        .foregroundColor(.white)
-                }
-
-                // Connecting line
-                if !isLast {
-                    Rectangle()
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    iconColor.opacity(0.5),
-                                    Color.gray.opacity(0.2)
-                                ]),
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .frame(width: 2)
-                        .padding(.vertical, 4)
-                }
-            }
-
-            // Card content
-            VStack(alignment: .leading, spacing: 0) {
-                timelineCardContent(item: item)
-                    .padding(.bottom, isLast ? 0 : 24)
-            }
-        }
-    }
-
-    private func timelineCardContent(item: CalendarTimelineItem) -> some View {
-        Group {
-            if (item.type == .dailyPlan || item.type == .outingPlan), let plan = item.relatedPlan {
-                NavigationLink(destination: PlanDetailView(plan: plan).environmentObject(viewModel)) {
-                    timelineCard(item: item)
-                }
-                .buttonStyle(PlainButtonStyle())
-            } else if item.type == .travel, let travelPlan = item.relatedTravelPlan {
-                NavigationLink(destination: TravelPlanDetailView(plan: travelPlan).environmentObject(travelViewModel)) {
-                    timelineCard(item: item)
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
-        }
-    }
-
-    private func timelineCard(item: CalendarTimelineItem) -> some View {
-        let cardColor: Color = {
-            switch item.type {
-            case .dailyPlan: return .orange
-            case .outingPlan: return .blue
-            case .travel: return .green
-            }
-        }()
-
-        return VStack(alignment: .leading, spacing: 12) {
-            // Time
-            Text(formatTime(item.time))
-                .font(.caption.weight(.semibold))
-                .foregroundColor(cardColor)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(cardColor.opacity(0.15))
-                )
-
-            // Title
-            Text(item.title)
-                .font(.headline.bold())
-                .foregroundColor(.primary)
-                .lineLimit(2)
-
-            // Subtitle
-            if let subtitle = item.subtitle, !subtitle.isEmpty {
-                Text(subtitle)
-                    .font(.subheadline)
-                    .foregroundColor(.secondary)
-                    .lineLimit(2)
-            }
-        }
-        .padding(16)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(
-                    colorScheme == .dark ?
-                    Color(.secondarySystemBackground) :
-                    Color.white.opacity(0.9)
-                )
-                .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(
-                    LinearGradient(
-                        gradient: Gradient(colors: [
-                            cardColor.opacity(0.2),
-                            Color.clear
-                        ]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        )
-    }
-
-    private var emptyScheduleView: some View {
-        VStack(spacing: 16) {
-            Image(systemName: "calendar.badge.clock")
-                .font(.system(size: 60))
-                .foregroundColor(.orange.opacity(0.3))
-
-            Text("予定がありません")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
-
-            Button(action: {
-                showAddSheet = true
-            }) {
-                Text("予定を追加")
-                    .font(.subheadline.weight(.medium))
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 24)
-                    .padding(.vertical, 10)
-                    .background(Color.orange)
-                    .clipShape(Capsule())
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 60)
-    }
-
-    private func scheduleCard(plan: Plan) -> some View {
-        NavigationLink(destination: PlanDetailView(plan: plan).environmentObject(viewModel)) {
-            HStack(spacing: 16) {
-                if let time = plan.time {
-                    VStack(spacing: 4) {
-                        Text(formatTime(time))
-                            .font(.system(size: 14, weight: .bold, design: .rounded))
-                            .foregroundColor(.orange)
-                    }
-                    .frame(width: 60)
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(plan.title)
-                        .font(.headline)
-                        .foregroundColor(.primary)
-                        .lineLimit(2)
-
-                    if let description = plan.description, !description.isEmpty {
-                        Text(description)
-                            .font(.caption)
-                            .foregroundColor(.secondary)
-                            .lineLimit(1)
-                    }
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .font(.caption)
-                    .foregroundColor(.secondary)
-            }
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color(.secondarySystemBackground))
-            )
-            .shadow(color: Color.black.opacity(0.04), radius: 4, x: 0, y: 2)
-        }
-        .buttonStyle(PlainButtonStyle())
-    }
-
-    private var selectedDateString: String {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "M月d日(E)"
-        formatter.locale = Locale(identifier: "ja_JP")
-        return formatter.string(from: selectedDate)
-    }
 
     // MARK: - Helper Methods
     private func changeMonth(by value: Int) {
@@ -673,15 +418,6 @@ struct CalendarView: View {
         formatter.dateFormat = "M/d"
         formatter.locale = Locale(identifier: "ja_JP")
         return "\(formatter.string(from: start))〜\(formatter.string(from: end))"
-    }
-}
-
-// MARK: - Preference Key for Scroll Offset
-struct ScrollOffsetPreferenceKey: PreferenceKey {
-    static var defaultValue: CGFloat = 0
-
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
     }
 }
 
