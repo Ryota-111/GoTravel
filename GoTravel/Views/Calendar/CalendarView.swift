@@ -71,6 +71,8 @@ struct CalendarView: View {
                     timelineItems: dailyTimeline,
                     isExpanded: $isTimelineExpanded
                 )
+                .environmentObject(viewModel)
+                .environmentObject(travelViewModel)
                 .ignoresSafeArea(.keyboard, edges: .bottom)
             }
             .navigationBarTitleDisplayMode(.inline)

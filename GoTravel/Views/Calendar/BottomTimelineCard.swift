@@ -5,6 +5,9 @@ struct BottomTimelineCard: View {
     let timelineItems: [CalendarTimelineItem]
     @Binding var isExpanded: Bool
 
+    @EnvironmentObject var plansViewModel: PlansViewModel
+    @EnvironmentObject var travelViewModel: TravelPlanViewModel
+
     @Environment(\.colorScheme) var colorScheme
     @State private var dragOffset: CGFloat = 0
 
@@ -169,9 +172,19 @@ struct BottomTimelineCard: View {
 struct TimelineItemCard: View {
     let item: CalendarTimelineItem
     let isLast: Bool
+
+    @EnvironmentObject var plansViewModel: PlansViewModel
+    @EnvironmentObject var travelViewModel: TravelPlanViewModel
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
+        NavigationLink(destination: destinationView) {
+            cardContent
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    private var cardContent: some View {
         HStack(alignment: .top, spacing: 16) {
             // Timeline indicator (vertical line with icon)
             VStack(spacing: 0) {
@@ -257,6 +270,26 @@ struct TimelineItemCard: View {
                         lineWidth: 1
                     )
             )
+        }
+    }
+
+    @ViewBuilder
+    private var destinationView: some View {
+        switch item.type {
+        case .dailyPlan, .outingPlan:
+            if let plan = item.relatedPlan {
+                PlanDetailView(plan: plan)
+                    .environmentObject(plansViewModel)
+            } else {
+                EmptyView()
+            }
+        case .travel:
+            if let travelPlan = item.relatedTravelPlan {
+                TravelPlanDetailView(plan: travelPlan)
+                    .environmentObject(travelViewModel)
+            } else {
+                EmptyView()
+            }
         }
     }
 
