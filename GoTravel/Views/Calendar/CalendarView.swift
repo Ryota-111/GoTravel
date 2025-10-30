@@ -381,20 +381,6 @@ struct CalendarView: View {
     // MARK: - Schedule List Section
     private var scheduleListSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            scheduleHeader
-
-            if dailyTimeline.isEmpty {
-                emptyScheduleView
-                    .transition(.opacity.combined(with: .slide))
-            } else {
-                timelineView
-                    .transition(.opacity.combined(with: .slide))
-            }
-        }
-    }
-
-    private var scheduleHeader: some View {
-        GeometryReader { geometry in
             HStack {
                 Text(selectedDateString)
                     .font(.headline.bold())
@@ -409,21 +395,42 @@ struct CalendarView: View {
             .padding(.horizontal, 20)
             .padding(.vertical, 12)
             .background(Color(.secondarySystemBackground))
-            .background(
-                GeometryReader { innerGeometry in
-                    Color.clear
-                        .preference(key: ScrollOffsetPreferenceKey.self, value: innerGeometry.frame(in: .named("scroll")).minY)
-                }
-            )
-        }
-        .frame(height: 44)
-        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { value in
-            let offset = value
 
+            if dailyTimeline.isEmpty {
+                emptyScheduleView
+                    .transition(.opacity.combined(with: .slide))
+            } else {
+                timelineView
+                    .transition(.opacity.combined(with: .slide))
+            }
+        }
+    }
+
+    // MARK: - Timeline View
+    private var timelineView: some View {
+        ScrollView(showsIndicators: false) {
+            VStack(alignment: .leading, spacing: 0) {
+                GeometryReader { geometry in
+                    Color.clear
+                        .preference(key: ScrollOffsetPreferenceKey.self, value: geometry.frame(in: .named("scrollView")).minY)
+                }
+                .frame(height: 0)
+
+                ForEach(Array(dailyTimeline.enumerated()), id: \.element.id) { index, item in
+                    timelineItemView(item: item, isLast: index == dailyTimeline.count - 1)
+                }
+            }
+            .padding(.horizontal, 20)
+            .padding(.vertical, 20)
+        }
+        .frame(height: timelineHeight)
+        .coordinateSpace(name: "scrollView")
+        .onPreferenceChange(ScrollOffsetPreferenceKey.self) { offset in
             // スクロールオフセットに基づいてタイムライン高さを調整
-            if offset < 0 {
-                // 上方向スクロール時に高さを増やす
-                let newHeight = min(500, 250 + abs(offset) * 1.5)
+            // 負の値（上方向スクロール）が大きいほど高さを増やす
+            if offset < 20 {
+                let scrollAmount = abs(min(0, offset - 20))
+                let newHeight = min(500, 250 + scrollAmount * 1.2)
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     timelineHeight = newHeight
                 }
@@ -434,21 +441,6 @@ struct CalendarView: View {
                 }
             }
         }
-    }
-
-    // MARK: - Timeline View
-    private var timelineView: some View {
-        ScrollView(showsIndicators: false) {
-            VStack(alignment: .leading, spacing: 0) {
-                ForEach(Array(dailyTimeline.enumerated()), id: \.element.id) { index, item in
-                    timelineItemView(item: item, isLast: index == dailyTimeline.count - 1)
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 20)
-        }
-        .frame(height: timelineHeight)
-        .coordinateSpace(name: "scroll")
     }
 
     private func timelineItemView(item: CalendarTimelineItem, isLast: Bool) -> some View {
