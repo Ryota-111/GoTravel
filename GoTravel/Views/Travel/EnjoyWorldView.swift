@@ -412,16 +412,16 @@ struct EnjoyWorldView: View {
             )
             .animation(.spring(response: 0.7, dampingFraction: 0.6), value: futureFilteredPlans.count)
 
-            PlanEventSectionView(
-                title: "過去の予定",
-                plans: pastFilteredPlans,
-                viewModel: plansViewModel,
-                onDelete: { plan in
-                    planEventToDelete = plan
-                    showPlanDeleteConfirmation = true
-                }
-            )
-            .animation(.spring(response: 0.7, dampingFraction: 0.6), value: pastFilteredPlans.count)
+//            PlanEventSectionView(
+//                title: "過去の予定",
+//                plans: pastFilteredPlans,
+//                viewModel: plansViewModel,
+//                onDelete: { plan in
+//                    planEventToDelete = plan
+//                    showPlanDeleteConfirmation = true
+//                }
+//            )
+//            .animation(.spring(response: 0.7, dampingFraction: 0.6), value: pastFilteredPlans.count)
 
             addPlanButton
         }

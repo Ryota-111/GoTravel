@@ -67,7 +67,7 @@ struct PlanEventCardView: View {
         .padding()
         .background(
             LinearGradient(
-                gradient: Gradient(colors: plan.planType == .daily ? [.orange.opacity(0.8), colorScheme == .dark ? .black.opacity(0.1) : .white.opacity(0.1)] : [.blue.opacity(0.8), colorScheme == .dark ? .black.opacity(0.1) : .white.opacity(0.1)]),
+                gradient: Gradient(colors: plan.planType == .daily ? [.orange, colorScheme == .dark ? .black.opacity(0.1) : .white.opacity(0.1)] : [.blue.opacity(0.8), colorScheme == .dark ? .black.opacity(0.1) : .white.opacity(0.1)]),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
