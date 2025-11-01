@@ -47,7 +47,15 @@ struct PlaceDetailView: View {
                 .padding(24)
             }
         }
-        .background(Color(.systemBackground))
+//        .background(Color(.systemBackground))
+        .background(
+            LinearGradient(
+                gradient: Gradient(colors: colorScheme == .dark ? [.orange.opacity(0.8), .black] : [.orange.opacity(0.7), .white.opacity(0.1)]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .ignoresSafeArea()
+        )
         .navigationBarTitleDisplayMode(.inline)
         .task {
             await loadLookAroundScene()
@@ -161,7 +169,7 @@ struct PlaceDetailView: View {
                 HStack(spacing: 8) {
                     Image(systemName: showMap ? "map.slash.fill" : "map.fill")
                         .font(.body)
-                    Text(showMap ? "閉じる" : "マップで開く")
+                    Text(showMap ? "閉じる" : "マップを開く")
                         .font(.subheadline.weight(.semibold))
                 }
                 .foregroundColor(.orange)
