@@ -162,6 +162,7 @@ struct AlbumCard: View {
                 multiPhotoPreview
             }
         }
+        .cornerRadius(radius: 20, corners: .allCorners)
         .frame(height: 140)
         .clipped()
     }
