@@ -15,7 +15,7 @@ struct MainTabView: View {
             PlacesListView()
                 .tabItem { Label("場所保存", systemImage: "figure.walk.suitcase.rolling") }
                 .tag(2)
-            AlbamHomeView()
+            AlbumHomeView()
                 .tabItem { Label("アルバム", systemImage: "photo.artframe") }
                 .tag(3)
         }
