@@ -1,6 +1,19 @@
 import Foundation
 import SwiftUI
 
+// MARK: - Packing Item
+struct PackingItem: Identifiable, Codable {
+    var id: String
+    var name: String
+    var isChecked: Bool
+
+    init(id: String = UUID().uuidString, name: String, isChecked: Bool = false) {
+        self.id = id
+        self.name = name
+        self.isChecked = isChecked
+    }
+}
+
 struct TravelPlan: Identifiable, Codable {
     var id: String?
     var title: String
@@ -12,9 +25,10 @@ struct TravelPlan: Identifiable, Codable {
     var createdAt: Date
     var userId: String?
     var daySchedules: [DaySchedule]
+    var packingItems: [PackingItem]
 
     enum CodingKeys: String, CodingKey {
-        case id, title, startDate, endDate, destination, localImageFileName, cardColorHex, createdAt, userId, daySchedules
+        case id, title, startDate, endDate, destination, localImageFileName, cardColorHex, createdAt, userId, daySchedules, packingItems
     }
 
     var cardColorHex: String? {
@@ -34,7 +48,8 @@ struct TravelPlan: Identifiable, Codable {
          cardColor: Color? = nil,
          createdAt: Date = Date(),
          userId: String? = nil,
-         daySchedules: [DaySchedule] = []) {
+         daySchedules: [DaySchedule] = [],
+         packingItems: [PackingItem] = []) {
         self.id = id
         self.title = title
         self.startDate = startDate
@@ -45,6 +60,7 @@ struct TravelPlan: Identifiable, Codable {
         self.createdAt = createdAt
         self.userId = userId
         self.daySchedules = daySchedules
+        self.packingItems = packingItems
     }
 
     init(from decoder: Decoder) throws {
@@ -58,6 +74,7 @@ struct TravelPlan: Identifiable, Codable {
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         userId = try container.decodeIfPresent(String.self, forKey: .userId)
         daySchedules = try container.decodeIfPresent([DaySchedule].self, forKey: .daySchedules) ?? []
+        packingItems = try container.decodeIfPresent([PackingItem].self, forKey: .packingItems) ?? []
 
         if let hex = try container.decodeIfPresent(String.self, forKey: .cardColorHex) {
             cardColor = Color(hex: hex)
@@ -78,5 +95,6 @@ struct TravelPlan: Identifiable, Codable {
         try container.encode(createdAt, forKey: .createdAt)
         try container.encodeIfPresent(userId, forKey: .userId)
         try container.encode(daySchedules, forKey: .daySchedules)
+        try container.encode(packingItems, forKey: .packingItems)
     }
 }

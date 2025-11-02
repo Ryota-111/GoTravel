@@ -201,6 +201,7 @@ final class FirestoreService {
         if let colorHex = planToSave.cardColorHex { dict["cardColorHex"] = colorHex }
 
         dict["daySchedules"] = serializeDaySchedules(planToSave.daySchedules)
+        dict["packingItems"] = serializePackingItems(planToSave.packingItems)
 
         print("FirestoreService: 保存するデータ: \(dict)")
 
@@ -432,6 +433,16 @@ final class FirestoreService {
         }
     }
 
+    private func serializePackingItems(_ packingItems: [PackingItem]) -> [[String: Any]] {
+        packingItems.map { item in
+            [
+                "id": item.id,
+                "name": item.name,
+                "isChecked": item.isChecked
+            ]
+        }
+    }
+
     private func serializePlaces(_ places: [PlannedPlace]) -> [[String: Any]] {
         places.map { place in
             var placeDict: [String: Any] = [
@@ -511,6 +522,11 @@ final class FirestoreService {
             daySchedules = daySchedulesArray.compactMap { parseDaySchedule(from: $0) }
         }
 
+        var packingItems: [PackingItem] = []
+        if let packingItemsArray = d["packingItems"] as? [[String: Any]] {
+            packingItems = packingItemsArray.compactMap { parsePackingItem(from: $0) }
+        }
+
         return TravelPlan(
             id: id,
             title: title,
@@ -521,7 +537,8 @@ final class FirestoreService {
             cardColor: cardColor,
             createdAt: createdAt,
             userId: userId,
-            daySchedules: daySchedules
+            daySchedules: daySchedules,
+            packingItems: packingItems
         )
     }
 
@@ -571,6 +588,16 @@ final class FirestoreService {
             mapURL: mapURL,
             linkURL: linkURL
         )
+    }
+
+    private func parsePackingItem(from itemDict: [String: Any]) -> PackingItem? {
+        guard let id = itemDict["id"] as? String,
+              let name = itemDict["name"] as? String,
+              let isChecked = itemDict["isChecked"] as? Bool else {
+            return nil
+        }
+
+        return PackingItem(id: id, name: name, isChecked: isChecked)
     }
 
     private func parsePlan(from doc: QueryDocumentSnapshot) -> Plan? {
