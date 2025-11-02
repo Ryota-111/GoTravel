@@ -23,7 +23,7 @@ struct PlacesListView: View {
 
     private var cardGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ? [.orange, .black.opacity(0.1)] : [.orange.opacity(0.8), .white.opacity(0.5)]),
+            gradient: Gradient(colors: colorScheme == .dark ? [.orange, .black.opacity(0.1)] : [.orange, .white.opacity(0.5)]),
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )

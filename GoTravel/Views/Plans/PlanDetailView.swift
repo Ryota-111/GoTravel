@@ -3,10 +3,27 @@ import MapKit
 
 struct PlanDetailView: View {
     @State var plan: Plan
-    @Environment(\.colorScheme) var colorScheme
-    @State private var sidebarOffset: CGFloat = -250
+    @State private var showMap = false
+    @State private var showStreetView = false
+    @State private var isEditMode = false
+    @State private var displayImage: UIImage?
     @State private var showSidebar = false
-    @State private var showEditSheet = false
+    @State private var showImagePicker = false
+    @State private var selectedImage: UIImage?
+    @State private var isSaving = false
+    @State private var showAlert = false
+    @State private var alertMessage = ""
+
+    // 編集用の一時変数
+    @State private var editedTitle: String = ""
+    @State private var editedDescription: String = ""
+    @State private var editedLinkURL: String = ""
+    @State private var editedPlanType: PlanType = .outing
+    @State private var editedStartDate: Date = Date()
+    @State private var editedEndDate: Date = Date()
+    @State private var editedTime: Date?
+
+    @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var viewModel: PlansViewModel
 
     var onUpdate: ((Plan) -> Void)?
@@ -14,33 +31,36 @@ struct PlanDetailView: View {
     var body: some View {
         ZStack(alignment: .leading) {
             // Main Content
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    headerSection
-
-                    if plan.planType == .daily && hasDailyPlanDetails {
-                        dailyPlanDetailsSection
-                    }
-
-                    if !plan.places.isEmpty {
-                        mapSection
-                        placesSection
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    if isEditMode {
+                        editModeView
+                    } else {
+                        viewModeView
                     }
                 }
-                .padding(.horizontal, 20)
-                .padding(.top, 20)
-                .padding(.bottom, 40)
             }
-            .background(backgroundGradient)
+            .background(
+                LinearGradient(
+                    gradient: Gradient(colors: colorScheme == .dark ?
+                        [planColor.opacity(0.8), .black] :
+                        [planColor.opacity(0.7), .white.opacity(0.1)]),
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+                .ignoresSafeArea()
+            )
             .offset(x: showSidebar ? 280 : 0)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showSidebar)
             .gesture(
                 DragGesture()
                     .onChanged { value in
-                        if value.translation.width > 0 && !showSidebar {
-                            showSidebar = true
-                        } else if value.translation.width < -50 && showSidebar {
-                            showSidebar = false
+                        if !isEditMode {
+                            if value.translation.width > 0 && !showSidebar {
+                                showSidebar = true
+                            } else if value.translation.width < -50 && showSidebar {
+                                showSidebar = false
+                            }
                         }
                     }
             )
@@ -50,45 +70,722 @@ struct PlanDetailView: View {
                 Color.black.opacity(0.3)
                     .edgesIgnoringSafeArea(.all)
                     .onTapGesture {
-                        showSidebar = false
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            showSidebar = false
+                        }
                     }
                     .transition(.opacity)
             }
 
-            // Sidebar
-            sidebarView
-                .offset(x: showSidebar ? 0 : -280)
-                .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showSidebar)
-                .zIndex(1)
+            // Sidebar (編集モード時は非表示)
+            if !isEditMode {
+                sidebarView
+                    .offset(x: showSidebar ? 0 : -280)
+                    .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showSidebar)
+                    .zIndex(1)
+            }
         }
-        .navigationTitle(plan.planType == .outing ? "おでかけプラン" : "日常プラン")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .navigationBarTrailing) {
-                Button(action: {
-                    showEditSheet = true
-                }) {
-                    Image(systemName: "pencil.circle.fill")
-                        .font(.title3)
-                        .foregroundColor(plan.planType == .daily ? .orange : .blue)
+                if isEditMode {
+                    HStack(spacing: 12) {
+                        Button("キャンセル") {
+                            cancelEdit()
+                        }
+                        .foregroundColor(.secondary)
+
+                        Button(action: saveChanges) {
+                            if isSaving {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle())
+                            } else {
+                                Text("保存")
+                                    .fontWeight(.semibold)
+                            }
+                        }
+                        .disabled(isSaving || editedTitle.isEmpty)
+                        .foregroundColor(editedTitle.isEmpty ? .secondary : planColor)
+                    }
+                } else {
+                    Button(action: {
+                        enterEditMode()
+                    }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "pencil")
+                            Text("編集")
+                        }
+                        .foregroundColor(planColor)
+                    }
                 }
             }
         }
-        .sheet(isPresented: $showEditSheet) {
-            EditPlanView(plan: plan, viewModel: viewModel)
+        .task {
+            loadLocalImage()
+        }
+        .sheet(isPresented: $showImagePicker) {
+            ImagePicker(image: $selectedImage)
+        }
+        .alert("エラー", isPresented: $showAlert) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text(alertMessage)
+        }
+        .onChange(of: selectedImage) { oldValue, newValue in
+            if newValue != nil {
+                displayImage = newValue
+            }
         }
     }
 
     // MARK: - Computed Properties
-    private var hasDailyPlanDetails: Bool {
-        let hasDescription = plan.description != nil && !plan.description!.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        let hasLink = plan.linkURL != nil && !plan.linkURL!.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-        return hasDescription || hasLink
+    private var planColor: Color {
+        isEditMode ? (editedPlanType == .daily ? .orange : .blue) : (plan.planType == .daily ? .orange : .blue)
     }
 
-    // MARK: - Computed Properties for Sidebar
-    private var sortedPlans: [Plan] {
-        viewModel.plans.sorted { $0.startDate < $1.startDate }
+    private var planTypeText: String {
+        isEditMode ? (editedPlanType == .daily ? "日常" : "おでかけ") : (plan.planType == .daily ? "日常" : "おでかけ")
+    }
+
+    private var planTypeIcon: String {
+        isEditMode ? (editedPlanType == .daily ? "house.fill" : "figure.walk") : (plan.planType == .daily ? "house.fill" : "figure.walk")
+    }
+
+    // MARK: - View Mode
+    private var viewModeView: some View {
+        VStack(spacing: 0) {
+            // Header Image
+            headerImageView
+
+            // Content Card
+            VStack(alignment: .leading, spacing: 15) {
+                // Category Tag
+                categoryTag
+
+                // Title
+                titleSection
+
+                // Date & Time Section
+                dateTimeSection
+
+                // Description Section
+                if let description = plan.description, !description.isEmpty {
+                    descriptionSection(description)
+                }
+
+                // Link Section
+                if let linkURL = plan.linkURL, !linkURL.isEmpty {
+                    linkSection(linkURL)
+                }
+
+                // Action Buttons
+                if !plan.places.isEmpty {
+                    actionButtons
+
+                    // Map Section (expandable)
+                    if showMap {
+                        mapSection
+                    }
+                }
+
+                // Places Section
+                if !plan.places.isEmpty {
+                    placesSection
+                }
+            }
+            .padding(24)
+        }
+    }
+
+    // MARK: - Edit Mode View
+    private var editModeView: some View {
+        VStack(spacing: 0) {
+            // Header Image with Edit Button
+            editHeaderImageView
+
+            // Edit Form
+            VStack(spacing: 20) {
+                // Title Card
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("プラン名")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+
+                    TextField("例：東京観光", text: $editedTitle)
+                        .font(.body)
+                        .padding(12)
+                        .background(Color(.systemBackground))
+                        .cornerRadius(10)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color(.separator).opacity(0.5), lineWidth: 1)
+                        )
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color(.secondarySystemBackground))
+                        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+                )
+
+                // Plan Type Card
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("プランタイプ")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+
+                    Menu {
+                        Button(action: {
+                            editedPlanType = .daily
+                        }) {
+                            HStack {
+                                Image(systemName: "house.fill")
+                                Text("日常")
+                                if editedPlanType == .daily {
+                                    Spacer()
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+
+                        Button(action: {
+                            editedPlanType = .outing
+                        }) {
+                            HStack {
+                                Image(systemName: "figure.walk")
+                                Text("おでかけ")
+                                if editedPlanType == .outing {
+                                    Spacer()
+                                    Image(systemName: "checkmark")
+                                }
+                            }
+                        }
+                    } label: {
+                        HStack {
+                            Image(systemName: editedPlanType == .daily ? "house.fill" : "figure.walk")
+                                .foregroundColor(editedPlanType == .daily ? .orange : .blue)
+                            Text(editedPlanType == .daily ? "日常" : "おでかけ")
+                                .foregroundColor(.primary)
+                            Spacer()
+                            Image(systemName: "chevron.down")
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        .font(.body)
+                        .padding(12)
+                        .background(Color(.systemBackground))
+                        .cornerRadius(10)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color(.separator).opacity(0.5), lineWidth: 1)
+                        )
+                    }
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color(.secondarySystemBackground))
+                        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+                )
+
+                // Date Card
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("日程")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+
+                    VStack(spacing: 12) {
+                        if editedPlanType == .outing {
+                            DatePicker("開始日", selection: $editedStartDate, displayedComponents: .date)
+                                .datePickerStyle(.compact)
+
+                            DatePicker("終了日", selection: $editedEndDate, displayedComponents: .date)
+                                .datePickerStyle(.compact)
+                        } else {
+                            DatePicker("日付", selection: $editedStartDate, displayedComponents: .date)
+                                .datePickerStyle(.compact)
+
+                            if let time = editedTime {
+                                DatePicker("時刻", selection: Binding(
+                                    get: { time },
+                                    set: { editedTime = $0 }
+                                ), displayedComponents: .hourAndMinute)
+                                    .datePickerStyle(.compact)
+                            } else {
+                                Button(action: {
+                                    editedTime = Date()
+                                }) {
+                                    HStack {
+                                        Image(systemName: "clock")
+                                        Text("時刻を設定")
+                                        Spacer()
+                                        Image(systemName: "plus.circle.fill")
+                                            .foregroundColor(.orange)
+                                    }
+                                    .padding(12)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .fill(Color.orange.opacity(0.1))
+                                    )
+                                }
+                            }
+                        }
+                    }
+                    .padding(12)
+                    .background(Color(.systemBackground))
+                    .cornerRadius(10)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 10)
+                            .stroke(Color(.separator).opacity(0.5), lineWidth: 1)
+                    )
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color(.secondarySystemBackground))
+                        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+                )
+
+                // Description Card
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("予定内容")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+
+                    ZStack(alignment: .topLeading) {
+                        if editedDescription.isEmpty {
+                            Text("この予定についての説明を記入...")
+                                .foregroundColor(.secondary.opacity(0.5))
+                                .padding(.horizontal, 16)
+                                .padding(.vertical, 20)
+                        }
+
+                        TextEditor(text: $editedDescription)
+                            .font(.body)
+                            .frame(minHeight: 120)
+                            .padding(8)
+                            .scrollContentBackground(.hidden)
+                            .background(Color(.systemBackground))
+                            .cornerRadius(10)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color(.separator).opacity(0.5), lineWidth: 1)
+                            )
+                    }
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color(.secondarySystemBackground))
+                        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+                )
+
+                // Link Card
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("関連リンク")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+
+                    TextField("https://example.com", text: $editedLinkURL)
+                        .font(.body)
+                        .padding(12)
+                        .background(Color(.systemBackground))
+                        .cornerRadius(10)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color(.separator).opacity(0.5), lineWidth: 1)
+                        )
+                        .keyboardType(.URL)
+                        .autocapitalization(.none)
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color(.secondarySystemBackground))
+                        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+                )
+
+                // Action Buttons
+                HStack(spacing: 12) {
+                    Button(action: cancelEdit) {
+                        Text("キャンセル")
+                            .font(.headline)
+                            .foregroundColor(.primary)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 16)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(Color(.secondarySystemBackground))
+                            )
+                    }
+
+                    Button(action: saveChanges) {
+                        HStack(spacing: 8) {
+                            if isSaving {
+                                ProgressView()
+                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                            } else {
+                                Text("保存")
+                                    .font(.headline)
+                                    .fontWeight(.semibold)
+                            }
+                        }
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 12)
+                                .fill(editedTitle.isEmpty ? Color.gray : Color.blue)
+                                .shadow(color: Color.blue.opacity(0.3), radius: 8, x: 0, y: 4)
+                        )
+                    }
+                    .disabled(isSaving || editedTitle.isEmpty)
+                }
+                .padding(.top, 10)
+            }
+            .padding(24)
+        }
+    }
+
+    // MARK: - Header Image (View Mode)
+    private var headerImageView: some View {
+        ZStack {
+            if let image = displayImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 200)
+                    .clipped()
+            } else {
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                planColor.opacity(0.6),
+                                planColor.opacity(0.3)
+                            ]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(height: 200)
+                    .overlay(
+                        Image(systemName: planTypeIcon)
+                            .font(.system(size: 80))
+                            .foregroundColor(.white.opacity(0.3))
+                    )
+            }
+        }
+        .cornerRadius(15)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 24)
+    }
+
+    // MARK: - Header Image (Edit Mode)
+    private var editHeaderImageView: some View {
+        ZStack {
+            if let image = displayImage {
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(height: 200)
+                    .clipped()
+            } else {
+                Rectangle()
+                    .fill(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                planColor.opacity(0.6),
+                                planColor.opacity(0.3)
+                            ]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        )
+                    )
+                    .frame(height: 200)
+                    .overlay(
+                        Image(systemName: editedPlanType == .daily ? "house.fill" : "figure.walk")
+                            .font(.system(size: 80))
+                            .foregroundColor(.white.opacity(0.3))
+                    )
+            }
+
+            // Change Photo Button
+            Button(action: {
+                showImagePicker = true
+            }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "camera.fill")
+                        .font(.body)
+                    Text("写真を変更")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 20)
+                .padding(.vertical, 12)
+                .background(
+                    Capsule()
+                        .fill(Color.black.opacity(0.6))
+                        .overlay(
+                            Capsule()
+                                .stroke(Color.white.opacity(0.3), lineWidth: 1)
+                        )
+                )
+                .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
+            }
+        }
+        .cornerRadius(15)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 24)
+    }
+
+    // MARK: - Title Section
+    private var titleSection: some View {
+        HStack(alignment: .top) {
+            VStack(alignment: .leading, spacing: 8) {
+                Text(plan.title)
+                    .font(.system(size: 32, weight: .bold))
+                    .foregroundColor(.primary)
+            }
+
+            Spacer()
+        }
+    }
+
+    // MARK: - Category Tag
+    private var categoryTag: some View {
+        HStack(spacing: 8) {
+            Image(systemName: planTypeIcon)
+                .font(.caption)
+            Text(planTypeText)
+                .font(.subheadline.weight(.semibold))
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 13)
+        .padding(.vertical, 6)
+        .background(
+            Capsule()
+                .fill(planColor)
+        )
+        .shadow(color: planColor.opacity(0.3), radius: 4, x: 0, y: 2)
+    }
+
+    // MARK: - Date & Time Section
+    private var dateTimeSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "calendar.circle.fill")
+                    .font(.headline)
+                    .foregroundColor(planColor)
+                Text("日程")
+                    .font(.headline.weight(.semibold))
+                    .foregroundColor(.primary)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                if plan.planType == .outing {
+                    Text(dateRangeString(plan.startDate, plan.endDate))
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                } else {
+                    Text(formatDate(plan.startDate))
+                        .font(.body)
+                        .foregroundColor(.secondary)
+                }
+
+                if plan.planType == .daily, let time = plan.time {
+                    HStack(spacing: 6) {
+                        Image(systemName: "clock.fill")
+                            .font(.caption)
+                            .foregroundColor(planColor)
+                        Text(formatTime(time))
+                            .font(.body)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.secondarySystemBackground))
+        )
+    }
+
+    // MARK: - Description Section
+    private func descriptionSection(_ description: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "note.text")
+                    .font(.headline)
+                    .foregroundColor(planColor)
+                Text("予定内容")
+                    .font(.headline.weight(.semibold))
+                    .foregroundColor(.primary)
+            }
+
+            Text(description)
+                .font(.body)
+                .foregroundColor(.secondary)
+                .lineSpacing(6)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.secondarySystemBackground))
+        )
+    }
+
+    // MARK: - Link Section
+    private func linkSection(_ linkURL: String) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "link")
+                    .font(.headline)
+                    .foregroundColor(planColor)
+                Text("関連リンク")
+                    .font(.headline.weight(.semibold))
+                    .foregroundColor(.primary)
+            }
+
+            if let url = URL(string: linkURL) {
+                Link(destination: url) {
+                    HStack {
+                        Image(systemName: "safari")
+                            .foregroundColor(planColor)
+                        Text(linkURL)
+                            .font(.subheadline)
+                            .foregroundColor(.primary)
+                            .lineLimit(1)
+                        Spacer()
+                        Image(systemName: "arrow.up.right")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                    .padding(12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 10)
+                            .fill(planColor.opacity(0.1))
+                    )
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.secondarySystemBackground))
+        )
+    }
+
+    // MARK: - Action Buttons
+    private var actionButtons: some View {
+        HStack(spacing: 12) {
+            // Show on Map Button
+            Button(action: {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    showMap.toggle()
+                }
+            }) {
+                HStack(spacing: 8) {
+                    Image(systemName: showMap ? "map.slash.fill" : "map.fill")
+                        .font(.body)
+                    Text(showMap ? "閉じる" : "マップを開く")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .foregroundColor(planColor)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    planColor.opacity(0.6),
+                                    planColor.opacity(0.1)
+                                ]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 12)
+                                .stroke(planColor, lineWidth: 2)
+                        )
+                )
+            }
+            .buttonStyle(ScaleButtonStyle())
+        }
+    }
+
+    // MARK: - Map Section
+    private var mapSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "map.circle.fill")
+                    .font(.headline)
+                    .foregroundColor(planColor)
+                Text("マップ")
+                    .font(.headline.weight(.semibold))
+                    .foregroundColor(.primary)
+            }
+
+            Map(position: .constant(.region(calculateMapRegion()))) {
+                ForEach(plan.places) { place in
+                    Marker(place.name, coordinate: place.coordinate)
+                        .tint(planColor)
+                }
+            }
+            .frame(height: 300)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .overlay(alignment: .bottomTrailing) {
+                HStack(spacing: 6) {
+                    Image(systemName: "mappin.circle.fill")
+                        .font(.caption)
+                    Text("\(plan.places.count)件")
+                        .font(.caption.weight(.medium))
+                }
+                .foregroundColor(.white)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+                .padding(12)
+            }
+        }
+        .transition(.asymmetric(
+            insertion: .scale.combined(with: .opacity),
+            removal: .scale.combined(with: .opacity)
+        ))
+    }
+
+    // MARK: - Places Section
+    private var placesSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "mappin.and.ellipse")
+                    .font(.headline)
+                    .foregroundColor(planColor)
+                Text("訪問予定の場所")
+                    .font(.headline.weight(.semibold))
+                    .foregroundColor(.primary)
+            }
+
+            VStack(spacing: 12) {
+                ForEach(plan.places) { place in
+                    PlaceRowCard(place: place, planColor: planColor)
+                }
+            }
+        }
     }
 
     // MARK: - Sidebar View
@@ -100,7 +797,7 @@ struct PlanDetailView: View {
                     Text("スケジュール")
                         .font(.title2.bold())
                         .foregroundColor(.white)
-                    
+
                     Spacer()
                 }
 
@@ -112,8 +809,8 @@ struct PlanDetailView: View {
             .background(
                 LinearGradient(
                     gradient: Gradient(colors: [
-                        plan.planType == .daily ? Color.orange : Color.blue,
-                        (plan.planType == .daily ? Color.orange : Color.blue).opacity(0.8)
+                        planColor,
+                        planColor.opacity(0.8)
                     ]),
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
@@ -141,6 +838,7 @@ struct PlanDetailView: View {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 plan = schedulePlan
                 showSidebar = false
+                loadLocalImage()
             }
         }) {
             HStack(alignment: .top, spacing: 12) {
@@ -152,7 +850,7 @@ struct PlanDetailView: View {
                               LinearGradient(gradient: Gradient(colors: [.blue, .blue.opacity(0.7)]), startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 50, height: 50)
 
-                    Image(systemName: schedulePlan.planType == .outing ? "airplane" : "house.fill")
+                    Image(systemName: schedulePlan.planType == .outing ? "figure.walk" : "house.fill")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(.white)
                 }
@@ -216,199 +914,123 @@ struct PlanDetailView: View {
         .buttonStyle(PlainButtonStyle())
     }
 
-
-    // MARK: - Helper Views
-    private var backgroundGradient: some View {
-        LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ?
-                [Color(.systemBackground), Color(.systemBackground)] :
-                [plan.planType == .daily ? Color.orange.opacity(0.05) : Color.blue.opacity(0.05), Color(.systemBackground)]),
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .ignoresSafeArea()
+    // MARK: - Computed Properties for Sidebar
+    private var sortedPlans: [Plan] {
+        viewModel.plans.sorted { $0.startDate < $1.startDate }
     }
 
-    private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // Plan type badge
-            HStack {
-                Image(systemName: plan.planType == .outing ? "figure.walk" : "house.fill")
-                    .font(.title3)
-                    .foregroundColor(plan.planType == .daily ? .orange : .blue)
-
-                Text(plan.planType == .outing ? "おでかけ" : "日常")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(plan.planType == .daily ? .orange : .blue)
-
-                Spacer()
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
-            .background(
-                Capsule()
-                    .fill((plan.planType == .daily ? Color.orange : Color.blue).opacity(0.15))
-            )
-
-            // Title
-            Text(plan.title)
-                .font(.system(size: 28, weight: .bold))
-                .foregroundColor(.primary)
-
-            // Date and time info
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(spacing: 8) {
-                    Image(systemName: "calendar")
-                        .font(.subheadline)
-                        .foregroundColor(plan.planType == .daily ? .orange : .blue)
-                        .frame(width: 24)
-
-                    if plan.planType == .outing {
-                        Text(dateRangeString(plan.startDate, plan.endDate))
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    } else {
-                        Text(formatDate(plan.startDate))
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                if plan.planType == .daily, let time = plan.time {
-                    HStack(spacing: 8) {
-                        Image(systemName: "clock.fill")
-                            .font(.subheadline)
-                            .foregroundColor(plan.planType == .daily ? .orange : .blue)
-                            .frame(width: 24)
-                        Text(formatTime(time))
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
-                }
-
-                if !plan.places.isEmpty {
-                    HStack(spacing: 8) {
-                        Image(systemName: "mappin.circle.fill")
-                            .font(.subheadline)
-                            .foregroundColor(plan.planType == .daily ? .orange : .blue)
-                            .frame(width: 24)
-                        Text("\(plan.places.count)件の場所")
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                    }
-                }
-            }
-            .padding(.top, 8)
-        }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(Color(.secondarySystemBackground))
-        )
-        .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 4)
-    }
-
-    private var mapSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("マップ")
-                .font(.headline.bold())
-                .foregroundColor(.primary)
-                .padding(.leading, 4)
-
-            Map(initialPosition: .region(calculateMapRegion())) {
-                ForEach(plan.places) { place in
-                    Marker(place.name, coordinate: place.coordinate)
-                        .tint(plan.planType == .daily ? .orange : .blue)
-                }
-            }
-            .frame(height: 280)
-            .clipShape(RoundedRectangle(cornerRadius: 20))
-            .shadow(color: Color.black.opacity(0.08), radius: 10, x: 0, y: 4)
+    // MARK: - Edit Mode Functions
+    private func enterEditMode() {
+        editedTitle = plan.title
+        editedDescription = plan.description ?? ""
+        editedLinkURL = plan.linkURL ?? ""
+        editedPlanType = plan.planType
+        editedStartDate = plan.startDate
+        editedEndDate = plan.endDate
+        editedTime = plan.time
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            isEditMode = true
         }
     }
 
-    private var dailyPlanDetailsSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            if let description = plan.description, !description.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Image(systemName: "text.alignleft")
-                            .font(.headline)
-                            .foregroundColor(plan.planType == .daily ? .orange : .blue)
-                        Text("予定内容")
-                            .font(.headline.bold())
-                            .foregroundColor(.primary)
-                    }
-
-                    Text(description)
-                        .font(.body)
-                        .foregroundColor(.secondary)
-                        .fixedSize(horizontal: false, vertical: true)
-                }
-                .padding(20)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color(.secondarySystemBackground))
-                )
-                .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
-            }
-
-            if let linkURL = plan.linkURL, !linkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty, let url = URL(string: linkURL) {
-                VStack(alignment: .leading, spacing: 12) {
-                    HStack {
-                        Image(systemName: "link")
-                            .font(.headline)
-                            .foregroundColor(plan.planType == .daily ? .orange : .blue)
-                        Text("関連リンク")
-                            .font(.headline.bold())
-                            .foregroundColor(.primary)
-                    }
-
-                    Link(destination: url) {
-                        HStack {
-                            Image(systemName: "safari")
-                                .foregroundColor(plan.planType == .daily ? .orange : .blue)
-                            Text(linkURL)
-                                .font(.subheadline)
-                                .foregroundColor(.primary)
-                                .lineLimit(1)
-                            Spacer()
-                            Image(systemName: "arrow.up.right")
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                        .padding(16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill((plan.planType == .daily ? Color.orange : Color.blue).opacity(0.1))
-                        )
-                    }
-                }
-                .padding(20)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color(.secondarySystemBackground))
-                )
-                .shadow(color: Color.black.opacity(0.04), radius: 8, x: 0, y: 2)
-            }
+    private func cancelEdit() {
+        selectedImage = nil
+        displayImage = loadImageFromLocal()
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            isEditMode = false
         }
     }
 
-    private var placesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("訪問予定の場所")
-                .font(.headline.bold())
-                .foregroundColor(.primary)
-                .padding(.leading, 4)
+    private func saveChanges() {
+        guard !editedTitle.isEmpty else { return }
 
-            ForEach(plan.places) { place in
-                PlaceRow(place: place, planType: plan.planType)
+        isSaving = true
+
+        // 画像を保存（選択されている場合）
+        if let image = selectedImage {
+            saveImageLocally(image) { result in
+                switch result {
+                case .success(let fileName):
+                    updatePlanData(with: fileName)
+                case .failure(let error):
+                    handleSaveError(error)
+                }
             }
+        } else {
+            updatePlanData(with: plan.localImageFileName)
         }
     }
-    
+
+    private func updatePlanData(with localFileName: String?) {
+        var updatedPlan = plan
+        updatedPlan.title = editedTitle
+        updatedPlan.description = editedDescription.isEmpty ? nil : editedDescription
+        updatedPlan.linkURL = editedLinkURL.isEmpty ? nil : editedLinkURL
+        updatedPlan.planType = editedPlanType
+        updatedPlan.startDate = editedStartDate
+        updatedPlan.endDate = editedEndDate
+        updatedPlan.time = editedTime
+        updatedPlan.localImageFileName = localFileName
+
+        viewModel.update(updatedPlan)
+
+        DispatchQueue.main.async {
+            isSaving = false
+            plan = updatedPlan
+            selectedImage = nil
+            displayImage = loadImageFromLocal()
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                isEditMode = false
+            }
+            print("✅ プランの更新成功")
+        }
+    }
+
+    private func handleSaveError(_ error: Error) {
+        DispatchQueue.main.async {
+            isSaving = false
+            alertMessage = "保存に失敗しました: \(error.localizedDescription)"
+            showAlert = true
+            print("❌ プランの更新失敗: \(error.localizedDescription)")
+        }
+    }
+
+    // MARK: - Image Storage Functions
+    private func saveImageLocally(_ image: UIImage, completion: @escaping (Result<String, Error>) -> Void) {
+        guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+            completion(.failure(NSError(domain: "PlanDetailView", code: -1, userInfo: [NSLocalizedDescriptionKey: "画像データの変換に失敗しました"])))
+            return
+        }
+
+        let fileName = "plan_\(plan.id).jpg"
+
+        do {
+            try FileManager.saveImageDataToDocuments(data: imageData, named: fileName)
+            print("✅ ローカル画像保存成功: \(fileName)")
+            completion(.success(fileName))
+        } catch {
+            print("❌ ローカル画像保存失敗: \(error.localizedDescription)")
+            completion(.failure(error))
+        }
+    }
+
+    private func loadLocalImage() {
+        displayImage = loadImageFromLocal()
+    }
+
+    private func loadImageFromLocal() -> UIImage? {
+        guard let fileName = plan.localImageFileName else { return nil }
+
+        if let image = FileManager.documentsImage(named: fileName) {
+            print("✅ ローカル画像読み込み成功: \(fileName)")
+            return image
+        } else {
+            print("❌ ローカル画像読み込み失敗: \(fileName)")
+            return nil
+        }
+    }
+
+    // MARK: - Helper Functions
     private func calculateMapRegion() -> MKCoordinateRegion {
         guard let firstPlace = plan.places.first else {
             return MKCoordinateRegion(
@@ -416,31 +1038,40 @@ struct PlanDetailView: View {
                 span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
             )
         }
-        
+
         return MKCoordinateRegion(
             center: firstPlace.coordinate,
             latitudinalMeters: CLLocationDistance(max(plan.places.count * 1000, 2000)),
             longitudinalMeters: CLLocationDistance(max(plan.places.count * 1000, 2000))
         )
     }
-    
+
     private func dateRangeString(_ start: Date, _ end: Date) -> String {
-        let formatter = DateFormatter.japaneseDate
-        return "\(formatter.string(from: start)) 〜 \(formatter.string(from: end))"
+        let formatter = DateFormatter()
+        formatter.dateFormat = "M月d日"
+        formatter.locale = Locale(identifier: "ja_JP")
+        return "\(formatter.string(from: start))〜\(formatter.string(from: end))"
     }
 
     private func formatDate(_ date: Date) -> String {
-        DateFormatter.japaneseDate.string(from: date)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy年M月d日(E)"
+        formatter.locale = Locale(identifier: "ja_JP")
+        return formatter.string(from: date)
     }
 
     private func formatTime(_ time: Date) -> String {
-        DateFormatter.japaneseTime.string(from: time)
+        let formatter = DateFormatter()
+        formatter.dateFormat = "HH:mm"
+        formatter.locale = Locale(identifier: "ja_JP")
+        return formatter.string(from: time)
     }
 }
 
-struct PlaceRow: View {
+// MARK: - Place Row Card
+struct PlaceRowCard: View {
     let place: PlannedPlace
-    let planType: PlanType
+    let planColor: Color
     @State private var showMapView = false
 
     var body: some View {
@@ -454,8 +1085,8 @@ struct PlaceRow: View {
                         .fill(
                             LinearGradient(
                                 gradient: Gradient(colors: [
-                                    planType == .daily ? Color.orange : Color.blue,
-                                    (planType == .daily ? Color.orange : Color.blue).opacity(0.6)
+                                    planColor,
+                                    planColor.opacity(0.6)
                                 ]),
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -467,7 +1098,7 @@ struct PlaceRow: View {
                         .font(.title3)
                         .foregroundColor(.white)
                 }
-                .shadow(color: (planType == .daily ? Color.orange : Color.blue).opacity(0.3), radius: 4, x: 0, y: 2)
+                .shadow(color: planColor.opacity(0.3), radius: 4, x: 0, y: 2)
 
                 // Content
                 VStack(alignment: .leading, spacing: 6) {
@@ -498,15 +1129,17 @@ struct PlaceRow: View {
             )
             .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
         }
-        .buttonStyle(PlainButtonStyle())
+        .buttonStyle(ScaleButtonStyle())
         .fullScreenCover(isPresented: $showMapView) {
-            PlaceDetailMapView(place: place)
+            PlaceDetailMapView(place: place, planColor: planColor)
         }
     }
 }
 
+// MARK: - Place Detail Map View
 struct PlaceDetailMapView: View {
     let place: PlannedPlace
+    let planColor: Color
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
@@ -519,7 +1152,7 @@ struct PlaceDetailMapView: View {
                 )
             )) {
                 Marker(place.name, coordinate: place.coordinate)
-                    .tint(.red)
+                    .tint(planColor)
             }
             .edgesIgnoringSafeArea(.all)
             .navigationTitle(place.name)
@@ -529,8 +1162,20 @@ struct PlaceDetailMapView: View {
                     Button("閉じる") {
                         dismiss()
                     }
+                    .foregroundColor(planColor)
                 }
             }
         }
     }
 }
+
+// MARK: - Scale Button Style (if not already defined)
+#if !DEBUG
+struct ScaleButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: configuration.isPressed)
+    }
+}
+#endif
