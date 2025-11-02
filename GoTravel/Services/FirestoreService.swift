@@ -200,8 +200,8 @@ final class FirestoreService {
         if let localImageFileName = planToSave.localImageFileName { dict["localImageFileName"] = localImageFileName }
         if let colorHex = planToSave.cardColorHex { dict["cardColorHex"] = colorHex }
 
-        dict["daySchedules"] = serializeDaySchedules(planToSave.daySchedules)
-        dict["packingItems"] = serializePackingItems(planToSave.packingItems)
+        dict["daySchedules"] = FirestoreSerializationHelper.serializeDaySchedules(planToSave.daySchedules)
+        dict["packingItems"] = FirestoreSerializationHelper.serializePackingItems(planToSave.packingItems)
 
         print("FirestoreService: 保存するデータ: \(dict)")
 
@@ -239,7 +239,7 @@ final class FirestoreService {
                 }
 
                 let plans: [TravelPlan] = docs.compactMap { doc in
-                    self.parseTravelPlan(from: doc)
+                    FirestoreParser.parseTravelPlan(from: doc)
                 }
                 completion(.success(plans))
             }
