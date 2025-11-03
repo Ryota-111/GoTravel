@@ -950,13 +950,48 @@ struct MaskedPrefectureImage: View {
     }
 }
 
-// MARK: - ViewModel (No changes - kept as is)
+// MARK: - ViewModel
 class JapanPhotoViewModel: ObservableObject {
     @Published var photos: [Prefecture: UIImage] = [:]
+    private let photoManager = JapanPhotoManager.shared
+
+    init() {
+        loadAllPhotos()
+    }
 
     func savePhoto(for prefecture: Prefecture, image: UIImage) {
-        photos[prefecture] = image
-        // TODO: Save to local storage
+        // Save to local storage
+        if photoManager.savePhoto(image, for: prefecture.rawValue) {
+            // Update in-memory photos
+            photos[prefecture] = image
+            print("✅ 写真保存成功: \(prefecture.name)")
+        } else {
+            print("❌ 写真保存失敗: \(prefecture.name)")
+        }
+    }
+
+    func deletePhoto(for prefecture: Prefecture) {
+        // Delete from local storage
+        if photoManager.deletePhoto(for: prefecture.rawValue) {
+            // Update in-memory photos
+            photos.removeValue(forKey: prefecture)
+            print("✅ 写真削除成功: \(prefecture.name)")
+        } else {
+            print("❌ 写真削除失敗: \(prefecture.name)")
+        }
+    }
+
+    private func loadAllPhotos() {
+        // Load all photos from local storage
+        let savedPhotos = photoManager.loadAllPhotos()
+
+        for (prefectureRawValue, image) in savedPhotos {
+            if let prefecture = Prefecture.allCases.first(where: { $0.rawValue == prefectureRawValue }) {
+                photos[prefecture] = image
+            }
+        }
+
+        print("✅ 保存済み写真を読み込みました: \(photos.count)枚")
     }
 }
 

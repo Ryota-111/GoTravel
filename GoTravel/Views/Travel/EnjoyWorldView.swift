@@ -356,7 +356,7 @@ struct EnjoyWorldView: View {
                     .foregroundColor(.orange)
             }
             .frame(width: 150, height: 200)
-            .background(Color.white.opacity(0.7))
+            .background(Color.white.opacity(0.2))
             .cornerRadius(25)
             .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
         }
@@ -412,17 +412,6 @@ struct EnjoyWorldView: View {
             )
             .animation(.spring(response: 0.7, dampingFraction: 0.6), value: futureFilteredPlans.count)
 
-//            PlanEventSectionView(
-//                title: "過去の予定",
-//                plans: pastFilteredPlans,
-//                viewModel: plansViewModel,
-//                onDelete: { plan in
-//                    planEventToDelete = plan
-//                    showPlanDeleteConfirmation = true
-//                }
-//            )
-//            .animation(.spring(response: 0.7, dampingFraction: 0.6), value: pastFilteredPlans.count)
-
             addPlanButton
         }
     }
@@ -440,7 +429,7 @@ struct EnjoyWorldView: View {
             }
             .padding(.vertical, 15)
             .frame(maxWidth: .infinity)
-            .background(Color.white.opacity(0.7))
+            .background(Color.white.opacity(0.2))
             .cornerRadius(15)
             .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
         }
