@@ -10,9 +10,11 @@ struct Album: Identifiable, Codable, Equatable {
     var icon: String
     var createdAt: Date
     var updatedAt: Date
+    var travelPlanId: String? // TravelPlanとの関連付け
+    var isDefaultAlbum: Bool // 固定アルバムかどうか
 
     enum CodingKeys: String, CodingKey {
-        case id, title, photoFileNames, coverColorHex, icon, createdAt, updatedAt
+        case id, title, photoFileNames, coverColorHex, icon, createdAt, updatedAt, travelPlanId, isDefaultAlbum
     }
 
     var coverColorHex: String? {
@@ -29,7 +31,9 @@ struct Album: Identifiable, Codable, Equatable {
          coverColor: Color? = nil,
          icon: String = "photo.on.rectangle.angled",
          createdAt: Date = Date(),
-         updatedAt: Date = Date()) {
+         updatedAt: Date = Date(),
+         travelPlanId: String? = nil,
+         isDefaultAlbum: Bool = false) {
         self.id = id
         self.title = title
         self.photoFileNames = photoFileNames
@@ -37,6 +41,8 @@ struct Album: Identifiable, Codable, Equatable {
         self.icon = icon
         self.createdAt = createdAt
         self.updatedAt = updatedAt
+        self.travelPlanId = travelPlanId
+        self.isDefaultAlbum = isDefaultAlbum
     }
 
     init(from decoder: Decoder) throws {
@@ -47,6 +53,8 @@ struct Album: Identifiable, Codable, Equatable {
         icon = try container.decode(String.self, forKey: .icon)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
+        travelPlanId = try container.decodeIfPresent(String.self, forKey: .travelPlanId)
+        isDefaultAlbum = try container.decodeIfPresent(Bool.self, forKey: .isDefaultAlbum) ?? false
 
         if let hex = try container.decodeIfPresent(String.self, forKey: .coverColorHex) {
             coverColor = Color(hex: hex)
@@ -61,6 +69,8 @@ struct Album: Identifiable, Codable, Equatable {
         try container.encode(icon, forKey: .icon)
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(updatedAt, forKey: .updatedAt)
+        try container.encodeIfPresent(travelPlanId, forKey: .travelPlanId)
+        try container.encode(isDefaultAlbum, forKey: .isDefaultAlbum)
 
         if let hex = coverColorHex {
             try container.encode(hex, forKey: .coverColorHex)

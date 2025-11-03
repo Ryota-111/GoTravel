@@ -3,10 +3,13 @@ import SwiftUI
 // MARK: - Album Home View
 struct AlbumHomeView: View {
     @StateObject private var albumManager = AlbumManager.shared
+    @StateObject private var travelPlanViewModel = TravelPlanViewModel()
     @Environment(\.colorScheme) var colorScheme
     @State private var showCreateAlbum = false
     @State private var selectedAlbum: Album?
     @State private var animateCards = false
+    @State private var albumToDelete: Album?
+    @State private var showDeleteConfirm = false
 
     var body: some View {
         NavigationView {
@@ -42,7 +45,7 @@ struct AlbumHomeView: View {
             }
         }
         .sheet(isPresented: $showCreateAlbum) {
-            CreateAlbumView()
+            CreateAlbumView(travelPlans: travelPlanViewModel.travelPlans)
         }
         .fullScreenCover(item: $selectedAlbum) { album in
             if album.title == "日本全国フォトマップ" {
@@ -50,6 +53,13 @@ struct AlbumHomeView: View {
             } else {
                 AlbumDetailView(album: album)
             }
+        }
+        .confirmationDialog("このアルバムを削除しますか？", isPresented: $showDeleteConfirm, presenting: albumToDelete) { album in
+            Button("削除", role: .destructive) {
+                albumManager.deleteAlbum(album)
+            }
+        } message: { album in
+            Text("「\(album.title)」を削除すると、アルバム内の写真もすべて削除されます。")
         }
     }
 
@@ -90,6 +100,12 @@ struct AlbumHomeView: View {
                 AlbumCard(album: album)
                     .onTapGesture {
                         selectedAlbum = album
+                    }
+                    .onLongPressGesture(minimumDuration: 0.5) {
+                        if !album.isDefaultAlbum {
+                            albumToDelete = album
+                            showDeleteConfirm = true
+                        }
                     }
                     .opacity(animateCards ? 1 : 0)
                     .offset(y: animateCards ? 0 : 20)
@@ -258,72 +274,42 @@ struct AlbumCard: View {
 struct CreateAlbumView: View {
     @Environment(\.dismiss) var dismiss
     @StateObject private var albumManager = AlbumManager.shared
+    @State private var creationMode: CreationMode = .manual
     @State private var albumTitle = ""
     @State private var selectedType: AlbumType = .custom
+    @State private var selectedTravelPlan: TravelPlan?
     @Environment(\.colorScheme) var colorScheme
 
+    let travelPlans: [TravelPlan]
     let albumTypes: [AlbumType] = [.travel, .family, .landscape, .food, .custom]
+
+    enum CreationMode {
+        case manual
+        case fromTravelPlan
+    }
 
     var body: some View {
         NavigationView {
             ZStack {
                 Color.black.opacity(0.9).ignoresSafeArea()
 
-                VStack(spacing: 30) {
-                    Spacer()
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 30) {
+                        // Mode Selection
+                        modeSelectionSection
 
-                    VStack(spacing: 20) {
-                        TextField("アルバム名", text: $albumTitle)
-                            .font(.title3)
-                            .foregroundColor(.white)
-                            .padding()
-                            .background(Color.white.opacity(0.1))
-                            .cornerRadius(15)
-
-                        VStack(alignment: .leading, spacing: 12) {
-                            Text("アルバムの種類")
-                                .font(.headline)
-                                .foregroundColor(.white.opacity(0.8))
-
-                            ScrollView(.horizontal, showsIndicators: false) {
-                                HStack(spacing: 12) {
-                                    ForEach(albumTypes, id: \.self) { type in
-                                        AlbumTypeButton(
-                                            type: type,
-                                            isSelected: selectedType == type
-                                        ) {
-                                            selectedType = type
-                                        }
-                                    }
-                                }
-                            }
+                        if creationMode == .manual {
+                            manualCreationSection
+                        } else {
+                            travelPlanSelectionSection
                         }
-                    }
 
-                    Spacer()
+                        Spacer()
 
-                    Button(action: createAlbum) {
-                        Text("作成")
-                            .font(.headline)
-                            .foregroundColor(.white)
-                            .frame(maxWidth: .infinity)
-                            .padding()
-                            .background(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        selectedType.coverColor,
-                                        selectedType.coverColor.opacity(0.7)
-                                    ]),
-                                    startPoint: .leading,
-                                    endPoint: .trailing
-                                )
-                            )
-                            .cornerRadius(15)
+                        createButton
                     }
-                    .disabled(albumTitle.isEmpty)
-                    .opacity(albumTitle.isEmpty ? 0.5 : 1)
+                    .padding()
                 }
-                .padding()
             }
             .navigationTitle("新規アルバム")
             .navigationBarTitleDisplayMode(.inline)
@@ -338,9 +324,253 @@ struct CreateAlbumView: View {
         }
     }
 
+    // MARK: - Mode Selection
+    private var modeSelectionSection: some View {
+        VStack(spacing: 12) {
+            Text("アルバムの作成方法")
+                .font(.headline)
+                .foregroundColor(.white.opacity(0.8))
+                .frame(maxWidth: .infinity, alignment: .leading)
+
+            HStack(spacing: 12) {
+                ModeButton(
+                    title: "手動作成",
+                    icon: "square.and.pencil",
+                    isSelected: creationMode == .manual
+                ) {
+                    creationMode = .manual
+                }
+
+                ModeButton(
+                    title: "旅行計画から",
+                    icon: "airplane.departure",
+                    isSelected: creationMode == .fromTravelPlan
+                ) {
+                    creationMode = .fromTravelPlan
+                }
+            }
+        }
+    }
+
+    // MARK: - Manual Creation
+    private var manualCreationSection: some View {
+        VStack(spacing: 20) {
+            TextField("アルバム名", text: $albumTitle)
+                .font(.title3)
+                .foregroundColor(.white)
+                .padding()
+                .background(Color.white.opacity(0.1))
+                .cornerRadius(15)
+
+            VStack(alignment: .leading, spacing: 12) {
+                Text("アルバムの種類")
+                    .font(.headline)
+                    .foregroundColor(.white.opacity(0.8))
+
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 12) {
+                        ForEach(albumTypes, id: \.self) { type in
+                            AlbumTypeButton(
+                                type: type,
+                                isSelected: selectedType == type
+                            ) {
+                                selectedType = type
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Travel Plan Selection
+    private var travelPlanSelectionSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("旅行計画を選択")
+                .font(.headline)
+                .foregroundColor(.white.opacity(0.8))
+
+            if travelPlans.isEmpty {
+                VStack(spacing: 10) {
+                    Image(systemName: "airplane.departure")
+                        .font(.system(size: 50))
+                        .foregroundColor(.white.opacity(0.3))
+
+                    Text("旅行計画がありません")
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.7))
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
+            } else {
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 12) {
+                        ForEach(travelPlans) { plan in
+                            TravelPlanSelectionCard(
+                                plan: plan,
+                                isSelected: selectedTravelPlan?.id == plan.id
+                            ) {
+                                selectedTravelPlan = plan
+                            }
+                        }
+                    }
+                }
+                .frame(maxHeight: 300)
+            }
+        }
+    }
+
+    // MARK: - Create Button
+    private var createButton: some View {
+        Button(action: createAlbum) {
+            Text("作成")
+                .font(.headline)
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            buttonColor,
+                            buttonColor.opacity(0.7)
+                        ]),
+                        startPoint: .leading,
+                        endPoint: .trailing
+                    )
+                )
+                .cornerRadius(15)
+        }
+        .disabled(!canCreate)
+        .opacity(canCreate ? 1 : 0.5)
+    }
+
+    private var buttonColor: Color {
+        if creationMode == .fromTravelPlan {
+            return selectedTravelPlan?.cardColor ?? .blue
+        } else {
+            return selectedType.coverColor
+        }
+    }
+
+    private var canCreate: Bool {
+        if creationMode == .manual {
+            return !albumTitle.isEmpty
+        } else {
+            return selectedTravelPlan != nil
+        }
+    }
+
     private func createAlbum() {
-        albumManager.createAlbum(title: albumTitle, type: selectedType)
+        if creationMode == .manual {
+            albumManager.createAlbum(title: albumTitle, type: selectedType)
+        } else if let travelPlan = selectedTravelPlan {
+            albumManager.createTravelPlanAlbum(from: travelPlan)
+        }
         dismiss()
+    }
+}
+
+// MARK: - Mode Button
+struct ModeButton: View {
+    let title: String
+    let icon: String
+    let isSelected: Bool
+    let action: () -> Void
+
+    var body: some View {
+        Button(action: action) {
+            VStack(spacing: 8) {
+                Image(systemName: icon)
+                    .font(.title2)
+                    .foregroundColor(.white)
+
+                Text(title)
+                    .font(.caption)
+                    .foregroundColor(.white)
+            }
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(isSelected ? Color.orange.opacity(0.3) : Color.white.opacity(0.1))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isSelected ? Color.orange : Color.clear, lineWidth: 2)
+            )
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+    }
+}
+
+// MARK: - Travel Plan Selection Card
+struct TravelPlanSelectionCard: View {
+    let plan: TravelPlan
+    let isSelected: Bool
+    let action: () -> Void
+    @Environment(\.colorScheme) var colorScheme
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                // Icon
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    (plan.cardColor ?? .blue).opacity(0.8),
+                                    (plan.cardColor ?? .blue).opacity(0.5)
+                                ]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 50, height: 50)
+
+                    Image(systemName: "airplane.departure")
+                        .font(.title3)
+                        .foregroundColor(.white)
+                }
+
+                // Info
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(plan.title)
+                        .font(.headline)
+                        .foregroundColor(.white)
+
+                    Text(plan.destination)
+                        .font(.caption)
+                        .foregroundColor(.white.opacity(0.7))
+                }
+
+                Spacer()
+
+                // Selection Indicator
+                if isSelected {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(.orange)
+                }
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(
+                        colorScheme == .dark ?
+                            Color.white.opacity(0.1) :
+                            Color.white.opacity(0.2)
+                    )
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(
+                        isSelected ? Color.orange : Color.clear,
+                        lineWidth: 2
+                    )
+            )
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
     }
 }
 

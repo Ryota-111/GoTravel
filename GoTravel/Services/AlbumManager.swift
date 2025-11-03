@@ -42,11 +42,31 @@ class AlbumManager: ObservableObject {
         }
     }
 
-    func createAlbum(title: String, type: AlbumType = .custom) {
+    func createAlbum(title: String, type: AlbumType = .custom, travelPlanId: String? = nil, isDefaultAlbum: Bool = false) {
         let album = Album(
             title: title,
             coverColor: type.coverColor,
-            icon: type.icon
+            icon: type.icon,
+            travelPlanId: travelPlanId,
+            isDefaultAlbum: isDefaultAlbum
+        )
+        albums.append(album)
+        saveAlbums()
+    }
+
+    func createTravelPlanAlbum(from travelPlan: TravelPlan) {
+        // Check if album already exists for this travel plan
+        if let planId = travelPlan.id, albums.contains(where: { $0.travelPlanId == planId }) {
+            print("Album already exists for this travel plan")
+            return
+        }
+
+        let album = Album(
+            title: travelPlan.title,
+            coverColor: travelPlan.cardColor ?? .blue,
+            icon: "airplane.departure",
+            travelPlanId: travelPlan.id,
+            isDefaultAlbum: false
         )
         albums.append(album)
         saveAlbums()
@@ -62,6 +82,12 @@ class AlbumManager: ObservableObject {
     }
 
     func deleteAlbum(_ album: Album) {
+        // Prevent deletion of default albums
+        if album.isDefaultAlbum {
+            print("Cannot delete default album: \(album.title)")
+            return
+        }
+
         // Delete all photos in the album
         for fileName in album.photoFileNames {
             deletePhoto(fileName: fileName)
@@ -131,7 +157,10 @@ class AlbumManager: ObservableObject {
 
     // MARK: - Default Albums Initialization
     private func initializeDefaultAlbums() {
-        if albums.isEmpty {
+        // Only create default albums if no albums exist at all
+        let hasDefaultAlbums = albums.contains(where: { $0.isDefaultAlbum })
+
+        if !hasDefaultAlbums {
             let defaultAlbums: [(String, AlbumType)] = [
                 ("日本全国フォトマップ", .japan),
                 ("旅行", .travel),
@@ -141,7 +170,7 @@ class AlbumManager: ObservableObject {
             ]
 
             for (title, type) in defaultAlbums {
-                createAlbum(title: title, type: type)
+                createAlbum(title: title, type: type, isDefaultAlbum: true)
             }
         }
     }
