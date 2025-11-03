@@ -35,22 +35,14 @@ struct JapanPhotoView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button(action: {
+                    Button("閉じる") {
                         dismiss()
-                    }) {
-                        HStack(spacing: 6) {
-                            Image(systemName: "chevron.left")
-                                .font(.body.weight(.semibold))
-                            Text("戻る")
-                        }
-                        .foregroundColor(.white)
                     }
+                    .foregroundColor(.blue)
                 }
             }
             .onAppear {
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
-                    animateCards = true
-                }
+                animateCards = true
             }
         }
         .sheet(item: $selectedPrefecture) { prefecture in
@@ -103,11 +95,9 @@ struct JapanPhotoView: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text("日本全国フォトマップ")
                         .font(.title2.bold())
-                        .foregroundColor(.white)
 
                     Text("訪れた都道府県の思い出を記録")
                         .font(.subheadline)
-                        .foregroundColor(.white.opacity(0.8))
                 }
 
                 Spacer()
@@ -115,7 +105,6 @@ struct JapanPhotoView: View {
         }
         .opacity(animateCards ? 1 : 0)
         .offset(y: animateCards ? 0 : -20)
-        .animation(.spring(response: 0.6, dampingFraction: 0.8), value: animateCards)
     }
 
     // MARK: - Map Card Section
@@ -124,7 +113,6 @@ struct JapanPhotoView: View {
             HStack {
                 Text("インタラクティブマップ")
                     .font(.headline)
-                    .foregroundColor(.white)
 
                 Spacer()
 
@@ -134,12 +122,12 @@ struct JapanPhotoView: View {
                     Text("ピンチ・ドラッグで操作")
                         .font(.caption)
                 }
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(.gray.opacity(0.7))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
                 .background(
                     Capsule()
-                        .fill(Color.white.opacity(0.15))
+                        .fill(Color.gray.opacity(0.15))
                 )
             }
 
@@ -147,7 +135,6 @@ struct JapanPhotoView: View {
         }
         .opacity(animateCards ? 1 : 0)
         .offset(y: animateCards ? 0 : 20)
-        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: animateCards)
     }
 
     private var mapView: some View {
@@ -184,49 +171,48 @@ struct JapanPhotoView: View {
                         prefectureMapCell(prefecture, in: CGSize(width: 370, height: 600))
                     }
                 }
-                .frame(width: 370, height: 600)
+                .frame(width: 370, height: 500)
                 .scaleEffect(scale)
                 .offset(offset)
-                .gesture(
-                    SimultaneousGesture(
-                        MagnificationGesture()
-                            .onChanged { value in
-                                scale = lastScale * value
-                            }
-                            .onEnded { value in
-                                lastScale = scale
-                                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                    if scale < 1.0 {
-                                        scale = 1.0
-                                        lastScale = 1.0
-                                    } else if scale > 3.0 {
-                                        scale = 3.0
-                                        lastScale = 3.0
-                                    }
-                                }
-                            },
-                        DragGesture()
-                            .onChanged { value in
-                                let newOffset = CGSize(
-                                    width: lastOffset.width + value.translation.width,
-                                    height: lastOffset.height + value.translation.height
-                                )
-                                let maxOffsetX = (370 * 2 * scale - geometry.size.width) / 2
-                                let maxOffsetY = (600 * 2 * scale - geometry.size.height) / 2
-
-                                offset = CGSize(
-                                    width: min(max(newOffset.width, -maxOffsetX), maxOffsetX),
-                                    height: min(max(newOffset.height, -maxOffsetY), maxOffsetY)
-                                )
-                            }
-                            .onEnded { value in
-                                lastOffset = offset
-                            }
-                    )
-                )
             }
             .frame(width: geometry.size.width, height: geometry.size.height, alignment: .center)
             .clipShape(RoundedRectangle(cornerRadius: 24))
+            .contentShape(Rectangle())
+            .gesture(
+                MagnificationGesture()
+                    .onChanged { value in
+                        scale = lastScale * value
+                    }
+                    .onEnded { value in
+                        lastScale = scale
+                        if scale < 1.0 {
+                            scale = 1.0
+                            lastScale = 1.0
+                        } else if scale > 3.0 {
+                            scale = 3.0
+                            lastScale = 3.0
+                        }
+                    }
+            )
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 10)
+                    .onChanged { value in
+                        let newOffset = CGSize(
+                            width: lastOffset.width + value.translation.width,
+                            height: lastOffset.height + value.translation.height
+                        )
+                        let maxOffsetX = (370 * 2 * scale - geometry.size.width) / 2
+                        let maxOffsetY = (600 * 2 * scale - geometry.size.height) / 2
+
+                        offset = CGSize(
+                            width: min(max(newOffset.width, -maxOffsetX), maxOffsetX),
+                            height: min(max(newOffset.height, -maxOffsetY), maxOffsetY)
+                        )
+                    }
+                    .onEnded { value in
+                        lastOffset = offset
+                    }
+            )
         }
         .frame(height: 500)
         .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 6)
@@ -318,7 +304,6 @@ struct JapanPhotoView: View {
         }
         .opacity(animateCards ? 1 : 0)
         .offset(y: animateCards ? 0 : 20)
-        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: animateCards)
     }
 
     // MARK: - Prefecture Grid Section
@@ -344,11 +329,6 @@ struct JapanPhotoView: View {
                     }
                     .opacity(animateCards ? 1 : 0)
                     .scaleEffect(animateCards ? 1 : 0.8)
-                    .animation(
-                        .spring(response: 0.6, dampingFraction: 0.8)
-                            .delay(0.3 + Double(index) * 0.02),
-                        value: animateCards
-                    )
                 }
             }
         }
@@ -372,11 +352,9 @@ struct JapanStatCard: View {
             VStack(spacing: 4) {
                 Text(value)
                     .font(.title2.bold())
-                    .foregroundColor(.white)
 
                 Text(title)
                     .font(.caption)
-                    .foregroundColor(.white.opacity(0.7))
             }
         }
         .frame(maxWidth: .infinity)
@@ -520,7 +498,7 @@ struct PrefecturePhotoEditorView: View {
                     Button("閉じる") {
                         presentationMode.wrappedValue.dismiss()
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(.blue)
                 }
             }
         }
@@ -566,11 +544,10 @@ struct PrefecturePhotoEditorView: View {
 
             Text(prefecture.name)
                 .font(.title.bold())
-                .foregroundColor(.white)
 
             Text("思い出の写真を追加")
                 .font(.subheadline)
-                .foregroundColor(.white.opacity(0.8))
+                .foregroundColor(.gray.opacity(0.8))
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 20)
@@ -612,11 +589,11 @@ struct PrefecturePhotoEditorView: View {
                         VStack(spacing: 16) {
                             Image(systemName: "photo.on.rectangle.angled")
                                 .font(.system(size: 60))
-                                .foregroundColor(.white.opacity(0.4))
+                                .foregroundColor(.white.opacity(0.8))
 
                             Text("写真を選択してください")
                                 .font(.headline)
-                                .foregroundColor(.white.opacity(0.6))
+                                .foregroundColor(.gray.opacity(0.6))
                         }
                     )
                     .overlay(

@@ -38,7 +38,7 @@ struct AlbumDetailView: View {
                     Button("閉じる") {
                         dismiss()
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(album.coverColor)
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -47,7 +47,7 @@ struct AlbumDetailView: View {
                     }) {
                         Image(systemName: "plus.circle.fill")
                             .font(.title3)
-                            .foregroundColor(.white)
+                            .foregroundColor(album.coverColor)
                     }
                 }
             }
@@ -91,18 +91,17 @@ struct AlbumDetailView: View {
 
     // MARK: - Empty State View
     private var emptyStateView: some View {
-        VStack(spacing: 20) {
+        VStack(spacing: 15) {
             Image(systemName: album.icon)
                 .font(.system(size: 80))
-                .foregroundColor(.white.opacity(0.4))
+                .foregroundColor(.white.opacity(0.8))
 
             Text("写真がありません")
                 .font(.title2.bold())
-                .foregroundColor(.white)
 
             Text("＋ボタンから写真を追加しましょう")
                 .font(.subheadline)
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(.gray)
                 .multilineTextAlignment(.center)
 
             Button(action: {

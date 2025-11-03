@@ -31,7 +31,7 @@ struct AlbumHomeView: View {
                     }) {
                         Image(systemName: "plus.circle.fill")
                             .font(.title3)
-                            .foregroundColor(.white)
+                            .foregroundColor(.orange)
                     }
                 }
             }
