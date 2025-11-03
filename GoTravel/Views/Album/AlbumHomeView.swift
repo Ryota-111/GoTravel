@@ -97,31 +97,58 @@ struct AlbumHomeView: View {
             GridItem(.flexible(), spacing: 16)
         ], spacing: 16) {
             ForEach(Array(albumManager.albums.enumerated()), id: \.element.id) { index, album in
-                AlbumCard(album: album)
-                    .onTapGesture {
+                AlbumCardWrapper(
+                    album: album,
+                    onTap: {
                         selectedAlbum = album
-                    }
-                    .onLongPressGesture(minimumDuration: 0.5) {
+                    },
+                    onLongPress: {
                         if !album.isDefaultAlbum {
                             albumToDelete = album
                             showDeleteConfirm = true
                         }
                     }
-                    .opacity(animateCards ? 1 : 0)
-                    .offset(y: animateCards ? 0 : 20)
-                    .animation(
-                        .spring(response: 0.6, dampingFraction: 0.8)
-                            .delay(Double(index) * 0.05),
-                        value: animateCards
-                    )
+                )
+                .opacity(animateCards ? 1 : 0)
+                .offset(y: animateCards ? 0 : 20)
+                .animation(
+                    .spring(response: 0.6, dampingFraction: 0.8)
+                        .delay(Double(index) * 0.05),
+                    value: animateCards
+                )
             }
         }
+    }
+}
+
+// MARK: - Album Card Wrapper
+struct AlbumCardWrapper: View {
+    let album: Album
+    let onTap: () -> Void
+    let onLongPress: () -> Void
+    @State private var isPressed = false
+
+    var body: some View {
+        AlbumCard(album: album, isPressed: $isPressed)
+            .onTapGesture {
+                onTap()
+            }
+            .onLongPressGesture(minimumDuration: 0.5, pressing: { pressing in
+                if !album.isDefaultAlbum {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        isPressed = pressing
+                    }
+                }
+            }, perform: {
+                onLongPress()
+            })
     }
 }
 
 // MARK: - Album Card
 struct AlbumCard: View {
     let album: Album
+    @Binding var isPressed: Bool
     @StateObject private var albumManager = AlbumManager.shared
     @Environment(\.colorScheme) var colorScheme
 
@@ -164,6 +191,30 @@ struct AlbumCard: View {
             radius: 10,
             x: 0,
             y: 5
+        )
+        .scaleEffect(isPressed ? 0.95 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
+        .overlay(
+            // Delete indicator overlay
+            Group {
+                if isPressed && !album.isDefaultAlbum {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 20)
+                            .fill(Color.red.opacity(0.3))
+
+                        VStack(spacing: 8) {
+                            Image(systemName: "trash.fill")
+                                .font(.title)
+                                .foregroundColor(.white)
+
+                            Text("長押しで削除")
+                                .font(.caption.bold())
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .transition(.opacity)
+                }
+            }
         )
     }
 
