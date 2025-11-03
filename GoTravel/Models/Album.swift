@@ -10,8 +10,8 @@ struct Album: Identifiable, Codable, Equatable {
     var icon: String
     var createdAt: Date
     var updatedAt: Date
-    var travelPlanId: String? // TravelPlanとの関連付け
-    var isDefaultAlbum: Bool // 固定アルバムかどうか
+    var travelPlanId: String?
+    var isDefaultAlbum: Bool
 
     enum CodingKeys: String, CodingKey {
         case id, title, photoFileNames, coverColorHex, icon, createdAt, updatedAt, travelPlanId, isDefaultAlbum

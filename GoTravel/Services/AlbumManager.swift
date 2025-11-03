@@ -157,21 +157,11 @@ class AlbumManager: ObservableObject {
 
     // MARK: - Default Albums Initialization
     private func initializeDefaultAlbums() {
-        // Only create default albums if no albums exist at all
-        let hasDefaultAlbums = albums.contains(where: { $0.isDefaultAlbum })
+        // Only create Japan Photo Map album if it doesn't exist
+        let hasJapanPhotoMap = albums.contains(where: { $0.title == "日本全国フォトマップ" })
 
-        if !hasDefaultAlbums {
-            let defaultAlbums: [(String, AlbumType)] = [
-                ("日本全国フォトマップ", .japan),
-                ("旅行", .travel),
-                ("家族", .family),
-                ("風景", .landscape),
-                ("グルメ", .food)
-            ]
-
-            for (title, type) in defaultAlbums {
-                createAlbum(title: title, type: type, isDefaultAlbum: true)
-            }
+        if !hasJapanPhotoMap {
+            createAlbum(title: "日本全国フォトマップ", type: .japan, isDefaultAlbum: true)
         }
     }
 
