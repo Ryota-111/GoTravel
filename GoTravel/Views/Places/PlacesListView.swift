@@ -136,7 +136,24 @@ struct PlacesListView: View {
             .padding()
             .background(cardGradient)
             .cornerRadius(15)
-            .shadow(color: colorScheme == .dark ? .black.opacity(0.3) : .gray.opacity(0.2), radius: 10, x: 0, y: 5)
+            .overlay(
+                RoundedRectangle(cornerRadius: 15)
+                    .stroke(
+                        LinearGradient(
+                            gradient: Gradient(colors: [
+                                .orange.opacity(0.5),
+                                .orange.opacity(0.2)
+                            ]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 2
+                    )
+            )
+            .shadow(
+                color: .orange.opacity(0.5),
+                radius: 10
+            )
         }
         .contextMenu {
             deleteButton(place: place)

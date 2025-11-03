@@ -151,15 +151,12 @@ struct AlbumDetailView: View {
                         if let image = albumManager.loadPhoto(fileName: fileName) {
                             PhotoThumbnail(
                                 image: image,
-                                albumColor: album.coverColor ?? .blue
+                                albumColor: album.coverColor ?? .blue,
+                                onDelete: {
+                                    selectedPhotoFileName = fileName
+                                    showDeleteConfirmation = true
+                                }
                             )
-                            .onTapGesture {
-                                selectedPhotoFileName = fileName
-                            }
-                            .onLongPressGesture {
-                                selectedPhotoFileName = fileName
-                                showDeleteConfirmation = true
-                            }
                             .opacity(animatePhotos ? 1 : 0)
                             .scaleEffect(animatePhotos ? 1 : 0.8)
                             .animation(
@@ -208,12 +205,12 @@ struct AlbumDetailView: View {
 struct PhotoThumbnail: View {
     let image: UIImage
     let albumColor: Color
+    let onDelete: () -> Void
     @State private var showFullScreen = false
+    @State private var showDeleteButton = false
 
     var body: some View {
-        Button(action: {
-            showFullScreen = true
-        }) {
+        ZStack(alignment: .topTrailing) {
             Image(uiImage: image)
                 .resizable()
                 .aspectRatio(contentMode: .fill)
@@ -230,6 +227,37 @@ struct PhotoThumbnail: View {
                     x: 0,
                     y: 2
                 )
+                .onTapGesture {
+                    showFullScreen = true
+                }
+                .onLongPressGesture(minimumDuration: 0.5) {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        showDeleteButton = true
+                    }
+                }
+
+            // Delete button
+            if showDeleteButton {
+                Button(action: {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                        showDeleteButton = false
+                    }
+                    onDelete()
+                }) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.red)
+                            .frame(width: 28, height: 28)
+
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(.white)
+                    }
+                }
+                .offset(x: 8, y: -8)
+                .transition(.scale.combined(with: .opacity))
+                .zIndex(1)
+            }
         }
         .fullScreenCover(isPresented: $showFullScreen) {
             PhotoFullScreenView(image: image, albumColor: albumColor)
