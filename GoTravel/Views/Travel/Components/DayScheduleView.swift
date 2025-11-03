@@ -13,7 +13,50 @@ struct DayScheduleView: View {
 
     // MARK: - Computed Properties
     private var sortedScheduleItems: [ScheduleItem] {
-        daySchedule.scheduleItems.sorted(by: { $0.time < $1.time })
+        let calendar = Calendar.current
+
+        // Debug: Print BEFORE sorting
+        #if DEBUG
+        print("\n=== Day \(daySchedule.dayNumber) BEFORE sorting ===")
+        for (index, item) in daySchedule.scheduleItems.enumerated() {
+            let fullFormatter = DateFormatter()
+            fullFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
+            let components = calendar.dateComponents([.hour, .minute], from: item.time)
+            print("\(index + 1). Full Date: \(fullFormatter.string(from: item.time)) - \(item.title)")
+            print("   Time components: \(components.hour ?? 0):\(components.minute ?? 0)")
+        }
+        #endif
+
+        let sorted = daySchedule.scheduleItems.sorted { item1, item2 in
+            // Extract hour and minute components only (ignore date)
+            let components1 = calendar.dateComponents([.hour, .minute], from: item1.time)
+            let components2 = calendar.dateComponents([.hour, .minute], from: item2.time)
+
+            let hour1 = components1.hour ?? 0
+            let minute1 = components1.minute ?? 0
+            let hour2 = components2.hour ?? 0
+            let minute2 = components2.minute ?? 0
+
+            // Compare by hour first, then by minute
+            if hour1 != hour2 {
+                return hour1 < hour2
+            } else {
+                return minute1 < minute2
+            }
+        }
+
+        // Debug: Print AFTER sorting
+        #if DEBUG
+        print("\n=== Day \(daySchedule.dayNumber) AFTER sorting ===")
+        for (index, item) in sorted.enumerated() {
+            let timeFormatter = DateFormatter()
+            timeFormatter.dateFormat = "HH:mm"
+            print("\(index + 1). \(timeFormatter.string(from: item.time)) - \(item.title)")
+        }
+        print("===\n")
+        #endif
+
+        return sorted
     }
 
     // MARK: - Body
