@@ -116,7 +116,7 @@ enum AlbumType {
         case .family: return .pink
         case .landscape: return .green
         case .food: return .red
-        case .custom: return .purple
+        case .custom: return .blue
         }
     }
 }

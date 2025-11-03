@@ -23,21 +23,49 @@ struct AlbumHomeView: View {
                         albumGridSection
                     }
                     .padding()
+                    .padding(.bottom, 80) // Add space for floating button
+                }
+
+                // Floating Action Button
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        Button(action: {
+                            showCreateAlbum = true
+                        }) {
+                            ZStack {
+                                Circle()
+                                    .fill(
+                                        LinearGradient(
+                                            gradient: Gradient(colors: [
+                                                Color.orange,
+                                                Color.orange.opacity(0.8)
+                                            ]),
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        )
+                                    )
+                                    .frame(width: 60, height: 60)
+                                    .shadow(
+                                        color: Color.orange.opacity(0.5),
+                                        radius: 15,
+                                        x: 0,
+                                        y: 5
+                                    )
+
+                                Image(systemName: "plus")
+                                    .font(.title2.bold())
+                                    .foregroundColor(.white)
+                            }
+                        }
+                        .padding(.trailing, 20)
+                        .padding(.bottom, 20)
+                    }
                 }
             }
             .navigationTitle("アルバム")
             .navigationBarTitleDisplayMode(.large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        showCreateAlbum = true
-                    }) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
-                            .foregroundColor(.orange)
-                    }
-                }
-            }
             .onAppear {
                 withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
                     animateCards = true
@@ -342,8 +370,6 @@ struct CreateAlbumView: View {
     var body: some View {
         NavigationView {
             ZStack {
-                Color.black.opacity(0.9).ignoresSafeArea()
-
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 30) {
                         // Mode Selection
@@ -369,7 +395,6 @@ struct CreateAlbumView: View {
                     Button("キャンセル") {
                         dismiss()
                     }
-                    .foregroundColor(.white)
                 }
             }
         }
