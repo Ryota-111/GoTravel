@@ -179,14 +179,41 @@ struct EnjoyWorldView: View {
             
             Spacer()
             
-            NavigationLink(destination: HomeView()) {
-                Image(systemName: "person.crop.circle")
-                    .font(.system(size: 30))
-                    .foregroundColor(.black)
+            NavigationLink(destination: ProfileView()) {
+                ZStack {
+                    Circle()
+                        .fill(Color(.systemGray6))
+                        .frame(width: 44, height: 44)
+                        .shadow(color: Color.black.opacity(0.1), radius: 3, x: 0, y: 2)
+                    
+                    Image(systemName: "person.crop.circle.fill")
+                        .resizable()
+                        .scaledToFit()
+                        .frame(width: 35, height: 35)
+                        .foregroundStyle(LinearGradient(colors: [.white, .orange], startPoint: .topLeading, endPoint: .bottomTrailing))
+                }
+                .padding(.trailing, 2)
             }
         }
         .padding(.horizontal, 20)
+        .padding(.top, 10)
     }
+
+//    private var titleSection: some View {
+//        HStack {
+//            Text("旅行計画")
+//                .font(.title.weight(.bold))
+//            
+//            Spacer()
+//            
+//            NavigationLink(destination: ProfileView()) {
+//                Image(systemName: "person.crop.circle")
+//                    .font(.system(size: 30))
+//                    .foregroundColor(.black)
+//            }
+//        }
+//        .padding(.horizontal, 20)
+//    }
 
     private var tabSelectionSection: some View {
         HStack(spacing: 8) {

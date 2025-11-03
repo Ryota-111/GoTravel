@@ -10,6 +10,18 @@ final class ProfileViewModel: ObservableObject {
 
     private let defaultsKey = "profile_v1"
 
+    var currentUser: User? {
+        Auth.auth().currentUser
+    }
+
+    var displayName: String {
+        currentUser?.displayName ?? profile.name
+    }
+
+    var email: String {
+        currentUser?.email ?? profile.email
+    }
+
     init() {
         if let data = UserDefaults.standard.data(forKey: defaultsKey),
            let decoded = try? JSONDecoder().decode(Profile.self, from: data) {
@@ -20,8 +32,20 @@ final class ProfileViewModel: ObservableObject {
                 self.avatarImage = nil
             }
         } else {
-            self.profile = .default
+            // Initialize with Firebase Auth user info if available
+            let user = Auth.auth().currentUser
+            self.profile = Profile(
+                name: user?.displayName ?? "Your Name",
+                email: user?.email ?? "you@example.com",
+                avatarImageFileName: nil
+            )
             self.avatarImage = nil
+        }
+
+        // Sync with Firebase Auth user info
+        if let user = Auth.auth().currentUser {
+            profile.name = user.displayName ?? profile.name
+            profile.email = user.email ?? profile.email
         }
     }
 
