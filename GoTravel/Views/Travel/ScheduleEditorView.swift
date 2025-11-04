@@ -1,4 +1,5 @@
 import SwiftUI
+import MapKit
 
 struct ScheduleEditorView: View {
     @Environment(\.presentationMode) var presentationMode
@@ -291,6 +292,11 @@ struct ScheduleItemEditCard: View {
     let onEdit: () -> Void
 
     @State private var showSaveAsVisited = false
+    @State private var showMapView = false
+
+    private var hasLocationData: Bool {
+        item.latitude != nil && item.longitude != nil
+    }
 
     var body: some View {
         HStack(spacing: 15) {
@@ -338,6 +344,14 @@ struct ScheduleItemEditCard: View {
                 .font(.system(size: 12))
                 .foregroundColor(.blue)
 
+                if hasLocationData {
+                    Button(action: { showMapView = true }) {
+                        Image(systemName: "map.circle.fill")
+                            .font(.system(size: 24))
+                            .foregroundColor(.green.opacity(0.8))
+                    }
+                }
+
                 Button(action: onDelete) {
                     Image(systemName: "trash.circle.fill")
                         .font(.system(size: 24))
@@ -355,6 +369,59 @@ struct ScheduleItemEditCard: View {
                 travelPlanId: plan.id
             )
         }
+        .sheet(isPresented: $showMapView) {
+            scheduleMapViewSheet
+        }
+    }
+
+    private var scheduleMapViewSheet: some View {
+        NavigationView {
+            Group {
+                if let latitude = item.latitude, let longitude = item.longitude {
+                    Map(initialPosition: .region(MKCoordinateRegion(
+                        center: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
+                        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                    ))) {
+                        if let location = item.location {
+                            Marker(location, coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude))
+                                .tint(.red)
+                        } else {
+                            Marker(item.title, coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude))
+                                .tint(.red)
+                        }
+                    }
+                } else {
+                    Text("位置情報がありません")
+                        .foregroundColor(.secondary)
+                }
+            }
+            .navigationTitle(item.location ?? item.title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("閉じる") {
+                        showMapView = false
+                    }
+                }
+                if let latitude = item.latitude, let longitude = item.longitude {
+                    ToolbarItem(placement: .navigationBarTrailing) {
+                        Button("マップで開く") {
+                            openInMaps(latitude: latitude, longitude: longitude)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func openInMaps(latitude: Double, longitude: Double) {
+        let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+        let placemark = MKPlacemark(coordinate: coordinate)
+        let mapItem = MKMapItem(placemark: placemark)
+        mapItem.name = item.location ?? item.title
+        mapItem.openInMaps(launchOptions: [
+            MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
+        ])
     }
 
     private func formatTime(_ date: Date) -> String {
@@ -373,8 +440,15 @@ struct AddScheduleItemToEditorView: View {
     @State private var notes: String = ""
     @State private var time: Date = Date()
     @State private var cost: String = ""
-    @State private var mapURL: String = ""
     @State private var linkURL: String = ""
+
+    // Location search properties
+    @State private var showLocationPicker = false
+    @State private var searchText: String = ""
+    @State private var searchResults: [MKMapItem] = []
+    @State private var selectedLocation: MKMapItem?
+    @State private var selectedCoordinate: CLLocationCoordinate2D?
+    @State private var selectedAddress: String?
 
     var dayDate: Date {
         let calendar = Calendar.current
@@ -397,7 +471,7 @@ struct AddScheduleItemToEditorView: View {
 
                         VStack(spacing: 15) {
                             customTextField(icon: "text.alignleft", placeholder: "タイトル（例：浅草寺観光）", text: $title)
-                            customTextField(icon: "mappin.circle", placeholder: "場所", text: $location)
+                            locationSection
 
                             HStack {
                                 Image(systemName: "yensign.circle")
@@ -412,7 +486,6 @@ struct AddScheduleItemToEditorView: View {
                             .background(Color.white.opacity(0.2))
                             .cornerRadius(10)
 
-                            customTextField(icon: "map", placeholder: "地図URL（任意）", text: $mapURL)
                             customTextField(icon: "link", placeholder: "リンク（任意）", text: $linkURL)
 
                             VStack(alignment: .leading, spacing: 10) {
@@ -509,16 +582,76 @@ struct AddScheduleItemToEditorView: View {
         return formatter.string(from: date)
     }
 
+    private var locationSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            if let selected = selectedLocation {
+                selectedLocationCard(selected)
+            } else {
+                Button(action: { showLocationPicker = true }) {
+                    HStack {
+                        Image(systemName: "mappin.circle")
+                            .foregroundColor(.white.opacity(0.7))
+                        Text("場所を検索")
+                            .foregroundColor(.white.opacity(0.7))
+                        Spacer()
+                        Image(systemName: "magnifyingglass")
+                            .foregroundColor(.white.opacity(0.5))
+                    }
+                    .padding()
+                    .background(Color.white.opacity(0.2))
+                    .cornerRadius(10)
+                }
+            }
+        }
+        .fullScreenCover(isPresented: $showLocationPicker) {
+            locationPickerView
+        }
+    }
+
+    private func selectedLocationCard(_ mapItem: MKMapItem) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(mapItem.name ?? "場所")
+                        .font(.headline)
+                        .foregroundColor(.white)
+
+                    if let address = selectedAddress ?? mapItem.placemark.title {
+                        Text(address)
+                            .font(.caption)
+                            .foregroundColor(.white.opacity(0.7))
+                    }
+                }
+
+                Spacer()
+
+                Button(action: {
+                    selectedLocation = nil
+                    selectedCoordinate = nil
+                    selectedAddress = nil
+                    location = ""
+                }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(.white.opacity(0.5))
+                }
+            }
+        }
+        .padding()
+        .background(Color.white.opacity(0.2))
+        .cornerRadius(10)
+    }
+
     private func addScheduleItem() {
         let costValue = cost.isEmpty ? nil : Double(cost)
 
         let newItem = ScheduleItem(
             time: time,
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            location: location.isEmpty ? nil : location.trimmingCharacters(in: .whitespacesAndNewlines),
+            location: selectedLocation?.name ?? (location.isEmpty ? nil : location.trimmingCharacters(in: .whitespacesAndNewlines)),
             notes: notes.isEmpty ? nil : notes.trimmingCharacters(in: .whitespacesAndNewlines),
+            latitude: selectedCoordinate?.latitude,
+            longitude: selectedCoordinate?.longitude,
             cost: costValue,
-            mapURL: mapURL.isEmpty ? nil : mapURL.trimmingCharacters(in: .whitespacesAndNewlines),
             linkURL: linkURL.isEmpty ? nil : linkURL.trimmingCharacters(in: .whitespacesAndNewlines)
         )
 
@@ -535,5 +668,208 @@ struct AddScheduleItemToEditorView: View {
         }
 
         presentationMode.wrappedValue.dismiss()
+    }
+
+    // MARK: - Location Picker View
+    @State private var mapPosition: MapCameraPosition = .region(MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
+        span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
+    ))
+    @State private var selectedMapResult: MKMapItem?
+    @State private var mapVisibleRegion: MKCoordinateRegion?
+
+    private var locationPickerView: some View {
+        NavigationView {
+            ZStack {
+                Map(position: $mapPosition, selection: $selectedMapResult) {
+                    ForEach(searchResults, id: \.self) { result in
+                        Marker(item: result)
+                            .tint(.red)
+                    }
+                }
+                .safeAreaInset(edge: .top) {
+                    locationSearchBarView
+                }
+                .safeAreaInset(edge: .bottom) {
+                    if let selectedResult = selectedMapResult {
+                        locationSelectedResultDetailView(selectedResult)
+                    }
+                }
+                .onMapCameraChange { context in
+                    mapVisibleRegion = context.region
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("閉じる") {
+                        showLocationPicker = false
+                    }
+                }
+            }
+        }
+    }
+
+    private var locationSearchBarView: some View {
+        TextField("場所を検索", text: $searchText)
+            .textFieldStyle(.plain)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(Color(.systemBackground))
+            .cornerRadius(10)
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial)
+            .onSubmit {
+                Task {
+                    await performLocationSearch()
+                }
+            }
+    }
+
+    private func performLocationSearch() async {
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = searchText
+        request.resultTypes = .pointOfInterest
+        request.region = mapVisibleRegion ?? MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
+            span: MKCoordinateSpan(latitudeDelta: 0.0125, longitudeDelta: 0.0125)
+        )
+
+        let search = MKLocalSearch(request: request)
+        do {
+            let response = try await search.start()
+            searchResults = response.mapItems
+            if let firstResult = searchResults.first {
+                withAnimation {
+                    mapPosition = .region(MKCoordinateRegion(
+                        center: firstResult.placemark.coordinate,
+                        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                    ))
+                }
+            }
+            searchText = ""
+        } catch {
+            print("検索エラー: \(error)")
+        }
+    }
+
+    private func locationSelectedResultDetailView(_ result: MKMapItem) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(result.name ?? "名称なし")
+                        .font(.title2)
+                        .fontWeight(.bold)
+
+                    if let category = result.pointOfInterestCategory?.rawValue {
+                        Text(category)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Spacer()
+            }
+
+            if let address = result.placemark.title {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "mappin.circle.fill")
+                        .foregroundStyle(.red)
+                        .font(.title3)
+                    Text(address)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let phoneNumber = result.phoneNumber {
+                HStack(spacing: 8) {
+                    Image(systemName: "phone.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.title3)
+                    Text(phoneNumber)
+                        .font(.subheadline)
+                    Spacer()
+                    Button {
+                        if let url = URL(string: "tel:\(phoneNumber.replacingOccurrences(of: " ", with: ""))") {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        Text("電話")
+                            .font(.caption)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.green)
+                            .foregroundStyle(.white)
+                            .cornerRadius(8)
+                    }
+                }
+            }
+
+            if let url = result.url {
+                HStack(spacing: 8) {
+                    Image(systemName: "safari.fill")
+                        .foregroundStyle(.blue)
+                        .font(.title3)
+                    Text(url.host ?? "Website")
+                        .font(.subheadline)
+                        .lineLimit(1)
+                    Spacer()
+                    Button {
+                        UIApplication.shared.open(url)
+                    } label: {
+                        Text("開く")
+                            .font(.caption)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.blue)
+                            .foregroundStyle(.white)
+                            .cornerRadius(8)
+                    }
+                }
+            }
+
+            Divider()
+
+            HStack(spacing: 12) {
+                Button {
+                    result.openInMaps()
+                } label: {
+                    Label("経路", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.blue.opacity(0.1))
+                        .foregroundStyle(.blue)
+                        .cornerRadius(10)
+                }
+
+                Button {
+                    selectLocationFromMapResult(result)
+                } label: {
+                    Label("選択", systemImage: "checkmark.circle.fill")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.orange.opacity(0.1))
+                        .foregroundStyle(.orange)
+                        .cornerRadius(10)
+                }
+            }
+        }
+        .padding(20)
+        .background(.ultraThinMaterial)
+        .cornerRadius(20)
+        .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: -4)
+        .padding(.horizontal)
+        .padding(.bottom, 12)
+    }
+
+    private func selectLocationFromMapResult(_ result: MKMapItem) {
+        selectedLocation = result
+        selectedCoordinate = result.placemark.coordinate
+        selectedAddress = result.placemark.title
+        location = result.name ?? ""
+        selectedMapResult = nil
+        showLocationPicker = false
     }
 }

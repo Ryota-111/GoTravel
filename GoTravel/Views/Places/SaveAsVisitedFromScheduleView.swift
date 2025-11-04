@@ -107,25 +107,27 @@ struct SaveAsVisitedFromScheduleView: View {
         isSaving = true
 
         print("SaveAsVisitedFromScheduleView: 保存開始")
-        print("scheduleItem.mapURL: \(scheduleItem.mapURL ?? "なし")")
+        print("scheduleItem.location: \(scheduleItem.location ?? "なし")")
+        print("scheduleItem.latitude: \(scheduleItem.latitude?.description ?? "なし")")
+        print("scheduleItem.longitude: \(scheduleItem.longitude?.description ?? "なし")")
 
         DispatchQueue.global(qos: .userInitiated).async {
-            var address: String? = scheduleItem.location
+            // Use location name as address if available
+            let address: String? = scheduleItem.location
 
-            if let mapURL = scheduleItem.mapURL {
-                if let extractedAddress = MapURLParser.extractAddress(from: mapURL) {
-                    address = extractedAddress
-                    print("mapURLから住所を抽出: \(extractedAddress)")
-                } else {
-                    print("mapURLから住所を抽出できませんでした")
-                }
-            }
+            // Get latitude and longitude from scheduleItem, default to 0 if not available
+            let latitude = scheduleItem.latitude ?? 0
+            let longitude = scheduleItem.longitude ?? 0
 
             print("保存する住所: \(address ?? "なし")")
+            print("保存する緯度: \(latitude)")
+            print("保存する経度: \(longitude)")
 
             let visitedPlace = VisitedPlace(
                 title: travelPlanTitle + " - " + scheduleItem.title,
                 notes: notes.trimmingCharacters(in: .whitespaces).isEmpty ? scheduleItem.notes : notes.trimmingCharacters(in: .whitespaces),
+                latitude: latitude,
+                longitude: longitude,
                 createdAt: Date(),
                 visitedAt: visitedDate,
                 address: address,
