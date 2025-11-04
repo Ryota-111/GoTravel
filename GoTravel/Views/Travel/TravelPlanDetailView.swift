@@ -16,6 +16,7 @@ struct TravelPlanDetailView: View {
     @State private var showScheduleEditor = false
     @State private var showBasicInfoEditor = false
     @State private var showBudgetSummary = false
+    @State private var showShareView = false
 
     let planId: String
 
@@ -62,7 +63,7 @@ struct TravelPlanDetailView: View {
                 contentView(plan: plan)
             }
         }
-        .navigationBarItems(trailing: editButton)
+        .navigationBarItems(trailing: navigationButtons)
     }
 
     // MARK: - View Components
@@ -95,16 +96,44 @@ struct TravelPlanDetailView: View {
                 BudgetSummaryView(plan: currentPlan)
             }
         }
+        .sheet(isPresented: $showShareView) {
+            if let currentPlan = currentPlan {
+                ShareTravelPlanView(plan: currentPlan) { shareCode in
+                    // Update plan with share code
+                    viewModel.updateShareCode(planId: currentPlan.id ?? "", shareCode: shareCode)
+                }
+                .environmentObject(viewModel)
+            }
+        }
     }
 
-    private var editButton: some View {
-        Button(action: { showBasicInfoEditor = true }) {
-            HStack {
-                Image(systemName: "pencil")
-                    .foregroundColor(.white)
-                    .imageScale(.large)
-                Text("編集")
-                    .foregroundColor(.black)
+    private var navigationButtons: some View {
+        HStack(spacing: 15) {
+            // Share Button
+            if let plan = currentPlan {
+                Button(action: { showShareView = true }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: plan.isShared ? "person.2.fill" : "person.2")
+                            .foregroundColor(plan.isShared ? .green : .white)
+                            .imageScale(.large)
+                        if plan.isShared {
+                            Text("\(plan.sharedWith.count)")
+                                .font(.caption)
+                                .foregroundColor(.green)
+                        }
+                    }
+                }
+            }
+
+            // Edit Button
+            Button(action: { showBasicInfoEditor = true }) {
+                HStack {
+                    Image(systemName: "pencil")
+                        .foregroundColor(.white)
+                        .imageScale(.large)
+                    Text("編集")
+                        .foregroundColor(.black)
+                }
             }
         }
     }
@@ -142,6 +171,10 @@ struct TravelPlanDetailView: View {
             }
             .font(.subheadline)
 
+            if plan.isShared {
+                lastUpdatedInfo(plan: plan)
+            }
+
             if let localImageFileName = plan.localImageFileName,
                let image = FileManager.documentsImage(named: localImageFileName) {
                 planImage(image: image)
@@ -150,6 +183,17 @@ struct TravelPlanDetailView: View {
         .padding()
         .background(Color.white.opacity(0.2))
         .cornerRadius(15)
+    }
+
+    private func lastUpdatedInfo(plan: TravelPlan) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: "clock.arrow.circlepath")
+                .font(.caption)
+                .foregroundColor(.green)
+            Text("最終更新: \(formatDateTime(plan.updatedAt))")
+                .font(.caption)
+                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+        }
     }
 
     private func destinationInfo(plan: TravelPlan) -> some View {
@@ -328,6 +372,12 @@ struct TravelPlanDetailView: View {
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter.japanese
         formatter.dateFormat = "M月d日"
+        return formatter.string(from: date)
+    }
+
+    private func formatDateTime(_ date: Date) -> String {
+        let formatter = DateFormatter.japanese
+        formatter.dateFormat = "M/d HH:mm"
         return formatter.string(from: date)
     }
 }

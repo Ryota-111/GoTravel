@@ -38,6 +38,10 @@ final class FirestoreService {
         db.collection("users").document(uid).collection("travelPlans")
     }
 
+    private var sharedTravelPlansCollectionRef: CollectionReference {
+        db.collection("sharedTravelPlans")
+    }
+
     // MARK: - Visited Places Methods
     func save(place: VisitedPlace, image: UIImage?, completion: @escaping (Result<VisitedPlace, Error>) -> Void) {
         guard let uid = Auth.auth().currentUser?.uid else {
@@ -181,28 +185,25 @@ final class FirestoreService {
         }
         print("FirestoreService: ユーザー認証OK - UID: \(uid)")
 
+        // If plan is shared, save to sharedTravelPlans collection
+        if plan.isShared {
+            saveSharedTravelPlan(plan, uid: uid, completion: completion)
+        } else {
+            saveUserTravelPlan(plan, uid: uid, completion: completion)
+        }
+    }
+
+    private func saveUserTravelPlan(_ plan: TravelPlan, uid: String, completion: @escaping (Result<TravelPlan, Error>) -> Void) {
         let docRef = travelPlansCollectionRef(for: uid).document(plan.id ?? UUID().uuidString)
         var planToSave = plan
         planToSave.id = docRef.documentID
         planToSave.userId = uid
+        planToSave.updatedAt = Date()
 
         print("FirestoreService: ドキュメントID: \(docRef.documentID)")
 
-        var dict: [String: Any] = [
-            "title": planToSave.title,
-            "startDate": Timestamp(date: planToSave.startDate),
-            "endDate": Timestamp(date: planToSave.endDate),
-            "destination": planToSave.destination,
-            "createdAt": Timestamp(date: planToSave.createdAt),
-            "userId": uid
-        ]
-
-        if let localImageFileName = planToSave.localImageFileName { dict["localImageFileName"] = localImageFileName }
-        if let colorHex = planToSave.cardColorHex { dict["cardColorHex"] = colorHex }
-
-        dict["daySchedules"] = FirestoreSerializationHelper.serializeDaySchedules(planToSave.daySchedules)
-        dict["packingItems"] = FirestoreSerializationHelper.serializePackingItems(planToSave.packingItems)
-
+        var dict = createTravelPlanDict(planToSave, uid: uid)
+        dict["updatedAt"] = Timestamp(date: planToSave.updatedAt)
         print("FirestoreService: 保存するデータ: \(dict)")
 
         docRef.setData(dict) { err in
@@ -218,6 +219,61 @@ final class FirestoreService {
         }
     }
 
+    private func saveSharedTravelPlan(_ plan: TravelPlan, uid: String, completion: @escaping (Result<TravelPlan, Error>) -> Void) {
+        guard let planId = plan.id else {
+            completion(.failure(APIClientError.parseError))
+            return
+        }
+
+        let docRef = sharedTravelPlansCollectionRef.document(planId)
+        var planToSave = plan
+        planToSave.lastEditedBy = uid
+        planToSave.updatedAt = Date()
+
+        var dict = createTravelPlanDict(planToSave, uid: uid)
+
+        // Add sharing-specific fields
+        dict["isShared"] = planToSave.isShared
+        if let shareCode = planToSave.shareCode { dict["shareCode"] = shareCode }
+        dict["sharedWith"] = planToSave.sharedWith
+        if let ownerId = planToSave.ownerId { dict["ownerId"] = ownerId }
+        if let lastEditedBy = planToSave.lastEditedBy { dict["lastEditedBy"] = lastEditedBy }
+        dict["updatedAt"] = Timestamp(date: planToSave.updatedAt)
+
+        print("FirestoreService: 共有プラン保存 - \(planId)")
+
+        docRef.setData(dict) { err in
+            DispatchQueue.main.async {
+                if let err = err {
+                    print("FirestoreService: 共有プラン保存失敗 - \(err.localizedDescription)")
+                    completion(.failure(APIClientError.firestoreError(err)))
+                } else {
+                    print("FirestoreService: 共有プラン保存成功")
+                    completion(.success(planToSave))
+                }
+            }
+        }
+    }
+
+    private func createTravelPlanDict(_ plan: TravelPlan, uid: String) -> [String: Any] {
+        var dict: [String: Any] = [
+            "title": plan.title,
+            "startDate": Timestamp(date: plan.startDate),
+            "endDate": Timestamp(date: plan.endDate),
+            "destination": plan.destination,
+            "createdAt": Timestamp(date: plan.createdAt),
+            "userId": uid
+        ]
+
+        if let localImageFileName = plan.localImageFileName { dict["localImageFileName"] = localImageFileName }
+        if let colorHex = plan.cardColorHex { dict["cardColorHex"] = colorHex }
+
+        dict["daySchedules"] = FirestoreSerializationHelper.serializeDaySchedules(plan.daySchedules)
+        dict["packingItems"] = FirestoreSerializationHelper.serializePackingItems(plan.packingItems)
+
+        return dict
+    }
+
     func observeTravelPlans(completion: @escaping (Result<[TravelPlan], Error>) -> Void) -> ListenerRegistration? {
         guard let uid = Auth.auth().currentUser?.uid else {
             DispatchQueue.main.async {
@@ -226,22 +282,40 @@ final class FirestoreService {
             return nil
         }
 
-        return travelPlansCollectionRef(for: uid)
-            .order(by: "createdAt", descending: true)
+        // Observe both user's own plans and shared plans
+        var userPlans: [TravelPlan] = []
+        var sharedPlans: [TravelPlan] = []
+        var hasUserPlans = false
+        var hasSharedPlans = false
+
+        func combineAndReturn() {
+            if hasUserPlans && hasSharedPlans {
+                let allPlans = (userPlans + sharedPlans).sorted { $0.createdAt > $1.createdAt }
+                completion(.success(allPlans))
+            }
+        }
+
+        // Listen to user's own plans
+        travelPlansCollectionRef(for: uid)
             .addSnapshotListener { snapshot, error in
                 if let error = error {
-                    completion(.failure(APIClientError.firestoreError(error)))
-                    return
+                    print("FirestoreService: ユーザープラン取得エラー - \(error.localizedDescription)")
                 }
-                guard let docs = snapshot?.documents else {
-                    completion(.success([]))
-                    return
-                }
+                userPlans = snapshot?.documents.compactMap { FirestoreParser.parseTravelPlan(from: $0) } ?? []
+                hasUserPlans = true
+                combineAndReturn()
+            }
 
-                let plans: [TravelPlan] = docs.compactMap { doc in
-                    FirestoreParser.parseTravelPlan(from: doc)
+        // Listen to shared plans where user is owner or shared with
+        return sharedTravelPlansCollectionRef
+            .whereField("sharedWith", arrayContains: uid)
+            .addSnapshotListener { snapshot, error in
+                if let error = error {
+                    print("FirestoreService: 共有プラン取得エラー - \(error.localizedDescription)")
                 }
-                completion(.success(plans))
+                sharedPlans = snapshot?.documents.compactMap { FirestoreParser.parseTravelPlan(from: $0) } ?? []
+                hasSharedPlans = true
+                combineAndReturn()
             }
     }
 
@@ -252,9 +326,102 @@ final class FirestoreService {
             return
         }
 
-        travelPlansCollectionRef(for: uid).document(id).delete { err in
+        if plan.isShared {
+            sharedTravelPlansCollectionRef.document(id).delete { err in
+                DispatchQueue.main.async {
+                    completion(err)
+                }
+            }
+        } else {
+            travelPlansCollectionRef(for: uid).document(id).delete { err in
+                DispatchQueue.main.async {
+                    completion(err)
+                }
+            }
+        }
+    }
+
+    // MARK: - Shared Travel Plan Methods
+    func findTravelPlanByShareCode(_ shareCode: String, completion: @escaping (Result<TravelPlan, Error>) -> Void) {
+        print("FirestoreService: 共有コードで検索 - \(shareCode)")
+
+        sharedTravelPlansCollectionRef
+            .whereField("shareCode", isEqualTo: shareCode)
+            .limit(to: 1)
+            .getDocuments { snapshot, error in
+                if let error = error {
+                    print("FirestoreService: 共有コード検索エラー - \(error.localizedDescription)")
+                    DispatchQueue.main.async {
+                        completion(.failure(APIClientError.firestoreError(error)))
+                    }
+                    return
+                }
+
+                guard let doc = snapshot?.documents.first else {
+                    print("FirestoreService: 共有コードに一致するプランが見つかりません")
+                    DispatchQueue.main.async {
+                        completion(.failure(APIClientError.notFound))
+                    }
+                    return
+                }
+
+                if let plan = FirestoreParser.parseTravelPlan(from: doc) {
+                    print("FirestoreService: プラン発見 - \(plan.title)")
+                    DispatchQueue.main.async {
+                        completion(.success(plan))
+                    }
+                } else {
+                    DispatchQueue.main.async {
+                        completion(.failure(APIClientError.parseError))
+                    }
+                }
+            }
+    }
+
+    func joinTravelPlan(planId: String, completion: @escaping (Result<TravelPlan, Error>) -> Void) {
+        guard let uid = Auth.auth().currentUser?.uid else {
             DispatchQueue.main.async {
-                completion(err)
+                completion(.failure(APIClientError.authenticationError))
+            }
+            return
+        }
+
+        print("FirestoreService: プランに参加 - PlanID: \(planId), UID: \(uid)")
+
+        let docRef = sharedTravelPlansCollectionRef.document(planId)
+
+        docRef.updateData([
+            "sharedWith": FieldValue.arrayUnion([uid]),
+            "updatedAt": Timestamp(date: Date())
+        ]) { error in
+            if let error = error {
+                print("FirestoreService: 参加失敗 - \(error.localizedDescription)")
+                DispatchQueue.main.async {
+                    completion(.failure(APIClientError.firestoreError(error)))
+                }
+                return
+            }
+
+            // Fetch the updated plan
+            docRef.getDocument { snapshot, error in
+                if let error = error {
+                    DispatchQueue.main.async {
+                        completion(.failure(APIClientError.firestoreError(error)))
+                    }
+                    return
+                }
+
+                guard let snapshot = snapshot, let plan = FirestoreParser.parseTravelPlan(from: snapshot) else {
+                    DispatchQueue.main.async {
+                        completion(.failure(APIClientError.parseError))
+                    }
+                    return
+                }
+
+                print("FirestoreService: 参加成功 - \(plan.title)")
+                DispatchQueue.main.async {
+                    completion(.success(plan))
+                }
             }
         }
     }

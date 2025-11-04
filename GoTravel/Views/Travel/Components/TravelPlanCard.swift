@@ -54,10 +54,28 @@ struct TravelPlanCard: View {
             HStack {
                 deleteButton
                 Spacer()
+                if plan.isShared {
+                    sharedBadge
+                }
             }
             Spacer()
         }
         .padding()
+    }
+
+    private var sharedBadge: some View {
+        HStack(spacing: 4) {
+            Image(systemName: "person.2.fill")
+                .font(.caption2)
+            Text("\(plan.sharedWith.count)")
+                .font(.caption2)
+                .fontWeight(.semibold)
+        }
+        .foregroundColor(.white)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(Color.green.opacity(0.8))
+        .cornerRadius(12)
     }
 
     private var deleteButton: some View {

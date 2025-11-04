@@ -27,8 +27,17 @@ struct TravelPlan: Identifiable, Codable {
     var daySchedules: [DaySchedule]
     var packingItems: [PackingItem]
 
+    // Sharing properties
+    var isShared: Bool
+    var shareCode: String?
+    var sharedWith: [String] // Array of user IDs
+    var ownerId: String? // Original creator's ID
+    var lastEditedBy: String?
+    var updatedAt: Date
+
     enum CodingKeys: String, CodingKey {
         case id, title, startDate, endDate, destination, localImageFileName, cardColorHex, createdAt, userId, daySchedules, packingItems
+        case isShared, shareCode, sharedWith, ownerId, lastEditedBy, updatedAt
     }
 
     var cardColorHex: String? {
@@ -49,7 +58,13 @@ struct TravelPlan: Identifiable, Codable {
          createdAt: Date = Date(),
          userId: String? = nil,
          daySchedules: [DaySchedule] = [],
-         packingItems: [PackingItem] = []) {
+         packingItems: [PackingItem] = [],
+         isShared: Bool = false,
+         shareCode: String? = nil,
+         sharedWith: [String] = [],
+         ownerId: String? = nil,
+         lastEditedBy: String? = nil,
+         updatedAt: Date = Date()) {
         self.id = id
         self.title = title
         self.startDate = startDate
@@ -61,6 +76,12 @@ struct TravelPlan: Identifiable, Codable {
         self.userId = userId
         self.daySchedules = daySchedules
         self.packingItems = packingItems
+        self.isShared = isShared
+        self.shareCode = shareCode
+        self.sharedWith = sharedWith
+        self.ownerId = ownerId
+        self.lastEditedBy = lastEditedBy
+        self.updatedAt = updatedAt
     }
 
     init(from decoder: Decoder) throws {
@@ -75,6 +96,12 @@ struct TravelPlan: Identifiable, Codable {
         userId = try container.decodeIfPresent(String.self, forKey: .userId)
         daySchedules = try container.decodeIfPresent([DaySchedule].self, forKey: .daySchedules) ?? []
         packingItems = try container.decodeIfPresent([PackingItem].self, forKey: .packingItems) ?? []
+        isShared = try container.decodeIfPresent(Bool.self, forKey: .isShared) ?? false
+        shareCode = try container.decodeIfPresent(String.self, forKey: .shareCode)
+        sharedWith = try container.decodeIfPresent([String].self, forKey: .sharedWith) ?? []
+        ownerId = try container.decodeIfPresent(String.self, forKey: .ownerId)
+        lastEditedBy = try container.decodeIfPresent(String.self, forKey: .lastEditedBy)
+        updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
 
         if let hex = try container.decodeIfPresent(String.self, forKey: .cardColorHex) {
             cardColor = Color(hex: hex)
@@ -96,5 +123,26 @@ struct TravelPlan: Identifiable, Codable {
         try container.encodeIfPresent(userId, forKey: .userId)
         try container.encode(daySchedules, forKey: .daySchedules)
         try container.encode(packingItems, forKey: .packingItems)
+        try container.encode(isShared, forKey: .isShared)
+        try container.encodeIfPresent(shareCode, forKey: .shareCode)
+        try container.encode(sharedWith, forKey: .sharedWith)
+        try container.encodeIfPresent(ownerId, forKey: .ownerId)
+        try container.encodeIfPresent(lastEditedBy, forKey: .lastEditedBy)
+        try container.encode(updatedAt, forKey: .updatedAt)
+    }
+
+    // Helper methods
+    func isOwner(userId: String) -> Bool {
+        return ownerId == userId || (ownerId == nil && self.userId == userId)
+    }
+
+    func isSharedWithUser(userId: String) -> Bool {
+        return sharedWith.contains(userId) || isOwner(userId: userId)
+    }
+
+    static func generateShareCode() -> String {
+        let prefix = "TRAVEL"
+        let randomString = String((0..<8).map { _ in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".randomElement()! })
+        return "\(prefix)-\(randomString)"
     }
 }

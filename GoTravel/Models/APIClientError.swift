@@ -7,6 +7,7 @@ enum APIClientError: Error {
     case parseError
     case firestoreError(Error)
     case storageError(Error)
+    case notFound
     case unknown(Error)
 
     var localizedDescription: String {
@@ -21,6 +22,8 @@ enum APIClientError: Error {
             return "Firestoreエラー: \(error.localizedDescription)"
         case .storageError(let error):
             return "Storageエラー: \(error.localizedDescription)"
+        case .notFound:
+            return "データが見つかりませんでした"
         case .unknown(let error):
             return "不明なエラー: \(error.localizedDescription)"
         }

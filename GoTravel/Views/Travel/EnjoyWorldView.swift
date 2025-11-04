@@ -21,6 +21,7 @@ struct EnjoyWorldView: View {
     @State private var selectedPlanTab: PlanTabType = .all
     @State private var showAddTravelPlan = false
     @State private var showAddPlan = false
+    @State private var showJoinPlan = false
     @State private var planToDelete: TravelPlan?
     @State private var showDeleteConfirmation = false
     @State private var planEventToDelete: Plan?
@@ -143,6 +144,10 @@ struct EnjoyWorldView: View {
                     plansViewModel.add(newPlan)
                 }
             }
+            .sheet(isPresented: $showJoinPlan) {
+                JoinTravelPlanView()
+                    .environmentObject(travelPlanViewModel)
+            }
             .alert("旅行計画を削除", isPresented: $showDeleteConfirmation, presenting: planToDelete) { plan in
                 Button("削除", role: .destructive) {
                     travelPlanViewModel.delete(plan)
@@ -176,16 +181,32 @@ struct EnjoyWorldView: View {
         HStack {
             Text("旅行計画")
                 .font(.title.weight(.bold))
-            
+
             Spacer()
-            
+
+            // Join shared plan button
+            Button(action: {
+                showJoinPlan = true
+            }) {
+                ZStack {
+                    Circle()
+                        .fill(Color(.systemGray6))
+                        .frame(width: 44, height: 44)
+                        .shadow(color: Color.black.opacity(0.1), radius: 3, x: 0, y: 2)
+
+                    Image(systemName: "person.badge.plus")
+                        .font(.system(size: 20))
+                        .foregroundColor(.green)
+                }
+            }
+
             NavigationLink(destination: ProfileView()) {
                 ZStack {
                     Circle()
                         .fill(Color(.systemGray6))
                         .frame(width: 44, height: 44)
                         .shadow(color: Color.black.opacity(0.1), radius: 3, x: 0, y: 2)
-                    
+
                     Image(systemName: "person.crop.circle.fill")
                         .resizable()
                         .scaledToFit()

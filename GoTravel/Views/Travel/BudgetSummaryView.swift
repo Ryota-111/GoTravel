@@ -20,6 +20,19 @@ struct BudgetSummaryView: View {
         return total
     }
 
+    private var memberCount: Int {
+        if plan.isShared {
+            // Owner + shared members
+            return plan.sharedWith.count
+        }
+        return 1
+    }
+
+    private var costPerPerson: Double {
+        guard memberCount > 0 else { return 0 }
+        return totalCost / Double(memberCount)
+    }
+
     private var costByDay: [(dayNumber: Int, date: Date, cost: Double)] {
         plan.daySchedules.map { daySchedule in
             let dayCost = daySchedule.scheduleItems.compactMap { $0.cost }.reduce(0, +)
@@ -59,6 +72,10 @@ struct BudgetSummaryView: View {
         ScrollView {
             VStack(spacing: 20) {
                 totalCostCard
+
+                if plan.isShared && totalCost > 0 {
+                    costSplitSection
+                }
 
                 if !costByDay.isEmpty {
                     costByDaySection
@@ -123,6 +140,63 @@ struct BudgetSummaryView: View {
 
                 Spacer()
             }
+        }
+        .padding()
+        .background(Color.white.opacity(0.2))
+        .cornerRadius(15)
+    }
+
+    private var costSplitSection: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            HStack {
+                Image(systemName: "person.2.fill")
+                    .font(.title2)
+                    .foregroundColor(.blue)
+
+                Text("金額折半")
+                    .font(.title2)
+                    .fontWeight(.bold)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+            }
+
+            // Member count and per-person cost
+            VStack(spacing: 12) {
+                HStack {
+                    Text("参加人数")
+                        .font(.subheadline)
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+
+                    Spacer()
+
+                    Text("\(memberCount)人")
+                        .font(.headline)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                }
+
+                Divider()
+                    .background(Color.white.opacity(0.3))
+
+                HStack {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text("1人あたりの金額")
+                            .font(.headline)
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
+
+                        Text("合計 \(formatCurrency(totalCost)) ÷ \(memberCount)人")
+                            .font(.caption)
+                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .gray)
+                    }
+
+                    Spacer()
+
+                    Text(formatCurrency(costPerPerson))
+                        .font(.system(size: 28, weight: .bold))
+                        .foregroundColor(.blue)
+                }
+            }
+            .padding()
+            .background(Color.blue.opacity(0.1))
+            .cornerRadius(10)
         }
         .padding()
         .background(Color.white.opacity(0.2))

@@ -77,4 +77,44 @@ final class TravelPlanViewModel: ObservableObject {
             }
         }
     }
+
+    // MARK: - Sharing Methods
+    func updateShareCode(planId: String, shareCode: String) {
+        guard var plan = travelPlans.first(where: { $0.id == planId }) else { return }
+        plan.isShared = true
+        plan.shareCode = shareCode
+        plan.ownerId = plan.userId
+        plan.updatedAt = Date()
+        update(plan)
+    }
+
+    func joinPlanByShareCode(_ shareCode: String, completion: @escaping (Result<TravelPlan, Error>) -> Void) {
+        print("TravelPlanViewModel: 共有コードで参加開始 - \(shareCode)")
+
+        // First, find the plan by share code
+        FirestoreService.shared.findTravelPlanByShareCode(shareCode) { result in
+            switch result {
+            case .success(let plan):
+                guard let planId = plan.id else {
+                    completion(.failure(APIClientError.parseError))
+                    return
+                }
+
+                // Join the plan
+                FirestoreService.shared.joinTravelPlan(planId: planId) { joinResult in
+                    switch joinResult {
+                    case .success(let joinedPlan):
+                        print("TravelPlanViewModel: 参加成功 - \(joinedPlan.title)")
+                        completion(.success(joinedPlan))
+                    case .failure(let error):
+                        print("TravelPlanViewModel: 参加失敗 - \(error.localizedDescription)")
+                        completion(.failure(error))
+                    }
+                }
+            case .failure(let error):
+                print("TravelPlanViewModel: プラン検索失敗 - \(error.localizedDescription)")
+                completion(.failure(error))
+            }
+        }
+    }
 }

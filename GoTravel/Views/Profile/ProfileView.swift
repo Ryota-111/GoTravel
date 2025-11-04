@@ -885,7 +885,7 @@ struct CustomTextFieldStyle: TextFieldStyle {
         configuration
             .foregroundColor(.white)
             .padding(10)
-            .background(Color.white.opacity(0.2))
+            .background(Color.gray.opacity(0.7))
             .cornerRadius(10)
     }
 }

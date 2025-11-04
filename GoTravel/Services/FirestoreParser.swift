@@ -38,6 +38,16 @@ struct FirestoreParser {
             packingItems = packingItemsArray.compactMap { FirestoreSerializationHelper.parsePackingItem(from: $0) }
         }
 
+        // Parse sharing fields
+        let isShared = d["isShared"] as? Bool ?? false
+        let shareCode = d["shareCode"] as? String
+        let sharedWith = d["sharedWith"] as? [String] ?? []
+        let ownerId = d["ownerId"] as? String
+        let lastEditedBy = d["lastEditedBy"] as? String
+
+        var updatedAt = Date()
+        if let ts = d["updatedAt"] as? Timestamp { updatedAt = ts.dateValue() }
+
         return TravelPlan(
             id: id,
             title: title,
@@ -49,7 +59,77 @@ struct FirestoreParser {
             createdAt: createdAt,
             userId: userId,
             daySchedules: daySchedules,
-            packingItems: packingItems
+            packingItems: packingItems,
+            isShared: isShared,
+            shareCode: shareCode,
+            sharedWith: sharedWith,
+            ownerId: ownerId,
+            lastEditedBy: lastEditedBy,
+            updatedAt: updatedAt
+        )
+    }
+
+    // Support DocumentSnapshot as well
+    static func parseTravelPlan(from doc: DocumentSnapshot) -> TravelPlan? {
+        guard let d = doc.data() else { return nil }
+        let id = doc.documentID
+        let title = d["title"] as? String ?? ""
+        let destination = d["destination"] as? String ?? ""
+        let localImageFileName = d["localImageFileName"] as? String
+        let userId = d["userId"] as? String
+
+        var startDate = Date()
+        if let ts = d["startDate"] as? Timestamp { startDate = ts.dateValue() }
+
+        var endDate = Date()
+        if let ts = d["endDate"] as? Timestamp { endDate = ts.dateValue() }
+
+        var createdAt = Date()
+        if let ts = d["createdAt"] as? Timestamp { createdAt = ts.dateValue() }
+
+        var cardColor: Color? = nil
+        if let hex = d["cardColorHex"] as? String {
+            cardColor = Color(hex: hex)
+        }
+
+        var daySchedules: [DaySchedule] = []
+        if let daySchedulesArray = d["daySchedules"] as? [[String: Any]] {
+            daySchedules = daySchedulesArray.compactMap { FirestoreSerializationHelper.parseDaySchedule(from: $0) }
+        }
+
+        var packingItems: [PackingItem] = []
+        if let packingItemsArray = d["packingItems"] as? [[String: Any]] {
+            packingItems = packingItemsArray.compactMap { FirestoreSerializationHelper.parsePackingItem(from: $0) }
+        }
+
+        // Parse sharing fields
+        let isShared = d["isShared"] as? Bool ?? false
+        let shareCode = d["shareCode"] as? String
+        let sharedWith = d["sharedWith"] as? [String] ?? []
+        let ownerId = d["ownerId"] as? String
+        let lastEditedBy = d["lastEditedBy"] as? String
+
+        var updatedAt = Date()
+        if let ts = d["updatedAt"] as? Timestamp { updatedAt = ts.dateValue() }
+
+        return TravelPlan(
+            id: id,
+            title: title,
+            startDate: startDate,
+            endDate: endDate,
+            destination: destination,
+            localImageFileName: localImageFileName,
+            cardColor: cardColor,
+            createdAt: createdAt,
+            userId: userId,
+            daySchedules: daySchedules,
+            packingItems: packingItems,
+            isShared: isShared,
+            shareCode: shareCode,
+            sharedWith: sharedWith,
+            ownerId: ownerId,
+            lastEditedBy: lastEditedBy,
+            updatedAt: updatedAt
         )
     }
 
