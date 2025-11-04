@@ -22,17 +22,11 @@ struct ScheduleItemCard: View {
             timeSection
             contentSection
             Spacer()
-            if hasLocationData {
-                mapButton
-            }
+            actionButtonsSection
         }
         .padding()
         .background(Color.white.opacity(0.2))
         .cornerRadius(15)
-        .contentShape(Rectangle())
-        .onTapGesture {
-            editingItem = item
-        }
         .sheet(isPresented: $showMapView) {
             mapViewSheet
         }
@@ -41,6 +35,35 @@ struct ScheduleItemCard: View {
                 SafariView(url: url)
             }
         }
+    }
+
+    private var actionButtonsSection: some View {
+        VStack(spacing: 12) {
+            if hasLocationData {
+                mapActionButton
+            }
+            editButton
+        }
+    }
+
+    private var editButton: some View {
+        Button(action: {
+            editingItem = item
+        }) {
+            Image(systemName: "pencil.circle.fill")
+                .font(.system(size: 28))
+                .foregroundColor(.blue)
+        }
+        .buttonStyle(.borderless)
+    }
+
+    private var mapActionButton: some View {
+        Button(action: { showMapView = true }) {
+            Image(systemName: "map.circle.fill")
+                .font(.system(size: 28))
+                .foregroundColor(.green)
+        }
+        .buttonStyle(.borderless)
     }
 
     private var mapViewSheet: some View {
@@ -161,22 +184,6 @@ struct ScheduleItemCard: View {
             .font(.caption)
             .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
             .lineLimit(2)
-    }
-
-    private var mapButton: some View {
-        Button(action: { showMapView = true }) {
-            ZStack {
-                Rectangle()
-                    .fill(Color.white.opacity(0.3))
-                    .frame(width: 80, height: 80)
-                    .cornerRadius(10)
-
-                Image(systemName: "map.fill")
-                    .font(.system(size: 30))
-                    .foregroundColor(.blue)
-            }
-        }
-        .buttonStyle(PlainButtonStyle())
     }
 
     // MARK: - Helper Methods

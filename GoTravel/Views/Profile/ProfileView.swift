@@ -12,19 +12,20 @@ struct ProfileView: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 25) {
-                        // Profile Header
                         profileHeaderSection
 
-                        // Menu Cards
                         VStack(spacing: 16) {
                             profileEditCard
+                            
                             accountCard
+                            
                             helpSupportCard
+                            
                             developerSupportCard
                         }
                         .padding(.horizontal)
                     }
-                    .padding(.top, 20)
+                    .padding(.top, 5)
                     .padding(.bottom, 30)
                 }
                 .navigationTitle("プロフィール")
@@ -89,11 +90,11 @@ struct ProfileView: View {
             VStack(spacing: 6) {
                 Text(vm.displayName)
                     .font(.title2.bold())
-                    .foregroundColor(.white)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
 
                 Text(vm.email)
                     .font(.subheadline)
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
             }
         }
         .padding(.vertical, 20)
@@ -209,11 +210,11 @@ struct ProfileMenuCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
 
                 Text(subtitle)
                     .font(.caption)
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
             }
 
             Spacer()
@@ -221,7 +222,7 @@ struct ProfileMenuCard: View {
             // Chevron
             Image(systemName: "chevron.right")
                 .font(.subheadline)
-                .foregroundColor(.white.opacity(0.5))
+                .foregroundColor(colorScheme == .dark ? .white.opacity(0.5) : .gray.opacity(0.5))
         }
         .padding()
         .background(
@@ -258,7 +259,7 @@ struct ProfileEditView: View {
     
     var body: some View {
         ZStack {
-            Color.black.opacity(0.9).ignoresSafeArea()
+//            Color.black.opacity(0.9).ignoresSafeArea()
             
             ScrollView {
                 VStack(spacing: 20) {
@@ -344,7 +345,7 @@ struct ProfileEditView: View {
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(Color.white.opacity(0.2))
+                .background(Color.blue.opacity(0.5))
                 .cornerRadius(12)
         }
         .disabled(vm.isSaving)
@@ -375,11 +376,11 @@ struct AccountActionView: View {
                         VStack(spacing: 8) {
                             Text("アカウント管理")
                                 .font(.title2.bold())
-                                .foregroundColor(.white)
+                                .foregroundColor(colorScheme == .dark ? .white : .black)
 
                             Text("サインアウトまたはアカウント削除を行います")
                                 .font(.subheadline)
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
                                 .multilineTextAlignment(.center)
                         }
                     }
@@ -395,13 +396,14 @@ struct AccountActionView: View {
                             HStack {
                                 Image(systemName: "rectangle.portrait.and.arrow.right")
                                     .font(.title3)
+                                    .foregroundColor(colorScheme == .dark ? .white : .black)
 
                                 Text("サインアウト")
                                     .font(.headline)
+                                    .foregroundColor(colorScheme == .dark ? .white : .black)
 
                                 Spacer()
                             }
-                            .foregroundColor(.white)
                             .padding()
                             .background(
                                 RoundedRectangle(cornerRadius: 16)
@@ -427,13 +429,14 @@ struct AccountActionView: View {
                             HStack {
                                 Image(systemName: "trash.fill")
                                     .font(.title3)
+                                    .foregroundColor(colorScheme == .dark ? .white : .black)
 
                                 Text("アカウント削除")
                                     .font(.headline)
+                                    .foregroundColor(colorScheme == .dark ? .white : .black)
 
                                 Spacer()
                             }
-                            .foregroundColor(.white)
                             .padding()
                             .background(
                                 RoundedRectangle(cornerRadius: 16)
@@ -460,11 +463,11 @@ struct AccountActionView: View {
 
                             Text("• サインアウト: 再度ログインすることでアカウントを復元できます")
                                 .font(.caption)
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
 
                             Text("• アカウント削除: すべてのデータが完全に削除されます。この操作は取り消せません")
                                 .font(.caption)
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
                         }
                         .padding()
                         .background(
@@ -540,11 +543,11 @@ struct HelpSupportView: View {
                         VStack(spacing: 8) {
                             Text("ヘルプ・サポート")
                                 .font(.title2.bold())
-                                .foregroundColor(.white)
+                                .foregroundColor(colorScheme == .dark ? .white : .black)
 
                             Text("使い方やお困りの際はこちら")
                                 .font(.subheadline)
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
                         }
                     }
                     .opacity(animateCards ? 1 : 0)
@@ -651,11 +654,11 @@ struct HelpCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
                         .font(.headline)
-                        .foregroundColor(.white)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
 
                     Text(description)
                         .font(.caption)
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
                 }
 
                 Spacer()
@@ -699,11 +702,11 @@ struct DeveloperSupportView: View {
                         VStack(spacing: 8) {
                             Text("開発者を応援")
                                 .font(.title2.bold())
-                                .foregroundColor(.white)
+                                .foregroundColor(colorScheme == .dark ? .white : .black)
 
                             Text("アプリの開発を支援していただけると嬉しいです")
                                 .font(.subheadline)
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
                                 .multilineTextAlignment(.center)
                                 .padding(.horizontal)
                         }
@@ -750,11 +753,11 @@ struct DeveloperSupportView: View {
                         VStack(spacing: 10) {
                             Text("🙏 ありがとうございます")
                                 .font(.headline)
-                                .foregroundColor(.white)
+                                .foregroundColor(colorScheme == .dark ? .white : .black)
 
                             Text("皆様の応援が開発の励みになります。より良いアプリを作るために頑張ります！")
                                 .font(.caption)
-                                .foregroundColor(.white.opacity(0.7))
+                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
                                 .multilineTextAlignment(.center)
                         }
                         .padding()
@@ -835,11 +838,11 @@ struct SupportOptionCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
                         .font(.headline)
-                        .foregroundColor(.white)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
 
                     Text(description)
                         .font(.caption)
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
                 }
 
                 Spacer()

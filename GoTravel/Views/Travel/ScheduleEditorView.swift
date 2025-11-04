@@ -337,26 +337,29 @@ struct ScheduleItemEditCard: View {
 
             Spacer()
 
-            VStack(spacing: 15) {
-                Button("場所保存") {
-                    showSaveAsVisited = true
-                }
-                .font(.system(size: 12))
-                .foregroundColor(.blue)
-
+            VStack(spacing: 12) {
                 if hasLocationData {
                     Button(action: { showMapView = true }) {
                         Image(systemName: "map.circle.fill")
-                            .font(.system(size: 24))
-                            .foregroundColor(.green.opacity(0.8))
+                            .font(.system(size: 28))
+                            .foregroundColor(.green)
                     }
+                    .buttonStyle(.borderless)
                 }
+
+                Button(action: { showSaveAsVisited = true }) {
+                    Image(systemName: "bookmark.circle.fill")
+                        .font(.system(size: 28))
+                        .foregroundColor(.orange)
+                }
+                .buttonStyle(.borderless)
 
                 Button(action: onDelete) {
                     Image(systemName: "trash.circle.fill")
-                        .font(.system(size: 24))
-                        .foregroundColor(.red.opacity(0.8))
+                        .font(.system(size: 28))
+                        .foregroundColor(.red)
                 }
+                .buttonStyle(.borderless)
             }
         }
         .padding()
