@@ -1,7 +1,7 @@
 import SwiftUI
 
+// TravelPlanの編集画面
 struct EditTravelPlanBasicInfoView: View {
-
     // MARK: - Properties
     @Environment(\.presentationMode) var presentationMode
     @StateObject private var viewModel = TravelPlanViewModel()

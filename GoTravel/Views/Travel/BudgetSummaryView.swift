@@ -1,7 +1,7 @@
 import SwiftUI
 
+// 金額画面
 struct BudgetSummaryView: View {
-
     // MARK: - Properties
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.colorScheme) var colorScheme

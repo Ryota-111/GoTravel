@@ -23,7 +23,7 @@ struct SplashScreenView: View {
                         .font(.system(size: 80))
                         .foregroundColor(.white)
 
-                    Text("GoTravel")
+                    Text("Travory")
                         .font(.largeTitle)
                         .fontWeight(.bold)
                         .foregroundColor(.white)

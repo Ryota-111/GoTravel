@@ -1,8 +1,8 @@
 import SwiftUI
 import MapKit
 
+// TravelPlanCardのスケジュール編集画面
 struct EditScheduleItemView: View {
-
     // MARK: - Properties
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject var viewModel: TravelPlanViewModel

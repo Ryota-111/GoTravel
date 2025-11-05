@@ -1,5 +1,6 @@
 import SwiftUI
 
+// TravelPlanの編集（使ってないかも）
 struct EditTravelPlanView: View {
     @Environment(\.presentationMode) var presentationMode
     var onSave: (TravelPlan) -> Void

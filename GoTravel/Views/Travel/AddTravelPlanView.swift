@@ -1,8 +1,8 @@
 import SwiftUI
 import PhotosUI
 
+// TravelPlanの追加画面
 struct AddTravelPlanView: View {
-
     // MARK: - Properties
     @Environment(\.presentationMode) var presentationMode
     var onSave: (TravelPlan) -> Void

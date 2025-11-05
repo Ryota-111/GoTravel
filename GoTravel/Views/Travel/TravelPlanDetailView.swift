@@ -1,5 +1,6 @@
 import SwiftUI
 
+// EnjoyWorldView -> TravelPlanの詳細画面
 struct TravelPlanDetailView: View {
 
     // MARK: - View State

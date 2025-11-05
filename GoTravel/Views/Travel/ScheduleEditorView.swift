@@ -1,6 +1,7 @@
 import SwiftUI
 import MapKit
 
+// Day""のスケジュールの右＋ボタンの遷移先画面
 struct ScheduleEditorView: View {
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.colorScheme) var colorScheme
