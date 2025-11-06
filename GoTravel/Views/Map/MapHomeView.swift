@@ -252,7 +252,6 @@ struct MapHomeView: View {
             let response = try await search.start().mapItems
             return response
         } catch {
-            print("検索エラー: \(error.localizedDescription)")
             return []
         }
     }

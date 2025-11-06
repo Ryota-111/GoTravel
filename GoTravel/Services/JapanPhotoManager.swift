@@ -34,7 +34,6 @@ class JapanPhotoManager {
             savePrefectureToList(prefecture)
             return true
         } catch {
-            print("Error saving photo for \(prefecture): \(error)")
             return false
         }
     }
@@ -62,7 +61,6 @@ class JapanPhotoManager {
             removePrefectureFromList(prefecture)
             return true
         } catch {
-            print("Error deleting photo for \(prefecture): \(error)")
             return false
         }
     }

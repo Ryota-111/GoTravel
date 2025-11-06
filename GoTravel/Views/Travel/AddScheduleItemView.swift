@@ -272,8 +272,6 @@ struct AddScheduleItemView: View {
     private func createScheduleItem() -> ScheduleItem {
         let costValue = cost.isEmpty ? nil : Double(cost)
 
-        print("AddScheduleItemView: 金額入力 - '\(cost)'")
-        print("AddScheduleItemView: 金額変換後 - \(costValue?.description ?? "nil")")
 
         return ScheduleItem(
             time: time,
@@ -292,23 +290,18 @@ struct AddScheduleItemView: View {
 
         if let dayIndex = updatedPlan.daySchedules.firstIndex(where: { $0.id == daySchedule.id }) {
             updatedPlan.daySchedules[dayIndex].scheduleItems.append(newItem)
-            print("AddScheduleItemView: Day \(daySchedule.dayNumber)に追加")
         } else {
             var newDaySchedule = daySchedule
             newDaySchedule.scheduleItems.append(newItem)
             updatedPlan.daySchedules.append(newDaySchedule)
-            print("AddScheduleItemView: 新しいDay \(daySchedule.dayNumber)を作成")
         }
 
         return updatedPlan
     }
 
     private func logSaveDetails(newItem: ScheduleItem, updatedPlan: TravelPlan) {
-        print("AddScheduleItemView: 新規アイテム作成 - タイトル: \(newItem.title), 金額: \(newItem.cost?.description ?? "nil")")
-        print("AddScheduleItemView: 更新後の全スケジュール数: \(updatedPlan.daySchedules.flatMap { $0.scheduleItems }.count)")
 
-        let totalCost = updatedPlan.daySchedules.flatMap { $0.scheduleItems }.compactMap { $0.cost }.reduce(0, +)
-        print("AddScheduleItemView: 更新後の合計金額: \(totalCost)")
+        _ = updatedPlan.daySchedules.flatMap { $0.scheduleItems }.compactMap { $0.cost }.reduce(0, +)
     }
 
     // MARK: - Location Picker View
@@ -391,7 +384,6 @@ struct AddScheduleItemView: View {
             }
             searchText = ""
         } catch {
-            print("検索エラー: \(error)")
         }
     }
 

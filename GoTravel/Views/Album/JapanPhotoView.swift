@@ -964,9 +964,7 @@ class JapanPhotoViewModel: ObservableObject {
         if photoManager.savePhoto(image, for: prefecture.rawValue) {
             // Update in-memory photos
             photos[prefecture] = image
-            print("✅ 写真保存成功: \(prefecture.name)")
         } else {
-            print("❌ 写真保存失敗: \(prefecture.name)")
         }
     }
 
@@ -975,9 +973,7 @@ class JapanPhotoViewModel: ObservableObject {
         if photoManager.deletePhoto(for: prefecture.rawValue) {
             // Update in-memory photos
             photos.removeValue(forKey: prefecture)
-            print("✅ 写真削除成功: \(prefecture.name)")
         } else {
-            print("❌ 写真削除失敗: \(prefecture.name)")
         }
     }
 
@@ -991,7 +987,6 @@ class JapanPhotoViewModel: ObservableObject {
             }
         }
 
-        print("✅ 保存済み写真を読み込みました: \(photos.count)枚")
     }
 }
 

@@ -22,8 +22,7 @@ final class PlacesViewModel: ObservableObject {
                 DispatchQueue.main.async {
                     self?.places = list
                 }
-            case .failure(let err):
-                print("Failed to observe places:", err.localizedDescription)
+            case .failure(_):
                 DispatchQueue.main.async {
                     self?.places = []
                 }

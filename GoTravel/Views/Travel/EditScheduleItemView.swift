@@ -411,7 +411,6 @@ struct EditScheduleItemView: View {
             }
             searchText = ""
         } catch {
-            print("検索エラー: \(error)")
         }
     }
 

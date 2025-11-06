@@ -91,7 +91,6 @@ struct LocationPreview: View {
             let request = MKLookAroundSceneRequest(coordinate: stationPoint.coordinate)
             scene = try await request.scene
         } catch {
-            print("Look Around scene not available: \(error)")
         }
     }
 }

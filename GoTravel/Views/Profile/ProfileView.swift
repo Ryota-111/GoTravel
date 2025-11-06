@@ -811,7 +811,6 @@ struct SupportOptionCard: View {
     var body: some View {
         Button(action: {
             // TODO: Implement in-app purchase
-            print("Support option tapped: \(title)")
         }) {
             HStack(spacing: 15) {
                 // Icon

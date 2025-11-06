@@ -40,7 +40,6 @@ struct SearchableMapView: View {
             guard let response = response,
                   let item = response.mapItems.first,
                   let location = item.placemark.location else {
-                print("検索エラー: \(error?.localizedDescription ?? "不明")")
                 return
             }
 
@@ -56,7 +55,6 @@ struct SearchableMapView: View {
                 point.title = item.name ?? query
                 annotation = point
 
-                print("検索成功: \(coordinate.latitude), \(coordinate.longitude)")
             }
         }
     }

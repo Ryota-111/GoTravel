@@ -41,7 +41,6 @@ final class SavePlaceViewModel: ObservableObject {
                 try FileManager.saveImageDataToDocuments(data: data, named: fileName)
                 place.localPhotoFileName = fileName
             } catch {
-                print("Failed to save image locally:", error)
             }
         }
 

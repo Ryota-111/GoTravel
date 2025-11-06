@@ -10,12 +10,9 @@ struct MapURLParser {
         var urlStr = urlString
 
         if urlStr.contains("maps.app.goo.gl") || urlStr.contains("goo.gl") {
-            print("短縮URLを検出（住所抽出）: \(urlStr)")
             if let expandedURL = expandShortenedURLCompletely(urlStr) {
-                print("URL展開成功: \(expandedURL)")
                 urlStr = expandedURL
             } else {
-                print("URL展開失敗")
                 return nil
             }
         }
@@ -25,7 +22,6 @@ struct MapURLParser {
             let addressEncoded = qParam.replacingOccurrences(of: "?q=", with: "")
             if let address = addressEncoded.removingPercentEncoding {
                 let simplified = simplifyAddress(address)
-                print("住所を抽出: \(simplified)")
                 return simplified
             }
         }
@@ -49,7 +45,6 @@ struct MapURLParser {
             if let httpResponse = response as? HTTPURLResponse {
                 if let finalURL = httpResponse.url?.absoluteString {
                     expandedURL = finalURL
-                    print("📍 最終URL: \(finalURL)")
                 }
             }
             semaphore.signal()

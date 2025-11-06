@@ -100,7 +100,6 @@ struct PackingListView: View {
             newItemName = ""
         }
 
-        print("✅ 持ち物追加: \(trimmedName)")
     }
 }
 

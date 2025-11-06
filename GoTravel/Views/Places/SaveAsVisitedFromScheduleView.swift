@@ -106,10 +106,6 @@ struct SaveAsVisitedFromScheduleView: View {
     private func saveVisitedPlace() {
         isSaving = true
 
-        print("SaveAsVisitedFromScheduleView: 保存開始")
-        print("scheduleItem.location: \(scheduleItem.location ?? "なし")")
-        print("scheduleItem.latitude: \(scheduleItem.latitude?.description ?? "なし")")
-        print("scheduleItem.longitude: \(scheduleItem.longitude?.description ?? "なし")")
 
         DispatchQueue.global(qos: .userInitiated).async {
             // Use location name as address if available
@@ -119,9 +115,6 @@ struct SaveAsVisitedFromScheduleView: View {
             let latitude = scheduleItem.latitude ?? 0
             let longitude = scheduleItem.longitude ?? 0
 
-            print("保存する住所: \(address ?? "なし")")
-            print("保存する緯度: \(latitude)")
-            print("保存する経度: \(longitude)")
 
             let visitedPlace = VisitedPlace(
                 title: travelPlanTitle + " - " + scheduleItem.title,
@@ -140,10 +133,9 @@ struct SaveAsVisitedFromScheduleView: View {
                     isSaving = false
                     switch result {
                     case .success:
-                        print("訪問地として保存成功")
                         presentationMode.wrappedValue.dismiss()
-                    case .failure(let error):
-                        print("訪問地の保存エラー: \(error.localizedDescription)")
+                    case .failure(_):
+                        break
                     }
                 }
             }

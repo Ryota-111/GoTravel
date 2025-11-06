@@ -57,7 +57,6 @@ class AlbumManager: ObservableObject {
     func createTravelPlanAlbum(from travelPlan: TravelPlan) {
         // Check if album already exists for this travel plan
         if let planId = travelPlan.id, albums.contains(where: { $0.travelPlanId == planId }) {
-            print("Album already exists for this travel plan")
             return
         }
 
@@ -84,7 +83,6 @@ class AlbumManager: ObservableObject {
     func deleteAlbum(_ album: Album) {
         // Prevent deletion of default albums
         if album.isDefaultAlbum {
-            print("Cannot delete default album: \(album.title)")
             return
         }
 
@@ -145,7 +143,6 @@ class AlbumManager: ObservableObject {
             try data.write(to: fileURL)
             return true
         } catch {
-            print("Error saving photo: \(error)")
             return false
         }
     }

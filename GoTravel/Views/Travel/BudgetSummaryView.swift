@@ -16,7 +16,6 @@ struct BudgetSummaryView: View {
         let costsArray = allItems.compactMap { $0.cost }
         let total = costsArray.reduce(0, +)
 
-        print("BudgetSummaryView: 合計金額: \(total)")
         return total
     }
 
@@ -322,16 +321,10 @@ struct BudgetSummaryView: View {
     }
 
     private func logBudgetDetails(allItems: [ScheduleItem]) {
-        print("BudgetSummaryView: 全スケジュール数: \(allItems.count)")
-        print("BudgetSummaryView: Plan ID: \(plan.id ?? "nil")")
-        print("BudgetSummaryView: スケジュール詳細:")
-        for (index, item) in allItems.enumerated() {
-            print("  [\(index)] \(item.title) - 金額: \(item.cost?.description ?? "nil")")
+        for (_, _) in allItems.enumerated() {
         }
 
-        let costsArray = allItems.compactMap { $0.cost }
-        print("BudgetSummaryView: 金額がある項目数: \(costsArray.count)")
-        print("BudgetSummaryView: 金額の配列: \(costsArray)")
+        _ = allItems.compactMap { $0.cost }
     }
 
     private func formatCurrency(_ amount: Double) -> String {

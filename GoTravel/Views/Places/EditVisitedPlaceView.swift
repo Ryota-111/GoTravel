@@ -90,10 +90,9 @@ struct EditVisitedPlaceView: View {
                 isSaving = false
                 switch result {
                 case .success:
-                    print("訪問地の更新成功")
                     presentationMode.wrappedValue.dismiss()
-                case .failure(let error):
-                    print("訪問地の更新エラー: \(error.localizedDescription)")
+                case .failure(_):
+                    break
                 }
             }
         }

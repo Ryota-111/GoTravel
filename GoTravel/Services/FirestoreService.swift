@@ -175,15 +175,12 @@ final class FirestoreService {
 
     // MARK: - Travel Plan Methods
     func saveTravelPlan(_ plan: TravelPlan, completion: @escaping (Result<TravelPlan, Error>) -> Void) {
-        print("FirestoreService: saveTravelPlan開始")
         guard let uid = Auth.auth().currentUser?.uid else {
-            print("FirestoreService: ユーザーが認証されていません")
             DispatchQueue.main.async {
                 completion(.failure(APIClientError.authenticationError))
             }
             return
         }
-        print("FirestoreService: ユーザー認証OK - UID: \(uid)")
 
         // If plan is shared, save to sharedTravelPlans collection
         if plan.isShared {
@@ -200,19 +197,14 @@ final class FirestoreService {
         planToSave.userId = uid
         planToSave.updatedAt = Date()
 
-        print("FirestoreService: ドキュメントID: \(docRef.documentID)")
-
         var dict = createTravelPlanDict(planToSave, uid: uid)
         dict["updatedAt"] = Timestamp(date: planToSave.updatedAt)
-        print("FirestoreService: 保存するデータ: \(dict)")
 
         docRef.setData(dict) { err in
             DispatchQueue.main.async {
                 if let err = err {
-                    print("FirestoreService: 保存失敗 - \(err.localizedDescription)")
                     completion(.failure(APIClientError.firestoreError(err)))
                 } else {
-                    print("FirestoreService: Firestore保存成功")
                     completion(.success(planToSave))
                 }
             }
@@ -240,15 +232,11 @@ final class FirestoreService {
         if let lastEditedBy = planToSave.lastEditedBy { dict["lastEditedBy"] = lastEditedBy }
         dict["updatedAt"] = Timestamp(date: planToSave.updatedAt)
 
-        print("FirestoreService: 共有プラン保存 - \(planId)")
-
         docRef.setData(dict) { err in
             DispatchQueue.main.async {
                 if let err = err {
-                    print("FirestoreService: 共有プラン保存失敗 - \(err.localizedDescription)")
                     completion(.failure(APIClientError.firestoreError(err)))
                 } else {
-                    print("FirestoreService: 共有プラン保存成功")
                     completion(.success(planToSave))
                 }
             }
@@ -298,9 +286,6 @@ final class FirestoreService {
         // Listen to user's own plans
         travelPlansCollectionRef(for: uid)
             .addSnapshotListener { snapshot, error in
-                if let error = error {
-                    print("FirestoreService: ユーザープラン取得エラー - \(error.localizedDescription)")
-                }
                 userPlans = snapshot?.documents.compactMap { FirestoreParser.parseTravelPlan(from: $0) } ?? []
                 hasUserPlans = true
                 combineAndReturn()
@@ -310,9 +295,6 @@ final class FirestoreService {
         return sharedTravelPlansCollectionRef
             .whereField("sharedWith", arrayContains: uid)
             .addSnapshotListener { snapshot, error in
-                if let error = error {
-                    print("FirestoreService: 共有プラン取得エラー - \(error.localizedDescription)")
-                }
                 sharedPlans = snapshot?.documents.compactMap { FirestoreParser.parseTravelPlan(from: $0) } ?? []
                 hasSharedPlans = true
                 combineAndReturn()
@@ -343,14 +325,11 @@ final class FirestoreService {
 
     // MARK: - Shared Travel Plan Methods
     func findTravelPlanByShareCode(_ shareCode: String, completion: @escaping (Result<TravelPlan, Error>) -> Void) {
-        print("FirestoreService: 共有コードで検索 - \(shareCode)")
-
         sharedTravelPlansCollectionRef
             .whereField("shareCode", isEqualTo: shareCode)
             .limit(to: 1)
             .getDocuments { snapshot, error in
                 if let error = error {
-                    print("FirestoreService: 共有コード検索エラー - \(error.localizedDescription)")
                     DispatchQueue.main.async {
                         completion(.failure(APIClientError.firestoreError(error)))
                     }
@@ -358,7 +337,6 @@ final class FirestoreService {
                 }
 
                 guard let doc = snapshot?.documents.first else {
-                    print("FirestoreService: 共有コードに一致するプランが見つかりません")
                     DispatchQueue.main.async {
                         completion(.failure(APIClientError.notFound))
                     }
@@ -366,7 +344,6 @@ final class FirestoreService {
                 }
 
                 if let plan = FirestoreParser.parseTravelPlan(from: doc) {
-                    print("FirestoreService: プラン発見 - \(plan.title)")
                     DispatchQueue.main.async {
                         completion(.success(plan))
                     }
@@ -386,8 +363,6 @@ final class FirestoreService {
             return
         }
 
-        print("FirestoreService: プランに参加 - PlanID: \(planId), UID: \(uid)")
-
         let docRef = sharedTravelPlansCollectionRef.document(planId)
 
         docRef.updateData([
@@ -395,7 +370,6 @@ final class FirestoreService {
             "updatedAt": Timestamp(date: Date())
         ]) { error in
             if let error = error {
-                print("FirestoreService: 参加失敗 - \(error.localizedDescription)")
                 DispatchQueue.main.async {
                     completion(.failure(APIClientError.firestoreError(error)))
                 }
@@ -418,7 +392,6 @@ final class FirestoreService {
                     return
                 }
 
-                print("FirestoreService: 参加成功 - \(plan.title)")
                 DispatchQueue.main.async {
                     completion(.success(plan))
                 }
@@ -428,22 +401,17 @@ final class FirestoreService {
 
     // MARK: - Plan Methods (予定計画)
     func savePlan(_ plan: Plan, completion: @escaping (Result<Plan, Error>) -> Void) {
-        print("FirestoreService: savePlan開始")
         guard let uid = Auth.auth().currentUser?.uid else {
-            print("FirestoreService: ユーザーが認証されていません")
             DispatchQueue.main.async {
                 completion(.failure(APIClientError.authenticationError))
             }
             return
         }
-        print("FirestoreService: ユーザー認証OK - UID: \(uid)")
 
         let docRef = plansCollectionRef(for: uid).document(plan.id)
         var planToSave = plan
         planToSave.id = docRef.documentID
         planToSave.userId = uid
-
-        print("FirestoreService: ドキュメントID: \(docRef.documentID)")
 
         var dict: [String: Any] = [
             "title": planToSave.title,
@@ -462,15 +430,11 @@ final class FirestoreService {
         if let description = planToSave.description { dict["description"] = description }
         if let linkURL = planToSave.linkURL { dict["linkURL"] = linkURL }
 
-        print("FirestoreService: 保存するデータ: \(dict)")
-
         docRef.setData(dict) { err in
             DispatchQueue.main.async {
                 if let err = err {
-                    print("FirestoreService: 保存失敗 - \(err.localizedDescription)")
                     completion(.failure(APIClientError.firestoreError(err)))
                 } else {
-                    print("FirestoreService: Firestore保存成功")
                     completion(.success(planToSave))
                 }
             }
@@ -519,10 +483,7 @@ final class FirestoreService {
 
     // MARK: - Local Image Storage Methods
     func saveTravelPlanImageLocally(_ image: UIImage, completion: @escaping (Result<String, Error>) -> Void) {
-        print("FirestoreService: ローカル画像保存開始")
-
         guard let imageData = image.jpegData(compressionQuality: 0.7) else {
-            print("FirestoreService: 画像データの変換に失敗")
             completion(.failure(APIClientError.parseError))
             return
         }
@@ -531,29 +492,22 @@ final class FirestoreService {
 
         do {
             try FileManager.saveImageDataToDocuments(data: imageData, named: fileName)
-            print("FirestoreService: ローカル画像保存成功 - \(fileName)")
             completion(.success(fileName))
         } catch {
-            print("FirestoreService: ローカル画像保存失敗 - \(error.localizedDescription)")
             completion(.failure(APIClientError.storageError(error)))
         }
     }
 
     func deleteTravelPlanImageLocally(_ fileName: String) {
-        print("FirestoreService: ローカル画像削除 - \(fileName)")
         do {
             try FileManager.removeDocumentFile(named: fileName)
-            print("FirestoreService: ローカル画像削除成功")
         } catch {
-            print("FirestoreService: ローカル画像削除失敗 - \(error.localizedDescription)")
+            // Silent fail
         }
     }
 
     func savePlanImageLocally(_ image: UIImage, completion: @escaping (Result<String, Error>) -> Void) {
-        print("FirestoreService: ローカル画像保存開始")
-
         guard let imageData = image.jpegData(compressionQuality: 0.7) else {
-            print("FirestoreService: 画像データの変換に失敗")
             completion(.failure(APIClientError.parseError))
             return
         }
@@ -562,10 +516,8 @@ final class FirestoreService {
 
         do {
             try FileManager.saveImageDataToDocuments(data: imageData, named: fileName)
-            print("FirestoreService: ローカル画像保存成功 - \(fileName)")
             completion(.success(fileName))
         } catch {
-            print("FirestoreService: ローカル画像保存失敗 - \(error.localizedDescription)")
             completion(.failure(APIClientError.storageError(error)))
         }
     }

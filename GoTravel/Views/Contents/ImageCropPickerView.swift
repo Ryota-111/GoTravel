@@ -19,13 +19,10 @@ struct ImageCropPickerView: View {
                     image: selectedImage,
                     aspectRatio: aspectRatio,
                     onCrop: { croppedImage in
-                        print("ImageCropPickerView: トリミング完了 - サイズ: \(croppedImage.size)")
                         image = croppedImage
-                        print("ImageCropPickerView: 画像をバインディングに設定")
                         presentationMode.wrappedValue.dismiss()
                     },
                     onCancel: {
-                        print("ImageCropPickerView: キャンセル")
                         self.selectedImage = nil
                         presentationMode.wrappedValue.dismiss()
                     }
@@ -38,16 +35,13 @@ struct ImageCropPickerView: View {
             }
         }
         .sheet(isPresented: $showImagePicker, onDismiss: {
-            print("ImagePickerView閉じた")
             isPickerDismissed = true
         }) {
             ImagePickerView(sourceType: .photoLibrary, image: $selectedImage)
         }
         .onChange(of: selectedImage) { _, newValue in
-            if let img = newValue {
-                print("ImageCropPickerView: selectedImage更新 - サイズ: \(img.size)")
+            if newValue != nil {
             } else if isPickerDismissed && newValue == nil {
-                print("ImageCropPickerView: 画像が選択されなかったので閉じます")
                 presentationMode.wrappedValue.dismiss()
             }
         }

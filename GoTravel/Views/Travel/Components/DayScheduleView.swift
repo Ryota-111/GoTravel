@@ -17,13 +17,10 @@ struct DayScheduleView: View {
 
         // Debug: Print BEFORE sorting
         #if DEBUG
-        print("\n=== Day \(daySchedule.dayNumber) BEFORE sorting ===")
-        for (index, item) in daySchedule.scheduleItems.enumerated() {
+        for (_, item) in daySchedule.scheduleItems.enumerated() {
             let fullFormatter = DateFormatter()
             fullFormatter.dateFormat = "yyyy-MM-dd HH:mm:ss"
-            let components = calendar.dateComponents([.hour, .minute], from: item.time)
-            print("\(index + 1). Full Date: \(fullFormatter.string(from: item.time)) - \(item.title)")
-            print("   Time components: \(components.hour ?? 0):\(components.minute ?? 0)")
+            _ = calendar.dateComponents([.hour, .minute], from: item.time)
         }
         #endif
 
@@ -47,13 +44,10 @@ struct DayScheduleView: View {
 
         // Debug: Print AFTER sorting
         #if DEBUG
-        print("\n=== Day \(daySchedule.dayNumber) AFTER sorting ===")
-        for (index, item) in sorted.enumerated() {
+        for (_, _) in sorted.enumerated() {
             let timeFormatter = DateFormatter()
             timeFormatter.dateFormat = "HH:mm"
-            print("\(index + 1). \(timeFormatter.string(from: item.time)) - \(item.title)")
         }
-        print("===\n")
         #endif
 
         return sorted

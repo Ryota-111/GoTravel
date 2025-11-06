@@ -15,26 +15,24 @@ struct GoTravelApp: App {
 
         NotificationService.shared.requestAuthorization { granted in
             if granted {
-                print("通知権限が許可されました")
                 NotificationService.shared.checkAuthorizationStatus { status in
-                    print("通知ステータス: \(status.rawValue)")
                     switch status {
                     case .authorized:
-                        print("   → 許可済み")
+                        break
                     case .denied:
-                        print("   → 拒否済み")
+                        break
                     case .notDetermined:
-                        print("   → 未決定")
+                        break
                     case .provisional:
-                        print("   → 仮許可")
+                        break
                     case .ephemeral:
-                        print("   → 一時的")
+                        break
                     @unknown default:
-                        print("   → 不明")
+                        break
                     }
                 }
             } else {
-                print("通知権限が拒否されました")
+                // Authorization denied
             }
         }
     }

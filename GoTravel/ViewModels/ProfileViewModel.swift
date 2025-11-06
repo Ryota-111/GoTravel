@@ -71,7 +71,6 @@ final class ProfileViewModel: ObservableObject {
                     self.saveProfile()
                 }
             } catch {
-                print("Failed to save avatar image:", error)
             }
         }
     }
@@ -88,9 +87,7 @@ final class ProfileViewModel: ObservableObject {
     func signOut(completion: @escaping (Result<Void, Error>) -> Void) {
             do {
                 try Auth.auth().signOut()
-                print("Signed out")
             } catch {
-                print("Sign out failed: \(error.localizedDescription)")
             }
         }
 

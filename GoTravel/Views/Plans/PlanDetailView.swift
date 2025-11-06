@@ -981,7 +981,6 @@ struct PlanDetailView: View {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 isEditMode = false
             }
-            print("✅ プランの更新成功")
         }
     }
 
@@ -990,7 +989,6 @@ struct PlanDetailView: View {
             isSaving = false
             alertMessage = "保存に失敗しました: \(error.localizedDescription)"
             showAlert = true
-            print("❌ プランの更新失敗: \(error.localizedDescription)")
         }
     }
 
@@ -1005,10 +1003,8 @@ struct PlanDetailView: View {
 
         do {
             try FileManager.saveImageDataToDocuments(data: imageData, named: fileName)
-            print("✅ ローカル画像保存成功: \(fileName)")
             completion(.success(fileName))
         } catch {
-            print("❌ ローカル画像保存失敗: \(error.localizedDescription)")
             completion(.failure(error))
         }
     }
@@ -1021,10 +1017,8 @@ struct PlanDetailView: View {
         guard let fileName = plan.localImageFileName else { return nil }
 
         if let image = FileManager.documentsImage(named: fileName) {
-            print("✅ ローカル画像読み込み成功: \(fileName)")
             return image
         } else {
-            print("❌ ローカル画像読み込み失敗: \(fileName)")
             return nil
         }
     }

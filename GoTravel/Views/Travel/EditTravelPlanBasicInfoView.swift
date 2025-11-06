@@ -281,10 +281,8 @@ struct EditTravelPlanBasicInfoView: View {
 
     // MARK: - Helper Methods
     private func logImageChange(_ newImage: UIImage?) {
-        if let img = newImage {
-            print("EditTravelPlanBasicInfoView: 画像が更新されました - サイズ: \(img.size)")
+        if newImage != nil {
         } else {
-            print("EditTravelPlanBasicInfoView: 画像がnilになりました")
         }
     }
 

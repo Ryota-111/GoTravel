@@ -235,8 +235,7 @@ struct PlacesListView: View {
     // MARK: - Actions
     private func deletePlace(_ place: VisitedPlace) {
         FirestoreService.shared.delete(place: place) { err in
-            if let err = err {
-                print("delete error:", err.localizedDescription)
+            if err != nil {
             }
         }
     }

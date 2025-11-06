@@ -191,12 +191,10 @@ struct JoinTravelPlanView: View {
             isJoining = false
 
             switch result {
-            case .success(let plan):
-                print("JoinTravelPlanView: 参加成功 - \(plan.title)")
+            case .success(_):
                 // Close the view on success
                 presentationMode.wrappedValue.dismiss()
             case .failure(let error):
-                print("JoinTravelPlanView: 参加失敗 - \(error.localizedDescription)")
                 if let apiError = error as? APIClientError {
                     switch apiError {
                     case .notFound:
