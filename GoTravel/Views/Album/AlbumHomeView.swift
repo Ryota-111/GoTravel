@@ -405,7 +405,6 @@ struct CreateAlbumView: View {
         VStack(spacing: 12) {
             Text("アルバムの作成方法")
                 .font(.headline)
-                .foregroundColor(.white.opacity(0.8))
                 .frame(maxWidth: .infinity, alignment: .leading)
 
             HStack(spacing: 12) {
@@ -433,15 +432,13 @@ struct CreateAlbumView: View {
         VStack(spacing: 20) {
             TextField("アルバム名", text: $albumTitle)
                 .font(.title3)
-                .foregroundColor(.white)
                 .padding()
-                .background(Color.white.opacity(0.1))
+                .background(Color.gray.opacity(0.2))
                 .cornerRadius(15)
 
             VStack(alignment: .leading, spacing: 12) {
                 Text("アルバムの種類")
                     .font(.headline)
-                    .foregroundColor(.white.opacity(0.8))
 
                 ScrollView(.horizontal, showsIndicators: false) {
                     HStack(spacing: 12) {
@@ -464,17 +461,16 @@ struct CreateAlbumView: View {
         VStack(alignment: .leading, spacing: 12) {
             Text("旅行計画を選択")
                 .font(.headline)
-                .foregroundColor(.white.opacity(0.8))
 
             if travelPlans.isEmpty {
                 VStack(spacing: 10) {
                     Image(systemName: "airplane.departure")
                         .font(.system(size: 50))
-                        .foregroundColor(.white.opacity(0.3))
+                        .foregroundColor(.gray.opacity(0.7))
 
                     Text("旅行計画がありません")
                         .font(.subheadline)
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(.gray.opacity(0.7))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 40)
@@ -501,8 +497,8 @@ struct CreateAlbumView: View {
         Button(action: createAlbum) {
             Text("作成")
                 .font(.headline)
-                .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
+                .foregroundColor(.white)
                 .padding()
                 .background(
                     LinearGradient(
@@ -558,11 +554,11 @@ struct ModeButton: View {
             VStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.title2)
-                    .foregroundColor(.white)
+                    .foregroundColor(.gray)
 
                 Text(title)
                     .font(.caption)
-                    .foregroundColor(.white)
+                    .foregroundColor(.gray)
             }
             .frame(maxWidth: .infinity)
             .padding()
@@ -572,7 +568,7 @@ struct ModeButton: View {
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? Color.orange : Color.clear, lineWidth: 2)
+                    .stroke(isSelected ? Color.orange : Color.gray, lineWidth: 2)
             )
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
@@ -596,7 +592,7 @@ struct TravelPlanSelectionCard: View {
                             LinearGradient(
                                 gradient: Gradient(colors: [
                                     (plan.cardColor ?? .blue).opacity(0.8),
-                                    (plan.cardColor ?? .blue).opacity(0.5)
+                                    (plan.cardColor ?? .white).opacity(0.5)
                                 ]),
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -606,18 +602,18 @@ struct TravelPlanSelectionCard: View {
 
                     Image(systemName: "airplane.departure")
                         .font(.title3)
-                        .foregroundColor(.white)
+                        .foregroundColor(.black)
                 }
 
                 // Info
                 VStack(alignment: .leading, spacing: 4) {
                     Text(plan.title)
                         .font(.headline)
-                        .foregroundColor(.white)
+                        .foregroundColor(.gray)
 
                     Text(plan.destination)
                         .font(.caption)
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(.gray)
                 }
 
                 Spacer()
@@ -641,7 +637,7 @@ struct TravelPlanSelectionCard: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(
-                        isSelected ? Color.orange : Color.clear,
+                        isSelected ? Color.blue : Color.gray,
                         lineWidth: 2
                     )
             )
@@ -687,7 +683,7 @@ struct AlbumTypeButton: View {
 
                 Text(type.title)
                     .font(.caption)
-                    .foregroundColor(.white)
+                    .foregroundColor(.gray)
                     .lineLimit(1)
             }
             .frame(width: 80)

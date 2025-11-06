@@ -11,6 +11,11 @@ struct DayScheduleView: View {
     @State private var showScheduleEditor = false
     @State private var editingItem: ScheduleItem?
 
+    // Weather Properties
+    @State private var weather: WeatherService.DayWeather?
+    @State private var isLoadingWeather = false
+    @State private var weatherError: String?
+
     // MARK: - Computed Properties
     private var sortedScheduleItems: [ScheduleItem] {
         let calendar = Calendar.current
@@ -53,10 +58,22 @@ struct DayScheduleView: View {
         return sorted
     }
 
+    // 天気情報を取得するための座標を返す
+    private var weatherLocation: (latitude: Double, longitude: Double)? {
+        // 最初のScheduleItemの座標を使用
+        guard let firstItem = daySchedule.scheduleItems.first,
+              let latitude = firstItem.latitude,
+              let longitude = firstItem.longitude else {
+            return nil
+        }
+        return (latitude, longitude)
+    }
+
     // MARK: - Body
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
             headerSection
+            weatherSection
             scheduleListSection
         }
         .padding()
@@ -68,6 +85,13 @@ struct DayScheduleView: View {
         .sheet(item: $editingItem) { item in
             EditScheduleItemView(plan: plan, daySchedule: daySchedule, item: item)
                 .environmentObject(viewModel)
+        }
+        .onAppear {
+            fetchWeather()
+        }
+        .onChange(of: daySchedule.scheduleItems) { _ in
+            // スケジュールアイテムが変更されたら天気情報を再取得
+            fetchWeather()
         }
     }
 
@@ -85,6 +109,19 @@ struct DayScheduleView: View {
                 Image(systemName: "plus.circle.fill")
                     .foregroundColor(.orange)
                     .imageScale(.large)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var weatherSection: some View {
+        if #available(iOS 16.0, *) {
+            if isLoadingWeather {
+                WeatherLoadingView()
+            } else if let error = weatherError {
+                WeatherErrorView(error: error)
+            } else if let weather = weather {
+                WeatherCardView(weather: weather, dayNumber: daySchedule.dayNumber)
             }
         }
     }
@@ -144,5 +181,40 @@ struct DayScheduleView: View {
         }
 
         viewModel.update(updatedPlan)
+    }
+
+    private func fetchWeather() {
+        guard #available(iOS 16.0, *) else { return }
+
+        // 座標がない場合は天気情報を取得しない
+        guard let location = weatherLocation else {
+            weather = nil
+            isLoadingWeather = false
+            weatherError = nil
+            return
+        }
+
+        isLoadingWeather = true
+        weatherError = nil
+
+        Task {
+            do {
+                let fetchedWeather = try await WeatherService.shared.fetchDayWeather(
+                    latitude: location.latitude,
+                    longitude: location.longitude,
+                    date: daySchedule.date
+                )
+
+                await MainActor.run {
+                    self.weather = fetchedWeather
+                    self.isLoadingWeather = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.weatherError = error.localizedDescription
+                    self.isLoadingWeather = false
+                }
+            }
+        }
     }
 }

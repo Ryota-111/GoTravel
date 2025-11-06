@@ -1,7 +1,7 @@
 import Foundation
 import SwiftUI
 
-struct DaySchedule: Identifiable, Codable {
+struct DaySchedule: Identifiable, Codable, Equatable {
     var id: String = UUID().uuidString
     var dayNumber: Int // 1, 2, 3...
     var date: Date
@@ -15,7 +15,7 @@ struct DaySchedule: Identifiable, Codable {
     }
 }
 
-struct ScheduleItem: Identifiable, Codable {
+struct ScheduleItem: Identifiable, Codable, Equatable {
     var id: String = UUID().uuidString
     var time: Date
     var title: String
