@@ -115,6 +115,7 @@ struct CalendarView: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     // MARK: - Computed Properties

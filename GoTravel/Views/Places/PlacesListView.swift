@@ -48,7 +48,9 @@ struct PlacesListView: View {
                     contentView
                 }
             }
+            .navigationBarHidden(true)
         }
+        .navigationViewStyle(.stack)
     }
 
     // MARK: - View Components

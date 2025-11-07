@@ -134,6 +134,7 @@ struct EnjoyWorldView: View {
                 }
             }
             .background(backgroundGradient)
+            .navigationBarHidden(true)
             .sheet(isPresented: $showAddTravelPlan) {
                 AddTravelPlanView { newPlan in
                     travelPlanViewModel.add(newPlan)
@@ -174,6 +175,7 @@ struct EnjoyWorldView: View {
                 selectedTab = hasOngoingPlans ? .ongoing : .all
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     // MARK: - View Components

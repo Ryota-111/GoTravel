@@ -72,6 +72,7 @@ struct AlbumHomeView: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
         .sheet(isPresented: $showCreateAlbum) {
             CreateAlbumView(travelPlans: travelPlanViewModel.travelPlans)
         }
@@ -398,6 +399,7 @@ struct CreateAlbumView: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     // MARK: - Mode Selection
