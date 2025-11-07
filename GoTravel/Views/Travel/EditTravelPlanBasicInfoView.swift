@@ -1,4 +1,5 @@
 import SwiftUI
+import MapKit
 
 // TravelPlanの編集画面
 struct EditTravelPlanBasicInfoView: View {
@@ -14,6 +15,7 @@ struct EditTravelPlanBasicInfoView: View {
     @State private var selectedImage: UIImage?
     @State private var showImagePicker = false
     @State private var isUploading = false
+    @State private var destinationCoordinate: (latitude: Double, longitude: Double)?
 
     // MARK: - Initialization
     init(plan: TravelPlan) {
@@ -22,6 +24,10 @@ struct EditTravelPlanBasicInfoView: View {
         _destination = State(initialValue: plan.destination)
         _startDate = State(initialValue: plan.startDate)
         _endDate = State(initialValue: plan.endDate)
+
+        if let latitude = plan.latitude, let longitude = plan.longitude {
+            _destinationCoordinate = State(initialValue: (latitude, longitude))
+        }
 
         if let localImageFileName = plan.localImageFileName,
            let image = FileManager.documentsImage(named: localImageFileName) {
@@ -128,6 +134,9 @@ struct EditTravelPlanBasicInfoView: View {
                 placeholder: "目的地",
                 text: $destination
             )
+            .onChange(of: destination) { newValue in
+                searchLocationCoordinate(for: newValue)
+            }
 
             HStack(alignment: .center) {
                 datePickerCard(title: "開始日", date: $startDate)
@@ -335,6 +344,8 @@ struct EditTravelPlanBasicInfoView: View {
         var updatedPlan = plan
         updatedPlan.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         updatedPlan.destination = destination.trimmingCharacters(in: .whitespacesAndNewlines)
+        updatedPlan.latitude = destinationCoordinate?.latitude
+        updatedPlan.longitude = destinationCoordinate?.longitude
         updatedPlan.startDate = startDate
         updatedPlan.endDate = normalizedEndDate
         updatedPlan.localImageFileName = fileName
@@ -344,6 +355,29 @@ struct EditTravelPlanBasicInfoView: View {
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             isUploading = false
             presentationMode.wrappedValue.dismiss()
+        }
+    }
+
+    // MARK: - Location Search
+    private func searchLocationCoordinate(for query: String) {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuery.isEmpty else {
+            destinationCoordinate = nil
+            return
+        }
+
+        let searchRequest = MKLocalSearch.Request()
+        searchRequest.naturalLanguageQuery = trimmedQuery
+
+        let search = MKLocalSearch(request: searchRequest)
+        search.start { response, error in
+            guard let response = response,
+                  let firstItem = response.mapItems.first else {
+                return
+            }
+
+            let coordinate = firstItem.placemark.coordinate
+            destinationCoordinate = (coordinate.latitude, coordinate.longitude)
         }
     }
 }

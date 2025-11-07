@@ -4,7 +4,7 @@ import SwiftUI
 struct WeatherCardView: View {
     @Environment(\.colorScheme) var colorScheme
     let weather: WeatherService.DayWeather
-    let dayNumber: Int
+    let dayNumber: Int?
 
     var body: some View {
         HStack(spacing: 15) {
@@ -16,9 +16,11 @@ struct WeatherCardView: View {
 
             // Weather Details
             VStack(alignment: .leading, spacing: 5) {
-                Text("Day \(dayNumber)")
-                    .font(.headline)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                if let day = dayNumber {
+                    Text("Day \(day)")
+                        .font(.headline)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                }
 
                 Text(weather.condition)
                     .font(.subheadline)

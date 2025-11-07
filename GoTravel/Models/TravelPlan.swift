@@ -20,6 +20,8 @@ struct TravelPlan: Identifiable, Codable {
     var startDate: Date
     var endDate: Date
     var destination: String
+    var latitude: Double?
+    var longitude: Double?
     var localImageFileName: String?
     var cardColor: Color?
     var createdAt: Date
@@ -36,7 +38,7 @@ struct TravelPlan: Identifiable, Codable {
     var updatedAt: Date
 
     enum CodingKeys: String, CodingKey {
-        case id, title, startDate, endDate, destination, localImageFileName, cardColorHex, createdAt, userId, daySchedules, packingItems
+        case id, title, startDate, endDate, destination, latitude, longitude, localImageFileName, cardColorHex, createdAt, userId, daySchedules, packingItems
         case isShared, shareCode, sharedWith, ownerId, lastEditedBy, updatedAt
     }
 
@@ -53,6 +55,8 @@ struct TravelPlan: Identifiable, Codable {
          startDate: Date,
          endDate: Date,
          destination: String,
+         latitude: Double? = nil,
+         longitude: Double? = nil,
          localImageFileName: String? = nil,
          cardColor: Color? = nil,
          createdAt: Date = Date(),
@@ -70,6 +74,8 @@ struct TravelPlan: Identifiable, Codable {
         self.startDate = startDate
         self.endDate = endDate
         self.destination = destination
+        self.latitude = latitude
+        self.longitude = longitude
         self.localImageFileName = localImageFileName
         self.cardColor = cardColor
         self.createdAt = createdAt
@@ -91,6 +97,8 @@ struct TravelPlan: Identifiable, Codable {
         startDate = try container.decode(Date.self, forKey: .startDate)
         endDate = try container.decode(Date.self, forKey: .endDate)
         destination = try container.decode(String.self, forKey: .destination)
+        latitude = try container.decodeIfPresent(Double.self, forKey: .latitude)
+        longitude = try container.decodeIfPresent(Double.self, forKey: .longitude)
         localImageFileName = try container.decodeIfPresent(String.self, forKey: .localImageFileName)
         createdAt = try container.decode(Date.self, forKey: .createdAt)
         userId = try container.decodeIfPresent(String.self, forKey: .userId)
@@ -117,6 +125,8 @@ struct TravelPlan: Identifiable, Codable {
         try container.encode(startDate, forKey: .startDate)
         try container.encode(endDate, forKey: .endDate)
         try container.encode(destination, forKey: .destination)
+        try container.encodeIfPresent(latitude, forKey: .latitude)
+        try container.encodeIfPresent(longitude, forKey: .longitude)
         try container.encodeIfPresent(localImageFileName, forKey: .localImageFileName)
         try container.encodeIfPresent(cardColorHex, forKey: .cardColorHex)
         try container.encode(createdAt, forKey: .createdAt)

@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import MapKit
 
 // TravelPlanの追加画面
 struct AddTravelPlanView: View {
@@ -14,6 +15,7 @@ struct AddTravelPlanView: View {
     @State private var selectedImage: UIImage?
     @State private var showImagePicker = false
     @State private var isUploading = false
+    @State private var destinationCoordinate: (latitude: Double, longitude: Double)?
 
     // MARK: - Computed Properties
     private var isFormValid: Bool {
@@ -106,6 +108,9 @@ struct AddTravelPlanView: View {
                 placeholder: "目的地",
                 text: $destination
             )
+            .onChange(of: destination) { newValue in
+                searchLocationCoordinate(for: newValue)
+            }
 
             HStack(alignment: .center) {
                 datePickerCard(title: "開始日", date: $startDate)
@@ -278,6 +283,8 @@ struct AddTravelPlanView: View {
             startDate: startDate,
             endDate: normalizedEndDate,
             destination: destination.trimmingCharacters(in: .whitespacesAndNewlines),
+            latitude: destinationCoordinate?.latitude,
+            longitude: destinationCoordinate?.longitude,
             localImageFileName: fileName,
             cardColor: Color.blue
         )
@@ -285,6 +292,29 @@ struct AddTravelPlanView: View {
         onSave(plan)
         isUploading = false
         presentationMode.wrappedValue.dismiss()
+    }
+
+    // MARK: - Location Search
+    private func searchLocationCoordinate(for query: String) {
+        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedQuery.isEmpty else {
+            destinationCoordinate = nil
+            return
+        }
+
+        let searchRequest = MKLocalSearch.Request()
+        searchRequest.naturalLanguageQuery = trimmedQuery
+
+        let search = MKLocalSearch(request: searchRequest)
+        search.start { response, error in
+            guard let response = response,
+                  let firstItem = response.mapItems.first else {
+                return
+            }
+
+            let coordinate = firstItem.placemark.coordinate
+            destinationCoordinate = (coordinate.latitude, coordinate.longitude)
+        }
     }
 }
 

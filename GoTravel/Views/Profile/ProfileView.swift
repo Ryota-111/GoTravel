@@ -1,4 +1,5 @@
 import SwiftUI
+import StoreKit
 
 struct ProfileView: View {
     @StateObject private var vm = ProfileViewModel()
@@ -16,12 +17,10 @@ struct ProfileView: View {
 
                         VStack(spacing: 16) {
                             profileEditCard
-                            
+
                             accountCard
-                            
+
                             helpSupportCard
-                            
-                            developerSupportCard
                         }
                         .padding(.horizontal)
                     }
@@ -146,21 +145,6 @@ struct ProfileView: View {
         .opacity(animateCards ? 1 : 0)
         .offset(y: animateCards ? 0 : 20)
         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: animateCards)
-    }
-
-    // MARK: - Developer Support Card
-    private var developerSupportCard: some View {
-        NavigationLink(destination: DeveloperSupportView()) {
-            ProfileMenuCard(
-                icon: "heart.fill",
-                title: "開発者を応援",
-                subtitle: "アプリの開発をサポート",
-                color: .pink
-            )
-        }
-        .opacity(animateCards ? 1 : 0)
-        .offset(y: animateCards ? 0 : 20)
-        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.25), value: animateCards)
     }
 
     // MARK: - Background
@@ -526,6 +510,8 @@ struct AccountActionView: View {
 struct HelpSupportView: View {
     @Environment(\.colorScheme) var colorScheme
     @State private var animateCards = false
+    @State private var showUserGuide = false
+    @State private var showContactAlert = false
 
     var body: some View {
         ZStack {
@@ -555,36 +541,46 @@ struct HelpSupportView: View {
 
                     // Help Cards
                     VStack(spacing: 16) {
-                        HelpCard(
-                            icon: "book.fill",
-                            title: "使い方ガイド",
-                            description: "アプリの基本的な使い方を確認できます",
-                            color: .blue
-                        )
+                        // User Guide
+                        Button(action: { showUserGuide = true }) {
+                            HelpCard(
+                                icon: "book.fill",
+                                title: "使い方ガイド",
+                                description: "アプリの基本的な使い方を確認できます",
+                                color: .blue
+                            )
+                        }
                         .opacity(animateCards ? 1 : 0)
                         .offset(y: animateCards ? 0 : 20)
                         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: animateCards)
 
-                        HelpCard(
-                            icon: "envelope.fill",
-                            title: "お問い合わせ",
-                            description: "ご質問やご要望はこちらから",
-                            color: .green
-                        )
+                        // Contact
+                        Button(action: { showContactAlert = true }) {
+                            HelpCard(
+                                icon: "envelope.fill",
+                                title: "お問い合わせ",
+                                description: "ご質問やご要望はこちらから",
+                                color: .green
+                            )
+                        }
                         .opacity(animateCards ? 1 : 0)
                         .offset(y: animateCards ? 0 : 20)
                         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.15), value: animateCards)
 
-                        HelpCard(
-                            icon: "star.fill",
-                            title: "レビューを書く",
-                            description: "アプリの評価をお願いします",
-                            color: .orange
-                        )
+                        // Review
+                        Button(action: { requestReview() }) {
+                            HelpCard(
+                                icon: "star.fill",
+                                title: "レビューを書く",
+                                description: "アプリの評価をお願いします",
+                                color: .orange
+                            )
+                        }
                         .opacity(animateCards ? 1 : 0)
                         .offset(y: animateCards ? 0 : 20)
                         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: animateCards)
 
+                        // Version Info
                         HelpCard(
                             icon: "info.circle.fill",
                             title: "バージョン情報",
@@ -606,6 +602,33 @@ struct HelpSupportView: View {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
                 animateCards = true
             }
+        }
+        .sheet(isPresented: $showUserGuide) {
+            UserGuideView()
+        }
+        .alert("お問い合わせ", isPresented: $showContactAlert) {
+            Button("メールを送る") {
+                openEmail()
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("ご質問やご要望がございましたら、下記のメールアドレスまでお問い合わせください。\n\ntaismryotasis@gmail.com")
+        }
+    }
+
+    private func requestReview() {
+        if let scene = UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
+            AppStore.requestReview(in: scene)
+        }
+    }
+
+    private func openEmail() {
+        let email = "support@gotravel.app"
+        let subject = "GoTravelアプリについてのお問い合わせ"
+        let urlString = "mailto:\(email)?subject=\(subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
+
+        if let url = URL(string: urlString) {
+            UIApplication.shared.open(url)
         }
     }
 
@@ -681,117 +704,163 @@ struct HelpCard: View {
     }
 }
 
-// MARK: - Developer Support View
-struct DeveloperSupportView: View {
+// MARK: - User Guide View
+struct UserGuideView: View {
+    @Environment(\.presentationMode) var presentationMode
     @Environment(\.colorScheme) var colorScheme
-    @State private var animateCards = false
+    @State private var selectedSection: Int = 0
+
+    let guideSections = [
+        GuideSection(
+            title: "旅行計画の作成",
+            icon: "airplane.departure",
+            color: .blue,
+            steps: [
+                "「予定」タブから「+」ボタンをタップ",
+                "旅行のタイトル、目的地、日程を入力",
+                "写真を追加（オプション）",
+                "「保存」をタップして完了"
+            ]
+        ),
+        GuideSection(
+            title: "スケジュール管理",
+            icon: "calendar",
+            color: .orange,
+            steps: [
+                "旅行計画の詳細画面を開く",
+                "日付タブを選択",
+                "「+」ボタンでスケジュールを追加",
+                "時間、場所、メモ、費用を入力"
+            ]
+        ),
+        GuideSection(
+            title: "訪問済み場所の保存",
+            icon: "mappin.circle",
+            color: .green,
+            steps: [
+                "「保存済み」タブを開く",
+                "「+」ボタンをタップ",
+                "場所を検索または選択",
+                "写真やメモを追加",
+                "タグを設定して保存"
+            ]
+        ),
+        GuideSection(
+            title: "天気予報の確認",
+            icon: "cloud.sun",
+            color: .cyan,
+            steps: [
+                "旅行計画で目的地を設定",
+                "詳細画面で自動的に天気予報を表示",
+                "気温、降水確率、UV指数を確認"
+            ]
+        ),
+        GuideSection(
+            title: "持ち物リスト",
+            icon: "checklist",
+            color: .purple,
+            steps: [
+                "旅行計画の詳細画面を開く",
+                "持ち物リストセクションを表示",
+                "「+」ボタンでアイテムを追加",
+                "チェックボックスで完了を管理"
+            ]
+        ),
+        GuideSection(
+            title: "計画の共有",
+            icon: "person.2",
+            color: .pink,
+            steps: [
+                "旅行計画の詳細画面を開く",
+                "共有ボタン（人アイコン）をタップ",
+                "共有コードを作成",
+                "友達に共有コードを送信"
+            ]
+        )
+    ]
 
     var body: some View {
-        ZStack {
-            backgroundGradient
+        NavigationView {
+            ZStack {
+                backgroundGradient
 
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 25) {
-                    // Header
-                    VStack(spacing: 15) {
-                        Image(systemName: "heart.circle.fill")
-                            .font(.system(size: 70))
-                            .foregroundColor(.pink.opacity(0.8))
-                            .padding(.top, 30)
+                ScrollView {
+                    VStack(spacing: 20) {
+                        // Header
+                        VStack(spacing: 10) {
+                            Image(systemName: "book.fill")
+                                .font(.system(size: 50))
+                                .foregroundColor(.blue.opacity(0.8))
+                                .padding(.top, 20)
 
-                        VStack(spacing: 8) {
-                            Text("開発者を応援")
-                                .font(.title2.bold())
+                            Text("使い方ガイド")
+                                .font(.title.bold())
                                 .foregroundColor(colorScheme == .dark ? .white : .black)
 
-                            Text("アプリの開発を支援していただけると嬉しいです")
+                            Text("GoTravelの基本的な使い方")
                                 .font(.subheadline)
                                 .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
-                                .multilineTextAlignment(.center)
+                        }
+                        .padding(.bottom, 10)
+
+                        // Guide Sections
+                        ForEach(Array(guideSections.enumerated()), id: \.offset) { index, section in
+                            GuideSectionCard(section: section)
                                 .padding(.horizontal)
                         }
+
+                        // Tips Section
+                        tipsSection
+                            .padding(.horizontal)
                     }
-                    .opacity(animateCards ? 1 : 0)
-                    .offset(y: animateCards ? 0 : -20)
-
-                    // Support Options
-                    VStack(spacing: 16) {
-                        SupportOptionCard(
-                            icon: "cup.and.saucer.fill",
-                            title: "コーヒー1杯分",
-                            price: "¥300",
-                            description: "開発のモチベーションになります",
-                            color: .orange
-                        )
-                        .opacity(animateCards ? 1 : 0)
-                        .offset(y: animateCards ? 0 : 20)
-                        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: animateCards)
-
-                        SupportOptionCard(
-                            icon: "fork.knife",
-                            title: "ランチ1食分",
-                            price: "¥800",
-                            description: "開発を全力でサポート",
-                            color: .green
-                        )
-                        .opacity(animateCards ? 1 : 0)
-                        .offset(y: animateCards ? 0 : 20)
-                        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.15), value: animateCards)
-
-                        SupportOptionCard(
-                            icon: "star.fill",
-                            title: "プレミアムサポート",
-                            price: "¥1,500",
-                            description: "継続的な開発を応援",
-                            color: .pink
-                        )
-                        .opacity(animateCards ? 1 : 0)
-                        .offset(y: animateCards ? 0 : 20)
-                        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: animateCards)
-
-                        // Thank You Message
-                        VStack(spacing: 10) {
-                            Text("🙏 ありがとうございます")
-                                .font(.headline)
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
-
-                            Text("皆様の応援が開発の励みになります。より良いアプリを作るために頑張ります！")
-                                .font(.caption)
-                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
-                                .multilineTextAlignment(.center)
-                        }
-                        .padding()
-                        .background(
-                            RoundedRectangle(cornerRadius: 16)
-                                .fill(Color.pink.opacity(0.1))
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 16)
-                                .stroke(Color.pink.opacity(0.3), lineWidth: 1)
-                        )
-                        .opacity(animateCards ? 1 : 0)
-                        .offset(y: animateCards ? 0 : 20)
-                        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.25), value: animateCards)
-                    }
-                    .padding(.horizontal)
+                    .padding(.bottom, 30)
                 }
-                .padding(.bottom, 30)
             }
-            .navigationTitle("開発者を応援")
-            .navigationBarTitleDisplayMode(.inline)
+            .navigationBarItems(trailing: closeButton)
         }
-        .onAppear {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
-                animateCards = true
+    }
+
+    private var closeButton: some View {
+        Button(action: { presentationMode.wrappedValue.dismiss() }) {
+            Image(systemName: "xmark.circle.fill")
+                .font(.title2)
+                .foregroundColor(.white.opacity(0.7))
+        }
+    }
+
+    private var tipsSection: some View {
+        VStack(alignment: .leading, spacing: 15) {
+            HStack {
+                Image(systemName: "lightbulb.fill")
+                    .foregroundColor(.yellow)
+                Text("便利なヒント")
+                    .font(.headline)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+            }
+
+            VStack(alignment: .leading, spacing: 10) {
+                TipRow(icon: "star.fill", text: "目的地を入力すると自動的に座標が設定され、天気予報が表示されます", color: .orange)
+                TipRow(icon: "photo.fill", text: "写真を追加すると旅行の思い出を振り返りやすくなります", color: .blue)
+                TipRow(icon: "tag.fill", text: "タグを使って訪問済み場所を整理しましょう", color: .green)
+                TipRow(icon: "yensign.circle.fill", text: "スケジュールに費用を入力すると自動的に合計金額が計算されます", color: .cyan)
             }
         }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.white.opacity(0.2))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.yellow.opacity(0.3), lineWidth: 1)
+        )
     }
 
     private var backgroundGradient: some View {
         LinearGradient(
             gradient: Gradient(colors: colorScheme == .dark ?
-                [.pink.opacity(0.7), .black] :
-                [.pink.opacity(0.6), .white.opacity(0.3)]),
+                [.blue.opacity(0.7), .black] :
+                [.blue.opacity(0.6), .white.opacity(0.3)]),
             startPoint: .top,
             endPoint: .bottom
         )
@@ -799,82 +868,94 @@ struct DeveloperSupportView: View {
     }
 }
 
-// MARK: - Support Option Card
-struct SupportOptionCard: View {
-    let icon: String
+// MARK: - Guide Section Model
+struct GuideSection {
     let title: String
-    let price: String
-    let description: String
+    let icon: String
     let color: Color
+    let steps: [String]
+}
+
+// MARK: - Guide Section Card
+struct GuideSectionCard: View {
+    let section: GuideSection
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
-        Button(action: {
-            // TODO: Implement in-app purchase
-        }) {
-            HStack(spacing: 15) {
-                // Icon
+        VStack(alignment: .leading, spacing: 15) {
+            // Title
+            HStack(spacing: 12) {
                 ZStack {
                     Circle()
                         .fill(
                             LinearGradient(
                                 gradient: Gradient(colors: [
-                                    color.opacity(0.8),
-                                    color.opacity(0.5)
+                                    section.color.opacity(0.8),
+                                    section.color.opacity(0.5)
                                 ]),
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .frame(width: 55, height: 55)
+                        .frame(width: 45, height: 45)
 
-                    Image(systemName: icon)
-                        .font(.title2)
+                    Image(systemName: section.icon)
+                        .font(.title3)
                         .foregroundColor(.white)
                 }
 
-                // Info
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(title)
-                        .font(.headline)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
-
-                    Text(description)
-                        .font(.caption)
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
-                }
+                Text(section.title)
+                    .font(.headline)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
 
                 Spacer()
-
-                // Price
-                Text(price)
-                    .font(.title3.bold())
-                    .foregroundColor(color)
             }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(
-                        colorScheme == .dark ?
-                            Color.white.opacity(0.1) :
-                            Color.white.opacity(0.2)
-                    )
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                color.opacity(0.5),
-                                color.opacity(0.2)
-                            ]),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 2
-                    )
-            )
-            .shadow(color: color.opacity(0.3), radius: 10, x: 0, y: 5)
+
+            // Steps
+            VStack(alignment: .leading, spacing: 8) {
+                ForEach(Array(section.steps.enumerated()), id: \.offset) { index, step in
+                    HStack(alignment: .top, spacing: 10) {
+                        Text("\(index + 1).")
+                            .font(.caption.bold())
+                            .foregroundColor(section.color)
+                            .frame(width: 20, alignment: .leading)
+
+                        Text(step)
+                            .font(.caption)
+                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .gray)
+                    }
+                }
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.white.opacity(0.2))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(section.color.opacity(0.3), lineWidth: 1)
+        )
+    }
+}
+
+// MARK: - Tip Row
+struct TipRow: View {
+    let icon: String
+    let text: String
+    let color: Color
+    @Environment(\.colorScheme) var colorScheme
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: icon)
+                .font(.caption)
+                .foregroundColor(color)
+                .frame(width: 20)
+
+            Text(text)
+                .font(.caption)
+                .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .gray)
         }
     }
 }

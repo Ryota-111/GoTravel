@@ -19,6 +19,11 @@ struct TravelPlanDetailView: View {
     @State private var showBudgetSummary = false
     @State private var showShareView = false
 
+    // Weather Properties
+    @State private var planWeather: WeatherService.DayWeather?
+    @State private var isLoadingPlanWeather = false
+    @State private var planWeatherError: String?
+
     let planId: String
 
     // MARK: - Initialization
@@ -76,6 +81,7 @@ struct TravelPlanDetailView: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         planInfoCard(plan: plan)
+                        planWeatherSection
                         budgetButton(plan: plan)
                         daySelectionTabs(plan: plan)
                         scheduleSection(plan: plan)
@@ -105,6 +111,9 @@ struct TravelPlanDetailView: View {
                 }
                 .environmentObject(viewModel)
             }
+        }
+        .onAppear {
+            fetchPlanWeather()
         }
     }
 
@@ -324,6 +333,38 @@ struct TravelPlanDetailView: View {
         .cornerRadius(15)
     }
 
+    // MARK: - Weather Section
+    @ViewBuilder
+    private var planWeatherSection: some View {
+        if #available(iOS 16.0, *) {
+            if let plan = currentPlan, plan.latitude != nil && plan.longitude != nil {
+                VStack(alignment: .leading, spacing: 15) {
+                    HStack {
+                        Image(systemName: "cloud.sun.fill")
+                            .foregroundColor(.orange)
+                            .font(.title2)
+                        Text("目的地の天気")
+                            .font(.title2)
+                            .fontWeight(.bold)
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                        Spacer()
+                    }
+
+                    if isLoadingPlanWeather {
+                        WeatherLoadingView()
+                    } else if let error = planWeatherError {
+                        WeatherErrorView(error: error)
+                    } else if let weather = planWeather {
+                        WeatherCardView(weather: weather, dayNumber: nil)
+                    }
+                }
+                .padding()
+                .background(Color.white.opacity(0.2))
+                .cornerRadius(15)
+            }
+        }
+    }
+
     // MARK: - Packing List Section
     private func packingListSection(plan: TravelPlan) -> some View {
         VStack(alignment: .leading, spacing: 15) {
@@ -380,6 +421,43 @@ struct TravelPlanDetailView: View {
         let formatter = DateFormatter.japanese
         formatter.dateFormat = "M/d HH:mm"
         return formatter.string(from: date)
+    }
+
+    // MARK: - Weather Fetching
+    private func fetchPlanWeather() {
+        guard #available(iOS 16.0, *) else { return }
+
+        guard let plan = currentPlan,
+              let latitude = plan.latitude,
+              let longitude = plan.longitude else {
+            planWeather = nil
+            isLoadingPlanWeather = false
+            planWeatherError = nil
+            return
+        }
+
+        isLoadingPlanWeather = true
+        planWeatherError = nil
+
+        Task {
+            do {
+                let fetchedWeather = try await WeatherService.shared.fetchDayWeather(
+                    latitude: latitude,
+                    longitude: longitude,
+                    date: plan.startDate
+                )
+
+                await MainActor.run {
+                    self.planWeather = fetchedWeather
+                    self.isLoadingPlanWeather = false
+                }
+            } catch {
+                await MainActor.run {
+                    self.planWeatherError = error.localizedDescription
+                    self.isLoadingPlanWeather = false
+                }
+            }
+        }
     }
 }
 
