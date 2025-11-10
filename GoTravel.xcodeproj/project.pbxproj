@@ -39,9 +39,22 @@
 		6C713E572E80F8270072D26B /* GoTravelUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GoTravelUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
+/* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
+		6C5484A72EC1CA3F004B085C /* Exceptions for "GoTravel" folder in "GoTravel" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 6C713E3F2E80F8240072D26B /* GoTravel */;
+		};
+/* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
+
 /* Begin PBXFileSystemSynchronizedRootGroup section */
 		6C713E422E80F8240072D26B /* GoTravel */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				6C5484A72EC1CA3F004B085C /* Exceptions for "GoTravel" folder in "GoTravel" target */,
+			);
 			path = GoTravel;
 			sourceTree = "<group>";
 		};
@@ -426,6 +439,7 @@
 				DEVELOPMENT_TEAM = S698QDGA49;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = GoTravel/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Travory;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.travel";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "訪問した場所を記録するために位置情報を使用します";
@@ -463,6 +477,7 @@
 				DEVELOPMENT_TEAM = S698QDGA49;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = GoTravel/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Travory;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.travel";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "訪問した場所を記録するために位置情報を使用します";

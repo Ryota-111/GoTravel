@@ -318,33 +318,6 @@ enum WeatherError: LocalizedError {
             #else
             return """
             WeatherKit 認証エラー（実機）
-
-            実機で実行しているにも関わらずこのエラーが発生しています。
-            以下を確認してください：
-
-            1. Apple Developer Portal の確認：
-               • developer.apple.com にログイン
-               • Certificates, Identifiers & Profiles を選択
-               • Identifiers からこのアプリの App ID を選択
-               • WeatherKit capability が有効になっているか確認
-
-            2. Xcode の確認：
-               • プロジェクトの Signing & Capabilities タブを開く
-               • + Capability ボタンで WeatherKit が追加されているか確認
-               • Provisioning Profile が最新か確認（古い場合は削除して再生成）
-
-            3. クリーンビルド：
-               • Product > Clean Build Folder (Shift + Command + K)
-               • 再度ビルド＆実行
-
-            4. Bundle ID の確認：
-               • Xcode の Bundle Identifier が Developer Portal の App ID と一致しているか確認
-
-            それでも解決しない場合：
-            • Apple Developer Support に問い合わせ
-            • 24-48時間待ってから再試行（設定が反映されるまで時間がかかる場合があります）
-
-            エラー詳細: \(message)
             """
             #endif
         case .unknownError(let error):
