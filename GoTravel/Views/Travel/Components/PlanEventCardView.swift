@@ -77,10 +77,7 @@ struct PlanEventCardView: View {
             RoundedRectangle(cornerRadius: 15)
                 .stroke(
                     LinearGradient(
-                        gradient: Gradient(colors: [
-                            .orange.opacity(0.5),
-                            .orange.opacity(0.2)
-                        ]),
+                        gradient: Gradient(colors: plan.planType == .daily ? [.orange.opacity(0.5), .orange.opacity(0.2)] : [.blue.opacity(0.5), .blue.opacity(0.2)]),
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
@@ -88,10 +85,9 @@ struct PlanEventCardView: View {
                 )
         )
         .shadow(
-            color: .orange.opacity(0.5),
+            color: plan.planType == .daily ? .orange.opacity(0.5) : .blue.opacity(0.5),
             radius: 10
         )
-//        .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
     }
 
     private func dateString(_ d: Date) -> String {
