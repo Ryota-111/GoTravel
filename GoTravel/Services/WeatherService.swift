@@ -1,13 +1,27 @@
 import Foundation
 import WeatherKit
 import CoreLocation
+import Network
 
 @available(iOS 16.0, *)
 final class WeatherService {
     static let shared = WeatherService()
     private let service = WeatherKit.WeatherService()
+    private let networkMonitor = NWPathMonitor()
+    private let monitorQueue = DispatchQueue(label: "NetworkMonitor")
+    private var isNetworkAvailable = true
 
-    private init() {}
+    private init() {
+        // ネットワーク接続の監視を開始
+        networkMonitor.pathUpdateHandler = { [weak self] path in
+            self?.isNetworkAvailable = path.status == .satisfied
+        }
+        networkMonitor.start(queue: monitorQueue)
+    }
+
+    deinit {
+        networkMonitor.cancel()
+    }
 
     // MARK: - Weather Data Models
     struct DayWeather: Identifiable {
@@ -37,6 +51,11 @@ final class WeatherService {
     ///   - date: 予報を取得する日付
     /// - Returns: その日の天気情報
     func fetchDayWeather(latitude: Double, longitude: Double, date: Date) async throws -> DayWeather {
+        // ネットワーク接続チェック
+        guard isNetworkAvailable else {
+            throw WeatherError.networkError
+        }
+
         let location = CLLocation(latitude: latitude, longitude: longitude)
 
         do {
@@ -67,6 +86,12 @@ final class WeatherService {
                errorString.contains("authentication") {
                 throw WeatherError.authenticationError(errorString)
             }
+            // Check for network errors
+            if errorString.contains("network") ||
+               errorString.contains("No network route") ||
+               errorString.contains("NSURLErrorDomain") {
+                throw WeatherError.networkError
+            }
             throw WeatherError.unknownError(error)
         }
     }
@@ -79,6 +104,11 @@ final class WeatherService {
     ///   - endDate: 終了日
     /// - Returns: 期間中の天気予報の配列
     func fetchWeatherForTrip(latitude: Double, longitude: Double, startDate: Date, endDate: Date) async throws -> [DayWeather] {
+        // ネットワーク接続チェック
+        guard isNetworkAvailable else {
+            throw WeatherError.networkError
+        }
+
         let location = CLLocation(latitude: latitude, longitude: longitude)
 
         do {
@@ -105,6 +135,12 @@ final class WeatherService {
                errorString.contains("error 2") ||
                errorString.contains("authentication") {
                 throw WeatherError.authenticationError(errorString)
+            }
+            // Check for network errors
+            if errorString.contains("network") ||
+               errorString.contains("No network route") ||
+               errorString.contains("NSURLErrorDomain") {
+                throw WeatherError.networkError
             }
             throw WeatherError.unknownError(error)
         }
@@ -140,9 +176,35 @@ enum WeatherError: LocalizedError {
         case .locationNotAvailable:
             return "位置情報が利用できません"
         case .networkError:
-            return "ネットワークエラーが発生しました"
+            return """
+            ネットワーク接続エラー
+
+            インターネット接続を確認してください：
+            • Wi-Fi またはモバイルデータが有効か確認
+            • 機内モードが無効か確認
+            • VPN を使用している場合は一時的に無効化
+
+            シミュレータの場合：
+            • Mac のインターネット接続を確認
+            • シミュレータを再起動
+            """
         case .authenticationError(let message):
-            return "認証エラー: \(message)\n\nApple Developer Portalで以下を確認してください：\n1. App IDにWeatherKitが追加されているか\n2. プロビジョニングプロファイルが最新か\n3. 実機でテストしているか"
+            return """
+            WeatherKit 認証エラー
+
+            このエラーは Apple Developer Portal の設定不足が原因です：
+
+            1. developer.apple.com にアクセス
+            2. Certificates, Identifiers & Profiles を選択
+            3. Identifiers から App ID を選択
+            4. WeatherKit capability を有効化
+            5. Provisioning Profile を再生成
+
+            重要：WeatherKit はシミュレータでは制限があります。
+            実機でテストしてください。
+
+            エラー詳細: \(message)
+            """
         case .unknownError(let error):
             return "エラーが発生しました: \(error.localizedDescription)"
         }
