@@ -476,6 +476,9 @@ struct TravelPlanDetailView: View {
         planWeatherError = nil
 
         Task { @MainActor in
+            // WeatherKitの準備が完了するまで少し待機
+            try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
+
             do {
                 let fetchedWeather = try await WeatherService.shared.fetchDayWeather(
                     latitude: latitude,

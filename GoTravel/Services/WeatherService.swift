@@ -22,9 +22,8 @@ final class WeatherService {
         }
         networkMonitor.start(queue: monitorQueue)
 
-        #if DEBUG
-        logEnvironmentInfo()
-        #endif
+        // 環境診断はfetchメソッドの最初の呼び出し時に遅延実行
+        // これにより、WeatherKitの準備が完了してから診断が行われる
     }
 
     deinit {
@@ -114,6 +113,8 @@ final class WeatherService {
     /// - Returns: その日の天気情報
     func fetchDayWeather(latitude: Double, longitude: Double, date: Date) async throws -> DayWeather {
         #if DEBUG
+        // 環境診断を最初の呼び出し時に実行（WeatherKitの準備完了後）
+        logEnvironmentInfo()
         logWeatherRequest(latitude: latitude, longitude: longitude, date: date)
         #endif
 
