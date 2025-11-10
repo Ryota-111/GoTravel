@@ -39,25 +39,36 @@ final class WeatherService {
     func fetchDayWeather(latitude: Double, longitude: Double, date: Date) async throws -> DayWeather {
         let location = CLLocation(latitude: latitude, longitude: longitude)
 
-        // Get daily forecast
-        let forecast = try await service.weather(
-            for: location,
-            including: .daily(startDate: date, endDate: date)
-        )
+        do {
+            // Get daily forecast
+            let forecast = try await service.weather(
+                for: location,
+                including: .daily(startDate: date, endDate: date)
+            )
 
-        guard let dayWeather = forecast.first else {
-            throw WeatherError.noDataAvailable
+            guard let dayWeather = forecast.first else {
+                throw WeatherError.noDataAvailable
+            }
+
+            return DayWeather(
+                date: date,
+                condition: dayWeather.condition.description,
+                symbolName: dayWeather.symbolName,
+                highTemperature: dayWeather.highTemperature.value,
+                lowTemperature: dayWeather.lowTemperature.value,
+                precipitation: dayWeather.precipitationChance,
+                uvIndex: dayWeather.uvIndex.value
+            )
+        } catch {
+            // Check for authentication errors
+            let errorString = "\(error)"
+            if errorString.contains("WDSJWTAuthenticatorServiceListener") ||
+               errorString.contains("error 2") ||
+               errorString.contains("authentication") {
+                throw WeatherError.authenticationError(errorString)
+            }
+            throw WeatherError.unknownError(error)
         }
-
-        return DayWeather(
-            date: date,
-            condition: dayWeather.condition.description,
-            symbolName: dayWeather.symbolName,
-            highTemperature: dayWeather.highTemperature.value,
-            lowTemperature: dayWeather.lowTemperature.value,
-            precipitation: dayWeather.precipitationChance,
-            uvIndex: dayWeather.uvIndex.value
-        )
     }
 
     /// TravelPlanの目的地の天気予報を取得（開始日から終了日まで）
@@ -70,21 +81,32 @@ final class WeatherService {
     func fetchWeatherForTrip(latitude: Double, longitude: Double, startDate: Date, endDate: Date) async throws -> [DayWeather] {
         let location = CLLocation(latitude: latitude, longitude: longitude)
 
-        let forecast = try await service.weather(
-            for: location,
-            including: .daily(startDate: startDate, endDate: endDate)
-        )
-
-        return forecast.map { dayWeather in
-            DayWeather(
-                date: dayWeather.date,
-                condition: dayWeather.condition.description,
-                symbolName: dayWeather.symbolName,
-                highTemperature: dayWeather.highTemperature.value,
-                lowTemperature: dayWeather.lowTemperature.value,
-                precipitation: dayWeather.precipitationChance,
-                uvIndex: dayWeather.uvIndex.value
+        do {
+            let forecast = try await service.weather(
+                for: location,
+                including: .daily(startDate: startDate, endDate: endDate)
             )
+
+            return forecast.map { dayWeather in
+                DayWeather(
+                    date: dayWeather.date,
+                    condition: dayWeather.condition.description,
+                    symbolName: dayWeather.symbolName,
+                    highTemperature: dayWeather.highTemperature.value,
+                    lowTemperature: dayWeather.lowTemperature.value,
+                    precipitation: dayWeather.precipitationChance,
+                    uvIndex: dayWeather.uvIndex.value
+                )
+            }
+        } catch {
+            // Check for authentication errors
+            let errorString = "\(error)"
+            if errorString.contains("WDSJWTAuthenticatorServiceListener") ||
+               errorString.contains("error 2") ||
+               errorString.contains("authentication") {
+                throw WeatherError.authenticationError(errorString)
+            }
+            throw WeatherError.unknownError(error)
         }
     }
 
@@ -108,6 +130,8 @@ enum WeatherError: LocalizedError {
     case noDataAvailable
     case locationNotAvailable
     case networkError
+    case authenticationError(String)
+    case unknownError(Error)
 
     var errorDescription: String? {
         switch self {
@@ -117,6 +141,10 @@ enum WeatherError: LocalizedError {
             return "位置情報が利用できません"
         case .networkError:
             return "ネットワークエラーが発生しました"
+        case .authenticationError(let message):
+            return "認証エラー: \(message)\n\nApple Developer Portalで以下を確認してください：\n1. App IDにWeatherKitが追加されているか\n2. プロビジョニングプロファイルが最新か\n3. 実機でテストしているか"
+        case .unknownError(let error):
+            return "エラーが発生しました: \(error.localizedDescription)"
         }
     }
 }
