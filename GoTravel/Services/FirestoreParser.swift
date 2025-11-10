@@ -13,6 +13,8 @@ struct FirestoreParser {
         let destination = d["destination"] as? String ?? ""
         let localImageFileName = d["localImageFileName"] as? String
         let userId = d["userId"] as? String
+        let latitude = d["latitude"] as? Double
+        let longitude = d["longitude"] as? Double
 
         var startDate = Date()
         if let ts = d["startDate"] as? Timestamp { startDate = ts.dateValue() }
@@ -48,12 +50,24 @@ struct FirestoreParser {
         var updatedAt = Date()
         if let ts = d["updatedAt"] as? Timestamp { updatedAt = ts.dateValue() }
 
+        #if DEBUG
+        print("📖 [Firestore] Parsing travel plan (QueryDocumentSnapshot):")
+        print("   Destination: \(destination)")
+        if let lat = latitude, let lon = longitude {
+            print("   Parsed coordinates: (\(lat), \(lon))")
+        } else {
+            print("   Parsed coordinates: nil")
+        }
+        #endif
+
         return TravelPlan(
             id: id,
             title: title,
             startDate: startDate,
             endDate: endDate,
             destination: destination,
+            latitude: latitude,
+            longitude: longitude,
             localImageFileName: localImageFileName,
             cardColor: cardColor,
             createdAt: createdAt,
@@ -77,6 +91,8 @@ struct FirestoreParser {
         let destination = d["destination"] as? String ?? ""
         let localImageFileName = d["localImageFileName"] as? String
         let userId = d["userId"] as? String
+        let latitude = d["latitude"] as? Double
+        let longitude = d["longitude"] as? Double
 
         var startDate = Date()
         if let ts = d["startDate"] as? Timestamp { startDate = ts.dateValue() }
@@ -112,12 +128,24 @@ struct FirestoreParser {
         var updatedAt = Date()
         if let ts = d["updatedAt"] as? Timestamp { updatedAt = ts.dateValue() }
 
+        #if DEBUG
+        print("📖 [Firestore] Parsing travel plan (DocumentSnapshot):")
+        print("   Destination: \(destination)")
+        if let lat = latitude, let lon = longitude {
+            print("   Parsed coordinates: (\(lat), \(lon))")
+        } else {
+            print("   Parsed coordinates: nil")
+        }
+        #endif
+
         return TravelPlan(
             id: id,
             title: title,
             startDate: startDate,
             endDate: endDate,
             destination: destination,
+            latitude: latitude,
+            longitude: longitude,
             localImageFileName: localImageFileName,
             cardColor: cardColor,
             createdAt: createdAt,

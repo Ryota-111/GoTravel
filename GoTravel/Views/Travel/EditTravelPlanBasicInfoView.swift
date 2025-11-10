@@ -341,6 +341,17 @@ struct EditTravelPlanBasicInfoView: View {
     }
 
     private func saveUpdatedPlan(with fileName: String?) {
+        #if DEBUG
+        print("💾 [Edit] Updating travel plan:")
+        print("   Title: \(title)")
+        print("   Destination: \(destination)")
+        if let coord = destinationCoordinate {
+            print("   Coordinates: (\(coord.latitude), \(coord.longitude))")
+        } else {
+            print("   Coordinates: nil")
+        }
+        #endif
+
         var updatedPlan = plan
         updatedPlan.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         updatedPlan.destination = destination.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -349,6 +360,14 @@ struct EditTravelPlanBasicInfoView: View {
         updatedPlan.startDate = startDate
         updatedPlan.endDate = normalizedEndDate
         updatedPlan.localImageFileName = fileName
+
+        #if DEBUG
+        if let lat = updatedPlan.latitude, let lon = updatedPlan.longitude {
+            print("✅ [Edit] Updated plan with coordinates: (\(lat), \(lon))")
+        } else {
+            print("✅ [Edit] Updated plan without coordinates")
+        }
+        #endif
 
         viewModel.update(updatedPlan)
 
@@ -361,7 +380,15 @@ struct EditTravelPlanBasicInfoView: View {
     // MARK: - Location Search
     private func searchLocationCoordinate(for query: String) {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        #if DEBUG
+        print("🔍 [Edit] Searching location for: '\(trimmedQuery)'")
+        #endif
+
         guard !trimmedQuery.isEmpty else {
+            #if DEBUG
+            print("⚠️ [Edit] Empty query, clearing coordinates")
+            #endif
             destinationCoordinate = nil
             return
         }
@@ -371,13 +398,32 @@ struct EditTravelPlanBasicInfoView: View {
 
         let search = MKLocalSearch(request: searchRequest)
         search.start { response, error in
+            if let error = error {
+                #if DEBUG
+                print("❌ [Edit] Location search error: \(error.localizedDescription)")
+                #endif
+                return
+            }
+
             guard let response = response,
                   let firstItem = response.mapItems.first else {
+                #if DEBUG
+                print("❌ [Edit] No search results found for: '\(trimmedQuery)'")
+                #endif
                 return
             }
 
             let coordinate = firstItem.placemark.coordinate
-            destinationCoordinate = (coordinate.latitude, coordinate.longitude)
+            let foundLocation = (coordinate.latitude, coordinate.longitude)
+
+            #if DEBUG
+            print("✅ [Edit] Location found: \(firstItem.name ?? "Unknown")")
+            print("   Coordinates: (\(coordinate.latitude), \(coordinate.longitude))")
+            #endif
+
+            DispatchQueue.main.async {
+                destinationCoordinate = foundLocation
+            }
         }
     }
 }

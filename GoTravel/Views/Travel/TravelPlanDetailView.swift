@@ -337,20 +337,36 @@ struct TravelPlanDetailView: View {
     @ViewBuilder
     private var planWeatherSection: some View {
         if #available(iOS 16.0, *) {
-            if let plan = currentPlan, plan.latitude != nil && plan.longitude != nil {
-                VStack(alignment: .leading, spacing: 15) {
-                    HStack {
-                        Image(systemName: "cloud.sun.fill")
-                            .foregroundColor(.orange)
-                            .font(.title2)
-                        Text("目的地の天気")
-                            .font(.title2)
-                            .fontWeight(.bold)
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
-                        Spacer()
-                    }
+            VStack(alignment: .leading, spacing: 15) {
+                HStack {
+                    Image(systemName: "cloud.sun.fill")
+                        .foregroundColor(.orange)
+                        .font(.title2)
+                    Text("目的地の天気")
+                        .font(.title2)
+                        .fontWeight(.bold)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    Spacer()
+                }
 
-                    if isLoadingPlanWeather {
+                if let plan = currentPlan {
+                    if plan.latitude == nil || plan.longitude == nil {
+                        // 座標が設定されていない場合
+                        VStack(spacing: 10) {
+                            Image(systemName: "location.slash")
+                                .font(.system(size: 30))
+                                .foregroundColor(.orange.opacity(0.7))
+                            Text("目的地の座標が設定されていません")
+                                .font(.subheadline)
+                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                            Text("旅行プランを編集して目的地を入力してください")
+                                .font(.caption)
+                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .gray.opacity(0.8))
+                                .multilineTextAlignment(.center)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 20)
+                    } else if isLoadingPlanWeather {
                         WeatherLoadingView()
                     } else if let error = planWeatherError {
                         WeatherErrorView(error: error)
@@ -358,10 +374,10 @@ struct TravelPlanDetailView: View {
                         WeatherCardView(weather: weather, dayNumber: nil)
                     }
                 }
-                .padding()
-                .background(Color.white.opacity(0.2))
-                .cornerRadius(15)
             }
+            .padding()
+            .background(Color.white.opacity(0.2))
+            .cornerRadius(15)
         }
     }
 
@@ -425,21 +441,41 @@ struct TravelPlanDetailView: View {
 
     // MARK: - Weather Fetching
     private func fetchPlanWeather() {
-        guard #available(iOS 16.0, *) else { return }
+        guard #available(iOS 16.0, *) else {
+            #if DEBUG
+            print("⚠️ WeatherKit requires iOS 16.0 or later")
+            #endif
+            return
+        }
 
-        guard let plan = currentPlan,
-              let latitude = plan.latitude,
+        guard let plan = currentPlan else {
+            #if DEBUG
+            print("⚠️ No current plan found")
+            #endif
+            return
+        }
+
+        guard let latitude = plan.latitude,
               let longitude = plan.longitude else {
+            #if DEBUG
+            print("⚠️ Plan coordinates not set: latitude=\(plan.latitude?.description ?? "nil"), longitude=\(plan.longitude?.description ?? "nil")")
+            #endif
             planWeather = nil
             isLoadingPlanWeather = false
             planWeatherError = nil
             return
         }
 
+        #if DEBUG
+        print("✅ Starting weather fetch for: \(plan.destination)")
+        print("   Coordinates: (\(latitude), \(longitude))")
+        print("   Date: \(plan.startDate)")
+        #endif
+
         isLoadingPlanWeather = true
         planWeatherError = nil
 
-        Task {
+        Task { @MainActor in
             do {
                 let fetchedWeather = try await WeatherService.shared.fetchDayWeather(
                     latitude: latitude,
@@ -447,15 +483,19 @@ struct TravelPlanDetailView: View {
                     date: plan.startDate
                 )
 
-                await MainActor.run {
-                    self.planWeather = fetchedWeather
-                    self.isLoadingPlanWeather = false
-                }
+                #if DEBUG
+                print("✅ Weather fetched successfully: \(fetchedWeather.condition)")
+                #endif
+
+                self.planWeather = fetchedWeather
+                self.isLoadingPlanWeather = false
             } catch {
-                await MainActor.run {
-                    self.planWeatherError = error.localizedDescription
-                    self.isLoadingPlanWeather = false
-                }
+                #if DEBUG
+                print("❌ Weather fetch error: \(error.localizedDescription)")
+                #endif
+
+                self.planWeatherError = error.localizedDescription
+                self.isLoadingPlanWeather = false
             }
         }
     }

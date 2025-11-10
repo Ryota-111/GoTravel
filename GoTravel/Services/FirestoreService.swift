@@ -255,9 +255,21 @@ final class FirestoreService {
 
         if let localImageFileName = plan.localImageFileName { dict["localImageFileName"] = localImageFileName }
         if let colorHex = plan.cardColorHex { dict["cardColorHex"] = colorHex }
+        if let latitude = plan.latitude { dict["latitude"] = latitude }
+        if let longitude = plan.longitude { dict["longitude"] = longitude }
 
         dict["daySchedules"] = FirestoreSerializationHelper.serializeDaySchedules(plan.daySchedules)
         dict["packingItems"] = FirestoreSerializationHelper.serializePackingItems(plan.packingItems)
+
+        #if DEBUG
+        print("📝 [Firestore] Saving travel plan dict:")
+        print("   Destination: \(plan.destination)")
+        if let lat = dict["latitude"] as? Double, let lon = dict["longitude"] as? Double {
+            print("   Coordinates in dict: (\(lat), \(lon))")
+        } else {
+            print("   Coordinates in dict: nil")
+        }
+        #endif
 
         return dict
     }
