@@ -399,10 +399,19 @@ struct CalendarView: View {
         }
 
         let hasTravelPlans = travelViewModel.travelPlans.contains { travelPlan in
-            calendar.isDate(travelPlan.startDate, inSameDayAs: date)
+            isDateInTravelPlanRange(date: date, travelPlan: travelPlan)
         }
 
         return hasPlans || hasTravelPlans
+    }
+
+    // 指定日が旅行プランの範囲内かチェック
+    private func isDateInTravelPlanRange(date: Date, travelPlan: TravelPlan) -> Bool {
+        let startOfSelectedDate = calendar.startOfDay(for: date)
+        let startOfPlanStartDate = calendar.startOfDay(for: travelPlan.startDate)
+        let startOfPlanEndDate = calendar.startOfDay(for: travelPlan.endDate)
+
+        return startOfSelectedDate >= startOfPlanStartDate && startOfSelectedDate <= startOfPlanEndDate
     }
 
     // 指定日のイベントタイプのリストを取得
@@ -421,9 +430,9 @@ struct CalendarView: View {
         }
         eventTypes.append(contentsOf: outingPlans.map { _ in CalendarItemType.outingPlan })
 
-        // Travel plans
+        // Travel plans (期間中のすべての日に表示)
         let travelPlans = travelViewModel.travelPlans.filter { travelPlan in
-            calendar.isDate(travelPlan.startDate, inSameDayAs: date)
+            isDateInTravelPlanRange(date: date, travelPlan: travelPlan)
         }
         eventTypes.append(contentsOf: travelPlans.map { _ in CalendarItemType.travel })
 
