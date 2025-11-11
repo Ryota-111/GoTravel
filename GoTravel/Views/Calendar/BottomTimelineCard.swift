@@ -221,7 +221,7 @@ struct TimelineItemCard: View {
             // Card content
             VStack(alignment: .leading, spacing: 12) {
                 // Time badge
-                Text(formatTime(item.time))
+                Text(formatTimeOrDate(item.time, type: item.type))
                     .font(.caption.weight(.semibold))
                     .foregroundColor(itemColor)
                     .padding(.horizontal, 12)
@@ -313,6 +313,22 @@ struct TimelineItemCard: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "HH:mm"
         formatter.locale = Locale(identifier: "ja_JP")
+        return formatter.string(from: time)
+    }
+
+    private func formatTimeOrDate(_ time: Date, type: CalendarItemType) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+
+        switch type {
+        case .dailyPlan:
+            // 日常プランは時刻を表示
+            formatter.dateFormat = "HH:mm"
+        case .outingPlan, .travel:
+            // おでかけプランと旅行プランは日付を表示
+            formatter.dateFormat = "M月d日"
+        }
+
         return formatter.string(from: time)
     }
 }

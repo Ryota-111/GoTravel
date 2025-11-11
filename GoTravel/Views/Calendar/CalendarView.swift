@@ -163,7 +163,7 @@ struct CalendarView: View {
                 isDateInPlanRange(date: selectedDate, plan: plan)
             }
             .map { plan -> CalendarTimelineItem in
-                let time = plan.time ?? calendar.startOfDay(for: plan.startDate)
+                let time = plan.time ?? calendar.startOfDay(for: selectedDate)
                 let dateInfo = formatOutingDateInfo(plan: plan)
                 return CalendarTimelineItem(
                     time: time,
@@ -183,7 +183,7 @@ struct CalendarView: View {
             .map { travelPlan -> CalendarTimelineItem in
                 let dateInfo = formatTravelDateInfo(travelPlan: travelPlan)
                 return CalendarTimelineItem(
-                    time: travelPlan.startDate,
+                    time: selectedDate,
                     title: travelPlan.title,
                     subtitle: dateInfo,
                     type: .travel,
