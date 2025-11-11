@@ -353,7 +353,7 @@ struct CalendarView: View {
     private func calendarDayCell(date: Date) -> some View {
         let isSelected = calendar.isDate(date, inSameDayAs: selectedDate)
         let isToday = calendar.isDateInToday(date)
-        let hasEvents = hasEventsOn(date: date)
+        let eventTypes = getEventTypesForDate(date: date)
         let dayNumber = calendar.component(.day, from: date)
 
         return VStack(spacing: 4) {
@@ -374,10 +374,15 @@ struct CalendarView: View {
                     }
                 )
 
-            if hasEvents {
-                Circle()
-                    .fill(Color.orange)
-                    .frame(width: 4, height: 4)
+            // イベントインジケーター（イベントタイプごとに色分け）
+            if !eventTypes.isEmpty {
+                HStack(spacing: 2) {
+                    ForEach(eventTypes.prefix(3).indices, id: \.self) { index in
+                        Circle()
+                            .fill(colorForEventType(eventTypes[index]))
+                            .frame(width: 4, height: 4)
+                    }
+                }
             }
         }
         .contentShape(Rectangle())
@@ -398,6 +403,42 @@ struct CalendarView: View {
         }
 
         return hasPlans || hasTravelPlans
+    }
+
+    // 指定日のイベントタイプのリストを取得
+    private func getEventTypesForDate(date: Date) -> [CalendarItemType] {
+        var eventTypes: [CalendarItemType] = []
+
+        // Daily plans
+        let dailyPlans = viewModel.plans.filter { plan in
+            plan.planType == .daily && isDateInPlanRange(date: date, plan: plan)
+        }
+        eventTypes.append(contentsOf: dailyPlans.map { _ in CalendarItemType.dailyPlan })
+
+        // Outing plans
+        let outingPlans = viewModel.plans.filter { plan in
+            plan.planType == .outing && isDateInPlanRange(date: date, plan: plan)
+        }
+        eventTypes.append(contentsOf: outingPlans.map { _ in CalendarItemType.outingPlan })
+
+        // Travel plans
+        let travelPlans = travelViewModel.travelPlans.filter { travelPlan in
+            calendar.isDate(travelPlan.startDate, inSameDayAs: date)
+        }
+        eventTypes.append(contentsOf: travelPlans.map { _ in CalendarItemType.travel })
+
+        return eventTypes
+    }
+
+    private func colorForEventType(_ type: CalendarItemType) -> Color {
+        switch type {
+        case .dailyPlan:
+            return .orange
+        case .outingPlan:
+            return .blue
+        case .travel:
+            return .green
+        }
     }
 
 

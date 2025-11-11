@@ -475,7 +475,7 @@ struct PlaceDetailView: View {
                 }
             }) {
                 HStack(spacing: 8) {
-                    Image(systemName: showMap ? "map.slash.fill" : "map.fill")
+                    Image(systemName: showMap ? "mappin.slash" : "mappin")
                         .font(.body)
                     Text(showMap ? "閉じる" : "マップを開く")
                         .font(.subheadline.weight(.semibold))
