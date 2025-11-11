@@ -178,13 +178,14 @@ struct CalendarView: View {
         // Travel plan items
         let travelItems = travelViewModel.travelPlans
             .filter { travelPlan in
-                calendar.isDate(travelPlan.startDate, inSameDayAs: selectedDate)
+                isDateInTravelPlanRange(date: selectedDate, travelPlan: travelPlan)
             }
             .map { travelPlan -> CalendarTimelineItem in
-                CalendarTimelineItem(
+                let dateInfo = formatTravelDateInfo(travelPlan: travelPlan)
+                return CalendarTimelineItem(
                     time: travelPlan.startDate,
                     title: travelPlan.title,
-                    subtitle: "\(travelPlan.destination) - \(dateRangeString(travelPlan.startDate, travelPlan.endDate))",
+                    subtitle: dateInfo,
                     type: .travel,
                     relatedPlan: nil,
                     relatedTravelPlan: travelPlan
@@ -232,6 +233,23 @@ struct CalendarView: View {
         } else {
             let dayNumber = calendar.dateComponents([.day], from: plan.startDate, to: selectedDate).day ?? 0
             return "\(dayNumber + 1)日目 - \(dateRangeString(plan.startDate, plan.endDate))"
+        }
+    }
+
+    // 旅行プランの日付情報をフォーマット
+    private func formatTravelDateInfo(travelPlan: TravelPlan) -> String {
+        let isStartDate = calendar.isDate(travelPlan.startDate, inSameDayAs: selectedDate)
+        let isEndDate = calendar.isDate(travelPlan.endDate, inSameDayAs: selectedDate)
+
+        if isStartDate && isEndDate {
+            return "\(travelPlan.destination) - 日帰り旅行"
+        } else if isStartDate {
+            return "\(travelPlan.destination) - 出発日 (\(dateRangeString(travelPlan.startDate, travelPlan.endDate)))"
+        } else if isEndDate {
+            return "\(travelPlan.destination) - 最終日 (\(dateRangeString(travelPlan.startDate, travelPlan.endDate)))"
+        } else {
+            let dayNumber = calendar.dateComponents([.day], from: travelPlan.startDate, to: selectedDate).day ?? 0
+            return "\(travelPlan.destination) - \(dayNumber + 1)日目 (\(dateRangeString(travelPlan.startDate, travelPlan.endDate)))"
         }
     }
 
