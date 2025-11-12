@@ -168,13 +168,6 @@ final class WeatherService {
             print("   Error Type: \(type(of: error))")
             print("   Error Description: \(error)")
             print("   Localized Description: \(error.localizedDescription)")
-
-            // Try to extract more error details
-            if let nsError = error as? NSError {
-                print("   Domain: \(nsError.domain)")
-                print("   Code: \(nsError.code)")
-                print("   UserInfo: \(nsError.userInfo)")
-            }
             #endif
 
             // Check for authentication errors

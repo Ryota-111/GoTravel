@@ -238,24 +238,34 @@ struct ProfileMenuCard: View {
 struct ProfileEditView: View {
     @StateObject var vm: ProfileViewModel
     @Environment(\.presentationMode) var presentationMode
+    @Environment(\.colorScheme) var colorScheme
     @State private var showImagePicker = false
     @State private var showRemoveAvatarConfirm = false
-    
+    @State private var animateContent = false
+
     var body: some View {
         ZStack {
-//            Color.black.opacity(0.9).ignoresSafeArea()
-            
-            ScrollView {
-                VStack(spacing: 20) {
+            backgroundGradient
+
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 25) {
                     avatarSection
-                    
+
                     nameEmailEditSection
-                    
+
                     saveButton
                 }
-                .padding()
+                .padding(.horizontal)
+                .padding(.top, 20)
+                .padding(.bottom, 30)
             }
             .navigationTitle("プロフィール編集")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
+                animateContent = true
+            }
         }
         .sheet(isPresented: $showImagePicker) {
             PhotoPicker { image in
@@ -268,71 +278,238 @@ struct ProfileEditView: View {
             Button("削除", role: .destructive) { vm.removeAvatar() }
         }
     }
+
+    private var backgroundGradient: some View {
+        LinearGradient(
+            gradient: Gradient(colors: colorScheme == .dark ?
+                [.blue.opacity(0.7), .black] :
+                [.blue.opacity(0.6), .white.opacity(0.3)]),
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
+    }
     
     private var avatarSection: some View {
-        ZStack(alignment: .bottomTrailing) {
-            Group {
-                if let ui = vm.avatarImage {
-                    Image(uiImage: ui)
-                        .resizable()
-                        .scaledToFill()
-                } else {
-                    Image(systemName: "person.crop.circle.fill")
-                        .resizable()
-                        .scaledToFill()
-                        .foregroundColor(.white.opacity(0.3))
+        VStack(spacing: 15) {
+            ZStack(alignment: .bottomTrailing) {
+                Group {
+                    if let ui = vm.avatarImage {
+                        Image(uiImage: ui)
+                            .resizable()
+                            .scaledToFill()
+                    } else {
+                        ZStack {
+                            Circle()
+                                .fill(
+                                    LinearGradient(
+                                        gradient: Gradient(colors: [
+                                            Color.blue.opacity(0.6),
+                                            Color.purple.opacity(0.6)
+                                        ]),
+                                        startPoint: .topLeading,
+                                        endPoint: .bottomTrailing
+                                    )
+                                )
+
+                            Image(systemName: "person.fill")
+                                .font(.system(size: 60))
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                    }
                 }
-            }
-            .frame(width: 150, height: 150)
-            .clipShape(Circle())
-            .overlay(
-                Circle()
-                    .stroke(Color.white.opacity(0.3), lineWidth: 3)
-            )
-            .shadow(color: .black.opacity(0.3), radius: 10, x: 0, y: 5)
-            
-            Menu {
-                Button("写真を選択") { showImagePicker = true }
-                if vm.avatarImage != nil {
-                    Button("削除", role: .destructive) { showRemoveAvatarConfirm = true }
-                }
-            } label: {
-                ZStack {
+                .frame(width: 120, height: 120)
+                .clipShape(Circle())
+                .overlay(
                     Circle()
-                        .fill(Color.white.opacity(0.2))
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "pencil")
-                        .foregroundColor(.white)
-                        .font(.system(size: 16, weight: .semibold))
+                        .stroke(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color.white.opacity(0.5),
+                                    Color.white.opacity(0.2)
+                                ]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 3
+                        )
+                )
+                .shadow(color: .black.opacity(0.2), radius: 15, x: 0, y: 8)
+
+                Menu {
+                    Button("写真を選択") { showImagePicker = true }
+                    if vm.avatarImage != nil {
+                        Button("削除", role: .destructive) { showRemoveAvatarConfirm = true }
+                    }
+                } label: {
+                    ZStack {
+                        Circle()
+                            .fill(Color.blue.opacity(0.8))
+                            .frame(width: 36, height: 36)
+                        Image(systemName: "pencil")
+                            .foregroundColor(.white)
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .shadow(color: .blue.opacity(0.3), radius: 5, x: 0, y: 2)
                 }
+                .offset(x: -5, y: -5)
             }
-            .offset(x: -10, y: -10)
+
+            Text("プロフィール写真")
+                .font(.caption)
+                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
         }
-        .padding(.top, 20)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 20)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(
+                    colorScheme == .dark ?
+                        Color.white.opacity(0.1) :
+                        Color.white.opacity(0.2)
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.blue.opacity(0.3),
+                            Color.blue.opacity(0.1)
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        )
+        .shadow(color: Color.blue.opacity(0.2), radius: 10, x: 0, y: 5)
+        .opacity(animateContent ? 1 : 0)
+        .offset(y: animateContent ? 0 : -20)
+        .animation(.spring(response: 0.6, dampingFraction: 0.8), value: animateContent)
     }
     private var nameEmailEditSection: some View {
-        VStack(spacing: 15) {
-            TextField("名前", text: $vm.profile.name)
-                .textFieldStyle(CustomTextFieldStyle())
-            
-            TextField("メールアドレス", text: $vm.profile.email)
-                .textFieldStyle(CustomTextFieldStyle())
+        VStack(spacing: 20) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image(systemName: "person.fill")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                    Text("名前")
+                        .font(.caption.bold())
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                }
+
+                TextField("名前を入力", text: $vm.profile.name)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(
+                                colorScheme == .dark ?
+                                    Color.white.opacity(0.05) :
+                                    Color.white.opacity(0.5)
+                            )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                    )
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image(systemName: "envelope.fill")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                    Text("メールアドレス")
+                        .font(.caption.bold())
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                }
+
+                TextField("メールアドレスを入力", text: $vm.profile.email)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .padding()
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(
+                                colorScheme == .dark ?
+                                    Color.white.opacity(0.05) :
+                                    Color.white.opacity(0.5)
+                            )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                    )
+            }
         }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(
+                    colorScheme == .dark ?
+                        Color.white.opacity(0.1) :
+                        Color.white.opacity(0.2)
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.blue.opacity(0.3),
+                            Color.blue.opacity(0.1)
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        )
+        .shadow(color: Color.blue.opacity(0.2), radius: 10, x: 0, y: 5)
+        .opacity(animateContent ? 1 : 0)
+        .offset(y: animateContent ? 0 : 20)
+        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: animateContent)
     }
-    
+
     private var saveButton: some View {
         Button(action: {
             vm.saveProfile()
             presentationMode.wrappedValue.dismiss()
         }) {
-            Text("保存")
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding()
-                .background(Color.blue.opacity(0.5))
-                .cornerRadius(12)
+            HStack(spacing: 8) {
+                if vm.isSaving {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                } else {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.title3)
+                }
+
+                Text(vm.isSaving ? "保存中..." : "保存")
+                    .font(.headline)
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding()
+            .background(
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        Color.blue.opacity(0.8),
+                        Color.blue.opacity(0.6)
+                    ]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+            )
+            .cornerRadius(16)
+            .shadow(color: Color.blue.opacity(0.3), radius: 10, x: 0, y: 5)
         }
         .disabled(vm.isSaving)
+        .opacity(animateContent ? 1 : 0)
+        .offset(y: animateContent ? 0 : 20)
+        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.15), value: animateContent)
     }
 }
 
@@ -960,12 +1137,3 @@ struct TipRow: View {
     }
 }
 
-struct CustomTextFieldStyle: TextFieldStyle {
-    func _body(configuration: TextField<Self._Label>) -> some View {
-        configuration
-            .foregroundColor(.white)
-            .padding(10)
-            .background(Color.gray.opacity(0.7))
-            .cornerRadius(10)
-    }
-}
