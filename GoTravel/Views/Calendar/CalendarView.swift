@@ -28,8 +28,12 @@ struct CalendarView: View {
     @Environment(\.colorScheme) var colorScheme
     @Namespace private var animation
 
-    private let calendar = Calendar.current
-    private let daysOfWeek = ["日", "月", "火", "水", "木", "金", "土"]
+    private let calendar: Calendar = {
+        var cal = Calendar.current
+        cal.firstWeekday = 2  // 2 = 月曜日始まり (1 = 日曜日, 2 = 月曜日)
+        return cal
+    }()
+    private let daysOfWeek = ["月", "火", "水", "木", "金", "土", "日"]
 
     var body: some View {
         NavigationView {
@@ -261,23 +265,29 @@ struct CalendarView: View {
     }
 
     private var daysInMonth: [Date?] {
-        guard let monthInterval = calendar.dateInterval(of: .month, for: currentMonth),
-              let monthFirstWeek = calendar.dateInterval(of: .weekOfMonth, for: monthInterval.start) else {
+        guard let monthInterval = calendar.dateInterval(of: .month, for: currentMonth) else {
             return []
         }
 
         var days: [Date?] = []
-        var currentDate = monthFirstWeek.start
 
+        // 月の最初の日の曜日を取得
         let firstDayWeekday = calendar.component(.weekday, from: monthInterval.start)
-        for _ in 1..<firstDayWeekday {
+
+        // 月曜日始まりの場合のオフセット計算
+        // weekday: 1=日, 2=月, 3=火, ... 7=土
+        // 月曜始まりの場合: 月=0, 火=1, 水=2, 木=3, 金=4, 土=5, 日=6
+        let offset = (firstDayWeekday - calendar.firstWeekday + 7) % 7
+
+        // 空白セルを追加
+        for _ in 0..<offset {
             days.append(nil)
         }
 
+        // 月の日付を追加
+        var currentDate = monthInterval.start
         while currentDate < monthInterval.end {
-            if calendar.isDate(currentDate, equalTo: currentMonth, toGranularity: .month) {
-                days.append(currentDate)
-            }
+            days.append(currentDate)
             guard let nextDate = calendar.date(byAdding: .day, value: 1, to: currentDate) else { break }
             currentDate = nextDate
         }
