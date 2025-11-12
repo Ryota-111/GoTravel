@@ -922,16 +922,17 @@ struct UserGuideView: View {
                 "タグを設定して保存"
             ]
         ),
-        GuideSection(
-            title: "天気予報の確認",
-            icon: "cloud.sun",
-            color: .cyan,
-            steps: [
-                "旅行計画で目的地を設定",
-                "詳細画面で自動的に天気予報を表示",
-                "気温、降水確率、UV指数を確認"
-            ]
-        ),
+        // 天気予報機能は将来のアップデートで提供予定
+        // GuideSection(
+        //     title: "天気予報の確認",
+        //     icon: "cloud.sun",
+        //     color: .cyan,
+        //     steps: [
+        //         "旅行計画で目的地を設定",
+        //         "詳細画面で自動的に天気予報を表示",
+        //         "気温、降水確率、UV指数を確認"
+        //     ]
+        // ),
         GuideSection(
             title: "持ち物リスト",
             icon: "checklist",
@@ -1016,10 +1017,12 @@ struct UserGuideView: View {
             }
 
             VStack(alignment: .leading, spacing: 10) {
-                TipRow(icon: "star.fill", text: "目的地を入力すると自動的に座標が設定され、天気予報が表示されます", color: .orange)
+                // 天気予報機能は将来のアップデートで提供予定
+                // TipRow(icon: "star.fill", text: "目的地を入力すると自動的に座標が設定され、天気予報が表示されます", color: .orange)
                 TipRow(icon: "photo.fill", text: "写真を追加すると旅行の思い出を振り返りやすくなります", color: .blue)
                 TipRow(icon: "tag.fill", text: "タグを使って訪問済み場所を整理しましょう", color: .green)
                 TipRow(icon: "yensign.circle.fill", text: "スケジュールに費用を入力すると自動的に合計金額が計算されます", color: .cyan)
+                TipRow(icon: "map.fill", text: "マップから場所を探して旅行プランに追加できます", color: .orange)
             }
         }
         .padding()

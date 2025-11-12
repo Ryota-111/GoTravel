@@ -24,6 +24,9 @@ struct TravelPlanDetailView: View {
     @State private var isLoadingPlanWeather = false
     @State private var planWeatherError: String?
 
+    // Feature Flag: 将来のアップデート用に天気機能を無効化
+    private let isWeatherFeatureEnabled = false
+
     let planId: String
 
     // MARK: - Initialization
@@ -81,7 +84,12 @@ struct TravelPlanDetailView: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         planInfoCard(plan: plan)
-                        planWeatherSection
+
+                        // 天気機能は将来のアップデート用に一時的に無効化
+                        if isWeatherFeatureEnabled {
+                            planWeatherSection
+                        }
+
                         budgetButton(plan: plan)
                         daySelectionTabs(plan: plan)
                         scheduleSection(plan: plan)
@@ -113,7 +121,10 @@ struct TravelPlanDetailView: View {
             }
         }
         .onAppear {
-            fetchPlanWeather()
+            // 天気機能が有効な場合のみ天気を取得
+            if isWeatherFeatureEnabled {
+                fetchPlanWeather()
+            }
         }
     }
 

@@ -13,6 +13,7 @@ struct PlanDetailView: View {
     @State private var isSaving = false
     @State private var showAlert = false
     @State private var alertMessage = ""
+    @State private var showDeleteConfirmation = false
 
     // 編集用の一時変数
     @State private var editedTitle: String = ""
@@ -24,6 +25,7 @@ struct PlanDetailView: View {
     @State private var editedTime: Date?
 
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var viewModel: PlansViewModel
 
     var onUpdate: ((Plan) -> Void)?
@@ -130,6 +132,14 @@ struct PlanDetailView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text(alertMessage)
+        }
+        .alert("プランを削除", isPresented: $showDeleteConfirmation) {
+            Button("キャンセル", role: .cancel) {}
+            Button("削除", role: .destructive) {
+                deletePlan()
+            }
+        } message: {
+            Text("このプランを削除してもよろしいですか？この操作は取り消せません。")
         }
         .onChange(of: selectedImage) { oldValue, newValue in
             if newValue != nil {
@@ -447,6 +457,28 @@ struct PlanDetailView: View {
                     .disabled(isSaving || editedTitle.isEmpty)
                 }
                 .padding(.top, 10)
+
+                // Delete Button
+                Button(action: {
+                    showDeleteConfirmation = true
+                }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "trash.fill")
+                            .font(.body)
+                        Text("プランを削除")
+                            .font(.headline)
+                            .fontWeight(.semibold)
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(Color.red)
+                            .shadow(color: Color.red.opacity(0.3), radius: 8, x: 0, y: 4)
+                    )
+                }
+                .padding(.top, 20)
             }
             .padding(24)
         }
@@ -1058,6 +1090,20 @@ struct PlanDetailView: View {
         formatter.dateFormat = "HH:mm"
         formatter.locale = Locale(identifier: "ja_JP")
         return formatter.string(from: time)
+    }
+
+    // MARK: - Delete Function
+    private func deletePlan() {
+        // ローカル画像ファイルを削除
+        if let fileName = plan.localImageFileName {
+            try? FileManager.removeDocumentFile(named: fileName)
+        }
+
+        // ViewModelからプランを削除
+        viewModel.deletePlan(plan)
+
+        // 画面を閉じる
+        dismiss()
     }
 }
 
