@@ -80,6 +80,7 @@ struct LoginView: View {
             emailField
             passwordField
             signInButton
+            AppleAuthView()
         }
         .padding(.horizontal, 40)
     }
