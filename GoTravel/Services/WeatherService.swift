@@ -36,7 +36,7 @@ final class WeatherService {
         guard !hasLoggedEnvironment else { return }
         hasLoggedEnvironment = true
 
-        print("🔍 ========== WeatherKit Environment Diagnostics ==========")
+        print("========== WeatherKit Environment Diagnostics ==========")
 
         // 1. Device vs Simulator
         #if targetEnvironment(simulator)
