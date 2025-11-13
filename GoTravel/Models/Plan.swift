@@ -21,10 +21,11 @@ struct Plan: Identifiable, Codable, Equatable {
     var time: Date?
     var description: String?
     var linkURL: String?
+    var scheduleItems: [PlanScheduleItem] = [] // スケジュール項目（おでかけプラン用）
 
     enum CodingKeys: String, CodingKey {
         case id, title, startDate, endDate, places, cardColorHex, localImageFileName, userId, createdAt
-        case planType, time, description, linkURL
+        case planType, time, description, linkURL, scheduleItems
     }
 
     var cardColorHex: String? {
@@ -47,7 +48,8 @@ struct Plan: Identifiable, Codable, Equatable {
          planType: PlanType = .outing,
          time: Date? = nil,
          description: String? = nil,
-         linkURL: String? = nil) {
+         linkURL: String? = nil,
+         scheduleItems: [PlanScheduleItem] = []) {
         self.id = id
         self.title = title
         self.startDate = startDate
@@ -61,6 +63,7 @@ struct Plan: Identifiable, Codable, Equatable {
         self.time = time
         self.description = description
         self.linkURL = linkURL
+        self.scheduleItems = scheduleItems
     }
 
     init(from decoder: Decoder) throws {
@@ -77,6 +80,7 @@ struct Plan: Identifiable, Codable, Equatable {
         time = try container.decodeIfPresent(Date.self, forKey: .time)
         description = try container.decodeIfPresent(String.self, forKey: .description)
         linkURL = try container.decodeIfPresent(String.self, forKey: .linkURL)
+        scheduleItems = try container.decodeIfPresent([PlanScheduleItem].self, forKey: .scheduleItems) ?? []
         if let hex = try container.decodeIfPresent(String.self, forKey: .cardColorHex) {
             cardColor = Color(hex: hex)
         } else {
@@ -99,6 +103,7 @@ struct Plan: Identifiable, Codable, Equatable {
         try container.encodeIfPresent(time, forKey: .time)
         try container.encodeIfPresent(description, forKey: .description)
         try container.encodeIfPresent(linkURL, forKey: .linkURL)
+        try container.encode(scheduleItems, forKey: .scheduleItems)
     }
 }
 

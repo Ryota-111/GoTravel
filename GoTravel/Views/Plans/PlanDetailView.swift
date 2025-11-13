@@ -14,6 +14,8 @@ struct PlanDetailView: View {
     @State private var showAlert = false
     @State private var alertMessage = ""
     @State private var showDeleteConfirmation = false
+    @State private var showScheduleEditor = false
+    @State private var editingScheduleItem: PlanScheduleItem?
 
     // 編集用の一時変数
     @State private var editedTitle: String = ""
@@ -186,6 +188,11 @@ struct PlanDetailView: View {
                 // Link Section
                 if let linkURL = plan.linkURL, !linkURL.isEmpty {
                     linkSection(linkURL)
+                }
+
+                // Schedule Section (おでかけプランのみ)
+                if plan.planType == .outing {
+                    scheduleSection
                 }
 
                 // Action Buttons
@@ -797,6 +804,150 @@ struct PlanDetailView: View {
             insertion: .scale.combined(with: .opacity),
             removal: .scale.combined(with: .opacity)
         ))
+    }
+
+    // MARK: - Schedule Section
+    private var scheduleSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Image(systemName: "clock.fill")
+                    .font(.headline)
+                    .foregroundColor(planColor)
+                Text("スケジュール")
+                    .font(.headline.weight(.semibold))
+                    .foregroundColor(.primary)
+
+                Spacer()
+
+                Button(action: {
+                    editingScheduleItem = nil
+                    showScheduleEditor = true
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.body)
+                        Text("追加")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .foregroundColor(planColor)
+                }
+            }
+
+            if plan.scheduleItems.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "calendar.badge.clock")
+                        .font(.system(size: 40))
+                        .foregroundColor(.secondary.opacity(0.5))
+                    Text("スケジュールがまだありません")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 30)
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(Color(.tertiarySystemBackground))
+                )
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(sortedScheduleItems) { item in
+                        scheduleItemRow(item: item)
+                    }
+                }
+            }
+        }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.secondarySystemBackground))
+        )
+        .sheet(isPresented: $showScheduleEditor) {
+            ScheduleItemEditorView(
+                plan: $plan,
+                scheduleItem: editingScheduleItem,
+                onSave: { updatedPlan in
+                    plan = updatedPlan
+                    viewModel.update(updatedPlan)
+                }
+            )
+        }
+    }
+
+    private func scheduleItemRow(item: PlanScheduleItem) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            // Time
+            VStack(spacing: 2) {
+                Text(formatTime(item.time))
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(planColor)
+            }
+            .frame(width: 50)
+
+            // Content
+            VStack(alignment: .leading, spacing: 6) {
+                Text(item.title)
+                    .font(.body.weight(.semibold))
+                    .foregroundColor(.primary)
+
+                if let placeId = item.placeId,
+                   let place = plan.places.first(where: { $0.id == placeId }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.caption)
+                            .foregroundColor(planColor.opacity(0.7))
+                        Text(place.name)
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+
+                if let note = item.note, !note.isEmpty {
+                    Text(note)
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                        .lineLimit(2)
+                }
+            }
+
+            Spacer()
+
+            // Edit/Delete Buttons
+            Menu {
+                Button(action: {
+                    editingScheduleItem = item
+                    showScheduleEditor = true
+                }) {
+                    Label("編集", systemImage: "pencil")
+                }
+
+                Button(role: .destructive, action: {
+                    deleteScheduleItem(item)
+                }) {
+                    Label("削除", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.body)
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color(.tertiarySystemBackground))
+        )
+    }
+
+    private var sortedScheduleItems: [PlanScheduleItem] {
+        plan.scheduleItems.sorted { $0.time < $1.time }
+    }
+
+    private func deleteScheduleItem(_ item: PlanScheduleItem) {
+        var updatedPlan = plan
+        updatedPlan.scheduleItems.removeAll { $0.id == item.id }
+        plan = updatedPlan
+        viewModel.update(updatedPlan)
     }
 
     // MARK: - Places Section
