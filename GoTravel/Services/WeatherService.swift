@@ -27,7 +27,6 @@ final class WeatherService {
     private let networkMonitor = NWPathMonitor()
     private let monitorQueue = DispatchQueue(label: "NetworkMonitor")
     private var isNetworkAvailable = true
-    private var hasLoggedEnvironment = false
 
     private init() {
         // ネットワーク接続の監視を開始
@@ -35,68 +34,12 @@ final class WeatherService {
             self?.isNetworkAvailable = path.status == .satisfied
         }
         networkMonitor.start(queue: monitorQueue)
-
-        // 環境診断はfetchメソッドの最初の呼び出し時に遅延実行
-        // これにより、WeatherKitの準備が完了してから診断が行われる
     }
 
     deinit {
         networkMonitor.cancel()
     }
 
-    // MARK: - Diagnostic Methods
-    #if DEBUG
-    private func logEnvironmentInfo() {
-        guard !hasLoggedEnvironment else { return }
-        hasLoggedEnvironment = true
-
-        print("========== WeatherKit Environment Diagnostics ==========")
-
-        // 1. Device vs Simulator
-        #if targetEnvironment(simulator)
-        print("⚠️ RUNNING ON SIMULATOR - WeatherKit may have limitations")
-        #else
-        print("✅ RUNNING ON PHYSICAL DEVICE")
-        #endif
-
-        // 2. Bundle ID
-        if let bundleID = Bundle.main.bundleIdentifier {
-            print("📦 Bundle ID: \(bundleID)")
-        } else {
-            print("❌ Bundle ID: NOT FOUND")
-        }
-
-        // 3. Entitlements Check
-        if let entitlements = Bundle.main.object(forInfoDictionaryKey: "Entitlements") as? [String: Any] {
-            print("📜 Entitlements found: \(entitlements.keys.joined(separator: ", "))")
-            if let weatherKitEnabled = entitlements["com.apple.developer.weatherkit"] as? Bool {
-                print(weatherKitEnabled ? "✅ WeatherKit entitlement: ENABLED" : "❌ WeatherKit entitlement: DISABLED")
-            }
-        } else {
-            print("⚠️ Could not read entitlements from Info.plist")
-        }
-
-        // 4. iOS Version
-        #if canImport(UIKit)
-        let osVersion = UIDevice.current.systemVersion
-        print("📱 iOS Version: \(osVersion)")
-        #endif
-
-        // 5. Network Status
-        print("🌐 Network Available: \(isNetworkAvailable ? "YES" : "NO")")
-
-        print("==========================================================")
-    }
-
-    private func logWeatherRequest(latitude: Double, longitude: Double, date: Date) {
-        let formatter = ISO8601DateFormatter()
-        print("🌤️ WeatherKit Request:")
-        print("   Latitude: \(latitude)")
-        print("   Longitude: \(longitude)")
-        print("   Date: \(formatter.string(from: date))")
-        print("   Network Available: \(isNetworkAvailable)")
-    }
-    #endif
 
     // MARK: - Weather Data Models
     struct DayWeather: Identifiable {
@@ -134,67 +77,35 @@ final class WeatherService {
         let today = Date.todayInLocalTimezone
         let requestDate = date.startOfDayInLocalTimezone
 
-        #if DEBUG
-        // 環境診断を最初の呼び出し時に実行（WeatherKitの準備完了後）
-        logEnvironmentInfo()
-        logWeatherRequest(latitude: roundedLatitude, longitude: roundedLongitude, date: requestDate)
-        print("🕐 Local timezone: \(TimeZone.current.identifier)")
-        #endif
-
         // ネットワーク接続チェック
         guard isNetworkAvailable else {
-            #if DEBUG
-            print("❌ Network not available")
-            #endif
             throw WeatherError.networkError
         }
 
         // 座標の検証
         guard roundedLatitude >= -90 && roundedLatitude <= 90 else {
-            #if DEBUG
-            print("❌ Invalid latitude: \(roundedLatitude). Must be between -90 and 90.")
-            #endif
             throw WeatherError.invalidCoordinates
         }
 
         guard roundedLongitude >= -180 && roundedLongitude <= 180 else {
-            #if DEBUG
-            print("❌ Invalid longitude: \(roundedLongitude). Must be between -180 and 180.")
-            #endif
             throw WeatherError.invalidCoordinates
         }
 
         // 日付の差分を計算
         let daysUntilDate = Calendar.current.dateComponents([.day], from: today, to: requestDate).day ?? 0
 
-        #if DEBUG
-        print("📅 Days until requested date: \(daysUntilDate)")
-        print("   Today (local timezone): \(today)")
-        print("   Requested date (local timezone): \(requestDate)")
-        #endif
-
         // 過去の日付もチェック（過去90日まで取得可能）
         guard daysUntilDate >= -90 else {
-            #if DEBUG
-            print("⚠️ Requested date is too far in the past (<\(daysUntilDate) days). WeatherKit only provides historical data for 90 days.")
-            #endif
             throw WeatherError.dateTooFarInPast
         }
 
         guard daysUntilDate <= 10 else {
-            #if DEBUG
-            print("⚠️ Requested date is too far in the future (>\(daysUntilDate) days). WeatherKit only provides 10-day forecasts.")
-            #endif
             throw WeatherError.dateTooFarInFuture
         }
 
         let location = CLLocation(latitude: roundedLatitude, longitude: roundedLongitude)
 
         do {
-            #if DEBUG
-            print("📡 Sending request to WeatherKit API...")
-            #endif
-
             // Get daily forecast - 日付を指定せずに取得（今日から10日間）
             // 特定の日付を指定すると404エラーになることがあるため
             let forecast = try await service.weather(
@@ -202,31 +113,13 @@ final class WeatherService {
                 including: .daily
             )
 
-            #if DEBUG
-            print("✅ Received \(forecast.count) days of weather data")
-            #endif
-
             // 指定された日付の天気を抽出
             let calendar = Calendar.current
             guard let dayWeather = forecast.first(where: { weatherDay in
                 calendar.isDate(weatherDay.date, inSameDayAs: requestDate)
             }) else {
-                #if DEBUG
-                print("❌ No weather data for requested date: \(requestDate)")
-                print("   Available dates:")
-                forecast.forEach { day in
-                    print("   - \(day.date)")
-                }
-                #endif
                 throw WeatherError.noDataAvailable
             }
-
-            #if DEBUG
-            print("✅ Weather data received successfully")
-            print("   Condition: \(dayWeather.condition.description)")
-            print("   High: \(dayWeather.highTemperature.value)°C")
-            print("   Low: \(dayWeather.lowTemperature.value)°C")
-            #endif
 
             return DayWeather(
                 date: date,
@@ -238,37 +131,16 @@ final class WeatherService {
                 uvIndex: dayWeather.uvIndex.value
             )
         } catch {
-            #if DEBUG
-            print("❌ WeatherKit API Error:")
-            print("   Error Type: \(type(of: error))")
-            print("   Error Description: \(error)")
-            print("   Localized Description: \(error.localizedDescription)")
-            #endif
-
             // Check for authentication errors
             let errorString = "\(error)"
 
             // HTTP 404 - リソースが見つからない（座標が無効または天気データが利用できない場所）
             if errorString.contains("404") {
-                #if DEBUG
-                print("⚠️ HTTP 404 detected")
-                print("   This usually means:")
-                print("   1. Coordinates are invalid or out of range")
-                print("   2. Weather data not available for this location (e.g., ocean, polar regions)")
-                print("   3. Date is outside the valid range")
-                #endif
                 throw WeatherError.locationNotAvailable
             }
 
             // HTTP 400 with MISSING JWT
             if errorString.contains("400") || errorString.contains("MISSING JWT") {
-                #if DEBUG
-                print("⚠️ HTTP 400 / MISSING JWT detected")
-                print("   This usually means:")
-                print("   1. App is running on simulator (WeatherKit requires physical device)")
-                print("   2. Provisioning profile doesn't include WeatherKit entitlement")
-                print("   3. Bundle ID mismatch between app and Developer Portal")
-                #endif
                 throw WeatherError.authenticationError(errorString)
             }
 

@@ -479,35 +479,20 @@ struct TravelPlanDetailView: View {
     // MARK: - Weather Fetching
     private func fetchPlanWeather() {
         guard #available(iOS 16.0, *) else {
-            #if DEBUG
-            print("⚠️ WeatherKit requires iOS 16.0 or later")
-            #endif
             return
         }
 
         guard let plan = currentPlan else {
-            #if DEBUG
-            print("⚠️ No current plan found")
-            #endif
             return
         }
 
         guard let latitude = plan.latitude,
               let longitude = plan.longitude else {
-            #if DEBUG
-            print("⚠️ Plan coordinates not set: latitude=\(plan.latitude?.description ?? "nil"), longitude=\(plan.longitude?.description ?? "nil")")
-            #endif
             planWeather = nil
             isLoadingPlanWeather = false
             planWeatherError = nil
             return
         }
-
-        #if DEBUG
-        print("✅ Starting weather fetch for: \(plan.destination)")
-        print("   Coordinates: (\(latitude), \(longitude))")
-        print("   Date: \(plan.startDate)")
-        #endif
 
         isLoadingPlanWeather = true
         planWeatherError = nil
@@ -523,17 +508,9 @@ struct TravelPlanDetailView: View {
                     date: plan.startDate
                 )
 
-                #if DEBUG
-                print("✅ Weather fetched successfully: \(fetchedWeather.condition)")
-                #endif
-
                 self.planWeather = fetchedWeather
                 self.isLoadingPlanWeather = false
             } catch {
-                #if DEBUG
-                print("❌ Weather fetch error: \(error.localizedDescription)")
-                #endif
-
                 self.planWeatherError = error.localizedDescription
                 self.isLoadingPlanWeather = false
             }
