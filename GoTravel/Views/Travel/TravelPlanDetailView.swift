@@ -23,9 +23,7 @@ struct TravelPlanDetailView: View {
     @State private var planWeather: WeatherService.DayWeather?
     @State private var isLoadingPlanWeather = false
     @State private var planWeatherError: String?
-
-    // Feature Flag: WeatherKit機能を有効化
-    private let isWeatherFeatureEnabled = true
+    @State private var weatherAttribution: WeatherService.WeatherAttribution?
 
     let planId: String
 
@@ -84,12 +82,7 @@ struct TravelPlanDetailView: View {
                 ScrollView {
                     VStack(spacing: 20) {
                         planInfoCard(plan: plan)
-
-                        // 天気機能は将来のアップデート用に一時的に無効化
-                        if isWeatherFeatureEnabled {
-                            planWeatherSection
-                        }
-
+                        planWeatherSection
                         budgetButton(plan: plan)
                         daySelectionTabs(plan: plan)
                         scheduleSection(plan: plan)
@@ -121,40 +114,19 @@ struct TravelPlanDetailView: View {
             }
         }
         .onAppear {
-            // 天気機能が有効な場合のみ天気を取得
-            if isWeatherFeatureEnabled {
-                fetchPlanWeather()
-            }
+            fetchPlanWeather()
         }
     }
 
     private var navigationButtons: some View {
-        HStack(spacing: 15) {
-            // Share Button
-            if let plan = currentPlan {
-                Button(action: { showShareView = true }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: plan.isShared ? "person.2.fill" : "person.2")
-                            .foregroundColor(plan.isShared ? .green : .white)
-                            .imageScale(.large)
-                        if plan.isShared {
-                            Text("\(plan.sharedWith.count)")
-                                .font(.caption)
-                                .foregroundColor(.green)
-                        }
-                    }
-                }
-            }
-
-            // Edit Button
-            Button(action: { showBasicInfoEditor = true }) {
-                HStack {
-                    Image(systemName: "pencil")
-                        .foregroundColor(.white)
-                        .imageScale(.large)
-                    Text("編集")
-                        .foregroundColor(.black)
-                }
+        // Edit Button
+        Button(action: { showBasicInfoEditor = true }) {
+            HStack {
+                Image(systemName: "pencil")
+                    .foregroundColor(.white)
+                    .imageScale(.large)
+                Text("編集")
+                    .foregroundColor(.black)
             }
         }
     }
@@ -181,10 +153,33 @@ struct TravelPlanDetailView: View {
 
     private func planInfoCard(plan: TravelPlan) -> some View {
         VStack(spacing: 15) {
-            Text(plan.title)
-                .font(.title)
-                .fontWeight(.bold)
-                .foregroundColor(colorScheme == .dark ? .white : .black)
+            HStack {
+                Text(plan.title)
+                    .font(.title)
+                    .fontWeight(.bold)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+
+                Spacer()
+
+                // Share Button
+                Button(action: { showShareView = true }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: plan.isShared ? "person.2.fill" : "person.2")
+                            .foregroundColor(plan.isShared ? .green : .orange)
+                            .font(.title3)
+                        if plan.isShared {
+                            Text("\(plan.sharedWith.count)")
+                                .font(.caption)
+                                .fontWeight(.semibold)
+                                .foregroundColor(.green)
+                        }
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(Color.white.opacity(0.3))
+                    .cornerRadius(10)
+                }
+            }
 
             HStack(spacing: 20) {
                 destinationInfo(plan: plan)
@@ -348,14 +343,13 @@ struct TravelPlanDetailView: View {
     @ViewBuilder
     private var planWeatherSection: some View {
         if #available(iOS 16.0, *) {
-            VStack(alignment: .leading, spacing: 15) {
-                HStack {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 6) {
                     Image(systemName: "cloud.sun.fill")
                         .foregroundColor(.orange)
-                        .font(.title2)
+                        .font(.body)
                     Text("目的地の天気")
-                        .font(.title2)
-                        .fontWeight(.bold)
+                        .font(.headline)
                         .foregroundColor(colorScheme == .dark ? .white : .black)
                     Spacer()
                 }
@@ -363,58 +357,64 @@ struct TravelPlanDetailView: View {
                 if let plan = currentPlan {
                     if plan.latitude == nil || plan.longitude == nil {
                         // 座標が設定されていない場合
-                        VStack(spacing: 10) {
+                        HStack(spacing: 8) {
                             Image(systemName: "location.slash")
-                                .font(.system(size: 30))
+                                .font(.system(size: 20))
                                 .foregroundColor(.orange.opacity(0.7))
-                            Text("目的地の座標が設定されていません")
-                                .font(.subheadline)
-                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
-                            Text("旅行プランを編集して目的地を入力してください")
-                                .font(.caption)
-                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .gray.opacity(0.8))
-                                .multilineTextAlignment(.center)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text("目的地の座標が設定されていません")
+                                    .font(.caption)
+                                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                                Text("旅行プランを編集して目的地を入力してください")
+                                    .font(.caption2)
+                                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .gray.opacity(0.8))
+                            }
                         }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 20)
+                        .padding(.vertical, 12)
                     } else if isLoadingPlanWeather {
                         WeatherLoadingView()
                     } else if let error = planWeatherError {
                         WeatherErrorView(error: error)
                     } else if let weather = planWeather {
-                        VStack(spacing: 12) {
+                        VStack(spacing: 8) {
                             WeatherCardView(weather: weather, dayNumber: nil)
 
                             // Apple Weather Attribution (required by App Store Guidelines 5.2.5)
-                            VStack(spacing: 8) {
-                                // Apple Weather Trademark
-                                HStack(spacing: 4) {
-                                    Text(" Weather")
-                                        .font(.body)
-                                        .fontWeight(.medium)
-                                        .foregroundColor(.white)
-                                }
+                            if let attribution = weatherAttribution {
+                                HStack(spacing: 6) {
+                                    // Apple Weather Trademark (using squareMarkURL)
+                                    AsyncImage(url: attribution.squareMarkURL) { image in
+                                        image
+                                            .resizable()
+                                            .aspectRatio(contentMode: .fit)
+                                            .frame(height: 12)
+                                    } placeholder: {
+                                        ProgressView()
+                                            .controlSize(.mini)
+                                            .frame(height: 12)
+                                    }
 
-                                // Legal Attribution Link
-                                Link(destination: URL(string: "https://weatherkit.apple.com/legal-attribution.html")!) {
-                                    Text("データソースと法的情報")
-                                        .font(.caption)
-                                        .foregroundColor(.blue)
-                                        .underline()
+                                    // Legal Attribution Link
+                                    Link(destination: attribution.legalPageURL) {
+                                        Text("法的情報")
+                                            .font(.caption2)
+                                            .foregroundColor(.blue.opacity(0.8))
+                                    }
+
+                                    Spacer()
                                 }
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 6)
+                                .background(Color.white.opacity(0.08))
+                                .cornerRadius(6)
                             }
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 12)
-                            .padding(.horizontal, 16)
-                            .background(Color.white.opacity(0.15))
-                            .cornerRadius(10)
                         }
                     }
                 }
             }
-            .padding()
+            .padding(12)
             .background(Color.white.opacity(0.2))
-            .cornerRadius(15)
+            .cornerRadius(12)
         }
     }
 
@@ -491,6 +491,7 @@ struct TravelPlanDetailView: View {
             planWeather = nil
             isLoadingPlanWeather = false
             planWeatherError = nil
+            weatherAttribution = nil
             return
         }
 
@@ -502,13 +503,21 @@ struct TravelPlanDetailView: View {
             try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
 
             do {
+                // Fetch weather data
                 let fetchedWeather = try await WeatherService.shared.fetchDayWeather(
                     latitude: latitude,
                     longitude: longitude,
                     date: plan.startDate
                 )
 
+                // Fetch attribution
+                let fetchedAttribution = try await WeatherService.shared.getWeatherAttribution(
+                    latitude: latitude,
+                    longitude: longitude
+                )
+
                 self.planWeather = fetchedWeather
+                self.weatherAttribution = fetchedAttribution
                 self.isLoadingPlanWeather = false
             } catch {
                 self.planWeatherError = error.localizedDescription

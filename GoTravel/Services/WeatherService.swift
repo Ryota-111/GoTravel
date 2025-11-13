@@ -8,19 +8,15 @@ import UIKit
 
 // MARK: - Date Extension for Local Date
 extension Date {
-    /// ローカルタイムゾーンでの日付の開始時刻を取得（00:00:00）
-    /// WeatherKitのdaily forecastはローカルタイムゾーンでの日付の開始時刻を期待します
     var startOfDayInLocalTimezone: Date {
         return Calendar.current.startOfDay(for: self)
     }
 
-    /// ローカルタイムゾーンでの「今日」の開始時刻を取得
     static var todayInLocalTimezone: Date {
         return Calendar.current.startOfDay(for: Date())
     }
 }
 
-//@available(iOS 16.0, *)
 final class WeatherService {
     static let shared = WeatherService()
     private let service = WeatherKit.WeatherService()
@@ -29,7 +25,6 @@ final class WeatherService {
     private var isNetworkAvailable = true
 
     private init() {
-        // ネットワーク接続の監視を開始
         networkMonitor.pathUpdateHandler = { [weak self] path in
             self?.isNetworkAvailable = path.status == .satisfied
         }
@@ -61,28 +56,35 @@ final class WeatherService {
         }
     }
 
+    struct WeatherAttribution {
+        let squareMarkURL: URL
+        let legalPageURL: URL
+    }
+
+    // MARK: - Get Weather Attribution
+    /// WeatherKitの帰属情報（Apple Weather商標と法的リンク）を取得
+    /// App Store Guidelines 5.2.5 に準拠するため、天気データと共に表示が必要
+    func getWeatherAttribution(latitude: Double, longitude: Double) async throws -> WeatherAttribution {
+        // Attribution is a property on WeatherService itself
+        let attribution = try await service.attribution
+
+        return WeatherAttribution(
+            squareMarkURL: attribution.squareMarkURL,
+            legalPageURL: attribution.legalPageURL
+        )
+    }
+
     // MARK: - Fetch Daily Weather
-    /// 指定された座標と日付の天気予報を取得
-    /// - Parameters:
-    ///   - latitude: 緯度
-    ///   - longitude: 経度
-    ///   - date: 予報を取得する日付
-    /// - Returns: その日の天気情報
     func fetchDayWeather(latitude: Double, longitude: Double, date: Date) async throws -> DayWeather {
-        // 座標を小数点第6位までに丸める
         let roundedLatitude = round(latitude * 1000000) / 1000000
         let roundedLongitude = round(longitude * 1000000) / 1000000
-
-        // ローカルタイムゾーンでの日付を使用（UTC のズレを補正）
         let today = Date.todayInLocalTimezone
         let requestDate = date.startOfDayInLocalTimezone
 
-        // ネットワーク接続チェック
         guard isNetworkAvailable else {
             throw WeatherError.networkError
         }
 
-        // 座標の検証
         guard roundedLatitude >= -90 && roundedLatitude <= 90 else {
             throw WeatherError.invalidCoordinates
         }
