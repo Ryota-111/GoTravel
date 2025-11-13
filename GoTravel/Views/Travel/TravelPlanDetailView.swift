@@ -24,8 +24,8 @@ struct TravelPlanDetailView: View {
     @State private var isLoadingPlanWeather = false
     @State private var planWeatherError: String?
 
-    // Feature Flag: 将来のアップデート用に天気機能を無効化
-    private let isWeatherFeatureEnabled = false
+    // Feature Flag: WeatherKit機能を有効化
+    private let isWeatherFeatureEnabled = true
 
     let planId: String
 
@@ -382,7 +382,33 @@ struct TravelPlanDetailView: View {
                     } else if let error = planWeatherError {
                         WeatherErrorView(error: error)
                     } else if let weather = planWeather {
-                        WeatherCardView(weather: weather, dayNumber: nil)
+                        VStack(spacing: 12) {
+                            WeatherCardView(weather: weather, dayNumber: nil)
+
+                            // Apple Weather Attribution (required by App Store Guidelines 5.2.5)
+                            VStack(spacing: 8) {
+                                // Apple Weather Trademark
+                                HStack(spacing: 4) {
+                                    Text(" Weather")
+                                        .font(.body)
+                                        .fontWeight(.medium)
+                                        .foregroundColor(.white)
+                                }
+
+                                // Legal Attribution Link
+                                Link(destination: URL(string: "https://weatherkit.apple.com/legal-attribution.html")!) {
+                                    Text("データソースと法的情報")
+                                        .font(.caption)
+                                        .foregroundColor(.blue)
+                                        .underline()
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 12)
+                            .padding(.horizontal, 16)
+                            .background(Color.white.opacity(0.15))
+                            .cornerRadius(10)
+                        }
                     }
                 }
             }
