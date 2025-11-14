@@ -163,12 +163,11 @@ final class FirestoreService {
     }
 
     func deletePlannedPlace(place: PlannedPlace, completion: @escaping (Error?) -> Void) {
-        guard let uid = Auth.auth().currentUser?.uid,
-              let id = place.id else {
+        guard let uid = Auth.auth().currentUser?.uid else {
             completion(APIClientError.authenticationError)
             return
         }
-        plansCollectionRef(for: uid).document(id).delete { err in
+        plansCollectionRef(for: uid).document(place.id).delete { err in
             completion(err)
         }
     }
@@ -442,6 +441,9 @@ final class FirestoreService {
         if let description = planToSave.description { dict["description"] = description }
         if let linkURL = planToSave.linkURL { dict["linkURL"] = linkURL }
 
+        // Serialize schedule items
+        dict["scheduleItems"] = serializePlanScheduleItems(planToSave.scheduleItems)
+
         docRef.setData(dict) { err in
             DispatchQueue.main.async {
                 if let err = err {
@@ -577,13 +579,26 @@ final class FirestoreService {
     private func serializePlaces(_ places: [PlannedPlace]) -> [[String: Any]] {
         places.map { place in
             var placeDict: [String: Any] = [
+                "id": place.id,
                 "name": place.name,
                 "latitude": place.latitude,
                 "longitude": place.longitude
             ]
             if let address = place.address { placeDict["address"] = address }
-            if let id = place.id { placeDict["id"] = id }
             return placeDict
+        }
+    }
+
+    private func serializePlanScheduleItems(_ scheduleItems: [PlanScheduleItem]) -> [[String: Any]] {
+        scheduleItems.map { item in
+            var itemDict: [String: Any] = [
+                "id": item.id,
+                "time": Timestamp(date: item.time),
+                "title": item.title
+            ]
+            if let placeId = item.placeId { itemDict["placeId"] = placeId }
+            if let note = item.note { itemDict["note"] = note }
+            return itemDict
         }
     }
 
@@ -766,6 +781,11 @@ final class FirestoreService {
         let description = d["description"] as? String
         let linkURL = d["linkURL"] as? String
 
+        var scheduleItems: [PlanScheduleItem] = []
+        if let scheduleItemsArray = d["scheduleItems"] as? [[String: Any]] {
+            scheduleItems = scheduleItemsArray.compactMap { parsePlanScheduleItem(from: $0) }
+        }
+
         return Plan(
             id: id,
             title: title,
@@ -779,7 +799,8 @@ final class FirestoreService {
             planType: planType,
             time: time,
             description: description,
-            linkURL: linkURL
+            linkURL: linkURL,
+            scheduleItems: scheduleItems
         )
     }
 
@@ -790,13 +811,31 @@ final class FirestoreService {
             return nil
         }
         let address = placeDict["address"] as? String
-        let placeId = placeDict["id"] as? String
+        let placeId = placeDict["id"] as? String ?? UUID().uuidString
         return PlannedPlace(
             id: placeId,
             name: name,
             latitude: latitude,
             longitude: longitude,
             address: address
+        )
+    }
+
+    private func parsePlanScheduleItem(from itemDict: [String: Any]) -> PlanScheduleItem? {
+        guard let id = itemDict["id"] as? String,
+              let timeTimestamp = itemDict["time"] as? Timestamp,
+              let title = itemDict["title"] as? String else {
+            return nil
+        }
+        let placeId = itemDict["placeId"] as? String
+        let note = itemDict["note"] as? String
+
+        return PlanScheduleItem(
+            id: id,
+            time: timeTimestamp.dateValue(),
+            title: title,
+            placeId: placeId,
+            note: note
         )
     }
 }

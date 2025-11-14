@@ -62,10 +62,7 @@ final class WeatherService {
     }
 
     // MARK: - Get Weather Attribution
-    /// WeatherKitの帰属情報（Apple Weather商標と法的リンク）を取得
-    /// App Store Guidelines 5.2.5 に準拠するため、天気データと共に表示が必要
     func getWeatherAttribution(latitude: Double, longitude: Double) async throws -> WeatherAttribution {
-        // Attribution is a property on WeatherService itself
         let attribution = try await service.attribution
 
         return WeatherAttribution(
@@ -93,10 +90,8 @@ final class WeatherService {
             throw WeatherError.invalidCoordinates
         }
 
-        // 日付の差分を計算
         let daysUntilDate = Calendar.current.dateComponents([.day], from: today, to: requestDate).day ?? 0
 
-        // 過去の日付もチェック（過去90日まで取得可能）
         guard daysUntilDate >= -90 else {
             throw WeatherError.dateTooFarInPast
         }
@@ -108,14 +103,11 @@ final class WeatherService {
         let location = CLLocation(latitude: roundedLatitude, longitude: roundedLongitude)
 
         do {
-            // Get daily forecast - 日付を指定せずに取得（今日から10日間）
-            // 特定の日付を指定すると404エラーになることがあるため
             let forecast = try await service.weather(
                 for: location,
                 including: .daily
             )
 
-            // 指定された日付の天気を抽出
             let calendar = Calendar.current
             guard let dayWeather = forecast.first(where: { weatherDay in
                 calendar.isDate(weatherDay.date, inSameDayAs: requestDate)

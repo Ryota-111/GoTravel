@@ -222,22 +222,6 @@ struct EnjoyWorldView: View {
         .padding(.top, 10)
     }
 
-//    private var titleSection: some View {
-//        HStack {
-//            Text("旅行計画")
-//                .font(.title.weight(.bold))
-//            
-//            Spacer()
-//            
-//            NavigationLink(destination: ProfileView()) {
-//                Image(systemName: "person.crop.circle")
-//                    .font(.system(size: 30))
-//                    .foregroundColor(.black)
-//            }
-//        }
-//        .padding(.horizontal, 20)
-//    }
-
     private var tabSelectionSection: some View {
         HStack(spacing: 8) {
             ForEach(TabType.allCases) { tab in
@@ -543,10 +527,10 @@ struct EnjoyWorldView: View {
 // MARK: - Tab Type
 extension EnjoyWorldView {
     enum TabType: String, CaseIterable, Identifiable {
-        case all = "All"
-        case ongoing = "Ongoing"
-        case upcoming = "Upcoming"
-        case past = "Past"
+        case all = "すべて"
+        case ongoing = "進行中"
+        case upcoming = "今後の旅行"
+        case past = "過去の旅行"
 
         var id: String { rawValue }
 
@@ -554,7 +538,7 @@ extension EnjoyWorldView {
     }
 
     enum PlanTabType: String, CaseIterable, Identifiable {
-        case all = "All"
+        case all = "すべて"
         case goingout = "おでかけ"
         case everyday = "日常"
 

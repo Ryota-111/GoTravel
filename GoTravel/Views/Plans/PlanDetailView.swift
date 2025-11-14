@@ -25,6 +25,16 @@ struct PlanDetailView: View {
     @State private var editedStartDate: Date = Date()
     @State private var editedEndDate: Date = Date()
     @State private var editedTime: Date?
+    @State private var editedPlaces: [PlannedPlace] = []
+    @State private var showAddPlaceInEdit = false
+    @State private var mapPosition: MapCameraPosition = .region(MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
+        span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
+    ))
+    @State private var selectedMapResult: MKMapItem?
+    @State private var mapVisibleRegion: MKCoordinateRegion?
+    @State private var searchText: String = ""
+    @State private var searchResults: [MKMapItem] = []
 
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dismiss) private var dismiss
@@ -129,6 +139,9 @@ struct PlanDetailView: View {
         }
         .sheet(isPresented: $showImagePicker) {
             ImagePicker(image: $selectedImage)
+        }
+        .fullScreenCover(isPresented: $showAddPlaceInEdit) {
+            mapPickerView
         }
         .alert("エラー", isPresented: $showAlert) {
             Button("OK", role: .cancel) {}
@@ -402,30 +415,101 @@ struct PlanDetailView: View {
                 )
 
                 // Link Card
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("関連リンク")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(.secondary)
+                if editedPlanType == .daily {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("関連リンク")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.secondary)
 
-                    TextField("https://example.com", text: $editedLinkURL)
-                        .font(.body)
-                        .padding(12)
-                        .background(Color(.systemBackground))
-                        .cornerRadius(10)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color(.separator).opacity(0.5), lineWidth: 1)
-                        )
-                        .keyboardType(.URL)
-                        .autocapitalization(.none)
+                        TextField("https://example.com", text: $editedLinkURL)
+                            .font(.body)
+                            .padding(12)
+                            .background(Color(.systemBackground))
+                            .cornerRadius(10)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color(.separator).opacity(0.5), lineWidth: 1)
+                            )
+                            .keyboardType(.URL)
+                            .autocapitalization(.none)
+                    }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(.secondarySystemBackground))
+                            .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+                    )
                 }
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(Color(.secondarySystemBackground))
-                        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
-                )
+
+                // Places Card (おでかけプランのみ)
+                if editedPlanType == .outing {
+                    VStack(alignment: .leading, spacing: 8) {
+                        Text("訪問場所")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(.secondary)
+
+                        if editedPlaces.isEmpty {
+                            Text("まだ場所が追加されていません")
+                                .foregroundColor(.secondary)
+                                .padding()
+                                .frame(maxWidth: .infinity)
+                                .background(Color(.systemBackground))
+                                .cornerRadius(10)
+                        } else {
+                            ForEach(editedPlaces) { place in
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        Text(place.name)
+                                            .foregroundColor(.primary)
+                                        if let address = place.address {
+                                            Text(address)
+                                                .font(.caption)
+                                                .foregroundColor(.secondary)
+                                        }
+                                    }
+                                    Spacer()
+                                    Button(action: {
+                                        if let index = editedPlaces.firstIndex(where: { $0.id == place.id }) {
+                                            editedPlaces.remove(at: index)
+                                        }
+                                    }) {
+                                        Image(systemName: "trash")
+                                            .foregroundColor(.red)
+                                    }
+                                }
+                                .padding(12)
+                                .background(Color(.systemBackground))
+                                .cornerRadius(10)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .stroke(Color(.separator).opacity(0.5), lineWidth: 1)
+                                )
+                            }
+                        }
+
+                        Button(action: {
+                            showAddPlaceInEdit = true
+                        }) {
+                            HStack {
+                                Image(systemName: "plus.circle.fill")
+                                Text("場所を追加")
+                            }
+                            .foregroundColor(.white)
+                            .padding(12)
+                            .frame(maxWidth: .infinity)
+                            .background(Color.blue)
+                            .cornerRadius(10)
+                        }
+                    }
+                    .padding(16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 16)
+                            .fill(Color(.secondarySystemBackground))
+                            .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+                    )
+                }
 
                 // Action Buttons
                 HStack(spacing: 12) {
@@ -1110,6 +1194,7 @@ struct PlanDetailView: View {
         editedStartDate = plan.startDate
         editedEndDate = plan.endDate
         editedTime = plan.time
+        editedPlaces = plan.places
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             isEditMode = true
         }
@@ -1152,6 +1237,7 @@ struct PlanDetailView: View {
         updatedPlan.startDate = editedStartDate
         updatedPlan.endDate = editedEndDate
         updatedPlan.time = editedTime
+        updatedPlan.places = editedPlaces
         updatedPlan.localImageFileName = localFileName
 
         viewModel.update(updatedPlan)
@@ -1255,6 +1341,206 @@ struct PlanDetailView: View {
 
         // 画面を閉じる
         dismiss()
+    }
+
+    // MARK: - Map Picker View
+    private var mapPickerView: some View {
+        NavigationView {
+            ZStack {
+                Map(position: $mapPosition, selection: $selectedMapResult) {
+                    ForEach(searchResults, id: \.self) { result in
+                        Marker(item: result)
+                            .tint(.red)
+                    }
+                }
+                .safeAreaInset(edge: .top) {
+                    mapSearchBarView
+                }
+                .safeAreaInset(edge: .bottom) {
+                    if let selectedResult = selectedMapResult {
+                        mapSelectedResultDetailView(selectedResult)
+                    }
+                }
+                .onMapCameraChange { context in
+                    mapVisibleRegion = context.region
+                }
+            }
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("閉じる") {
+                        showAddPlaceInEdit = false
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Map Search Bar
+    private var mapSearchBarView: some View {
+        TextField("場所を検索", text: $searchText)
+            .textFieldStyle(.plain)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(Color(.systemBackground))
+            .cornerRadius(10)
+            .padding(.horizontal)
+            .padding(.vertical, 8)
+            .background(.ultraThinMaterial)
+            .onSubmit {
+                Task {
+                    await performMapSearch()
+                }
+            }
+    }
+
+    private func performMapSearch() async {
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = searchText
+        request.resultTypes = .pointOfInterest
+        request.region = mapVisibleRegion ?? MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
+            span: MKCoordinateSpan(latitudeDelta: 0.0125, longitudeDelta: 0.0125)
+        )
+
+        let search = MKLocalSearch(request: request)
+        do {
+            let response = try await search.start()
+            searchResults = response.mapItems
+            if let firstResult = searchResults.first {
+                withAnimation {
+                    mapPosition = .region(MKCoordinateRegion(
+                        center: firstResult.placemark.coordinate,
+                        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                    ))
+                }
+            }
+            searchText = ""
+        } catch {
+        }
+    }
+
+    // MARK: - Map Selected Result Detail View
+    private func mapSelectedResultDetailView(_ result: MKMapItem) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .top) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(result.name ?? "名称なし")
+                        .font(.title2)
+                        .fontWeight(.bold)
+
+                    if let category = result.pointOfInterestCategory?.rawValue {
+                        Text(category)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                Spacer()
+            }
+
+            if let address = result.placemark.title {
+                HStack(alignment: .top, spacing: 8) {
+                    Image(systemName: "mappin.circle.fill")
+                        .foregroundStyle(.red)
+                        .font(.title3)
+                    Text(address)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            if let phoneNumber = result.phoneNumber {
+                HStack(spacing: 8) {
+                    Image(systemName: "phone.circle.fill")
+                        .foregroundStyle(.green)
+                        .font(.title3)
+                    Text(phoneNumber)
+                        .font(.subheadline)
+                    Spacer()
+                    Button {
+                        if let url = URL(string: "tel:\(phoneNumber.replacingOccurrences(of: " ", with: ""))") {
+                            UIApplication.shared.open(url)
+                        }
+                    } label: {
+                        Text("電話")
+                            .font(.caption)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.green)
+                            .foregroundStyle(.white)
+                            .cornerRadius(8)
+                    }
+                }
+            }
+
+            if let url = result.url {
+                HStack(spacing: 8) {
+                    Image(systemName: "safari.fill")
+                        .foregroundStyle(.blue)
+                        .font(.title3)
+                    Text(url.host ?? "Website")
+                        .font(.subheadline)
+                        .lineLimit(1)
+                    Spacer()
+                    Button {
+                        UIApplication.shared.open(url)
+                    } label: {
+                        Text("開く")
+                            .font(.caption)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 6)
+                            .background(Color.blue)
+                            .foregroundStyle(.white)
+                            .cornerRadius(8)
+                    }
+                }
+            }
+
+            Divider()
+
+            HStack(spacing: 12) {
+                Button {
+                    result.openInMaps()
+                } label: {
+                    Label("経路", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.blue.opacity(0.1))
+                        .foregroundStyle(.blue)
+                        .cornerRadius(10)
+                }
+
+                Button {
+                    addPlaceFromMapResult(result)
+                } label: {
+                    Label("追加", systemImage: "plus.circle.fill")
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Color.orange.opacity(0.1))
+                        .foregroundStyle(.orange)
+                        .cornerRadius(10)
+                }
+            }
+        }
+        .padding(20)
+        .background(.ultraThinMaterial)
+        .cornerRadius(20)
+        .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: -4)
+        .padding(.horizontal)
+        .padding(.bottom, 12)
+    }
+
+    private func addPlaceFromMapResult(_ result: MKMapItem) {
+        let place = PlannedPlace(
+            name: result.name ?? "名称不明",
+            latitude: result.placemark.coordinate.latitude,
+            longitude: result.placemark.coordinate.longitude,
+            address: result.placemark.title
+        )
+        editedPlaces.append(place)
+        selectedMapResult = nil
+        showAddPlaceInEdit = false
     }
 }
 

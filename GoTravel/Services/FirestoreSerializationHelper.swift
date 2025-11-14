@@ -48,7 +48,7 @@ struct FirestoreSerializationHelper {
     static func serializePlaces(_ places: [PlannedPlace]) -> [[String: Any]] {
         places.map { place in
             var placeDict: [String: Any] = [
-                "id": place.id as Any,
+                "id": place.id,
                 "name": place.name,
                 "latitude": place.latitude,
                 "longitude": place.longitude
@@ -118,14 +118,14 @@ struct FirestoreSerializationHelper {
     }
 
     static func parsePlannedPlace(from placeDict: [String: Any]) -> PlannedPlace? {
-        guard let id = placeDict["id"] as? String,
-              let name = placeDict["name"] as? String,
+        guard let name = placeDict["name"] as? String,
               let latitude = placeDict["latitude"] as? Double,
               let longitude = placeDict["longitude"] as? Double else {
             return nil
         }
 
         let address = placeDict["address"] as? String
+        let id = placeDict["id"] as? String ?? UUID().uuidString
 
         return PlannedPlace(
             id: id,
