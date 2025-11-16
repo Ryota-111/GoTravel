@@ -3,6 +3,7 @@ import StoreKit
 
 struct ProfileView: View {
     @StateObject private var vm = ProfileViewModel()
+    @EnvironmentObject var authVM: AuthViewModel
     @Environment(\.colorScheme) var colorScheme
     @State private var animateCards = false
 
@@ -21,6 +22,8 @@ struct ProfileView: View {
                             accountCard
 
                             helpSupportCard
+
+                            // cloudKitTestCard // 開発用：必要時にコメント解除
                         }
                         .padding(.horizontal)
                     }
@@ -145,6 +148,21 @@ struct ProfileView: View {
         .opacity(animateCards ? 1 : 0)
         .offset(y: animateCards ? 0 : 20)
         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: animateCards)
+    }
+
+    // MARK: - CloudKit Test Card
+    private var cloudKitTestCard: some View {
+        NavigationLink(destination: CloudKitTestView()) {
+            ProfileMenuCard(
+                icon: "icloud.fill",
+                title: "CloudKit テスト",
+                subtitle: "iCloud接続確認、データ同期",
+                color: .purple
+            )
+        }
+        .opacity(animateCards ? 1 : 0)
+        .offset(y: animateCards ? 0 : 20)
+        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.25), value: animateCards)
     }
 
     // MARK: - Background

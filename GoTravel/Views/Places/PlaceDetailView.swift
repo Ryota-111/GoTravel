@@ -5,6 +5,7 @@ import PhotosUI
 struct PlaceDetailView: View {
     @State private var place: VisitedPlace
 
+    @EnvironmentObject var authVM: AuthViewModel
     @State private var showStreetView = false
     @State private var showMap = true
     @State private var lookAroundScene: MKLookAroundScene?
@@ -715,20 +716,28 @@ struct PlaceDetailView: View {
         updatedPlace.category = editedCategory
         updatedPlace.localPhotoFileName = localFileName
 
-        FirestoreService.shared.update(place: updatedPlace) { result in
-            DispatchQueue.main.async {
-                isSaving = false
+        Task {
+            guard let userId = authVM.userId else {
+                await MainActor.run {
+                    isSaving = false
+                }
+                return
+            }
 
-                switch result {
-                case .success(let savedPlace):
-                    place = savedPlace
+            do {
+                _ = try await CloudKitService.shared.saveVisitedPlace(updatedPlace, userId: userId, image: nil)
+                await MainActor.run {
+                    isSaving = false
+                    place = updatedPlace
                     selectedImage = nil
                     displayImage = loadImageFromLocal()
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                         isEditMode = false
                     }
-
-                case .failure(let error):
+                }
+            } catch {
+                await MainActor.run {
+                    isSaving = false
                     handleSaveError(error)
                 }
             }

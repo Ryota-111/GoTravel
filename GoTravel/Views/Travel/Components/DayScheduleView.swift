@@ -6,6 +6,7 @@ struct DayScheduleView: View {
     // MARK: - Properties
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var viewModel: TravelPlanViewModel
+    @EnvironmentObject var authVM: AuthViewModel
     let daySchedule: DaySchedule
     let plan: TravelPlan
     @State private var showScheduleEditor = false
@@ -143,6 +144,8 @@ struct DayScheduleView: View {
             updatedPlan.daySchedules[dayIndex].scheduleItems.removeAll(where: { $0.id == item.id })
         }
 
-        viewModel.update(updatedPlan)
+        if let userId = authVM.userId {
+            viewModel.update(updatedPlan, userId: userId)
+        }
     }
 }

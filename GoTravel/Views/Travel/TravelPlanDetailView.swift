@@ -13,6 +13,7 @@ struct TravelPlanDetailView: View {
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var viewModel: TravelPlanViewModel
+    @EnvironmentObject var authVM: AuthViewModel
     @State private var selectedDay: Int = 1
     @State private var showScheduleEditor = false
     @State private var showBasicInfoEditor = false
@@ -108,7 +109,9 @@ struct TravelPlanDetailView: View {
             if let currentPlan = currentPlan {
                 ShareTravelPlanView(plan: currentPlan) { shareCode in
                     // Update plan with share code
-                    viewModel.updateShareCode(planId: currentPlan.id ?? "", shareCode: shareCode)
+                    if let userId = authVM.userId {
+                        viewModel.updateShareCode(planId: currentPlan.id ?? "", shareCode: shareCode, userId: userId)
+                    }
                 }
                 .environmentObject(viewModel)
             }

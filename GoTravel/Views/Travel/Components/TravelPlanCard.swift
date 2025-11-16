@@ -21,14 +21,26 @@ struct TravelPlanCard: View {
 
     private var cardBackground: some View {
         ZStack {
-            if let localImageFileName = plan.localImageFileName,
-               let image = FileManager.documentsImage(named: localImageFileName) {
+            // CloudKitから取得した画像を優先的に表示
+            if let planId = plan.id,
+               let image = viewModel.planImages[planId] {
                 Image(uiImage: image)
                     .resizable()
-                    .scaledToFit()
+                    .scaledToFill()
                     .frame(width: 200, height: 200)
+                    .clipped()
+                    .cornerRadius(25)
+            } else if let localImageFileName = plan.localImageFileName,
+                      let image = FileManager.documentsImage(named: localImageFileName) {
+                // フォールバック：ローカルストレージから画像を取得
+                Image(uiImage: image)
+                    .resizable()
+                    .scaledToFill()
+                    .frame(width: 200, height: 200)
+                    .clipped()
                     .cornerRadius(25)
             } else {
+                // 画像がない場合はグラデーション背景を表示
                 RoundedRectangle(cornerRadius: 25)
                     .fill(
                         LinearGradient(

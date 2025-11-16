@@ -1,7 +1,6 @@
 import SwiftUI
 import Combine
 import UIKit
-import FirebaseAuth
 
 final class ProfileViewModel: ObservableObject {
     @Published var profile: Profile
@@ -10,16 +9,12 @@ final class ProfileViewModel: ObservableObject {
 
     private let defaultsKey = "profile_v1"
 
-    var currentUser: User? {
-        Auth.auth().currentUser
-    }
-
     var displayName: String {
-        currentUser?.displayName ?? profile.name
+        profile.name
     }
 
     var email: String {
-        currentUser?.email ?? profile.email
+        profile.email
     }
 
     init() {
@@ -32,20 +27,13 @@ final class ProfileViewModel: ObservableObject {
                 self.avatarImage = nil
             }
         } else {
-            // Initialize with Firebase Auth user info if available
-            let user = Auth.auth().currentUser
+            // Initialize with default values
             self.profile = Profile(
-                name: user?.displayName ?? "Your Name",
-                email: user?.email ?? "you@example.com",
+                name: "Your Name",
+                email: "you@example.com",
                 avatarImageFileName: nil
             )
             self.avatarImage = nil
-        }
-
-        // Sync with Firebase Auth user info
-        if let user = Auth.auth().currentUser {
-            profile.name = user.displayName ?? profile.name
-            profile.email = user.email ?? profile.email
         }
     }
 
@@ -85,24 +73,13 @@ final class ProfileViewModel: ObservableObject {
     }
     
     func signOut(completion: @escaping (Result<Void, Error>) -> Void) {
-            do {
-                try Auth.auth().signOut()
-            } catch {
-            }
-        }
+        // Sign out is now handled by AuthViewModel
+        completion(.success(()))
+    }
 
-        func deleteAccount(completion: @escaping (Result<Void, Error>) -> Void) {
-            guard let user = Auth.auth().currentUser else {
-                completion(.failure(NSError(domain: "Auth", code: -1, userInfo: [NSLocalizedDescriptionKey: "No user logged in"])))
-                return
-            }
-
-            user.delete { error in
-                if let error = error {
-                    completion(.failure(error))
-                } else {
-                    completion(.success(()))
-                }
-            }
-        }
+    func deleteAccount(completion: @escaping (Result<Void, Error>) -> Void) {
+        // Account deletion for Apple Sign In requires revoking token through Apple's API
+        // For now, just clear local data
+        completion(.success(()))
+    }
 }

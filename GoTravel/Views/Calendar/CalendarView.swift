@@ -20,6 +20,7 @@ enum CalendarItemType {
 struct CalendarView: View {
     @StateObject private var viewModel = PlansViewModel()
     @StateObject private var travelViewModel = TravelPlanViewModel()
+    @EnvironmentObject var authVM: AuthViewModel
     @State private var selectedDate = Date()
     @State private var currentMonth = Date()
     @State private var showAddSheet = false
@@ -115,7 +116,16 @@ struct CalendarView: View {
             }
             .sheet(isPresented: $showAddSheet) {
                 AddPlanView { newPlan in
-                    viewModel.add(newPlan)
+                    if let userId = authVM.userId {
+                        viewModel.add(newPlan, userId: userId)
+                    }
+                }
+            }
+            .onAppear {
+                // CloudKitからプランを取得
+                if let userId = authVM.userId {
+                    viewModel.refreshFromCloudKit(userId: userId)
+                    travelViewModel.refreshFromCloudKit(userId: userId)
                 }
             }
         }

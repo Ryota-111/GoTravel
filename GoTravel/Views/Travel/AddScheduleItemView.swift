@@ -6,6 +6,7 @@ struct AddScheduleItemView: View {
     // MARK: - Properties
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject var viewModel: TravelPlanViewModel
+    @EnvironmentObject var authVM: AuthViewModel
 
     let plan: TravelPlan
     let daySchedule: DaySchedule
@@ -261,7 +262,9 @@ struct AddScheduleItemView: View {
 
         logSaveDetails(newItem: newItem, updatedPlan: updatedPlan)
 
-        viewModel.update(updatedPlan)
+        if let userId = authVM.userId {
+            viewModel.update(updatedPlan, userId: userId)
+        }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             isSaving = false

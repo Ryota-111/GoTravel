@@ -18,14 +18,14 @@ final class SavePlaceViewModel: ObservableObject {
         self.coordinate = coord
     }
 
-    func save(completion: @escaping (Result<Void, Error>) -> Void) {
+    func save(userId: String, completion: @escaping (Result<Void, Error>) -> Void) {
         guard let coord = coordinate else {
             completion(.failure(NSError(domain: "Save", code: -1, userInfo: [NSLocalizedDescriptionKey: "座標がありません"])))
             return
         }
         isSaving = true
 
-        var place = VisitedPlace(
+        let place = VisitedPlace(
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
             latitude: coord.latitude,
@@ -35,24 +35,30 @@ final class SavePlaceViewModel: ObservableObject {
             category: category
         )
 
-        if let image = image, let data = image.jpegData(compressionQuality: 0.85) {
-            let fileName = "place_\(UUID().uuidString).jpg"
-            do {
-                try FileManager.saveImageDataToDocuments(data: data, named: fileName)
-                place.localPhotoFileName = fileName
-            } catch {
-            }
-        }
+        // CloudKitに保存
+        print("🟢 [SavePlaceViewModel] Starting CloudKit save")
+        print("🟢 [SavePlaceViewModel] - has image: \(image != nil)")
 
-        FirestoreService.shared.save(place: place, image: nil) { result in
-            DispatchQueue.main.async {
-                self.isSaving = false
-                switch result {
-                case .success(_):
+        Task {
+            do {
+                let savedPlace = try await CloudKitService.shared.saveVisitedPlace(
+                    place,
+                    userId: userId,
+                    image: self.image
+                )
+
+                await MainActor.run {
+                    print("✅ [SavePlaceViewModel] CloudKit save completed")
+                    print("✅ [SavePlaceViewModel] - saved place ID: \(savedPlace.id ?? "nil")")
+                    self.isSaving = false
                     completion(.success(()))
-                case .failure(let err):
-                    self.error = err.localizedDescription
-                    completion(.failure(err))
+                }
+            } catch {
+                await MainActor.run {
+                    print("❌ [SavePlaceViewModel] CloudKit save failed: \(error.localizedDescription)")
+                    self.isSaving = false
+                    self.error = error.localizedDescription
+                    completion(.failure(error))
                 }
             }
         }

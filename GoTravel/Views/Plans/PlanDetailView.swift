@@ -39,6 +39,7 @@ struct PlanDetailView: View {
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var viewModel: PlansViewModel
+    @EnvironmentObject var authVM: AuthViewModel
 
     var onUpdate: ((Plan) -> Void)?
 
@@ -952,7 +953,9 @@ struct PlanDetailView: View {
                 scheduleItem: editingScheduleItem,
                 onSave: { updatedPlan in
                     plan = updatedPlan
-                    viewModel.update(updatedPlan)
+                    if let userId = authVM.userId {
+                        viewModel.update(updatedPlan, userId: userId)
+                    }
                 }
             )
         }
@@ -1031,7 +1034,9 @@ struct PlanDetailView: View {
         var updatedPlan = plan
         updatedPlan.scheduleItems.removeAll { $0.id == item.id }
         plan = updatedPlan
-        viewModel.update(updatedPlan)
+        if let userId = authVM.userId {
+            viewModel.update(updatedPlan, userId: userId)
+        }
     }
 
     // MARK: - Places Section
@@ -1240,7 +1245,9 @@ struct PlanDetailView: View {
         updatedPlan.places = editedPlaces
         updatedPlan.localImageFileName = localFileName
 
-        viewModel.update(updatedPlan)
+        if let userId = authVM.userId {
+            viewModel.update(updatedPlan, userId: userId)
+        }
 
         DispatchQueue.main.async {
             isSaving = false

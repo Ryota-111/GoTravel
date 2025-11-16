@@ -5,6 +5,7 @@ struct SaveAsVisitedView: View {
     let travelPlanTitle: String
     let travelPlanId: String?
 
+    @EnvironmentObject var authVM: AuthViewModel
     @Environment(\.presentationMode) var presentationMode
     @State private var notes: String = ""
     @State private var selectedCategory: PlaceCategory = .other
@@ -83,6 +84,7 @@ struct SaveAsVisitedView: View {
     }
 
     private func saveVisitedPlace() {
+        guard let userId = authVM.userId else { return }
         isSaving = true
 
         let visitedPlace = VisitedPlace(
@@ -94,14 +96,17 @@ struct SaveAsVisitedView: View {
             category: selectedCategory
         )
 
-        FirestoreService.shared.save(place: visitedPlace, image: nil) { result in
-            DispatchQueue.main.async {
-                isSaving = false
-                switch result {
-                case .success:
+        Task {
+            do {
+                _ = try await CloudKitService.shared.saveVisitedPlace(visitedPlace, userId: userId, image: nil)
+                await MainActor.run {
+                    isSaving = false
                     presentationMode.wrappedValue.dismiss()
-                case .failure(_):
-                    break
+                }
+            } catch {
+                await MainActor.run {
+                    isSaving = false
+                    print("❌ Failed to save place: \(error)")
                 }
             }
         }

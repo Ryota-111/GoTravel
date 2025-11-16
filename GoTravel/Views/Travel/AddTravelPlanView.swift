@@ -260,16 +260,20 @@ struct AddTravelPlanView: View {
     }
 
     private func saveWithImage(_ image: UIImage) {
-        FirestoreService.shared.saveTravelPlanImageLocally(image) { result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success(let fileName):
-                    createAndSavePlan(withImageFileName: fileName)
+        // 画像をローカルに保存
+        guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+            createAndSavePlan(withImageFileName: nil)
+            return
+        }
 
-                case .failure(_):
-                    createAndSavePlan(withImageFileName: nil)
-                }
-            }
+        let fileName = "travel_plan_\(UUID().uuidString).jpg"
+
+        do {
+            try FileManager.saveImageDataToDocuments(data: imageData, named: fileName)
+            createAndSavePlan(withImageFileName: fileName)
+        } catch {
+            print("❌ Failed to save image: \(error)")
+            createAndSavePlan(withImageFileName: nil)
         }
     }
 

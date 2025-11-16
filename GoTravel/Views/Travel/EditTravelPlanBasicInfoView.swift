@@ -6,6 +6,7 @@ struct EditTravelPlanBasicInfoView: View {
     // MARK: - Properties
     @Environment(\.presentationMode) var presentationMode
     @StateObject private var viewModel = TravelPlanViewModel()
+    @EnvironmentObject var authVM: AuthViewModel
 
     let plan: TravelPlan
     @State private var title: String
@@ -316,16 +317,20 @@ struct EditTravelPlanBasicInfoView: View {
     }
 
     private func saveNewImage(_ image: UIImage) {
-        FirestoreService.shared.saveTravelPlanImageLocally(image) { result in
-            DispatchQueue.main.async {
-                switch result {
-                case .success(let fileName):
-                    deleteOldImageIfExists()
-                    saveUpdatedPlan(with: fileName)
-                case .failure:
-                    saveUpdatedPlan(with: plan.localImageFileName)
-                }
-            }
+        guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+            saveUpdatedPlan(with: plan.localImageFileName)
+            return
+        }
+
+        let fileName = "travel_plan_\(UUID().uuidString).jpg"
+
+        do {
+            try FileManager.saveImageDataToDocuments(data: imageData, named: fileName)
+            deleteOldImageIfExists()
+            saveUpdatedPlan(with: fileName)
+        } catch {
+            print("❌ Failed to save image: \(error)")
+            saveUpdatedPlan(with: plan.localImageFileName)
         }
     }
 
@@ -336,7 +341,7 @@ struct EditTravelPlanBasicInfoView: View {
 
     private func deleteOldImageIfExists() {
         if let oldFileName = plan.localImageFileName {
-            FirestoreService.shared.deleteTravelPlanImageLocally(oldFileName)
+            try? FileManager.removeDocumentFile(named: oldFileName)
         }
     }
 
@@ -369,7 +374,9 @@ struct EditTravelPlanBasicInfoView: View {
         }
         #endif
 
-        viewModel.update(updatedPlan)
+        if let userId = authVM.userId {
+            viewModel.update(updatedPlan, userId: userId, image: selectedImage)
+        }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             isUploading = false

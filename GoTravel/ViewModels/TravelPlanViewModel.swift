@@ -1,105 +1,177 @@
 import Foundation
 import Combine
-import FirebaseFirestore
+import UIKit
 
 final class TravelPlanViewModel: ObservableObject {
     @Published var travelPlans: [TravelPlan] = []
-    private var listener: ListenerRegistration?
+    @Published var planImages: [String: UIImage] = [:] // planId: image
+    private var refreshTask: Task<Void, Never>?
 
     init() {
-        startListening()
+        // CloudKitからのデータ取得は各Viewで明示的に呼び出す
     }
 
     deinit {
-        stopListening()
+        refreshTask?.cancel()
     }
 
-    func startListening() {
-        listener = FirestoreService.shared.observeTravelPlans { [weak self] result in
-            switch result {
-            case .success(let plans):
-                DispatchQueue.main.async {
-                    self?.travelPlans = plans
+    // CloudKitからデータを取得（userIdが必要）
+    func refreshFromCloudKit(userId: String? = nil) {
+        print("🟣 [TravelPlanViewModel] Starting CloudKit refresh")
+        print("🟣 [TravelPlanViewModel] - userId: \(userId ?? "nil")")
+        refreshTask?.cancel()
+
+        refreshTask = Task { @MainActor in
+            guard let userId = userId else {
+                print("❌ [TravelPlanViewModel] userId is nil, cannot fetch")
+                return
+            }
+
+            do {
+                print("🟣 [TravelPlanViewModel] Fetching from CloudKit...")
+                let results = try await CloudKitService.shared.fetchTravelPlans(userId: userId)
+                print("✅ [TravelPlanViewModel] Fetched \(results.count) travel plans from CloudKit")
+
+                // TravelPlanと画像を分離
+                self.travelPlans = results.map { $0.plan }
+
+                // 画像をキャッシュ
+                var imageCount = 0
+                for result in results {
+                    if let image = result.image, let planId = result.plan.id {
+                        self.planImages[planId] = image
+                        imageCount += 1
+                    }
                 }
-            case .failure(_):
-                DispatchQueue.main.async {
-                    self?.travelPlans = []
-                }
+                print("✅ [TravelPlanViewModel] Cached \(imageCount) images")
+            } catch {
+                print("❌ [TravelPlanViewModel] Failed to fetch from CloudKit: \(error)")
+                print("❌ [TravelPlanViewModel] Error details: \(error.localizedDescription)")
+                self.travelPlans = []
             }
         }
     }
 
-    func stopListening() {
-        listener?.remove()
-        listener = nil
+    // 特定のTravelPlanの画像を取得
+    func loadImage(for planId: String) async -> UIImage? {
+        // キャッシュをチェック
+        if let cached = planImages[planId] {
+            return cached
+        }
+
+        // CloudKitから取得
+        do {
+            let image = try await CloudKitService.shared.fetchTravelPlanImage(planId: planId)
+            await MainActor.run {
+                if let image = image {
+                    self.planImages[planId] = image
+                }
+            }
+            return image
+        } catch {
+            print("❌ [TravelPlanViewModel] Failed to load image: \(error)")
+            return nil
+        }
     }
 
-    func add(_ plan: TravelPlan) {
-        FirestoreService.shared.saveTravelPlan(plan) { result in
-            switch result {
-            case .success(let savedPlan):
+    func add(_ plan: TravelPlan, userId: String, image: UIImage? = nil) {
+        // CloudKitに保存
+        Task {
+            do {
+                let savedPlan = try await CloudKitService.shared.saveTravelPlan(plan, userId: userId, image: image)
                 NotificationService.shared.scheduleTravelPlanNotifications(for: savedPlan)
-            case .failure(_):
-                break
+                // 保存後にリストを更新
+                await MainActor.run {
+                    self.refreshFromCloudKit(userId: userId)
+                }
+            } catch {
+                print("❌ [TravelPlanViewModel] Failed to add plan to CloudKit: \(error)")
             }
         }
     }
 
-    func update(_ plan: TravelPlan) {
-        FirestoreService.shared.saveTravelPlan(plan) { result in
-            switch result {
-            case .success(let updatedPlan):
+    func update(_ plan: TravelPlan, userId: String, image: UIImage? = nil) {
+        // CloudKitに保存
+        Task {
+            do {
+                let updatedPlan = try await CloudKitService.shared.saveTravelPlan(plan, userId: userId, image: image)
                 NotificationService.shared.scheduleTravelPlanNotifications(for: updatedPlan)
-            case .failure(_):
-                break
+                // 更新後にリストを更新
+                await MainActor.run {
+                    self.refreshFromCloudKit(userId: userId)
+                }
+            } catch {
+                print("❌ [TravelPlanViewModel] Failed to update plan in CloudKit: \(error)")
             }
         }
     }
 
-    func delete(_ plan: TravelPlan) {
+    func delete(_ plan: TravelPlan, userId: String? = nil) {
         if let planId = plan.id {
             NotificationService.shared.cancelTravelPlanNotifications(for: planId)
         }
 
-        FirestoreService.shared.deleteTravelPlan(plan) { error in
-            if error != nil {
-            } else {
+        // CloudKitから削除
+        Task {
+            do {
+                if let planId = plan.id {
+                    try await CloudKitService.shared.deleteTravelPlan(planId: planId)
+                    // 削除後にリストを更新
+                    if let userId = userId {
+                        await MainActor.run {
+                            self.refreshFromCloudKit(userId: userId)
+                        }
+                    }
+                }
+            } catch {
+                print("❌ [TravelPlanViewModel] Failed to delete plan from CloudKit: \(error)")
             }
         }
     }
 
     // MARK: - Sharing Methods
-    func updateShareCode(planId: String, shareCode: String) {
+    func updateShareCode(planId: String, shareCode: String, userId: String) {
         guard var plan = travelPlans.first(where: { $0.id == planId }) else { return }
         plan.isShared = true
         plan.shareCode = shareCode
         plan.ownerId = plan.userId
         plan.updatedAt = Date()
-        update(plan)
+        update(plan, userId: userId)
     }
 
-    func joinPlanByShareCode(_ shareCode: String, completion: @escaping (Result<TravelPlan, Error>) -> Void) {
-
-        // First, find the plan by share code
-        FirestoreService.shared.findTravelPlanByShareCode(shareCode) { result in
-            switch result {
-            case .success(let plan):
-                guard let planId = plan.id else {
-                    completion(.failure(APIClientError.parseError))
+    func joinPlanByShareCode(_ shareCode: String, userId: String, completion: @escaping (Result<TravelPlan, Error>) -> Void) {
+        // CloudKitで共有プランを検索
+        Task {
+            do {
+                guard var plan = try await CloudKitService.shared.findTravelPlanByShareCode(shareCode) else {
+                    await MainActor.run {
+                        completion(.failure(APIClientError.notFound))
+                    }
                     return
                 }
 
-                // Join the plan
-                FirestoreService.shared.joinTravelPlan(planId: planId) { joinResult in
-                    switch joinResult {
-                    case .success(let joinedPlan):
-                        completion(.success(joinedPlan))
-                    case .failure(let error):
-                        completion(.failure(error))
+                // 現在のユーザーをsharedWith配列に追加
+                if !plan.sharedWith.contains(userId) {
+                    plan.sharedWith.append(userId)
+                    plan.updatedAt = Date()
+
+                    // 更新を保存（プランのownerIdを使用）
+                    let updatedPlan = try await CloudKitService.shared.saveTravelPlan(plan, userId: plan.userId ?? userId)
+
+                    await MainActor.run {
+                        completion(.success(updatedPlan))
+                        // リストを更新
+                        self.refreshFromCloudKit(userId: userId)
+                    }
+                } else {
+                    await MainActor.run {
+                        completion(.success(plan))
                     }
                 }
-            case .failure(let error):
-                completion(.failure(error))
+            } catch {
+                await MainActor.run {
+                    completion(.failure(error))
+                }
             }
         }
     }

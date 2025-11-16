@@ -685,15 +685,7 @@ struct AddPlanView: View {
 
     private func deletePlace(_ place: PlannedPlace) {
         if let index = places.firstIndex(where: { $0.id == place.id }) {
-            let placeToDelete = places[index]
-            FirestoreService.shared.deletePlannedPlace(place: placeToDelete) { err in
-                if err != nil {
-                } else {
-                    DispatchQueue.main.async {
-                        places.remove(at: index)
-                    }
-                }
-            }
+            places.remove(at: index)
         }
     }
 

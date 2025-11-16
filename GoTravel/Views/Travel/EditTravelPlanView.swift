@@ -378,23 +378,28 @@ struct EditTravelPlanView: View {
                FileManager.documentsImage(named: existingFileName) == image {
                 saveWithImage(existingFileName)
             } else {
-                FirestoreService.shared.saveTravelPlanImageLocally(image) { result in
-                    DispatchQueue.main.async {
-                        switch result {
-                        case .success(let fileName):
-                            if let oldFileName = plan.localImageFileName {
-                                FirestoreService.shared.deleteTravelPlanImageLocally(oldFileName)
-                            }
-                            saveWithImage(fileName)
-                        case .failure:
-                            saveWithImage(plan.localImageFileName)
-                        }
+                // 画像をローカルに保存
+                guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+                    saveWithImage(plan.localImageFileName)
+                    return
+                }
+
+                let fileName = "travel_plan_\(UUID().uuidString).jpg"
+
+                do {
+                    try FileManager.saveImageDataToDocuments(data: imageData, named: fileName)
+                    if let oldFileName = plan.localImageFileName {
+                        try? FileManager.removeDocumentFile(named: oldFileName)
                     }
+                    saveWithImage(fileName)
+                } catch {
+                    print("❌ Failed to save image: \(error)")
+                    saveWithImage(plan.localImageFileName)
                 }
             }
         } else {
             if let oldFileName = plan.localImageFileName {
-                FirestoreService.shared.deleteTravelPlanImageLocally(oldFileName)
+                try? FileManager.removeDocumentFile(named: oldFileName)
             }
             saveWithImage(nil)
         }

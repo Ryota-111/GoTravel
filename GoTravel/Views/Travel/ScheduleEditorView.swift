@@ -6,6 +6,7 @@ struct ScheduleEditorView: View {
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.colorScheme) var colorScheme
     @StateObject private var viewModel = TravelPlanViewModel()
+    @EnvironmentObject var authVM: AuthViewModel
 
     let plan: TravelPlan
     @State private var daySchedules: [DaySchedule]
@@ -276,7 +277,9 @@ struct ScheduleEditorView: View {
         var updatedPlan = plan
         updatedPlan.daySchedules = daySchedules
 
-        viewModel.update(updatedPlan)
+        if let userId = authVM.userId {
+            viewModel.update(updatedPlan, userId: userId)
+        }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             isSaving = false

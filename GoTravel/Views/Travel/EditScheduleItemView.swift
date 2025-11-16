@@ -6,6 +6,7 @@ struct EditScheduleItemView: View {
     // MARK: - Properties
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject var viewModel: TravelPlanViewModel
+    @EnvironmentObject var authVM: AuthViewModel
 
     let plan: TravelPlan
     let daySchedule: DaySchedule
@@ -307,7 +308,9 @@ struct EditScheduleItemView: View {
         let updatedItem = createUpdatedItem()
         let updatedPlan = updatePlanWithItem(updatedItem)
 
-        viewModel.update(updatedPlan)
+        if let userId = authVM.userId {
+            viewModel.update(updatedPlan, userId: userId)
+        }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             isSaving = false
@@ -550,7 +553,9 @@ struct EditScheduleItemView: View {
 
         let updatedPlan = removePlaceFromPlan()
 
-        viewModel.update(updatedPlan)
+        if let userId = authVM.userId {
+            viewModel.update(updatedPlan, userId: userId)
+        }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             isSaving = false

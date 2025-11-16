@@ -4,6 +4,7 @@ import MapKit
 struct EditPlanView: View {
     let plan: Plan
     let viewModel: PlansViewModel
+    @EnvironmentObject var authVM: AuthViewModel
     @Environment(\.dismiss) var dismiss
     
     @State private var title: String
@@ -186,8 +187,10 @@ struct EditPlanView: View {
             updatedPlan.linkURL = nil
         }
         
-        viewModel.update(updatedPlan)
-        
+        if let userId = authVM.userId {
+            viewModel.update(updatedPlan, userId: userId)
+        }
+
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
             isSaving = false
             dismiss()

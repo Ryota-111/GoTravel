@@ -6,6 +6,7 @@ struct PackingListView: View {
     // MARK: - Properties
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var viewModel: TravelPlanViewModel
+    @EnvironmentObject var authVM: AuthViewModel
     let plan: TravelPlan
     @State private var newItemName: String = ""
 
@@ -96,7 +97,9 @@ struct PackingListView: View {
         updatedPlan.packingItems.append(newItem)
 
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            viewModel.update(updatedPlan)
+            if let userId = authVM.userId {
+                viewModel.update(updatedPlan, userId: userId)
+            }
             newItemName = ""
         }
 
@@ -109,6 +112,7 @@ struct PackingItemRow: View {
     // MARK: - Properties
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var viewModel: TravelPlanViewModel
+    @EnvironmentObject var authVM: AuthViewModel
     let item: PackingItem
     let planId: String
 
@@ -172,7 +176,9 @@ struct PackingItemRow: View {
             updatedPlan.packingItems[index].isChecked.toggle()
 
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                viewModel.update(updatedPlan)
+                if let userId = authVM.userId {
+                    viewModel.update(updatedPlan, userId: userId)
+                }
             }
         }
     }
@@ -183,7 +189,9 @@ struct PackingItemRow: View {
         updatedPlan.packingItems.removeAll(where: { $0.id == item.id })
 
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-            viewModel.update(updatedPlan)
+            if let userId = authVM.userId {
+                viewModel.update(updatedPlan, userId: userId)
+            }
         }
     }
 }

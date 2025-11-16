@@ -5,6 +5,7 @@ struct SaveAsVisitedFromScheduleView: View {
     let travelPlanTitle: String
     let travelPlanId: String?
 
+    @EnvironmentObject var authVM: AuthViewModel
     @Environment(\.presentationMode) var presentationMode
     @State private var notes: String
     @State private var selectedCategory: PlaceCategory = .sightseeing
@@ -104,39 +105,36 @@ struct SaveAsVisitedFromScheduleView: View {
     }
 
     private func saveVisitedPlace() {
+        guard let userId = authVM.userId else { return }
         isSaving = true
 
+        let address: String? = scheduleItem.location
+        let latitude = scheduleItem.latitude ?? 0
+        let longitude = scheduleItem.longitude ?? 0
 
-        DispatchQueue.global(qos: .userInitiated).async {
-            // Use location name as address if available
-            let address: String? = scheduleItem.location
+        let visitedPlace = VisitedPlace(
+            title: travelPlanTitle + " - " + scheduleItem.title,
+            notes: notes.trimmingCharacters(in: .whitespaces).isEmpty ? scheduleItem.notes : notes.trimmingCharacters(in: .whitespaces),
+            latitude: latitude,
+            longitude: longitude,
+            createdAt: Date(),
+            visitedAt: visitedDate,
+            address: address,
+            category: selectedCategory,
+            travelPlanId: travelPlanId
+        )
 
-            // Get latitude and longitude from scheduleItem, default to 0 if not available
-            let latitude = scheduleItem.latitude ?? 0
-            let longitude = scheduleItem.longitude ?? 0
-
-
-            let visitedPlace = VisitedPlace(
-                title: travelPlanTitle + " - " + scheduleItem.title,
-                notes: notes.trimmingCharacters(in: .whitespaces).isEmpty ? scheduleItem.notes : notes.trimmingCharacters(in: .whitespaces),
-                latitude: latitude,
-                longitude: longitude,
-                createdAt: Date(),
-                visitedAt: visitedDate,
-                address: address,
-                category: selectedCategory,
-                travelPlanId: travelPlanId
-            )
-
-            FirestoreService.shared.save(place: visitedPlace, image: nil) { result in
-                DispatchQueue.main.async {
+        Task {
+            do {
+                _ = try await CloudKitService.shared.saveVisitedPlace(visitedPlace, userId: userId, image: nil)
+                await MainActor.run {
                     isSaving = false
-                    switch result {
-                    case .success:
-                        presentationMode.wrappedValue.dismiss()
-                    case .failure(_):
-                        break
-                    }
+                    presentationMode.wrappedValue.dismiss()
+                }
+            } catch {
+                await MainActor.run {
+                    isSaving = false
+                    print("❌ Failed to save place: \(error)")
                 }
             }
         }

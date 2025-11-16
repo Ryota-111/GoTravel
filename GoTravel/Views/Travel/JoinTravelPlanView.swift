@@ -5,6 +5,7 @@ struct JoinTravelPlanView: View {
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var viewModel: TravelPlanViewModel
+    @EnvironmentObject var authVM: AuthViewModel
 
     @State private var shareCode: String = ""
     @State private var isJoining: Bool = false
@@ -187,7 +188,14 @@ struct JoinTravelPlanView: View {
 
         isJoining = true
 
-        viewModel.joinPlanByShareCode(trimmedCode) { result in
+        guard let userId = authVM.userId else {
+            errorMessage = "ログインが必要です。"
+            showError = true
+            isJoining = false
+            return
+        }
+
+        viewModel.joinPlanByShareCode(trimmedCode, userId: userId) { result in
             isJoining = false
 
             switch result {

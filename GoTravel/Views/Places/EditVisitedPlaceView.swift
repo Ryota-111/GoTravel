@@ -2,6 +2,7 @@ import SwiftUI
 
 struct EditVisitedPlaceView: View {
     let place: VisitedPlace
+    @EnvironmentObject var authVM: AuthViewModel
     @Environment(\.presentationMode) var presentationMode
 
     @State private var title: String
@@ -77,6 +78,7 @@ struct EditVisitedPlaceView: View {
     }
 
     private func saveChanges() {
+        guard let userId = authVM.userId else { return }
         isSaving = true
 
         var updatedPlace = place
@@ -85,14 +87,17 @@ struct EditVisitedPlaceView: View {
         updatedPlace.category = selectedCategory
         updatedPlace.visitedAt = visitedDate
 
-        FirestoreService.shared.update(place: updatedPlace) { result in
-            DispatchQueue.main.async {
-                isSaving = false
-                switch result {
-                case .success:
+        Task {
+            do {
+                _ = try await CloudKitService.shared.saveVisitedPlace(updatedPlace, userId: userId, image: nil)
+                await MainActor.run {
+                    isSaving = false
                     presentationMode.wrappedValue.dismiss()
-                case .failure(_):
-                    break
+                }
+            } catch {
+                await MainActor.run {
+                    isSaving = false
+                    print("❌ Failed to update place: \(error)")
                 }
             }
         }

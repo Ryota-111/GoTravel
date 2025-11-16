@@ -5,6 +5,7 @@ struct SavePlaceView: View {
 
     // MARK: - Properties
     @Environment(\.presentationMode) var presentationMode
+    @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var vm: SavePlaceViewModel
     @State private var showImagePicker: Bool = false
     @State private var showPhotoSourceActionSheet: Bool = false
@@ -94,11 +95,22 @@ struct SavePlaceView: View {
 
     private var saveButton: some View {
         Button("保存") {
-            vm.save { result in
+            print("🔴 [SavePlaceView] Save button pressed")
+            print("🔴 [SavePlaceView] - authVM.userId: \(authVM.userId ?? "nil")")
+
+            guard let userId = authVM.userId else {
+                print("❌ [SavePlaceView] userId is nil, cannot save")
+                return
+            }
+
+            print("🔴 [SavePlaceView] Calling vm.save with userId: \(userId)")
+            vm.save(userId: userId) { result in
                 switch result {
                 case .success:
+                    print("✅ [SavePlaceView] Save completed successfully")
                     presentationMode.wrappedValue.dismiss()
-                case .failure:
+                case .failure(let error):
+                    print("❌ [SavePlaceView] Save failed: \(error.localizedDescription)")
                     break
                 }
             }

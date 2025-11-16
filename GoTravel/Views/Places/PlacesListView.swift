@@ -3,6 +3,7 @@ import SwiftUI
 struct PlacesListView: View {
 
     // MARK: - Properties
+    @EnvironmentObject var authVM: AuthViewModel
     @StateObject private var vm = PlacesViewModel()
     @State private var selectedCategory: PlaceCategory = .hotel
     @Environment(\.colorScheme) var colorScheme
@@ -51,6 +52,18 @@ struct PlacesListView: View {
             .navigationBarHidden(true)
         }
         .navigationViewStyle(.stack)
+        .onAppear {
+            // CloudKitからデータを取得
+            if let userId = authVM.userId {
+                vm.refreshFromCloudKit(userId: userId)
+            }
+        }
+        .refreshable {
+            // Pull to refreshで更新
+            if let userId = authVM.userId {
+                vm.refreshFromCloudKit(userId: userId)
+            }
+        }
     }
 
     // MARK: - View Components
@@ -236,8 +249,18 @@ struct PlacesListView: View {
 
     // MARK: - Actions
     private func deletePlace(_ place: VisitedPlace) {
-        FirestoreService.shared.delete(place: place) { err in
-            if err != nil {
+        guard let placeId = place.id else { return }
+
+        // CloudKitから削除
+        Task {
+            do {
+                try await CloudKitService.shared.deleteVisitedPlace(placeId: placeId)
+                // 削除後、リストを更新
+                if let userId = authVM.userId {
+                    vm.refreshFromCloudKit(userId: userId)
+                }
+            } catch {
+                print("❌ Failed to delete from CloudKit: \(error)")
             }
         }
     }

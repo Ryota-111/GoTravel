@@ -17,6 +17,7 @@ struct EnjoyWorldView: View {
     // MARK: - Properties
     @StateObject private var travelPlanViewModel = TravelPlanViewModel()
     @StateObject private var plansViewModel = PlansViewModel()
+    @EnvironmentObject var authVM: AuthViewModel
     @State private var selectedTab: TabType = .all
     @State private var selectedPlanTab: PlanTabType = .all
     @State private var showAddTravelPlan = false
@@ -137,12 +138,16 @@ struct EnjoyWorldView: View {
             .navigationBarHidden(true)
             .sheet(isPresented: $showAddTravelPlan) {
                 AddTravelPlanView { newPlan in
-                    travelPlanViewModel.add(newPlan)
+                    if let userId = authVM.userId {
+                        travelPlanViewModel.add(newPlan, userId: userId)
+                    }
                 }
             }
             .sheet(isPresented: $showAddPlan) {
                 AddPlanView { newPlan in
-                    plansViewModel.add(newPlan)
+                    if let userId = authVM.userId {
+                        plansViewModel.add(newPlan, userId: userId)
+                    }
                 }
             }
             .sheet(isPresented: $showJoinPlan) {
@@ -151,7 +156,9 @@ struct EnjoyWorldView: View {
             }
             .alert("旅行計画を削除", isPresented: $showDeleteConfirmation, presenting: planToDelete) { plan in
                 Button("削除", role: .destructive) {
-                    travelPlanViewModel.delete(plan)
+                    if let userId = authVM.userId {
+                        travelPlanViewModel.delete(plan, userId: userId)
+                    }
                     planToDelete = nil
                 }
                 Button("キャンセル", role: .cancel) {
@@ -162,7 +169,9 @@ struct EnjoyWorldView: View {
             }
             .alert("予定を削除", isPresented: $showPlanDeleteConfirmation, presenting: planEventToDelete) { plan in
                 Button("削除", role: .destructive) {
-                    plansViewModel.deletePlan(plan)
+                    if let userId = authVM.userId {
+                        plansViewModel.deletePlan(plan, userId: userId)
+                    }
                     planEventToDelete = nil
                 }
                 Button("キャンセル", role: .cancel) {
@@ -173,6 +182,12 @@ struct EnjoyWorldView: View {
             }
             .onAppear {
                 selectedTab = hasOngoingPlans ? .ongoing : .all
+
+                // CloudKitからデータを取得
+                if let userId = authVM.userId {
+                    travelPlanViewModel.refreshFromCloudKit(userId: userId)
+                    plansViewModel.refreshFromCloudKit(userId: userId)
+                }
             }
         }
         .navigationViewStyle(.stack)
