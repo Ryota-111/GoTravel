@@ -188,7 +188,25 @@ final class CloudKitService {
         print("🔵 [CloudKit] - recordName: \(recordName)")
 
         let recordID = CKRecord.ID(recordName: recordName)
-        let record = CKRecord(recordType: "VisitedPlace", recordID: recordID)
+
+        // 既存のレコードを取得してから更新、存在しない場合は新規作成
+        let record: CKRecord
+        if place.id != nil {
+            // 既存レコードの取得を試みる
+            do {
+                print("🔵 [CloudKit] Fetching existing record...")
+                record = try await privateDatabase.record(for: recordID)
+                print("✅ [CloudKit] Existing record found, will update")
+            } catch {
+                // レコードが存在しない場合は新規作成
+                print("⚠️ [CloudKit] Record not found, creating new one")
+                record = CKRecord(recordType: "VisitedPlace", recordID: recordID)
+            }
+        } else {
+            // idがnilの場合は新規作成
+            print("🔵 [CloudKit] Creating new record (no id)")
+            record = CKRecord(recordType: "VisitedPlace", recordID: recordID)
+        }
 
         // Required fields
         record["userId"] = userId

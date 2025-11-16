@@ -7,6 +7,7 @@ struct PlacesListView: View {
     @StateObject private var vm = PlacesViewModel()
     @State private var selectedCategory: PlaceCategory = .hotel
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.scenePhase) var scenePhase
 
     // MARK: - Computed Properties
     private var filteredPlaces: [VisitedPlace] {
@@ -58,10 +59,24 @@ struct PlacesListView: View {
                 vm.refreshFromCloudKit(userId: userId)
             }
         }
+        .task {
+            // ビューが表示されるたびにデータを再読み込み（NavigationStackでの戻りも含む）
+            if let userId = authVM.userId {
+                vm.refreshFromCloudKit(userId: userId)
+            }
+        }
         .refreshable {
             // Pull to refreshで更新
             if let userId = authVM.userId {
                 vm.refreshFromCloudKit(userId: userId)
+            }
+        }
+        .onChange(of: scenePhase) { oldPhase, newPhase in
+            // 画面がアクティブになった時にデータを再読み込み
+            if newPhase == .active {
+                if let userId = authVM.userId {
+                    vm.refreshFromCloudKit(userId: userId)
+                }
             }
         }
     }

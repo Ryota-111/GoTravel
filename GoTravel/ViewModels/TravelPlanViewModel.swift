@@ -74,31 +74,64 @@ final class TravelPlanViewModel: ObservableObject {
         }
     }
 
+    @MainActor
     func add(_ plan: TravelPlan, userId: String, image: UIImage? = nil) {
-        // CloudKitに保存
+        // 即座にローカルリストに追加（UI更新）
+        travelPlans.append(plan)
+        if let image = image, let planId = plan.id {
+            planImages[planId] = image
+        }
+        print("✅ [TravelPlanViewModel] Added plan to local list immediately")
+
+        // バックグラウンドでCloudKitに保存
         Task {
             do {
                 let savedPlan = try await CloudKitService.shared.saveTravelPlan(plan, userId: userId, image: image)
+                print("✅ [TravelPlanViewModel] Plan saved to CloudKit")
                 NotificationService.shared.scheduleTravelPlanNotifications(for: savedPlan)
-                // 保存後にリストを更新
+
+                // CloudKitから返された最新のプランでローカルを更新
                 await MainActor.run {
-                    self.refreshFromCloudKit(userId: userId)
+                    if let index = self.travelPlans.firstIndex(where: { $0.id == plan.id }) {
+                        self.travelPlans[index] = savedPlan
+                    }
                 }
             } catch {
                 print("❌ [TravelPlanViewModel] Failed to add plan to CloudKit: \(error)")
+                // エラーの場合、ローカルから削除
+                await MainActor.run {
+                    self.travelPlans.removeAll { $0.id == plan.id }
+                    if let planId = plan.id {
+                        self.planImages.removeValue(forKey: planId)
+                    }
+                }
             }
         }
     }
 
+    @MainActor
     func update(_ plan: TravelPlan, userId: String, image: UIImage? = nil) {
-        // CloudKitに保存
+        // 即座にローカルリストを更新（UI更新）
+        if let index = travelPlans.firstIndex(where: { $0.id == plan.id }) {
+            travelPlans[index] = plan
+        }
+        if let image = image, let planId = plan.id {
+            planImages[planId] = image
+        }
+        print("✅ [TravelPlanViewModel] Updated plan in local list immediately")
+
+        // バックグラウンドでCloudKitに保存
         Task {
             do {
                 let updatedPlan = try await CloudKitService.shared.saveTravelPlan(plan, userId: userId, image: image)
+                print("✅ [TravelPlanViewModel] Plan updated in CloudKit")
                 NotificationService.shared.scheduleTravelPlanNotifications(for: updatedPlan)
-                // 更新後にリストを更新
+
+                // CloudKitから返された最新のプランでローカルを更新
                 await MainActor.run {
-                    self.refreshFromCloudKit(userId: userId)
+                    if let index = self.travelPlans.firstIndex(where: { $0.id == plan.id }) {
+                        self.travelPlans[index] = updatedPlan
+                    }
                 }
             } catch {
                 print("❌ [TravelPlanViewModel] Failed to update plan in CloudKit: \(error)")
@@ -106,25 +139,32 @@ final class TravelPlanViewModel: ObservableObject {
         }
     }
 
+    @MainActor
     func delete(_ plan: TravelPlan, userId: String? = nil) {
         if let planId = plan.id {
             NotificationService.shared.cancelTravelPlanNotifications(for: planId)
         }
 
-        // CloudKitから削除
+        // 即座にローカルリストから削除（UI更新）
+        travelPlans.removeAll { $0.id == plan.id }
+        if let planId = plan.id {
+            planImages.removeValue(forKey: planId)
+        }
+        print("✅ [TravelPlanViewModel] Removed plan from local list immediately")
+
+        // バックグラウンドでCloudKitから削除
         Task {
             do {
                 if let planId = plan.id {
                     try await CloudKitService.shared.deleteTravelPlan(planId: planId)
-                    // 削除後にリストを更新
-                    if let userId = userId {
-                        await MainActor.run {
-                            self.refreshFromCloudKit(userId: userId)
-                        }
-                    }
+                    print("✅ [TravelPlanViewModel] Plan deleted from CloudKit")
                 }
             } catch {
                 print("❌ [TravelPlanViewModel] Failed to delete plan from CloudKit: \(error)")
+                // エラーの場合、削除をロールバック
+                if let userId = userId {
+                    self.refreshFromCloudKit(userId: userId)
+                }
             }
         }
     }

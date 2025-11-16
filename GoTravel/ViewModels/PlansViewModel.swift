@@ -40,31 +40,55 @@ final class PlansViewModel: ObservableObject {
         }
     }
 
+    @MainActor
     func add(_ plan: Plan, userId: String) {
-        // CloudKitに保存
+        // 即座にローカルリストに追加（UI更新）
+        plans.append(plan)
+        print("✅ [PlansViewModel] Added plan to local list immediately")
+
+        // バックグラウンドでCloudKitに保存
         Task {
             do {
                 let savedPlan = try await CloudKitService.shared.savePlan(plan, userId: userId)
+                print("✅ [PlansViewModel] Plan saved to CloudKit")
                 NotificationService.shared.schedulePlanNotifications(for: savedPlan)
-                // 保存後にリストを更新
+
+                // CloudKitから返された最新のプランでローカルを更新
                 await MainActor.run {
-                    self.refreshFromCloudKit(userId: userId)
+                    if let index = self.plans.firstIndex(where: { $0.id == plan.id }) {
+                        self.plans[index] = savedPlan
+                    }
                 }
             } catch {
                 print("❌ [PlansViewModel] Failed to add plan to CloudKit: \(error)")
+                // エラーの場合、ローカルから削除
+                await MainActor.run {
+                    self.plans.removeAll { $0.id == plan.id }
+                }
             }
         }
     }
 
+    @MainActor
     func update(_ plan: Plan, userId: String) {
-        // CloudKitに保存
+        // 即座にローカルリストを更新（UI更新）
+        if let index = plans.firstIndex(where: { $0.id == plan.id }) {
+            plans[index] = plan
+        }
+        print("✅ [PlansViewModel] Updated plan in local list immediately")
+
+        // バックグラウンドでCloudKitに保存
         Task {
             do {
                 let updatedPlan = try await CloudKitService.shared.savePlan(plan, userId: userId)
+                print("✅ [PlansViewModel] Plan updated in CloudKit")
                 NotificationService.shared.schedulePlanNotifications(for: updatedPlan)
-                // 更新後にリストを更新
+
+                // CloudKitから返された最新のプランでローカルを更新
                 await MainActor.run {
-                    self.refreshFromCloudKit(userId: userId)
+                    if let index = self.plans.firstIndex(where: { $0.id == plan.id }) {
+                        self.plans[index] = updatedPlan
+                    }
                 }
             } catch {
                 print("❌ [PlansViewModel] Failed to update plan in CloudKit: \(error)")
@@ -79,21 +103,25 @@ final class PlansViewModel: ObservableObject {
         }
     }
 
+    @MainActor
     func deletePlan(_ plan: Plan, userId: String? = nil) {
         NotificationService.shared.cancelPlanNotifications(for: plan.id)
 
-        // CloudKitから削除
+        // 即座にローカルリストから削除（UI更新）
+        plans.removeAll { $0.id == plan.id }
+        print("✅ [PlansViewModel] Removed plan from local list immediately")
+
+        // バックグラウンドでCloudKitから削除
         Task {
             do {
                 try await CloudKitService.shared.deletePlan(planId: plan.id)
-                // 削除後にリストを更新
-                if let userId = userId {
-                    await MainActor.run {
-                        self.refreshFromCloudKit(userId: userId)
-                    }
-                }
+                print("✅ [PlansViewModel] Plan deleted from CloudKit")
             } catch {
                 print("❌ [PlansViewModel] Failed to delete plan from CloudKit: \(error)")
+                // エラーの場合、削除をロールバック
+                if let userId = userId {
+                    self.refreshFromCloudKit(userId: userId)
+                }
             }
         }
     }

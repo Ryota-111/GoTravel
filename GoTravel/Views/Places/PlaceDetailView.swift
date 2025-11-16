@@ -21,6 +21,7 @@ struct PlaceDetailView: View {
     @State private var editedTitle: String = ""
     @State private var editedNotes: String = ""
     @State private var editedCategory: PlaceCategory = .other
+    @State private var editedVisitedAt: Date = Date()
 
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dismiss) var dismiss
@@ -212,6 +213,32 @@ struct PlaceDetailView: View {
                                 .stroke(Color(.separator).opacity(0.5), lineWidth: 1)
                         )
                     }
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color(.secondarySystemBackground))
+                        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+                )
+
+                // Visit Date Card
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("訪問日")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
+
+                    DatePicker("", selection: $editedVisitedAt, displayedComponents: .date)
+                        .datePickerStyle(.graphical)
+                        .labelsHidden()
+                        .frame(maxWidth: .infinity)
+                        .padding(8)
+                        .background(Color(.systemBackground))
+                        .cornerRadius(10)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 10)
+                                .stroke(Color(.separator).opacity(0.5), lineWidth: 1)
+                        )
                 }
                 .padding(16)
                 .background(
@@ -676,6 +703,7 @@ struct PlaceDetailView: View {
         editedTitle = place.title
         editedNotes = place.notes ?? ""
         editedCategory = place.category
+        editedVisitedAt = place.visitedAt ?? Date()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             isEditMode = true
         }
@@ -696,6 +724,9 @@ struct PlaceDetailView: View {
 
         // 画像を保存（選択されている場合）
         if let image = selectedImage {
+            // 即座にUIを更新
+            displayImage = image
+
             saveImageLocally(image) { result in
                 switch result {
                 case .success(let fileName):
@@ -710,12 +741,25 @@ struct PlaceDetailView: View {
     }
 
     private func updatePlaceData(with localFileName: String?) {
+        print("🔵 [PlaceDetail] updatePlaceData called with fileName: \(localFileName ?? "nil")")
         var updatedPlace = place
         updatedPlace.title = editedTitle
         updatedPlace.notes = editedNotes.isEmpty ? nil : editedNotes
         updatedPlace.category = editedCategory
+        updatedPlace.visitedAt = editedVisitedAt
         updatedPlace.localPhotoFileName = localFileName
 
+        print("🔵 [PlaceDetail] updatedPlace.localPhotoFileName: \(updatedPlace.localPhotoFileName ?? "nil")")
+        print("🔵 [PlaceDetail] updatedPlace.visitedAt: \(editedVisitedAt)")
+
+        // 即座にUIを更新（CloudKit保存を待たない）
+        place = updatedPlace
+        selectedImage = nil
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            isEditMode = false
+        }
+
+        // バックグラウンドでCloudKitに保存
         Task {
             guard let userId = authVM.userId else {
                 await MainActor.run {
@@ -725,19 +769,21 @@ struct PlaceDetailView: View {
             }
 
             do {
-                _ = try await CloudKitService.shared.saveVisitedPlace(updatedPlace, userId: userId, image: nil)
+                print("🔵 [PlaceDetail] Saving to CloudKit (background)...")
+                let savedPlace = try await CloudKitService.shared.saveVisitedPlace(updatedPlace, userId: userId, image: nil)
+                print("✅ [PlaceDetail] CloudKit save successful")
+                print("✅ [PlaceDetail] savedPlace.id: \(savedPlace.id ?? "nil")")
+                print("✅ [PlaceDetail] savedPlace.localPhotoFileName: \(savedPlace.localPhotoFileName ?? "nil")")
                 await MainActor.run {
                     isSaving = false
-                    place = updatedPlace
-                    selectedImage = nil
-                    displayImage = loadImageFromLocal()
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                        isEditMode = false
-                    }
+                    // CloudKitから返された最新のデータでplaceを更新
+                    place = savedPlace
                 }
             } catch {
+                print("❌ [PlaceDetail] CloudKit save failed: \(error)")
                 await MainActor.run {
                     isSaving = false
+                    // エラーの場合はユーザーに通知するが、ローカルの変更は保持
                     handleSaveError(error)
                 }
             }
@@ -754,17 +800,23 @@ struct PlaceDetailView: View {
 
     // MARK: - Image Storage Functions
     private func saveImageLocally(_ image: UIImage, completion: @escaping (Result<String, Error>) -> Void) {
+        print("🔵 [PlaceDetail] saveImageLocally called")
         guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+            print("❌ [PlaceDetail] Failed to convert image to JPEG data")
             completion(.failure(NSError(domain: "PlaceDetailView", code: -1, userInfo: [NSLocalizedDescriptionKey: "画像データの変換に失敗しました"])))
             return
         }
 
         let fileName = "place_\(place.id ?? UUID().uuidString).jpg"
+        print("🔵 [PlaceDetail] Saving image with fileName: \(fileName)")
+        print("🔵 [PlaceDetail] place.id: \(place.id ?? "nil")")
 
         do {
             try FileManager.saveImageDataToDocuments(data: imageData, named: fileName)
+            print("✅ [PlaceDetail] Image saved successfully: \(fileName)")
             completion(.success(fileName))
         } catch {
+            print("❌ [PlaceDetail] Failed to save image: \(error)")
             completion(.failure(error))
         }
     }
@@ -774,11 +826,19 @@ struct PlaceDetailView: View {
     }
 
     private func loadImageFromLocal() -> UIImage? {
-        guard let fileName = place.localPhotoFileName else { return nil }
+        print("🔵 [PlaceDetail] loadImageFromLocal called")
+        print("🔵 [PlaceDetail] place.localPhotoFileName: \(place.localPhotoFileName ?? "nil")")
+
+        guard let fileName = place.localPhotoFileName else {
+            print("⚠️ [PlaceDetail] No localPhotoFileName set")
+            return nil
+        }
 
         if let image = FileManager.documentsImage(named: fileName) {
+            print("✅ [PlaceDetail] Image loaded successfully: \(fileName)")
             return image
         } else {
+            print("❌ [PlaceDetail] Image not found: \(fileName)")
             return nil
         }
     }
