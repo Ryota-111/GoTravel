@@ -1338,16 +1338,24 @@ struct PlanDetailView: View {
 
     // MARK: - Delete Function
     private func deletePlan() {
-        // ローカル画像ファイルを削除
-        if let fileName = plan.localImageFileName {
-            try? FileManager.removeDocumentFile(named: fileName)
+        print("🗑️ [PlanDetailView] Delete button pressed for plan: \(plan.title)")
+        Task { @MainActor in
+            print("🗑️ [PlanDetailView] Calling viewModel.deletePlan...")
+            // ViewModelからプランを削除（CloudKitの削除完了まで待つ）
+            await viewModel.deletePlan(plan, userId: authVM.userId)
+            print("🗑️ [PlanDetailView] deletePlan completed")
+
+            // ローカル画像ファイルを削除
+            if let fileName = plan.localImageFileName {
+                print("🗑️ [PlanDetailView] Removing local image: \(fileName)")
+                try? FileManager.removeDocumentFile(named: fileName)
+            }
+
+            // CloudKit削除完了後に画面を閉じる
+            print("🗑️ [PlanDetailView] Dismissing view")
+            dismiss()
+            print("🗑️ [PlanDetailView] View dismissed")
         }
-
-        // ViewModelからプランを削除
-        viewModel.deletePlan(plan)
-
-        // 画面を閉じる
-        dismiss()
     }
 
     // MARK: - Map Picker View

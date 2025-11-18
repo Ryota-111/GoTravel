@@ -170,7 +170,9 @@ struct EnjoyWorldView: View {
             .alert("予定を削除", isPresented: $showPlanDeleteConfirmation, presenting: planEventToDelete) { plan in
                 Button("削除", role: .destructive) {
                     if let userId = authVM.userId {
-                        plansViewModel.deletePlan(plan, userId: userId)
+                        Task {
+                            await plansViewModel.deletePlan(plan, userId: userId)
+                        }
                     }
                     planEventToDelete = nil
                 }

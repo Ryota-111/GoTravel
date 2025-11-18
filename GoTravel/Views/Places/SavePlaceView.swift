@@ -7,9 +7,6 @@ struct SavePlaceView: View {
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var vm: SavePlaceViewModel
-    @State private var showImagePicker: Bool = false
-    @State private var showPhotoSourceActionSheet: Bool = false
-    @State private var pickerSource: UIImagePickerController.SourceType = .photoLibrary
 
     // MARK: - Computed Properties
     private var isSaveDisabled: Bool {
@@ -21,7 +18,6 @@ struct SavePlaceView: View {
         NavigationView {
             Form {
                 placeInfoSection
-                photoSection
 
                 if let error = vm.error {
                     errorSection(error: error)
@@ -35,12 +31,6 @@ struct SavePlaceView: View {
                 ToolbarItem(placement: .cancellationAction) {
                     cancelButton
                 }
-            }
-            .actionSheet(isPresented: $showPhotoSourceActionSheet) {
-                photoSourceActionSheet
-            }
-            .sheet(isPresented: $showImagePicker) {
-                ImagePickerView(sourceType: pickerSource, image: $vm.image)
             }
         }
     }
@@ -65,24 +55,6 @@ struct SavePlaceView: View {
                 }
             }
             .pickerStyle(.menu)
-        }
-    }
-
-    private var photoSection: some View {
-        Section(header: Text("写真")) {
-            if let image = vm.image {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxHeight: 200)
-                    .cornerRadius(8)
-            }
-
-            Button(action: {
-                showPhotoSourceActionSheet = true
-            }) {
-                Label(vm.image == nil ? "写真を追加" : "写真を変更", systemImage: "photo")
-            }
         }
     }
 
@@ -122,22 +94,5 @@ struct SavePlaceView: View {
         Button("キャンセル") {
             presentationMode.wrappedValue.dismiss()
         }
-    }
-
-    private var photoSourceActionSheet: ActionSheet {
-        ActionSheet(
-            title: Text("写真を選択"),
-            buttons: [
-                .default(Text("カメラ")) {
-                    pickerSource = .camera
-                    showImagePicker = true
-                },
-                .default(Text("フォトライブラリ")) {
-                    pickerSource = .photoLibrary
-                    showImagePicker = true
-                },
-                .cancel(Text("キャンセル"))
-            ]
-        )
     }
 }

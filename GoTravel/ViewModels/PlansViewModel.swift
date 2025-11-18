@@ -16,25 +16,21 @@ final class PlansViewModel: ObservableObject {
 
     // CloudKitからデータを取得（userIdが必要）
     func refreshFromCloudKit(userId: String? = nil) {
-        print("🟠 [PlansViewModel] Starting CloudKit refresh")
-        print("🟠 [PlansViewModel] - userId: \(userId ?? "nil")")
+        print("🔄 [PlansViewModel] refreshFromCloudKit called")
         refreshTask?.cancel()
 
         refreshTask = Task { @MainActor in
             guard let userId = userId else {
-                print("❌ [PlansViewModel] userId is nil, cannot fetch")
+                print("❌ [PlansViewModel] userId is nil")
                 return
             }
 
             do {
-                print("🟠 [PlansViewModel] Fetching from CloudKit...")
                 let results = try await CloudKitService.shared.fetchPlans(userId: userId)
-                print("✅ [PlansViewModel] Fetched \(results.count) plans from CloudKit")
-
+                print("✅ [PlansViewModel] Fetched \(results.count) plans")
                 self.plans = results
             } catch {
-                print("❌ [PlansViewModel] Failed to fetch from CloudKit: \(error)")
-                print("❌ [PlansViewModel] Error details: \(error.localizedDescription)")
+                print("❌ [PlansViewModel] Fetch error: \(error)")
                 self.plans = []
             }
         }
@@ -42,26 +38,22 @@ final class PlansViewModel: ObservableObject {
 
     @MainActor
     func add(_ plan: Plan, userId: String) {
-        // 即座にローカルリストに追加（UI更新）
         plans.append(plan)
-        print("✅ [PlansViewModel] Added plan to local list immediately")
+        print("➕ [PlansViewModel] Added plan locally, count: \(plans.count)")
 
-        // バックグラウンドでCloudKitに保存
         Task {
             do {
                 let savedPlan = try await CloudKitService.shared.savePlan(plan, userId: userId)
-                print("✅ [PlansViewModel] Plan saved to CloudKit")
+                print("✅ [PlansViewModel] Saved to CloudKit")
                 NotificationService.shared.schedulePlanNotifications(for: savedPlan)
 
-                // CloudKitから返された最新のプランでローカルを更新
                 await MainActor.run {
                     if let index = self.plans.firstIndex(where: { $0.id == plan.id }) {
                         self.plans[index] = savedPlan
                     }
                 }
             } catch {
-                print("❌ [PlansViewModel] Failed to add plan to CloudKit: \(error)")
-                // エラーの場合、ローカルから削除
+                print("❌ [PlansViewModel] CloudKit save error: \(error)")
                 await MainActor.run {
                     self.plans.removeAll { $0.id == plan.id }
                 }
@@ -71,27 +63,24 @@ final class PlansViewModel: ObservableObject {
 
     @MainActor
     func update(_ plan: Plan, userId: String) {
-        // 即座にローカルリストを更新（UI更新）
         if let index = plans.firstIndex(where: { $0.id == plan.id }) {
             plans[index] = plan
         }
-        print("✅ [PlansViewModel] Updated plan in local list immediately")
+        print("📝 [PlansViewModel] Updated plan locally, count: \(plans.count)")
 
-        // バックグラウンドでCloudKitに保存
         Task {
             do {
                 let updatedPlan = try await CloudKitService.shared.savePlan(plan, userId: userId)
-                print("✅ [PlansViewModel] Plan updated in CloudKit")
+                print("✅ [PlansViewModel] Updated in CloudKit")
                 NotificationService.shared.schedulePlanNotifications(for: updatedPlan)
 
-                // CloudKitから返された最新のプランでローカルを更新
                 await MainActor.run {
                     if let index = self.plans.firstIndex(where: { $0.id == plan.id }) {
                         self.plans[index] = updatedPlan
                     }
                 }
             } catch {
-                print("❌ [PlansViewModel] Failed to update plan in CloudKit: \(error)")
+                print("❌ [PlansViewModel] CloudKit update error: \(error)")
             }
         }
     }
@@ -99,30 +88,40 @@ final class PlansViewModel: ObservableObject {
     func delete(at offsets: IndexSet, userId: String? = nil) {
         for index in offsets {
            let plan = plans[index]
-           deletePlan(plan, userId: userId)
+           Task {
+               await deletePlan(plan, userId: userId)
+           }
         }
     }
 
     @MainActor
-    func deletePlan(_ plan: Plan, userId: String? = nil) {
+    func deletePlan(_ plan: Plan, userId: String? = nil) async {
+        print("🗑️ [PlansViewModel] DELETE START - Plan: \(plan.title), ID: \(plan.id)")
+        print("🗑️ [PlansViewModel] Before delete - plans.count: \(plans.count)")
+
         NotificationService.shared.cancelPlanNotifications(for: plan.id)
 
         // 即座にローカルリストから削除（UI更新）
         plans.removeAll { $0.id == plan.id }
-        print("✅ [PlansViewModel] Removed plan from local list immediately")
+        print("🗑️ [PlansViewModel] Removed from local - plans.count: \(plans.count)")
 
-        // バックグラウンドでCloudKitから削除
-        Task {
-            do {
-                try await CloudKitService.shared.deletePlan(planId: plan.id)
-                print("✅ [PlansViewModel] Plan deleted from CloudKit")
-            } catch {
-                print("❌ [PlansViewModel] Failed to delete plan from CloudKit: \(error)")
-                // エラーの場合、削除をロールバック
-                if let userId = userId {
-                    self.refreshFromCloudKit(userId: userId)
-                }
+        // CloudKitから削除（完了するまで待つ）
+        do {
+            print("🗑️ [PlansViewModel] Deleting from CloudKit...")
+            try await CloudKitService.shared.deletePlan(planId: plan.id)
+            print("✅ [PlansViewModel] CloudKit deletion SUCCESS - final count: \(plans.count)")
+        } catch {
+            print("❌ [PlansViewModel] CloudKit deletion FAILED: \(error)")
+            // エラーの場合、削除をロールバック
+            if let userId = userId {
+                print("🔄 [PlansViewModel] Rolling back - refreshing from CloudKit")
+                self.refreshFromCloudKit(userId: userId)
+            } else {
+                print("🔄 [PlansViewModel] Rolling back - re-adding plan")
+                self.plans.append(plan)
+                print("🔄 [PlansViewModel] After rollback - plans.count: \(plans.count)")
             }
         }
+        print("🗑️ [PlansViewModel] DELETE END - final count: \(plans.count)")
     }
 }

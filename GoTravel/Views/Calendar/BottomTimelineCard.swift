@@ -12,6 +12,8 @@ struct BottomTimelineCard: View {
     @State private var dragOffset: CGFloat = 0
 
     var body: some View {
+        let _ = print("📋 [BottomTimelineCard] Rendering - timelineItems.count: \(timelineItems.count)")
+
         GeometryReader { geometry in
             VStack(spacing: 0) {
                 Spacer()
