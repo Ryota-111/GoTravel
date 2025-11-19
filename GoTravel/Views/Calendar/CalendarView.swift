@@ -80,7 +80,6 @@ struct CalendarView: View {
                 .environmentObject(viewModel)
                 .environmentObject(travelViewModel)
                 .ignoresSafeArea(.keyboard, edges: .bottom)
-                .id("\(selectedDate)-\(viewModel.plans.count)-\(travelViewModel.travelPlans.count)")
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -126,12 +125,9 @@ struct CalendarView: View {
             .task {
                 // CloudKitからプランを取得（初回のみ）
                 if !hasLoadedData, let userId = authVM.userId {
-                    print("📅 [CalendarView] Initial data load")
                     hasLoadedData = true
                     viewModel.refreshFromCloudKit(userId: userId)
                     travelViewModel.refreshFromCloudKit(userId: userId)
-                } else {
-                    print("📅 [CalendarView] Skipping refresh - already loaded")
                 }
             }
         }
@@ -158,8 +154,6 @@ struct CalendarView: View {
     }
 
     private var dailyTimeline: [CalendarTimelineItem] {
-        print("📅 [CalendarView] Computing dailyTimeline - viewModel.plans.count: \(viewModel.plans.count)")
-
         // Daily plan items
         let dailyPlanItems = viewModel.plans
             .filter { plan in
@@ -177,8 +171,6 @@ struct CalendarView: View {
                     relatedTravelPlan: nil
                 )
             }
-
-        print("📅 [CalendarView] Daily plans: \(dailyPlanItems.count)")
 
         // Outing plan items
         let outingPlanItems = viewModel.plans
@@ -216,11 +208,8 @@ struct CalendarView: View {
                 )
             }
 
-        print("📅 [CalendarView] Outing plans: \(outingPlanItems.count)")
-        print("📅 [CalendarView] Travel plans: \(travelItems.count)")
-
         // 時系列順にソート
-        let sortedItems = (dailyPlanItems + outingPlanItems + travelItems).sorted { item1, item2 in
+        return (dailyPlanItems + outingPlanItems + travelItems).sorted { item1, item2 in
             let components1 = calendar.dateComponents([.hour, .minute], from: item1.time)
             let components2 = calendar.dateComponents([.hour, .minute], from: item2.time)
 
@@ -229,9 +218,6 @@ struct CalendarView: View {
 
             return minutes1 < minutes2
         }
-
-        print("📅 [CalendarView] Total timeline items: \(sortedItems.count)")
-        return sortedItems
     }
 
     // 指定日がプランの範囲内かチェック

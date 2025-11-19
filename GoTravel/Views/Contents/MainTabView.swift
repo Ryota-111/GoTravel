@@ -3,6 +3,8 @@ import MapKit
 
 struct MainTabView: View {
     @State private var selectedTab: Int = 0
+    @State private var showICloudAlert = false
+    @State private var hasCheckedICloud = false
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -25,6 +27,29 @@ struct MainTabView: View {
                 let impact = UIImpactFeedbackGenerator(style: .light)
                 impact.impactOccurred()
             }
+        }
+        .task {
+            if !hasCheckedICloud {
+                hasCheckedICloud = true
+                await checkICloudStatus()
+            }
+        }
+        .alert("iCloudが必要です", isPresented: $showICloudAlert) {
+            Button("設定を開く", role: .none) {
+                if let url = URL(string: "App-prefs:CASTLE") {
+                    UIApplication.shared.open(url)
+                }
+            }
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("このアプリはデータを保存するためにiCloudを使用します。iCloudにサインインしてください。\n\n設定 > [あなたの名前] > iCloud")
+        }
+    }
+
+    private func checkICloudStatus() async {
+        let isAvailable = await CloudKitService.shared.isICloudAvailable()
+        if !isAvailable {
+            showICloudAlert = true
         }
     }
 }
