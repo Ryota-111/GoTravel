@@ -27,6 +27,7 @@ struct EnjoyWorldView: View {
     @State private var showDeleteConfirmation = false
     @State private var planEventToDelete: Plan?
     @State private var showPlanDeleteConfirmation = false
+    @State private var showAuthError = false
     @Environment(\.colorScheme) var colorScheme
     @Namespace private var animation
 
@@ -145,14 +146,25 @@ struct EnjoyWorldView: View {
             }
             .sheet(isPresented: $showAddPlan) {
                 AddPlanView { newPlan in
+                    print("🌍 [EnjoyWorldView] AddPlanView onSave called")
+                    print("🌍 [EnjoyWorldView] - authVM.userId: \(authVM.userId ?? "nil")")
                     if let userId = authVM.userId {
+                        print("🌍 [EnjoyWorldView] - userId is valid, calling plansViewModel.add()")
                         plansViewModel.add(newPlan, userId: userId)
+                    } else {
+                        print("❌ [EnjoyWorldView] - userId is NIL! Plan will NOT be saved!")
+                        showAuthError = true
                     }
                 }
             }
             .sheet(isPresented: $showJoinPlan) {
                 JoinTravelPlanView()
                     .environmentObject(travelPlanViewModel)
+            }
+            .alert("認証が必要です", isPresented: $showAuthError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("予定を保存するには、アプリを再起動してApple IDでサインインしてください。")
             }
             .alert("旅行計画を削除", isPresented: $showDeleteConfirmation, presenting: planToDelete) { plan in
                 Button("削除", role: .destructive) {

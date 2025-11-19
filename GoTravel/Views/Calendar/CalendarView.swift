@@ -27,6 +27,7 @@ struct CalendarView: View {
     @State private var dragOffset: CGFloat = 0
     @State private var isTimelineExpanded = false
     @State private var hasLoadedData = false
+    @State private var showAuthError = false
     @Environment(\.colorScheme) var colorScheme
     @Namespace private var animation
 
@@ -117,10 +118,21 @@ struct CalendarView: View {
             }
             .sheet(isPresented: $showAddSheet) {
                 AddPlanView { newPlan in
+                    print("📅 [CalendarView] AddPlanView onSave called")
+                    print("📅 [CalendarView] - authVM.userId: \(authVM.userId ?? "nil")")
                     if let userId = authVM.userId {
+                        print("📅 [CalendarView] - userId is valid, calling viewModel.add()")
                         viewModel.add(newPlan, userId: userId)
+                    } else {
+                        print("❌ [CalendarView] - userId is NIL! Plan will NOT be saved!")
+                        showAuthError = true
                     }
                 }
+            }
+            .alert("認証が必要です", isPresented: $showAuthError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("予定を保存するには、アプリを再起動してApple IDでサインインしてください。")
             }
             .task {
                 // CloudKitからプランを取得（初回のみ）

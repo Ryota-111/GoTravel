@@ -99,6 +99,7 @@ struct TravelPlanDetailView: View {
         }
         .sheet(isPresented: $showBasicInfoEditor) {
             EditTravelPlanBasicInfoView(plan: plan)
+                .environmentObject(viewModel)
         }
         .sheet(isPresented: $showBudgetSummary) {
             if let currentPlan = currentPlan {
@@ -194,8 +195,11 @@ struct TravelPlanDetailView: View {
                 lastUpdatedInfo(plan: plan)
             }
 
-            if let localImageFileName = plan.localImageFileName,
-               let image = FileManager.documentsImage(named: localImageFileName) {
+            // 画像を表示: planImagesキャッシュを優先、なければローカルファイルから読み込む
+            if let planId = plan.id, let image = viewModel.planImages[planId] {
+                planImage(image: image)
+            } else if let localImageFileName = plan.localImageFileName,
+                      let image = FileManager.documentsImage(named: localImageFileName) {
                 planImage(image: image)
             }
         }

@@ -34,21 +34,34 @@ final class PlansViewModel: ObservableObject {
 
     @MainActor
     func add(_ plan: Plan, userId: String) {
+        print("🟢 [PlansViewModel] add() called")
+        print("🟢 [PlansViewModel] - plan.id: \(plan.id)")
+        print("🟢 [PlansViewModel] - plan.title: \(plan.title)")
+        print("🟢 [PlansViewModel] - userId: \(userId)")
+
         plans.append(plan)
+        print("🟢 [PlansViewModel] - plan added to local array, plans.count: \(plans.count)")
 
         Task {
             do {
+                print("🟢 [PlansViewModel] - calling CloudKitService.savePlan()")
                 let savedPlan = try await CloudKitService.shared.savePlan(plan, userId: userId)
+                print("✅ [PlansViewModel] - CloudKit save SUCCESS")
+
                 NotificationService.shared.schedulePlanNotifications(for: savedPlan)
 
                 await MainActor.run {
                     if let index = self.plans.firstIndex(where: { $0.id == plan.id }) {
                         self.plans[index] = savedPlan
+                        print("✅ [PlansViewModel] - Updated plan in array at index \(index)")
                     }
                 }
             } catch {
+                print("❌ [PlansViewModel] - CloudKit save FAILED: \(error)")
+                print("❌ [PlansViewModel] - Error description: \(error.localizedDescription)")
                 await MainActor.run {
                     self.plans.removeAll { $0.id == plan.id }
+                    print("❌ [PlansViewModel] - Removed plan from local array, plans.count: \(self.plans.count)")
                 }
             }
         }

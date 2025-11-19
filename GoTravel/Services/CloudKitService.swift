@@ -361,14 +361,22 @@ final class CloudKitService {
 
     /// PlanをCloudKitに保存
     func savePlan(_ plan: Plan, userId: String) async throws -> Plan {
+        print("🟠 [CloudKit] Starting savePlan")
+        print("🟠 [CloudKit] - plan.id: \(plan.id)")
+        print("🟠 [CloudKit] - plan.title: \(plan.title)")
+        print("🟠 [CloudKit] - userId: \(userId)")
+
         let recordID = CKRecord.ID(recordName: plan.id)
 
         // 既存のレコードを取得してから更新、存在しない場合は新規作成
         let record: CKRecord
         do {
+            print("🟠 [CloudKit] Attempting to fetch existing record...")
             record = try await privateDatabase.record(for: recordID)
+            print("✅ [CloudKit] Existing record found, will update")
         } catch {
-            // レコードが存在しない場合は新規作成
+            print("⚠️ [CloudKit] Record not found, creating new one")
+            print("⚠️ [CloudKit] Error details: \(error)")
             record = CKRecord(recordType: "Plan", recordID: recordID)
         }
 
@@ -413,7 +421,10 @@ final class CloudKitService {
             record["scheduleItemsJSON"] = scheduleItemsJSON
         }
 
+        print("🟠 [CloudKit] Saving record to CloudKit...")
         let savedRecord = try await save(record)
+        print("✅ [CloudKit] Plan record saved successfully!")
+        print("✅ [CloudKit] - saved recordID: \(savedRecord.recordID.recordName)")
 
         // 保存されたレコードからPlanを再構築
         var updatedPlan = plan

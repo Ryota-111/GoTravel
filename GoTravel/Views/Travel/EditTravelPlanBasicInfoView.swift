@@ -5,7 +5,7 @@ import MapKit
 struct EditTravelPlanBasicInfoView: View {
     // MARK: - Properties
     @Environment(\.presentationMode) var presentationMode
-    @StateObject private var viewModel = TravelPlanViewModel()
+    @EnvironmentObject var viewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
 
     let plan: TravelPlan

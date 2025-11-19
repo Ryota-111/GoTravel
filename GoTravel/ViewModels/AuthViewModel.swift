@@ -9,28 +9,39 @@ final class AuthViewModel: ObservableObject {
     private let userDefaults = UserDefaults.standard
 
     init() {
+        print("🔐 [AuthViewModel] Initializing...")
         // UserDefaultsから保存されたユーザーIDを復元
         if let savedUserId = userDefaults.string(forKey: userIdKey) {
             self.userId = savedUserId
             self.isSignedIn = true
+            print("✅ [AuthViewModel] Restored userId from UserDefaults: \(savedUserId)")
+        } else {
+            print("⚠️ [AuthViewModel] No userId found in UserDefaults")
         }
+        print("🔐 [AuthViewModel] isSignedIn: \(self.isSignedIn)")
     }
 
     // Apple Sign Inでのサインイン
     func signInWithApple(userId: String) {
+        print("🔐 [AuthViewModel] signInWithApple() called with userId: \(userId)")
         DispatchQueue.main.async {
             self.userId = userId
             self.isSignedIn = true
             self.userDefaults.set(userId, forKey: self.userIdKey)
+            print("✅ [AuthViewModel] Sign in successful, userId saved to UserDefaults")
+            print("✅ [AuthViewModel] isSignedIn: \(self.isSignedIn)")
         }
     }
 
     // サインアウト
     func signOut() {
+        print("🔐 [AuthViewModel] signOut() called")
         DispatchQueue.main.async {
             self.isSignedIn = false
             self.userId = nil
             self.userDefaults.removeObject(forKey: self.userIdKey)
+            print("✅ [AuthViewModel] Sign out successful")
+            print("✅ [AuthViewModel] isSignedIn: \(self.isSignedIn)")
         }
     }
 }
