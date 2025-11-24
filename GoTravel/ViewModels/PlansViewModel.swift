@@ -4,6 +4,7 @@ import Combine
 
 final class PlansViewModel: ObservableObject {
     @Published var plans: [Plan] = []
+    @Published var isLoading: Bool = false
     private var refreshTask: Task<Void, Never>?
 
     init() {
@@ -23,12 +24,16 @@ final class PlansViewModel: ObservableObject {
                 return
             }
 
+            self.isLoading = true
+
             do {
                 let results = try await CloudKitService.shared.fetchPlans(userId: userId)
                 self.plans = results
             } catch {
                 self.plans = []
             }
+
+            self.isLoading = false
         }
     }
 

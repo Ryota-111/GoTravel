@@ -10,6 +10,7 @@ struct EnjoyWorldView: View {
     }
 
     enum PlanListState {
+        case loading
         case empty
         case content([Plan])
     }
@@ -33,7 +34,9 @@ struct EnjoyWorldView: View {
 
     // MARK: - Computed Properties
     private var travelPlansState: ViewState {
-        if travelPlanViewModel.travelPlans.isEmpty {
+        if travelPlanViewModel.isLoading {
+            return .loading
+        } else if travelPlanViewModel.travelPlans.isEmpty {
             return .empty
         } else {
             return .content(filteredTravelPlans)
@@ -41,7 +44,9 @@ struct EnjoyWorldView: View {
     }
 
     private var planListState: PlanListState {
-        if plansViewModel.plans.isEmpty {
+        if plansViewModel.isLoading {
+            return .loading
+        } else if plansViewModel.plans.isEmpty {
             return .empty
         } else {
             return .content(filteredPlans)
@@ -265,8 +270,18 @@ struct EnjoyWorldView: View {
         Group {
             switch travelPlansState {
             case .loading:
-                ProgressView()
-                    .padding(.horizontal, 20)
+                VStack(spacing: 15) {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                    Text("旅行計画を読み込み中...")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                }
+                .frame(width: 200, height: 200)
+                .background(Color.white.opacity(0.2))
+                .cornerRadius(25)
+                .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
+                .padding(.horizontal, 20)
             case .empty:
                 emptyTravelPlansView
             case .content(let plans):
@@ -297,6 +312,16 @@ struct EnjoyWorldView: View {
     private var planEventsListSection: some View {
         VStack(spacing: 15) {
             switch planListState {
+            case .loading:
+                VStack(spacing: 15) {
+                    ProgressView()
+                        .scaleEffect(1.2)
+                    Text("予定を読み込み中...")
+                        .font(.subheadline)
+                        .foregroundColor(.gray)
+                }
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 40)
             case .empty:
                 emptyPlanEventsView
             case .content(let plans):

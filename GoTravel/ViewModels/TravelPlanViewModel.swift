@@ -5,6 +5,7 @@ import UIKit
 final class TravelPlanViewModel: ObservableObject {
     @Published var travelPlans: [TravelPlan] = []
     @Published var planImages: [String: UIImage] = [:] // planId: image
+    @Published var isLoading: Bool = false
     private var refreshTask: Task<Void, Never>?
 
     init() {
@@ -26,6 +27,8 @@ final class TravelPlanViewModel: ObservableObject {
                 print("❌ [TravelPlanViewModel] userId is nil, cannot fetch")
                 return
             }
+
+            self.isLoading = true
 
             do {
                 print("🟣 [TravelPlanViewModel] Fetching from CloudKit...")
@@ -49,6 +52,8 @@ final class TravelPlanViewModel: ObservableObject {
                 print("❌ [TravelPlanViewModel] Error details: \(error.localizedDescription)")
                 self.travelPlans = []
             }
+
+            self.isLoading = false
         }
     }
 
