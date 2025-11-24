@@ -1187,7 +1187,21 @@ struct PlanDetailView: View {
 
     // MARK: - Computed Properties for Sidebar
     private var sortedPlans: [Plan] {
-        viewModel.plans.sorted { $0.startDate < $1.startDate }
+        let today = Calendar.current.startOfDay(for: Date())
+        return viewModel.plans
+            .filter { plan in
+                let endDate: Date
+                if plan.planType == .outing {
+                    // おでかけプランの場合は終了日をチェック
+                    endDate = Calendar.current.startOfDay(for: plan.endDate)
+                } else {
+                    // 日常プランの場合は開始日をチェック
+                    endDate = Calendar.current.startOfDay(for: plan.startDate)
+                }
+                // 今日以降のプランのみを表示
+                return endDate >= today
+            }
+            .sorted { $0.startDate < $1.startDate }
     }
 
     // MARK: - Edit Mode Functions

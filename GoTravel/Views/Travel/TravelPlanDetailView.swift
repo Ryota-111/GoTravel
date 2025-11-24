@@ -96,6 +96,7 @@ struct TravelPlanDetailView: View {
         .gesture(swipeBackGesture)
         .sheet(isPresented: $showScheduleEditor) {
             ScheduleEditorView(plan: plan)
+                .environmentObject(viewModel)
         }
         .sheet(isPresented: $showBasicInfoEditor) {
             EditTravelPlanBasicInfoView(plan: plan)

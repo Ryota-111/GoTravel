@@ -5,7 +5,7 @@ import MapKit
 struct ScheduleEditorView: View {
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.colorScheme) var colorScheme
-    @StateObject private var viewModel = TravelPlanViewModel()
+    @EnvironmentObject var viewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
 
     let plan: TravelPlan
