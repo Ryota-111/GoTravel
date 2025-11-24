@@ -29,6 +29,7 @@ struct EnjoyWorldView: View {
     @State private var planEventToDelete: Plan?
     @State private var showPlanDeleteConfirmation = false
     @State private var showAuthError = false
+    @State private var hasLoadedData = false
     @Environment(\.colorScheme) var colorScheme
     @Namespace private var animation
 
@@ -202,10 +203,11 @@ struct EnjoyWorldView: View {
             .onAppear {
                 selectedTab = hasOngoingPlans ? .ongoing : .all
 
-                // CloudKitからデータを取得
-                if let userId = authVM.userId {
+                // 初回のみCloudKitからデータを取得
+                if !hasLoadedData, let userId = authVM.userId {
                     travelPlanViewModel.refreshFromCloudKit(userId: userId)
                     plansViewModel.refreshFromCloudKit(userId: userId)
+                    hasLoadedData = true
                 }
             }
         }

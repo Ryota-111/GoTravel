@@ -6,6 +6,7 @@ struct PlacesListView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @StateObject private var vm = PlacesViewModel()
     @State private var selectedCategory: PlaceCategory = .hotel
+    @State private var hasLoadedData = false
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.scenePhase) var scenePhase
 
@@ -53,30 +54,17 @@ struct PlacesListView: View {
             .navigationBarHidden(true)
         }
         .navigationViewStyle(.stack)
-        .onAppear {
-            // CloudKitからデータを取得
-            if let userId = authVM.userId {
-                vm.refreshFromCloudKit(userId: userId)
-            }
-        }
         .task {
-            // ビューが表示されるたびにデータを再読み込み（NavigationStackでの戻りも含む）
-            if let userId = authVM.userId {
+            // 初回のみCloudKitからデータを取得
+            if !hasLoadedData, let userId = authVM.userId {
                 vm.refreshFromCloudKit(userId: userId)
+                hasLoadedData = true
             }
         }
         .refreshable {
             // Pull to refreshで更新
             if let userId = authVM.userId {
                 vm.refreshFromCloudKit(userId: userId)
-            }
-        }
-        .onChange(of: scenePhase) { oldPhase, newPhase in
-            // 画面がアクティブになった時にデータを再読み込み
-            if newPhase == .active {
-                if let userId = authVM.userId {
-                    vm.refreshFromCloudKit(userId: userId)
-                }
             }
         }
     }
@@ -264,20 +252,8 @@ struct PlacesListView: View {
 
     // MARK: - Actions
     private func deletePlace(_ place: VisitedPlace) {
-        guard let placeId = place.id else { return }
-
-        // CloudKitから削除
-        Task {
-            do {
-                try await CloudKitService.shared.deleteVisitedPlace(placeId: placeId)
-                // 削除後、リストを更新
-                if let userId = authVM.userId {
-                    vm.refreshFromCloudKit(userId: userId)
-                }
-            } catch {
-                print("❌ Failed to delete from CloudKit: \(error)")
-            }
-        }
+        guard let userId = authVM.userId else { return }
+        vm.delete(place, userId: userId)
     }
 }
 
