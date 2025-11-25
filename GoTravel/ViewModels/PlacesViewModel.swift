@@ -6,6 +6,7 @@ import UIKit
 final class PlacesViewModel: ObservableObject {
     @Published var places: [VisitedPlace] = []
     @Published var placeImages: [String: UIImage] = [:] // placeId: image
+    @Published var isLoading: Bool = false
 
     private var refreshTask: Task<Void, Never>?
 
@@ -29,6 +30,8 @@ final class PlacesViewModel: ObservableObject {
                 return
             }
 
+            self.isLoading = true
+
             do {
                 print("🟡 [PlacesViewModel] Fetching from CloudKit...")
                 let results = try await CloudKitService.shared.fetchVisitedPlaces(userId: userId)
@@ -51,6 +54,8 @@ final class PlacesViewModel: ObservableObject {
                 print("❌ [PlacesViewModel] Error details: \(error.localizedDescription)")
                 self.places = []
             }
+
+            self.isLoading = false
         }
     }
 

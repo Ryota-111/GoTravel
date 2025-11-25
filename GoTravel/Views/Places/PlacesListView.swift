@@ -72,11 +72,27 @@ struct PlacesListView: View {
     // MARK: - View Components
     private var contentView: some View {
         Group {
-            if filteredPlaces.isEmpty {
+            if vm.isLoading {
+                loadingView
+            } else if filteredPlaces.isEmpty {
                 emptyStateView
             } else {
                 placesListView
             }
+        }
+    }
+
+    private var loadingView: some View {
+        VStack {
+            Spacer()
+            ProgressView()
+                .progressViewStyle(CircularProgressViewStyle(tint: .orange))
+                .scaleEffect(1.5)
+            Text("読み込み中...")
+                .font(.subheadline)
+                .foregroundColor(secondaryTextColor)
+                .padding(.top, 20)
+            Spacer()
         }
     }
 
