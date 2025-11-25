@@ -45,29 +45,29 @@ struct ProfileView: View {
     private var profileHeaderSection: some View {
         VStack(spacing: 15) {
             // Avatar
-            Group {
+            ZStack {
                 if let ui = vm.avatarImage {
                     Image(uiImage: ui)
                         .resizable()
                         .scaledToFill()
+                        .frame(width: 140, height: 140)
                 } else {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        Color.blue.opacity(0.6),
-                                        Color.purple.opacity(0.6)
-                                    ]),
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color.blue.opacity(0.6),
+                                    Color.purple.opacity(0.6)
+                                ]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
                             )
+                        )
+                        .frame(width: 120, height: 120)
 
-                        Image(systemName: "person.fill")
-                            .font(.system(size: 60))
-                            .foregroundColor(.white.opacity(0.8))
-                    }
+                    Image(systemName: "person.fill")
+                        .font(.system(size: 60))
+                        .foregroundColor(.white.opacity(0.8))
                 }
             }
             .frame(width: 120, height: 120)
@@ -90,11 +90,11 @@ struct ProfileView: View {
 
             // User Info
             VStack(spacing: 6) {
-                Text(vm.displayName)
+                Text(authVM.userFullName ?? "ユーザー")
                     .font(.title2.bold())
                     .foregroundColor(colorScheme == .dark ? .white : .black)
 
-                Text(vm.email)
+                Text(authVM.userEmail ?? "")
                     .font(.subheadline)
                     .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
             }
@@ -111,7 +111,7 @@ struct ProfileView: View {
             ProfileMenuCard(
                 icon: "person.crop.circle",
                 title: "プロフィール編集",
-                subtitle: "名前、写真の変更",
+                subtitle: "写真の変更",
                 color: .blue
             )
         }
@@ -255,6 +255,7 @@ struct ProfileMenuCard: View {
 
 struct ProfileEditView: View {
     @StateObject var vm: ProfileViewModel
+    @EnvironmentObject var authVM: AuthViewModel
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.colorScheme) var colorScheme
     @State private var showImagePicker = false
@@ -267,11 +268,12 @@ struct ProfileEditView: View {
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 25) {
+                    // User Info (read-only)
+                    userInfoSection
+
                     avatarSection
 
-                    nameEmailEditSection
-
-                    saveButton
+                    infoNote
                 }
                 .padding(.horizontal)
                 .padding(.top, 20)
@@ -307,33 +309,150 @@ struct ProfileEditView: View {
         )
         .ignoresSafeArea()
     }
-    
+
+    private var userInfoSection: some View {
+        VStack(spacing: 20) {
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image(systemName: "person.fill")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                    Text("名前")
+                        .font(.caption.bold())
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                }
+
+                Text(authVM.userFullName ?? "ユーザー")
+                    .font(.body)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(
+                                colorScheme == .dark ?
+                                    Color.white.opacity(0.05) :
+                                    Color.white.opacity(0.5)
+                            )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                    )
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Image(systemName: "envelope.fill")
+                        .font(.caption)
+                        .foregroundColor(.blue)
+                    Text("メールアドレス")
+                        .font(.caption.bold())
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                }
+
+                Text(authVM.userEmail ?? "")
+                    .font(.body)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .padding()
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(
+                                colorScheme == .dark ?
+                                    Color.white.opacity(0.05) :
+                                    Color.white.opacity(0.5)
+                            )
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                    )
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(
+                    colorScheme == .dark ?
+                        Color.white.opacity(0.1) :
+                        Color.white.opacity(0.2)
+                )
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.blue.opacity(0.3),
+                            Color.blue.opacity(0.1)
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        )
+        .shadow(color: Color.blue.opacity(0.2), radius: 10, x: 0, y: 5)
+        .opacity(animateContent ? 1 : 0)
+        .offset(y: animateContent ? 0 : -20)
+        .animation(.spring(response: 0.6, dampingFraction: 0.8), value: animateContent)
+    }
+
+    private var infoNote: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Image(systemName: "info.circle.fill")
+                    .foregroundColor(.blue)
+                Text("お知らせ")
+                    .font(.caption.bold())
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+            }
+
+            Text("名前とメールアドレスはApple IDから取得されます。変更する場合は、Apple IDの設定から変更してください。")
+                .font(.caption)
+                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.blue.opacity(0.1))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+        )
+        .opacity(animateContent ? 1 : 0)
+        .offset(y: animateContent ? 0 : 20)
+        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: animateContent)
+    }
+
     private var avatarSection: some View {
         VStack(spacing: 15) {
             ZStack(alignment: .bottomTrailing) {
-                Group {
+                ZStack {
                     if let ui = vm.avatarImage {
                         Image(uiImage: ui)
                             .resizable()
                             .scaledToFill()
+                            .frame(width: 140, height: 140)
                     } else {
-                        ZStack {
-                            Circle()
-                                .fill(
-                                    LinearGradient(
-                                        gradient: Gradient(colors: [
-                                            Color.blue.opacity(0.6),
-                                            Color.purple.opacity(0.6)
-                                        ]),
-                                        startPoint: .topLeading,
-                                        endPoint: .bottomTrailing
-                                    )
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        Color.blue.opacity(0.6),
+                                        Color.purple.opacity(0.6)
+                                    ]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
                                 )
+                            )
+                            .frame(width: 120, height: 120)
 
-                            Image(systemName: "person.fill")
-                                .font(.system(size: 60))
-                                .foregroundColor(.white.opacity(0.8))
-                        }
+                        Image(systemName: "person.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(.white.opacity(0.8))
                     }
                 }
                 .frame(width: 120, height: 120)
@@ -405,129 +524,6 @@ struct ProfileEditView: View {
         .opacity(animateContent ? 1 : 0)
         .offset(y: animateContent ? 0 : -20)
         .animation(.spring(response: 0.6, dampingFraction: 0.8), value: animateContent)
-    }
-    private var nameEmailEditSection: some View {
-        VStack(spacing: 20) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Image(systemName: "person.fill")
-                        .font(.caption)
-                        .foregroundColor(.blue)
-                    Text("名前")
-                        .font(.caption.bold())
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
-                }
-
-                TextField("名前を入力", text: $vm.profile.name)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(
-                                colorScheme == .dark ?
-                                    Color.white.opacity(0.05) :
-                                    Color.white.opacity(0.5)
-                            )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.blue.opacity(0.3), lineWidth: 1)
-                    )
-            }
-
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Image(systemName: "envelope.fill")
-                        .font(.caption)
-                        .foregroundColor(.blue)
-                    Text("メールアドレス")
-                        .font(.caption.bold())
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
-                }
-
-                TextField("メールアドレスを入力", text: $vm.profile.email)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                    .padding()
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(
-                                colorScheme == .dark ?
-                                    Color.white.opacity(0.05) :
-                                    Color.white.opacity(0.5)
-                            )
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.blue.opacity(0.3), lineWidth: 1)
-                    )
-            }
-        }
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(
-                    colorScheme == .dark ?
-                        Color.white.opacity(0.1) :
-                        Color.white.opacity(0.2)
-                )
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(
-                    LinearGradient(
-                        gradient: Gradient(colors: [
-                            Color.blue.opacity(0.3),
-                            Color.blue.opacity(0.1)
-                        ]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        )
-        .shadow(color: Color.blue.opacity(0.2), radius: 10, x: 0, y: 5)
-        .opacity(animateContent ? 1 : 0)
-        .offset(y: animateContent ? 0 : 20)
-        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: animateContent)
-    }
-
-    private var saveButton: some View {
-        Button(action: {
-            vm.saveProfile()
-            presentationMode.wrappedValue.dismiss()
-        }) {
-            HStack(spacing: 8) {
-                if vm.isSaving {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                } else {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.title3)
-                }
-
-                Text(vm.isSaving ? "保存中..." : "保存")
-                    .font(.headline)
-            }
-            .foregroundColor(.white)
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        Color.blue.opacity(0.8),
-                        Color.blue.opacity(0.6)
-                    ]),
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
-            .cornerRadius(16)
-            .shadow(color: Color.blue.opacity(0.3), radius: 10, x: 0, y: 5)
-        }
-        .disabled(vm.isSaving)
-        .opacity(animateContent ? 1 : 0)
-        .offset(y: animateContent ? 0 : 20)
-        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.15), value: animateContent)
     }
 }
 

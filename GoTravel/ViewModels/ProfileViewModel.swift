@@ -3,45 +3,15 @@ import Combine
 import UIKit
 
 final class ProfileViewModel: ObservableObject {
-    @Published var profile: Profile
     @Published var avatarImage: UIImage?
     @Published var isSaving: Bool = false
 
-    private let defaultsKey = "profile_v1"
-
-    var displayName: String {
-        profile.name
-    }
-
-    var email: String {
-        profile.email
-    }
+    private let avatarFileNameKey = "profile_avatar_fileName"
 
     init() {
-        if let data = UserDefaults.standard.data(forKey: defaultsKey),
-           let decoded = try? JSONDecoder().decode(Profile.self, from: data) {
-            self.profile = decoded
-            if let fileName = decoded.avatarImageFileName {
-                self.avatarImage = FileManager.documentsImage(named: fileName)
-            } else {
-                self.avatarImage = nil
-            }
-        } else {
-            // Initialize with default values
-            self.profile = Profile(
-                name: "Your Name",
-                email: "you@example.com",
-                avatarImageFileName: nil
-            )
-            self.avatarImage = nil
-        }
-    }
-
-    func saveProfile() {
-        isSaving = true
-        defer { isSaving = false }
-        if let encoded = try? JSONEncoder().encode(profile) {
-            UserDefaults.standard.set(encoded, forKey: defaultsKey)
+        // アバター画像を復元
+        if let fileName = UserDefaults.standard.string(forKey: avatarFileNameKey) {
+            self.avatarImage = FileManager.documentsImage(named: fileName)
         }
     }
 
@@ -54,22 +24,21 @@ final class ProfileViewModel: ObservableObject {
             do {
                 try FileManager.saveImageDataToDocuments(data: data, named: fileName)
                 DispatchQueue.main.async {
-                    self.profile.avatarImageFileName = fileName
                     self.avatarImage = image
-                    self.saveProfile()
+                    UserDefaults.standard.set(fileName, forKey: self.avatarFileNameKey)
                 }
             } catch {
+                print("❌ [ProfileViewModel] Failed to save avatar: \(error)")
             }
         }
     }
 
     func removeAvatar() {
-        if let fileName = profile.avatarImageFileName {
+        if let fileName = UserDefaults.standard.string(forKey: avatarFileNameKey) {
             try? FileManager.removeDocumentFile(named: fileName)
         }
-        profile.avatarImageFileName = nil
         avatarImage = nil
-        saveProfile()
+        UserDefaults.standard.removeObject(forKey: avatarFileNameKey)
     }
     
     func signOut(completion: @escaping (Result<Void, Error>) -> Void) {
