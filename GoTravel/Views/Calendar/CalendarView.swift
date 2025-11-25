@@ -18,8 +18,8 @@ enum CalendarItemType {
 }
 
 struct CalendarView: View {
-    @StateObject private var viewModel = PlansViewModel()
-    @StateObject private var travelViewModel = TravelPlanViewModel()
+    @EnvironmentObject var viewModel: PlansViewModel
+    @EnvironmentObject var travelViewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
     @State private var selectedDate = Date()
     @State private var currentMonth = Date()

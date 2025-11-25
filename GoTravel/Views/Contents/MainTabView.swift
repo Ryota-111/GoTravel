@@ -5,22 +5,26 @@ struct MainTabView: View {
     @State private var selectedTab: Int = 0
     @State private var showICloudAlert = false
     @State private var hasCheckedICloud = false
+    @StateObject private var plansViewModel = PlansViewModel()
+    @StateObject private var travelPlanViewModel = TravelPlanViewModel()
 
     var body: some View {
         TabView(selection: $selectedTab) {
             EnjoyWorldView()
-                .tabItem{ Label("計画", systemImage: "text.pad.header.badge.clock") }
+                .tabItem{ Label("計画", systemImage: "list.clipboard") }
                 .tag(0)
             CalendarView()
                 .tabItem { Label("カレンダー", systemImage: "calendar") }
                 .tag(1)
             PlacesListView()
-                .tabItem { Label("場所保存", systemImage: "figure.walk.suitcase.rolling") }
+                .tabItem { Label("場所保存", systemImage: "mappin.and.ellipse") }
                 .tag(2)
             AlbumHomeView()
                 .tabItem { Label("アルバム", systemImage: "photo.artframe") }
                 .tag(3)
         }
+        .environmentObject(plansViewModel)
+        .environmentObject(travelPlanViewModel)
         .accentColor(.orange)
         .onChange(of: selectedTab) { oldValue, newValue in
             if oldValue != newValue {

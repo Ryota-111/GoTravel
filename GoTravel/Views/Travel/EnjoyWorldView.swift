@@ -16,8 +16,8 @@ struct EnjoyWorldView: View {
     }
 
     // MARK: - Properties
-    @StateObject private var travelPlanViewModel = TravelPlanViewModel()
-    @StateObject private var plansViewModel = PlansViewModel()
+    @EnvironmentObject var travelPlanViewModel: TravelPlanViewModel
+    @EnvironmentObject var plansViewModel: PlansViewModel
     @EnvironmentObject var authVM: AuthViewModel
     @State private var selectedTab: TabType = .all
     @State private var selectedPlanTab: PlanTabType = .all

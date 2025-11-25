@@ -1313,7 +1313,9 @@ struct PlanDetailView: View {
 
     // MARK: - Helper Functions
     private func calculateMapRegion() -> MKCoordinateRegion {
-        guard let firstPlace = plan.places.first else {
+        guard let firstPlace = plan.places.first,
+              firstPlace.coordinate.latitude.isFinite,
+              firstPlace.coordinate.longitude.isFinite else {
             return MKCoordinateRegion(
                 center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
                 span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
