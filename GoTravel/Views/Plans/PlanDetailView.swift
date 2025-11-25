@@ -443,74 +443,72 @@ struct PlanDetailView: View {
                     )
                 }
 
-                // Places Card (おでかけプランのみ)
-                if editedPlanType == .outing {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("訪問場所")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(.secondary)
+                // Places Card
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("訪問場所")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(.secondary)
 
-                        if editedPlaces.isEmpty {
-                            Text("まだ場所が追加されていません")
-                                .foregroundColor(.secondary)
-                                .padding()
-                                .frame(maxWidth: .infinity)
-                                .background(Color(.systemBackground))
-                                .cornerRadius(10)
-                        } else {
-                            ForEach(editedPlaces) { place in
-                                HStack {
-                                    VStack(alignment: .leading) {
-                                        Text(place.name)
-                                            .foregroundColor(.primary)
-                                        if let address = place.address {
-                                            Text(address)
-                                                .font(.caption)
-                                                .foregroundColor(.secondary)
-                                        }
-                                    }
-                                    Spacer()
-                                    Button(action: {
-                                        if let index = editedPlaces.firstIndex(where: { $0.id == place.id }) {
-                                            editedPlaces.remove(at: index)
-                                        }
-                                    }) {
-                                        Image(systemName: "trash")
-                                            .foregroundColor(.red)
+                    if editedPlaces.isEmpty {
+                        Text("まだ場所が追加されていません")
+                            .foregroundColor(.secondary)
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                            .background(Color(.systemBackground))
+                            .cornerRadius(10)
+                    } else {
+                        ForEach(editedPlaces) { place in
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text(place.name)
+                                        .foregroundColor(.primary)
+                                    if let address = place.address {
+                                        Text(address)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
                                     }
                                 }
-                                .padding(12)
-                                .background(Color(.systemBackground))
-                                .cornerRadius(10)
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
-                                        .stroke(Color(.separator).opacity(0.5), lineWidth: 1)
-                                )
+                                Spacer()
+                                Button(action: {
+                                    if let index = editedPlaces.firstIndex(where: { $0.id == place.id }) {
+                                        editedPlaces.remove(at: index)
+                                    }
+                                }) {
+                                    Image(systemName: "trash")
+                                        .foregroundColor(.red)
+                                }
                             }
-                        }
-
-                        Button(action: {
-                            showAddPlaceInEdit = true
-                        }) {
-                            HStack {
-                                Image(systemName: "plus.circle.fill")
-                                Text("場所を追加")
-                            }
-                            .foregroundColor(.white)
                             .padding(12)
-                            .frame(maxWidth: .infinity)
-                            .background(Color.blue)
+                            .background(Color(.systemBackground))
                             .cornerRadius(10)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .stroke(Color(.separator).opacity(0.5), lineWidth: 1)
+                            )
                         }
                     }
-                    .padding(16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(Color(.secondarySystemBackground))
-                            .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
-                    )
+
+                    Button(action: {
+                        showAddPlaceInEdit = true
+                    }) {
+                        HStack {
+                            Image(systemName: "plus.circle.fill")
+                            Text("場所を追加")
+                        }
+                        .foregroundColor(.white)
+                        .padding(12)
+                        .frame(maxWidth: .infinity)
+                        .background(planColor)
+                        .cornerRadius(10)
+                    }
                 }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(Color(.secondarySystemBackground))
+                        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+                )
 
                 // Action Buttons
                 HStack(spacing: 12) {
