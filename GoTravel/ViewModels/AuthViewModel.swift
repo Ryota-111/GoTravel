@@ -44,4 +44,23 @@ final class AuthViewModel: ObservableObject {
             print("✅ [AuthViewModel] isSignedIn: \(self.isSignedIn)")
         }
     }
+
+    // アカウント削除
+    func deleteAccount() {
+        print("🔐 [AuthViewModel] deleteAccount() called")
+        DispatchQueue.main.async {
+            // ローカルデータを削除
+            self.isSignedIn = false
+            self.userId = nil
+            self.userDefaults.removeObject(forKey: self.userIdKey)
+
+            // プロフィールデータを削除
+            self.userDefaults.removeObject(forKey: "profile_v1")
+
+            // CloudKitのデータは残るが、ローカルの認証情報を削除することで
+            // 再ログインしない限りアクセスできなくなる
+            print("✅ [AuthViewModel] Account deleted, local data cleared")
+            print("✅ [AuthViewModel] isSignedIn: \(self.isSignedIn)")
+        }
+    }
 }

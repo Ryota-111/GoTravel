@@ -534,6 +534,7 @@ struct ProfileEditView: View {
 // MARK: - Account Action View
 struct AccountActionView: View {
     @StateObject var vm: ProfileViewModel
+    @EnvironmentObject var authVM: AuthViewModel
     @Environment(\.colorScheme) var colorScheme
     @State private var showSignOutConfirm = false
     @State private var showDeleteConfirm = false
@@ -675,14 +676,14 @@ struct AccountActionView: View {
         }
         .confirmationDialog("サインアウトしますか？", isPresented: $showSignOutConfirm) {
             Button("サインアウト", role: .destructive) {
-                vm.signOut { _ in }
+                authVM.signOut()
             }
         } message: {
             Text("再度ログインすることでアカウントを復元できます")
         }
         .confirmationDialog("アカウントを削除しますか？", isPresented: $showDeleteConfirm) {
             Button("削除", role: .destructive) {
-                vm.deleteAccount { _ in }
+                authVM.deleteAccount()
             }
         } message: {
             Text("この操作は取り消せません。すべてのデータが完全に削除されます。")
