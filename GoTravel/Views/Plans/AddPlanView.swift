@@ -632,8 +632,14 @@ struct AddPlanView: View {
         HStack {
             Image(systemName: icon)
                 .foregroundColor(secondaryTextColor)
-            TextField(placeholder, text: text)
-                .foregroundColor(primaryTextColor)
+            ZStack(alignment: .leading) {
+                if text.wrappedValue.isEmpty {
+                    Text(placeholder)
+                        .foregroundColor(.gray) // 常にライトモードの色で固定
+                }
+                TextField("", text: text)
+                    .foregroundColor(primaryTextColor)
+            }
         }
         .padding()
         .background(fieldBackgroundColor)
