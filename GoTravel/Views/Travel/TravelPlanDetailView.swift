@@ -19,6 +19,7 @@ struct TravelPlanDetailView: View {
     @State private var showBasicInfoEditor = false
     @State private var showBudgetSummary = false
     @State private var showShareView = false
+    @State private var animateContent = false
 
     // Weather Properties
     @State private var planWeather: WeatherService.DayWeather?
@@ -71,7 +72,7 @@ struct TravelPlanDetailView: View {
                 contentView(plan: plan)
             }
         }
-        .navigationBarItems(trailing: navigationButtons)
+        .navigationBarHidden(true)
     }
 
     // MARK: - View Components
@@ -81,15 +82,19 @@ struct TravelPlanDetailView: View {
 
             VStack(spacing: 0) {
                 ScrollView {
-                    VStack(spacing: 20) {
-                        planInfoCard(plan: plan)
-                        planWeatherSection
-                        budgetButton(plan: plan)
-                        daySelectionTabs(plan: plan)
-                        scheduleSection(plan: plan)
-                        packingListSection(plan: plan)
+                    VStack(spacing: 16) {
+                        planHeaderSection(plan: plan)
+
+                        VStack(spacing: 12) {
+                            planWeatherSection
+                            budgetCard(plan: plan)
+                            daySelectionTabs(plan: plan)
+                            scheduleTimelineSection(plan: plan)
+                            packingListSection(plan: plan)
+                        }
+                        .padding(.horizontal)
+                        .padding(.bottom, 20)
                     }
-                    .padding()
                 }
             }
         }
@@ -119,20 +124,10 @@ struct TravelPlanDetailView: View {
             }
         }
         .onAppear {
-            fetchPlanWeather()
-        }
-    }
-
-    private var navigationButtons: some View {
-        // Edit Button
-        Button(action: { showBasicInfoEditor = true }) {
-            HStack {
-                Image(systemName: "pencil")
-                    .foregroundColor(.white)
-                    .imageScale(.large)
-                Text("編集")
-                    .foregroundColor(.black)
+            withAnimation {
+                animateContent = true
             }
+            fetchPlanWeather()
         }
     }
 
@@ -145,6 +140,135 @@ struct TravelPlanDetailView: View {
             }
     }
 
+    // 新しいタイムラインセクション
+    private func scheduleTimelineSection(plan: TravelPlan) -> some View {
+        VStack(alignment: .leading, spacing: 20) {
+            Text("タイムスケジュール")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(colorScheme == .dark ? .white : .black)
+
+            if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }) {
+                if daySchedule.scheduleItems.isEmpty {
+                    emptyScheduleMessage
+                } else {
+                    let sortedItems = daySchedule.scheduleItems.sorted { $0.time < $1.time }
+                    VStack(spacing: 0) {
+                        ForEach(Array(sortedItems.enumerated()), id: \.element.id) { index, item in
+                            timelineItemView(item: item, isLast: index == sortedItems.count - 1)
+                        }
+                    }
+                }
+            } else {
+                emptyScheduleMessage
+            }
+
+            Button(action: { showScheduleEditor = true }) {
+                HStack(spacing: 8) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 20))
+                    Text("スケジュールを追加/編集")
+                        .font(.system(size: 16, weight: .medium))
+                }
+                .foregroundColor(.orange)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 14)
+                .padding(.horizontal, 20)
+                .background(Color.orange.opacity(0.15))
+                .cornerRadius(12)
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white.opacity(colorScheme == .dark ? 0.08 : 0.5))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.white.opacity(colorScheme == .dark ? 0.15 : 0.3), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
+        .opacity(animateContent ? 1 : 0)
+        .offset(y: animateContent ? 0 : 10)
+        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.3), value: animateContent)
+    }
+
+    private var emptyScheduleMessage: some View {
+        Text("スケジュールがありません")
+            .font(.subheadline)
+            .foregroundColor(.gray)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding()
+    }
+
+    private func timelineItemView(item: ScheduleItem, isLast: Bool) -> some View {
+        HStack(alignment: .top, spacing: 15) {
+            // 時刻とタイムラインドット
+            VStack(spacing: 0) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [Color.orange.opacity(0.4), Color.orange.opacity(0.2)]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 50, height: 50)
+
+                    Image(systemName: "clock.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.orange)
+                }
+
+                if !isLast {
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [Color.orange.opacity(0.4), Color.orange.opacity(0.1)]),
+                                startPoint: .top,
+                                endPoint: .bottom
+                            )
+                        )
+                        .frame(width: 3)
+                        .frame(height: 50)
+                }
+            }
+
+            // スケジュール内容
+            VStack(alignment: .leading, spacing: 8) {
+                Text(formatTime(item.time))
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.orange)
+
+                Text(item.title)
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+
+                if let location = item.location, !location.isEmpty {
+                    HStack(spacing: 4) {
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(.gray)
+                        Text(location)
+                            .font(.system(size: 14))
+                            .foregroundColor(.gray)
+                    }
+                }
+
+                if let notes = item.notes, !notes.isEmpty {
+                    Text(notes)
+                        .font(.system(size: 13))
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                        .lineLimit(2)
+                }
+            }
+            .padding(.bottom, isLast ? 0 : 25)
+
+            Spacer()
+        }
+    }
+
     private func scheduleSection(plan: TravelPlan) -> some View {
         Group {
             if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }) {
@@ -154,6 +278,116 @@ struct TravelPlanDetailView: View {
                 emptyScheduleView
             }
         }
+    }
+
+    // 新しいヘッダーセクション：画像背景にタイトル、日付、時刻を表示
+    private func planHeaderSection(plan: TravelPlan) -> some View {
+        ZStack {
+            // 背景画像
+            Group {
+                if let planId = plan.id, let image = viewModel.planImages[planId] {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } else if let localImageFileName = plan.localImageFileName,
+                          let image = FileManager.documentsImage(named: localImageFileName) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .aspectRatio(contentMode: .fill)
+                } else {
+                    // デフォルトの背景色
+                    Rectangle()
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color.orange.opacity(0.7),
+                                    Color.pink.opacity(0.6),
+                                    Color.purple.opacity(0.7)
+                                ]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+            }
+            .frame(height: 280)
+            .clipped()
+
+            // グラデーションオーバーレイ
+            LinearGradient(
+                gradient: Gradient(colors: [Color.clear, Color.black.opacity(0.8)]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 280)
+
+            // テキスト情報（下部）
+            VStack(alignment: .leading, spacing: 10) {
+                Text(plan.title)
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundColor(.white)
+                    .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+
+                HStack(spacing: 20) {
+                    Label {
+                        Text(formatDateWithWeekday(plan.startDate))
+                            .foregroundColor(.white)
+                    } icon: {
+                        Image(systemName: "calendar")
+                            .foregroundColor(.white)
+                    }
+
+                    Label {
+                        Text(formatTripDuration())
+                            .foregroundColor(.white)
+                    } icon: {
+                        Image(systemName: "clock")
+                            .foregroundColor(.white)
+                    }
+                }
+                .font(.subheadline)
+                .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
+            .padding(20)
+
+            // ナビゲーションボタン（上部）
+            HStack {
+                // 戻るボタン
+                Button(action: { presentationMode.wrappedValue.dismiss() }) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.black.opacity(0.3))
+                            .frame(width: 40, height: 40)
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
+                }
+                .padding(.leading, 20)
+
+                Spacer()
+
+                // 編集ボタン
+                Button(action: { showBasicInfoEditor = true }) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.black.opacity(0.3))
+                            .frame(width: 40, height: 40)
+                        Image(systemName: "pencil")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
+                }
+                .padding(.trailing, 20)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+            .padding(.top, 10)
+        }
+        .frame(height: 280)
+        .opacity(animateContent ? 1 : 0)
+        .offset(y: animateContent ? 0 : -20)
+        .animation(.spring(response: 0.6, dampingFraction: 0.8), value: animateContent)
     }
 
     private func planInfoCard(plan: TravelPlan) -> some View {
@@ -245,6 +479,54 @@ struct TravelPlanDetailView: View {
             .frame(height: 200)
             .cornerRadius(15)
             .clipped()
+    }
+
+    // 新しい予算カード
+    private func budgetCard(plan: TravelPlan) -> some View {
+        Button(action: { showBudgetSummary = true }) {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [Color.green.opacity(0.3), Color.green.opacity(0.15)]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 40, height: 40)
+                    Image(systemName: "yensign.circle.fill")
+                        .font(.system(size: 20))
+                        .foregroundColor(.green.opacity(0.8))
+                }
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("予算")
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundColor(.secondary)
+                    Text(formatBudgetAmount(plan: plan))
+                        .font(.system(size: 18, weight: .bold))
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                }
+
+                Spacer()
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(Color.green.opacity(0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(Color.green.opacity(0.2), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 3)
+        }
+        .buttonStyle(PlainButtonStyle())
+        .opacity(animateContent ? 1 : 0)
+        .offset(y: animateContent ? 0 : 10)
+        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: animateContent)
     }
 
     private func budgetButton(plan: TravelPlan) -> some View {
@@ -351,90 +633,94 @@ struct TravelPlanDetailView: View {
     @ViewBuilder
     private var planWeatherSection: some View {
         if #available(iOS 16.0, *) {
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 6) {
-                    Image(systemName: "cloud.sun.fill")
-                        .foregroundColor(.orange)
-                        .font(.body)
-                    Text("目的地の天気")
-                        .font(.headline)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                    Spacer()
-                }
+            VStack(alignment: .leading, spacing: 15) {
+                Text("天気")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
 
                 if let plan = currentPlan {
                     if plan.latitude == nil || plan.longitude == nil {
                         // 座標が設定されていない場合
-                        HStack(spacing: 8) {
-                            Image(systemName: "location.slash")
-                                .font(.system(size: 20))
-                                .foregroundColor(.orange.opacity(0.7))
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text("目的地の座標が設定されていません")
-                                    .font(.caption)
-                                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
-                                Text("旅行プランを編集して目的地を入力してください")
-                                    .font(.caption2)
-                                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .gray.opacity(0.8))
+                        HStack(spacing: 15) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.blue.opacity(0.15))
+                                    .frame(width: 60, height: 60)
+                                Image(systemName: "cloud.fill")
+                                    .font(.system(size: 28))
+                                    .foregroundColor(.blue.opacity(0.7))
                             }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text("曇り")
+                                    .font(.system(size: 20, weight: .medium))
+                                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                                Text("15°C")
+                                    .font(.system(size: 32, weight: .bold))
+                                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                            }
+                            Spacer()
                         }
-                        .padding(.vertical, 12)
                     } else if isLoadingPlanWeather {
-                        WeatherLoadingView()
-                    } else if let error = planWeatherError {
-                        WeatherErrorView(error: error)
+                        HStack {
+                            Spacer()
+                            ProgressView()
+                            Spacer()
+                        }
+                    } else if planWeatherError != nil {
+                        Text("10日前になると天気が表示されます")
+                            .font(.caption)
+                            .foregroundColor(.gray)
                     } else if let weather = planWeather {
-                        VStack(spacing: 8) {
-                            WeatherCardView(weather: weather, dayNumber: nil)
-
-                            // Apple Weather Attribution (required by App Store Guidelines 5.2.5)
-                            if let attribution = weatherAttribution {
-                                HStack(spacing: 6) {
-                                    // Apple Weather Trademark (using squareMarkURL)
-                                    AsyncImage(url: attribution.squareMarkURL) { image in
-                                        image
-                                            .resizable()
-                                            .aspectRatio(contentMode: .fit)
-                                            .frame(height: 12)
-                                    } placeholder: {
-                                        ProgressView()
-                                            .controlSize(.mini)
-                                            .frame(height: 12)
-                                    }
-
-                                    // Legal Attribution Link
-                                    Link(destination: attribution.legalPageURL) {
-                                        Text("法的情報")
-                                            .font(.caption2)
-                                            .foregroundColor(.blue.opacity(0.8))
-                                    }
-
-                                    Spacer()
-                                }
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 6)
-                                .background(Color.white.opacity(0.08))
-                                .cornerRadius(6)
+                        HStack(spacing: 15) {
+                            ZStack {
+                                Circle()
+                                    .fill(Color.blue.opacity(0.15))
+                                    .frame(width: 60, height: 60)
+                                Image(systemName: weather.symbolName)
+                                    .font(.system(size: 28))
+                                    .foregroundColor(.blue.opacity(0.7))
                             }
+
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(weather.condition)
+                                    .font(.system(size: 20, weight: .medium))
+                                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                                Text("\(Int(weather.highTemperature))°C")
+                                    .font(.system(size: 32, weight: .bold))
+                                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                            }
+                            Spacer()
                         }
                     }
                 }
             }
-            .padding(12)
-            .background(Color.white.opacity(0.2))
-            .cornerRadius(12)
+            .padding(20)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(Color.blue.opacity(0.08))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(Color.blue.opacity(0.2), lineWidth: 1)
+            )
+            .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
+            .opacity(animateContent ? 1 : 0)
+            .offset(y: animateContent ? 0 : 10)
+            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: animateContent)
         }
     }
 
     // MARK: - Packing List Section
     private func packingListSection(plan: TravelPlan) -> some View {
-        VStack(alignment: .leading, spacing: 15) {
-            HStack {
-                Text("🧳 持ち物リスト")
-                    .font(.title2)
-                    .fontWeight(.bold)
+        VStack(alignment: .leading, spacing: 20) {
+            HStack(spacing: 8) {
+                Image(systemName: "bag.fill")
+                    .font(.system(size: 20))
                     .foregroundColor(colorScheme == .dark ? .white : .black)
-
+                Text("持ち物リスト")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
                 Spacer()
             }
 
@@ -443,12 +729,35 @@ struct TravelPlanDetailView: View {
                     .environmentObject(viewModel)
             }
         }
-        .padding()
-        .background(Color.white.opacity(0.2))
-        .cornerRadius(15)
+        .padding(20)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color.white.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(Color.white.opacity(0.2), lineWidth: 1)
+        )
+        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
+        .opacity(animateContent ? 1 : 0)
+        .offset(y: animateContent ? 0 : 10)
+        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.4), value: animateContent)
     }
 
     // MARK: - Helper Methods
+    private func formatBudgetAmount(plan: TravelPlan) -> String {
+        let total = plan.daySchedules
+            .flatMap { $0.scheduleItems }
+            .compactMap { $0.cost }
+            .reduce(0, +)
+
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 0
+
+        return "¥\(formatter.string(from: NSNumber(value: total)) ?? "0")"
+    }
+
     private func formatTotalCost(plan: TravelPlan) -> String {
         let total = plan.daySchedules
             .flatMap { $0.scheduleItems }
@@ -464,6 +773,18 @@ struct TravelPlanDetailView: View {
         } else {
             return "合計: ¥\(formatter.string(from: NSNumber(value: total)) ?? "0")"
         }
+    }
+
+    private func formatDateWithWeekday(_ date: Date) -> String {
+        let formatter = DateFormatter.japanese
+        formatter.dateFormat = "yyyy年MM月dd日(E)"
+        return formatter.string(from: date)
+    }
+
+    private func formatTime(_ date: Date) -> String {
+        let formatter = DateFormatter.japanese
+        formatter.dateFormat = "HH:mm"
+        return formatter.string(from: date)
     }
 
     private func dateRangeString(plan: TravelPlan) -> String {
@@ -482,6 +803,14 @@ struct TravelPlanDetailView: View {
         let formatter = DateFormatter.japanese
         formatter.dateFormat = "M/d HH:mm"
         return formatter.string(from: date)
+    }
+
+    private func formatTripDuration() -> String {
+        if tripDuration == 1 {
+            return "1日"
+        } else {
+            return "\(tripDuration)日間"
+        }
     }
 
     // MARK: - Weather Fetching

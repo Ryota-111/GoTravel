@@ -36,24 +36,34 @@ struct PackingListView: View {
 
     // MARK: - View Components
     private var addItemSection: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             TextField("持ち物を追加", text: $newItemName)
-                .font(.body)
-                .padding(12)
+                .font(.system(size: 15))
+                .padding(10)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(colorScheme == .dark ? Color(.secondarySystemBackground) : Color.white.opacity(0.9))
-                        .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.white.opacity(0.6))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
-                        .stroke(Color.orange.opacity(0.3), lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(Color.black.opacity(0.2), lineWidth: 1)
                 )
 
             Button(action: addItem) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(.orange)
+                ZStack {
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: [Color.black.opacity(0.7), Color.black.opacity(0.5)]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 36, height: 36)
+                    Image(systemName: "plus")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                }
             }
             .disabled(newItemName.trimmingCharacters(in: .whitespaces).isEmpty)
             .opacity(newItemName.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1.0)
@@ -61,25 +71,25 @@ struct PackingListView: View {
     }
 
     private var emptyStateView: some View {
-        VStack(spacing: 10) {
-            Image(systemName: "checklist")
-                .font(.system(size: 40))
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.4) : .gray.opacity(0.4))
+        VStack(spacing: 12) {
+            Image(systemName: "bag")
+                .font(.system(size: 36))
+                .foregroundColor(.purple.opacity(0.4))
 
             Text("持ち物を追加してください")
-                .font(.subheadline)
+                .font(.system(size: 14))
                 .foregroundColor(.secondary)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 30)
+        .padding(.vertical, 24)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(Color.white.opacity(0.1))
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.purple.opacity(0.05))
         )
     }
 
     private func itemsList(for plan: TravelPlan) -> some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
             ForEach(plan.packingItems) { item in
                 PackingItemRow(item: item, planId: plan.id ?? "")
                     .environmentObject(viewModel)
@@ -123,17 +133,24 @@ struct PackingItemRow: View {
 
     // MARK: - Body
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 10) {
             // Checkbox
             Button(action: toggleCheck) {
-                Image(systemName: item.isChecked ? "checkmark.circle.fill" : "circle")
-                    .font(.title3)
-                    .foregroundColor(item.isChecked ? .green : .secondary)
+                ZStack {
+                    Circle()
+                        .stroke(item.isChecked ? Color.purple.opacity(0.5) : Color.gray.opacity(0.3), lineWidth: 2)
+                        .frame(width: 22, height: 22)
+                    if item.isChecked {
+                        Image(systemName: "checkmark")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.purple)
+                    }
+                }
             }
 
             // Item name
             Text(item.name)
-                .font(.body)
+                .font(.system(size: 15))
                 .foregroundColor(item.isChecked ? .secondary : (colorScheme == .dark ? .white : .black))
                 .strikethrough(item.isChecked, color: .secondary)
 
@@ -141,28 +158,24 @@ struct PackingItemRow: View {
 
             // Delete button
             Button(action: deleteItem) {
-                Image(systemName: "trash")
-                    .font(.subheadline)
-                    .foregroundColor(.red.opacity(0.7))
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundColor(.gray.opacity(0.5))
             }
         }
-        .padding(12)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(colorScheme == .dark ? Color(.secondarySystemBackground) : Color.white.opacity(0.9))
-                .shadow(color: Color.black.opacity(0.05), radius: 4, x: 0, y: 2)
+            RoundedRectangle(cornerRadius: 10)
+                .fill(item.isChecked
+                    ? Color.purple.opacity(0.08)
+                    : (colorScheme == .dark ? Color.white.opacity(0.05) : Color.white.opacity(0.6))
+                )
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: 10)
                 .stroke(
-                    LinearGradient(
-                        gradient: Gradient(colors: [
-                            item.isChecked ? Color.green.opacity(0.3) : Color.orange.opacity(0.2),
-                            Color.clear
-                        ]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
+                    item.isChecked ? Color.purple.opacity(0.3) : Color.clear,
                     lineWidth: 1
                 )
         )
