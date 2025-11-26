@@ -82,14 +82,17 @@ struct TravelPlanDetailView: View {
 
             VStack(spacing: 0) {
                 ScrollView {
-                    VStack(spacing: 16) {
+                    VStack(spacing: 0) {
                         planHeaderSection(plan: plan)
 
-                        VStack(spacing: 12) {
+                        VStack(spacing: 0) {
                             planWeatherSection
+                            Divider()
                             budgetCard(plan: plan)
+                            Divider()
                             daySelectionTabs(plan: plan)
                             scheduleTimelineSection(plan: plan)
+                            Divider()
                             packingListSection(plan: plan)
                         }
                         .padding(.horizontal)
@@ -178,16 +181,7 @@ struct TravelPlanDetailView: View {
             }
             .buttonStyle(PlainButtonStyle())
         }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(colorScheme == .dark ? 0.08 : 0.5))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.white.opacity(colorScheme == .dark ? 0.15 : 0.3), lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
+        .padding(.vertical, 20)
         .opacity(animateContent ? 1 : 0)
         .offset(y: animateContent ? 0 : 10)
         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.3), value: animateContent)
@@ -484,44 +478,35 @@ struct TravelPlanDetailView: View {
     // 新しい予算カード
     private func budgetCard(plan: TravelPlan) -> some View {
         Button(action: { showBudgetSummary = true }) {
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [Color.green.opacity(0.3), Color.green.opacity(0.15)]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+            VStack(alignment: .leading, spacing: 15) {
+                Text("予算")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
+
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [Color.green.opacity(0.3), Color.green.opacity(0.15)]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
                             )
-                        )
-                        .frame(width: 40, height: 40)
-                    Image(systemName: "yensign.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(.green.opacity(0.8))
-                }
+                            .frame(width: 40, height: 40)
+                        Image(systemName: "yensign.circle.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(.green.opacity(0.8))
+                    }
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("予算")
-                        .font(.system(size: 13, weight: .medium))
-                        .foregroundColor(.secondary)
                     Text(formatBudgetAmount(plan: plan))
-                        .font(.system(size: 18, weight: .bold))
+                        .font(.system(size: 30, weight: .bold))
                         .foregroundColor(colorScheme == .dark ? .white : .black)
-                }
 
-                Spacer()
+                    Spacer()
+                }
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(Color.green.opacity(0.08))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.green.opacity(0.2), lineWidth: 1)
-            )
-            .shadow(color: Color.black.opacity(0.05), radius: 6, x: 0, y: 3)
+            .padding(.vertical, 20)
         }
         .buttonStyle(PlainButtonStyle())
         .opacity(animateContent ? 1 : 0)
@@ -542,8 +527,8 @@ struct TravelPlanDetailView: View {
                         .foregroundColor(colorScheme == .dark ? .white : .black)
 
                     Text(formatTotalCost(plan: plan))
-                        .font(.subheadline)
-                        .foregroundColor(.green)
+                        .font(.headline)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
                 }
 
                 Spacer()
@@ -565,6 +550,7 @@ struct TravelPlanDetailView: View {
                 }
             }
         }
+        .padding(.vertical, 20)
     }
 
     private func dayTab(day: Int, plan: TravelPlan) -> some View {
@@ -641,32 +627,12 @@ struct TravelPlanDetailView: View {
                 if let plan = currentPlan {
                     if plan.latitude == nil || plan.longitude == nil {
                         // 座標が設定されていない場合
-                        HStack(spacing: 15) {
-                            ZStack {
-                                Circle()
-                                    .fill(Color.blue.opacity(0.15))
-                                    .frame(width: 60, height: 60)
-                                Image(systemName: "cloud.fill")
-                                    .font(.system(size: 28))
-                                    .foregroundColor(.blue.opacity(0.7))
-                            }
-
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text("曇り")
-                                    .font(.system(size: 20, weight: .medium))
-                                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                                Text("15°C")
-                                    .font(.system(size: 32, weight: .bold))
-                                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                            }
-                            Spacer()
-                        }
+                        Text("設定された場所には天気の情報がありませんでした")
+                            .font(.caption)
+                            .foregroundColor(.gray)
                     } else if isLoadingPlanWeather {
-                        HStack {
-                            Spacer()
-                            ProgressView()
-                            Spacer()
-                        }
+                        ProgressView()
+                            .frame(maxWidth: .infinity, alignment: .leading)
                     } else if planWeatherError != nil {
                         Text("10日前になると天気が表示されます")
                             .font(.caption)
@@ -695,16 +661,7 @@ struct TravelPlanDetailView: View {
                     }
                 }
             }
-            .padding(20)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.blue.opacity(0.08))
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(Color.blue.opacity(0.2), lineWidth: 1)
-            )
-            .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
+            .padding(.vertical, 20)
             .opacity(animateContent ? 1 : 0)
             .offset(y: animateContent ? 0 : 10)
             .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: animateContent)
@@ -714,31 +671,16 @@ struct TravelPlanDetailView: View {
     // MARK: - Packing List Section
     private func packingListSection(plan: TravelPlan) -> some View {
         VStack(alignment: .leading, spacing: 20) {
-            HStack(spacing: 8) {
-                Image(systemName: "bag.fill")
-                    .font(.system(size: 20))
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                Text("持ち物リスト")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-                Spacer()
-            }
+            Text("持ち物リスト")
+                .font(.system(size: 18, weight: .semibold))
+                .foregroundColor(colorScheme == .dark ? .white : .black)
 
             if let currentPlan = currentPlan {
                 PackingListView(plan: currentPlan)
                     .environmentObject(viewModel)
             }
         }
-        .padding(20)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.white.opacity(0.08))
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.white.opacity(0.2), lineWidth: 1)
-        )
-        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 4)
+        .padding(.vertical, 20)
         .opacity(animateContent ? 1 : 0)
         .offset(y: animateContent ? 0 : 10)
         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.4), value: animateContent)
