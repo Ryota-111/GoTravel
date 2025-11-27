@@ -181,7 +181,8 @@ struct TravelPlanDetailView: View {
             }
             .buttonStyle(PlainButtonStyle())
         }
-        .padding(.vertical, 20)
+        .padding(.top, 8)
+        .padding(.bottom, 20)
         .opacity(animateContent ? 1 : 0)
         .offset(y: animateContent ? 0 : 10)
         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.3), value: animateContent)
@@ -550,7 +551,8 @@ struct TravelPlanDetailView: View {
                 }
             }
         }
-        .padding(.vertical, 20)
+        .padding(.top, 20)
+        .padding(.bottom, 8)
     }
 
     private func dayTab(day: Int, plan: TravelPlan) -> some View {

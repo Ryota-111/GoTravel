@@ -179,7 +179,7 @@ struct CloudKitTestView: View {
             Text(alertMessage)
         }
         .task {
-            await initialCheck()
+            initialCheck()
         }
     }
 
@@ -194,8 +194,8 @@ struct CloudKitTestView: View {
         }
     }
 
-    private func initialCheck() async {
-        await checkAccountStatus()
+    private func initialCheck() {
+        checkAccountStatus()
     }
 
     private func checkAccountStatus() {
@@ -724,3 +724,4 @@ struct CloudKitTestView: View {
     CloudKitTestView()
         .environmentObject(AuthViewModel())
 }
+

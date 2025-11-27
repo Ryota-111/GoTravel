@@ -79,8 +79,6 @@ final class CloudKitService {
     /// 全レコードを取得（index不要）
     func fetchAllRecords(recordType: String) async throws -> [CKRecord] {
         var allRecords: [CKRecord] = []
-        var cursor: CKQueryOperation.Cursor?
-
         let query = CKQuery(recordType: recordType, predicate: NSPredicate(value: true))
         let operation = CKQueryOperation(query: query)
         operation.resultsLimit = CKQueryOperation.maximumResults
@@ -94,8 +92,7 @@ final class CloudKitService {
 
             operation.queryResultBlock = { result in
                 switch result {
-                case .success(let resultCursor):
-                    cursor = resultCursor
+                case .success(_):
                     continuation.resume(returning: allRecords)
                 case .failure(let error):
                     continuation.resume(throwing: error)
