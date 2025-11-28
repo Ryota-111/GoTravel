@@ -4,6 +4,7 @@ import SwiftUI
 struct AlbumHomeView: View {
     @StateObject private var albumManager = AlbumManager.shared
     @StateObject private var travelPlanViewModel = TravelPlanViewModel()
+    @EnvironmentObject var authVM: AuthViewModel
     @Environment(\.colorScheme) var colorScheme
     @State private var showCreateAlbum = false
     @State private var selectedAlbum: Album?
@@ -69,6 +70,10 @@ struct AlbumHomeView: View {
             .onAppear {
                 withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
                     animateCards = true
+                }
+                // Fetch travel plans from CloudKit
+                if let userId = authVM.userId {
+                    travelPlanViewModel.refreshFromCloudKit(userId: userId)
                 }
             }
         }
