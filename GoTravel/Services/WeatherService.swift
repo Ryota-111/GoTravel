@@ -57,16 +57,18 @@ final class WeatherService {
     }
 
     struct WeatherAttribution {
-        let squareMarkURL: URL
+        let combinedMarkLightURL: URL
+        let combinedMarkDarkURL: URL
         let legalPageURL: URL
     }
 
     // MARK: - Get Weather Attribution
-    func getWeatherAttribution(latitude: Double, longitude: Double) async throws -> WeatherAttribution {
+    func getWeatherAttribution() async throws -> WeatherAttribution {
         let attribution = try await service.attribution
 
         return WeatherAttribution(
-            squareMarkURL: attribution.squareMarkURL,
+            combinedMarkLightURL: attribution.combinedMarkLightURL,
+            combinedMarkDarkURL: attribution.combinedMarkDarkURL,
             legalPageURL: attribution.legalPageURL
         )
     }

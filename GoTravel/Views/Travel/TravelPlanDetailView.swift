@@ -1,4 +1,5 @@
 import SwiftUI
+import WeatherKit
 
 // EnjoyWorldView -> TravelPlanの詳細画面
 struct TravelPlanDetailView: View {
@@ -662,6 +663,28 @@ struct TravelPlanDetailView: View {
                         }
                     }
                 }
+
+                // Weather attribution
+                if let attribution = weatherAttribution {
+                    VStack(alignment: .trailing, spacing: 4) {
+                        AsyncImage(url: colorScheme == .dark ? attribution.combinedMarkLightURL : attribution.combinedMarkDarkURL) { image in
+                            image
+                                .resizable()
+                                .scaledToFit()
+                                .frame(height: 15)
+                        } placeholder: {
+                            ProgressView()
+                                .controlSize(.mini)
+                        }
+
+                        Link(destination: attribution.legalPageURL) {
+                            Text("その他のデータソース")
+                                .font(.caption2)
+                                .foregroundColor(.blue)
+                        }
+                    }
+                    .frame(maxWidth: .infinity, alignment: .trailing)
+                }
             }
             .padding(.vertical, 20)
             .opacity(animateContent ? 1 : 0)
@@ -792,10 +815,7 @@ struct TravelPlanDetailView: View {
                 )
 
                 // Fetch attribution
-                let fetchedAttribution = try await WeatherService.shared.getWeatherAttribution(
-                    latitude: latitude,
-                    longitude: longitude
-                )
+                let fetchedAttribution = try await WeatherService.shared.getWeatherAttribution()
 
                 self.planWeather = fetchedWeather
                 self.weatherAttribution = fetchedAttribution

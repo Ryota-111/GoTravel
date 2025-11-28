@@ -74,7 +74,7 @@ struct PackingListView: View {
         VStack(spacing: 12) {
             Image(systemName: "bag")
                 .font(.system(size: 36))
-                .foregroundColor(.purple.opacity(0.4))
+                .foregroundColor(.black.opacity(0.4))
 
             Text("持ち物を追加してください")
                 .font(.system(size: 14))
@@ -84,7 +84,7 @@ struct PackingListView: View {
         .padding(.vertical, 24)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color.purple.opacity(0.05))
+                .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.white.opacity(0.6))
         )
     }
 
