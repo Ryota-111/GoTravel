@@ -623,9 +623,32 @@ struct TravelPlanDetailView: View {
     private var planWeatherSection: some View {
         if #available(iOS 16.0, *) {
             VStack(alignment: .leading, spacing: 15) {
-                Text("天気")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                HStack {
+                    Text("天気")
+                        .font(.system(size: 18, weight: .semibold))
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                    
+                    if let attribution = weatherAttribution {
+                        VStack(alignment: .trailing, spacing: 4) {
+                            AsyncImage(url: colorScheme == .dark ? attribution.combinedMarkLightURL : attribution.combinedMarkDarkURL) { image in
+                                image
+                                    .resizable()
+                                    .scaledToFit()
+                                    .frame(height: 15)
+                            } placeholder: {
+                                ProgressView()
+                                    .controlSize(.mini)
+                            }
+
+                            Link(destination: attribution.legalPageURL) {
+                                Text("その他のデータソース")
+                                    .font(.caption2)
+                                    .foregroundColor(.blue)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, alignment: .trailing)
+                    }
+                }
 
                 if let plan = currentPlan {
                     if plan.latitude == nil || plan.longitude == nil {
@@ -662,28 +685,6 @@ struct TravelPlanDetailView: View {
                             Spacer()
                         }
                     }
-                }
-
-                // Weather attribution
-                if let attribution = weatherAttribution {
-                    VStack(alignment: .trailing, spacing: 4) {
-                        AsyncImage(url: colorScheme == .dark ? attribution.combinedMarkLightURL : attribution.combinedMarkDarkURL) { image in
-                            image
-                                .resizable()
-                                .scaledToFit()
-                                .frame(height: 15)
-                        } placeholder: {
-                            ProgressView()
-                                .controlSize(.mini)
-                        }
-
-                        Link(destination: attribution.legalPageURL) {
-                            Text("その他のデータソース")
-                                .font(.caption2)
-                                .foregroundColor(.blue)
-                        }
-                    }
-                    .frame(maxWidth: .infinity, alignment: .trailing)
                 }
             }
             .padding(.vertical, 20)
