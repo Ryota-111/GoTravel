@@ -105,37 +105,45 @@ struct PlaceDetailView: View {
     // MARK: - View Mode
     private var viewModeView: some View {
         VStack(spacing: 0) {
-            // Header Image
+            // Header Image with title overlay
             headerImageView
 
             // Content Card
-            VStack(alignment: .leading, spacing: 15) {
+            VStack(alignment: .leading, spacing: 0) {
                 // Category Tag
                 categoryTag
+                    .padding(.horizontal, 24)
+                    .padding(.top, 20)
 
-                // Title
-                titleSection
+                // Gradient Separator
+                gradientSeparator
 
                 // Notes Section
                 notesSection
+                    .padding(.horizontal, 24)
 
-                // Action Buttons
-                actionButtons
+                // Gradient Separator
+                gradientSeparator
 
-                // Map Section (expandable)
-                if showMap {
-                    mapSection
-                }
+                // Map Section (always visible)
+                mapSection
+                    .padding(.horizontal, 24)
 
-                // Street View Section (expandable)
-                if showStreetView {
-                    streetViewSection
-                }
+                // Gradient Separator
+                gradientSeparator
+
+                // Street View Section
+                streetViewSection
+                    .padding(.horizontal, 24)
+
+                // Gradient Separator
+                gradientSeparator
 
                 // Visit Date
                 visitDateSection
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 24)
             }
-            .padding(24)
         }
     }
 
@@ -326,12 +334,13 @@ struct PlaceDetailView: View {
 
     // MARK: - Header Image (View Mode)
     private var headerImageView: some View {
-        ZStack {
+        ZStack(alignment: .bottomLeading) {
+            // Background Image
             if let image = displayImage {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .frame(height: 200)
+                    .frame(height: 250)
                     .clipped()
             } else {
                 Rectangle()
@@ -345,17 +354,49 @@ struct PlaceDetailView: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(height: 200)
+                    .frame(height: 250)
                     .overlay(
                         Image(systemName: place.category.iconName)
                             .font(.system(size: 80))
                             .foregroundColor(.white.opacity(0.3))
                     )
             }
+
+            // Gradient Overlay for better text readability
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color.black.opacity(0),
+                    Color.black.opacity(0.7)
+                ]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 150)
+            .frame(maxHeight: .infinity, alignment: .bottom)
+
+            // Title and Address Overlay
+            VStack(alignment: .leading, spacing: 8) {
+                Text(place.title)
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundColor(.white)
+                    .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
+
+                if let address = place.address {
+                    HStack(spacing: 6) {
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.subheadline)
+
+                        Text(address)
+                            .font(.subheadline)
+                            .lineLimit(2)
+                    }
+                    .foregroundColor(.white.opacity(0.9))
+                    .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
+                }
+            }
+            .padding(24)
         }
-        .cornerRadius(15)
-        .padding(.horizontal, 24)
-        .padding(.vertical, 24)
+        .frame(height: 250)
     }
 
     // MARK: - Header Image (Edit Mode)
@@ -417,29 +458,22 @@ struct PlaceDetailView: View {
         .padding(.vertical, 24)
     }
 
-    // MARK: - Title Section
-    private var titleSection: some View {
-        HStack(alignment: .top) {
-            VStack(alignment: .leading, spacing: 8) {
-                Text(place.title)
-                    .font(.system(size: 32, weight: .bold))
-                    .foregroundColor(.primary)
-
-                if let address = place.address {
-                    HStack(spacing: 6) {
-                        Image(systemName: "mappin.circle.fill")
-                            .font(.caption)
-                            .foregroundColor(.orange)
-                        Text(address)
-                            .font(.subheadline)
-                            .foregroundColor(.secondary)
-                            .lineLimit(2)
-                    }
-                }
-            }
-
-            Spacer()
-        }
+    // MARK: - Gradient Separator
+    private var gradientSeparator: some View {
+        Rectangle()
+            .fill(
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        Color.clear,
+                        Color.orange.opacity(0.3),
+                        Color.clear
+                    ]),
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .frame(height: 1)
+            .padding(.vertical, 20)
     }
 
     // MARK: - Category Tag
@@ -485,86 +519,9 @@ struct PlaceDetailView: View {
                     .italic()
             }
         }
-        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.secondarySystemBackground))
-        )
     }
 
-    // MARK: - Action Buttons
-    private var actionButtons: some View {
-        HStack(spacing: 12) {
-            // Show on Map Button
-            Button(action: {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                    showMap.toggle()
-                }
-            }) {
-                HStack(spacing: 8) {
-                    Image(systemName: showMap ? "mappin.slash" : "mappin")
-                        .font(.body)
-                    Text(showMap ? "閉じる" : "マップを開く")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .foregroundColor(.orange)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    Color.orange.opacity(0.6),
-                                    Color.orange.opacity(0.1)
-                                ]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.orange, lineWidth: 2)
-                        )
-                )
-            }
-
-            // Street View Button
-            Button(action: {
-                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                    showStreetView.toggle()
-                }
-            }) {
-                HStack(spacing: 8) {
-                    Image(systemName: showStreetView ? "eye.slash.fill" : "eye.fill")
-                        .font(.body)
-                    Text(showStreetView ? "閉じる" : "ストリートビュー")
-                        .font(.subheadline.weight(.semibold))
-                }
-                .foregroundColor(.orange)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    Color.orange.opacity(0.6),
-                                    Color.orange.opacity(0.1)
-                                ]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 12)
-                                .stroke(Color.orange, lineWidth: 2)
-                        )
-                )
-            }
-        }
-    }
 
     // MARK: - Street View Section
     private var streetViewSection: some View {
@@ -618,10 +575,6 @@ struct PlaceDetailView: View {
                 )
             }
         }
-        .transition(.asymmetric(
-            insertion: .scale.combined(with: .opacity),
-            removal: .scale.combined(with: .opacity)
-        ))
     }
 
     // MARK: - Map Section
@@ -660,28 +613,24 @@ struct PlaceDetailView: View {
                 .padding(12)
             }
         }
-        .transition(.asymmetric(
-            insertion: .scale.combined(with: .opacity),
-            removal: .scale.combined(with: .opacity)
-        ))
     }
 
     // MARK: - Visit Date Section
     private var visitDateSection: some View {
         HStack(spacing: 12) {
             Image(systemName: "calendar.circle.fill")
-                .font(.title3)
+                .font(.headline)
                 .foregroundColor(.orange)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("訪問日")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.secondary)
+                    .font(.headline.weight(.semibold))
+                    .foregroundColor(.primary)
 
                 if let visitedAt = place.visitedAt {
                     Text(visitedAt.japaneseYearMonthDay())
-                        .font(.subheadline.weight(.medium))
-                        .foregroundColor(.primary)
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
                 } else {
                     Text("未設定")
                         .font(.subheadline)
@@ -691,11 +640,6 @@ struct PlaceDetailView: View {
 
             Spacer()
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.secondarySystemBackground))
-        )
     }
 
     // MARK: - Edit Mode Functions
