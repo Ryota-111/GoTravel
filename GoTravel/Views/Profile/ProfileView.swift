@@ -9,25 +9,29 @@ struct ProfileView: View {
 
     var body: some View {
         NavigationView {
-            ScrollView(showsIndicators: false) {
-                VStack(spacing: 0) {
-                    profileHeaderSection
+            ZStack {
+                // Background with mesh gradient effect
+                backgroundGradient
 
-                    VStack(spacing: 12) {
-                        profileEditCard
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 0) {
+                        profileHeaderSection
 
-                        accountCard
+                        VStack(spacing: 16) {
+                            profileEditCard
 
-                        helpSupportCard
+                            accountCard
 
-                        // cloudKitTestCard // 開発用：必要時にコメント解除
+                            helpSupportCard
+
+                            // cloudKitTestCard // 開発用：必要時にコメント解除
+                        }
+                        .padding(.horizontal, 24)
+                        .padding(.top, 30)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 20)
+                    .padding(.bottom, 40)
                 }
-                .padding(.bottom, 30)
             }
-            .background(colorScheme == .dark ? Color.black : Color(UIColor.systemGroupedBackground))
             .navigationTitle("")
             .navigationBarHidden(true)
             .onAppear {
@@ -36,188 +40,365 @@ struct ProfileView: View {
                 }
             }
         }
+        .navigationViewStyle(StackNavigationViewStyle())
+    }
+
+    // MARK: - Background Gradient
+    private var backgroundGradient: some View {
+        ZStack {
+            // Multi-layer gradient background
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color(red: 0.1, green: 0.05, blue: 0.2),
+                    Color(red: 0.15, green: 0.1, blue: 0.25),
+                    Color(red: 0.05, green: 0.05, blue: 0.15)
+                ]),
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+
+            // Animated gradient circles
+            Circle()
+                .fill(
+                    RadialGradient(
+                        gradient: Gradient(colors: [
+                            Color.purple.opacity(0.3),
+                            Color.clear
+                        ]),
+                        center: .topLeading,
+                        startRadius: 50,
+                        endRadius: 400
+                    )
+                )
+                .offset(x: -100, y: -200)
+                .blur(radius: 60)
+
+            Circle()
+                .fill(
+                    RadialGradient(
+                        gradient: Gradient(colors: [
+                            Color.blue.opacity(0.25),
+                            Color.clear
+                        ]),
+                        center: .bottomTrailing,
+                        startRadius: 50,
+                        endRadius: 350
+                    )
+                )
+                .offset(x: 150, y: 400)
+                .blur(radius: 70)
+
+            Circle()
+                .fill(
+                    RadialGradient(
+                        gradient: Gradient(colors: [
+                            Color.pink.opacity(0.2),
+                            Color.clear
+                        ]),
+                        center: .center,
+                        startRadius: 30,
+                        endRadius: 300
+                    )
+                )
+                .offset(x: 50, y: 100)
+                .blur(radius: 80)
+        }
     }
 
     // MARK: - Profile Header
     private var profileHeaderSection: some View {
         VStack(spacing: 0) {
-            // Gradient Header Background
-            ZStack(alignment: .bottom) {
-                LinearGradient(
-                    gradient: Gradient(colors: [Color.blue, Color.purple]),
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-                .frame(height: 200)
-                .clipShape(RoundedRectangle(cornerRadius: 0))
+            ZStack {
+                // Avatar with glassmorphism effect
+                VStack(spacing: 20) {
+                    Spacer()
+                        .frame(height: 40)
 
-                // Avatar with online status
-                ZStack(alignment: .bottomTrailing) {
+                    // Profile Photo
                     ZStack {
-                        if let ui = vm.avatarImage {
-                            Image(uiImage: ui)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 120, height: 120)
-                        } else {
-                            Circle()
-                                .fill(Color.gray.opacity(0.3))
-                                .frame(width: 120, height: 120)
+                        // Glowing background
+                        Circle()
+                            .fill(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        Color.purple.opacity(0.6),
+                                        Color.pink.opacity(0.4),
+                                        Color.blue.opacity(0.5)
+                                    ]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 150, height: 150)
+                            .blur(radius: 20)
 
-                            Image(systemName: "person.fill")
-                                .font(.system(size: 60))
-                                .foregroundColor(.white.opacity(0.8))
+                        // Avatar container
+                        ZStack(alignment: .bottomTrailing) {
+                            ZStack {
+                                if let ui = vm.avatarImage {
+                                    Image(uiImage: ui)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 140, height: 140)
+                                } else {
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                gradient: Gradient(colors: [
+                                                    Color.purple.opacity(0.5),
+                                                    Color.pink.opacity(0.3)
+                                                ]),
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .frame(width: 140, height: 140)
+
+                                    Image(systemName: "person.fill")
+                                        .font(.system(size: 70))
+                                        .foregroundColor(.white.opacity(0.9))
+                                }
+                            }
+                            .frame(width: 140, height: 140)
+                            .clipShape(Circle())
+                            .overlay(
+                                Circle()
+                                    .stroke(
+                                        LinearGradient(
+                                            gradient: Gradient(colors: [
+                                                Color.white.opacity(0.8),
+                                                Color.purple.opacity(0.4),
+                                                Color.pink.opacity(0.4)
+                                            ]),
+                                            startPoint: .topLeading,
+                                            endPoint: .bottomTrailing
+                                        ),
+                                        lineWidth: 4
+                                    )
+                            )
+                            .shadow(color: Color.purple.opacity(0.4), radius: 20, x: 0, y: 10)
                         }
                     }
-                    .frame(width: 120, height: 120)
-                    .clipShape(Circle())
-                    .overlay(
-                        Circle()
-                            .stroke(Color.white, lineWidth: 4)
-                    )
 
-                    // Online status indicator
-                    Circle()
-                        .fill(Color.green)
-                        .frame(width: 24, height: 24)
-                        .overlay(
-                            Circle()
-                                .stroke(Color.white, lineWidth: 3)
-                        )
-                        .offset(x: -5, y: -5)
+                    // User Info with glassmorphism card
+                    VStack(spacing: 12) {
+                        Text(authVM.userFullName ?? "ユーザー")
+                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .foregroundStyle(
+                                LinearGradient(
+                                    gradient: Gradient(colors: [.white, Color.white.opacity(0.8)]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+
+                        Text(authVM.userEmail ?? "")
+                            .font(.system(size: 15, weight: .medium))
+                            .foregroundColor(.white.opacity(0.7))
+                            .padding(.horizontal, 20)
+                            .padding(.vertical, 8)
+                            .background(
+                                Capsule()
+                                    .fill(Color.white.opacity(0.15))
+                                    .overlay(
+                                        Capsule()
+                                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                    )
+                            )
+                            .background(
+                                Capsule()
+                                    .fill(Color.white.opacity(0.05))
+                                    .blur(radius: 10)
+                                    .offset(y: 5)
+                            )
+                    }
+                    .padding(.top, 15)
+                    .padding(.bottom, 30)
                 }
-                .offset(y: 60)
             }
-
-            // User Info
-            VStack(spacing: 8) {
-                Text(authVM.userFullName ?? "ユーザー")
-                    .font(.title2.bold())
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-
-                Text(authVM.userEmail ?? "")
-                    .font(.subheadline)
-                    .foregroundColor(.gray)
-            }
-            .padding(.top, 70)
-            .padding(.bottom, 20)
         }
         .opacity(animateCards ? 1 : 0)
-        .offset(y: animateCards ? 0 : -20)
-        .animation(.spring(response: 0.6, dampingFraction: 0.8), value: animateCards)
+        .scaleEffect(animateCards ? 1 : 0.9)
+        .animation(.spring(response: 0.7, dampingFraction: 0.7), value: animateCards)
     }
 
     // MARK: - Profile Edit Card
     private var profileEditCard: some View {
         NavigationLink(destination: ProfileEditView(vm: vm)) {
-            ProfileMenuCard(
+            GlassMenuCard(
                 icon: "pencil",
                 title: "アカウント編集",
                 subtitle: "プロフィール情報を変更",
-                color: .blue
+                gradientColors: [Color(red: 0.4, green: 0.5, blue: 1.0), Color(red: 0.5, green: 0.3, blue: 0.9)]
             )
         }
+        .buttonStyle(CardButtonStyle())
         .opacity(animateCards ? 1 : 0)
-        .offset(y: animateCards ? 0 : 20)
-        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: animateCards)
+        .scaleEffect(animateCards ? 1 : 0.8)
+        .offset(y: animateCards ? 0 : 30)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.15), value: animateCards)
     }
 
     // MARK: - Account Card
     private var accountCard: some View {
         NavigationLink(destination: AccountActionView(vm: vm)) {
-            ProfileMenuCard(
+            GlassMenuCard(
                 icon: "gearshape",
                 title: "アカウント管理",
                 subtitle: "セキュリティとプライバシー",
-                color: .orange
+                gradientColors: [Color(red: 1.0, green: 0.5, blue: 0.3), Color(red: 1.0, green: 0.3, blue: 0.5)]
             )
         }
+        .buttonStyle(CardButtonStyle())
         .opacity(animateCards ? 1 : 0)
-        .offset(y: animateCards ? 0 : 20)
-        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.15), value: animateCards)
+        .scaleEffect(animateCards ? 1 : 0.8)
+        .offset(y: animateCards ? 0 : 30)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.25), value: animateCards)
     }
 
     // MARK: - Help & Support Card
     private var helpSupportCard: some View {
         NavigationLink(destination: HelpSupportView()) {
-            ProfileMenuCard(
+            GlassMenuCard(
                 icon: "questionmark.circle",
                 title: "ヘルプサポート",
                 subtitle: "よくある質問とお問い合わせ",
-                color: .green
+                gradientColors: [Color(red: 0.2, green: 0.8, blue: 0.5), Color(red: 0.3, green: 0.6, blue: 0.9)]
             )
         }
+        .buttonStyle(CardButtonStyle())
         .opacity(animateCards ? 1 : 0)
-        .offset(y: animateCards ? 0 : 20)
-        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: animateCards)
+        .scaleEffect(animateCards ? 1 : 0.8)
+        .offset(y: animateCards ? 0 : 30)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.35), value: animateCards)
     }
 
     // MARK: - CloudKit Test Card
     private var cloudKitTestCard: some View {
         NavigationLink(destination: CloudKitTestView()) {
-            ProfileMenuCard(
+            GlassMenuCard(
                 icon: "icloud.fill",
                 title: "CloudKit テスト",
                 subtitle: "iCloud接続確認、データ同期",
-                color: .purple
+                gradientColors: [Color.purple, Color.pink]
             )
         }
+        .buttonStyle(CardButtonStyle())
         .opacity(animateCards ? 1 : 0)
-        .offset(y: animateCards ? 0 : 20)
-        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.25), value: animateCards)
+        .scaleEffect(animateCards ? 1 : 0.8)
+        .offset(y: animateCards ? 0 : 30)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.45), value: animateCards)
     }
 
 }
 
-// MARK: - Profile Menu Card
-struct ProfileMenuCard: View {
+// MARK: - Glass Menu Card
+struct GlassMenuCard: View {
     let icon: String
     let title: String
     let subtitle: String
-    let color: Color
-    @Environment(\.colorScheme) var colorScheme
+    let gradientColors: [Color]
 
     var body: some View {
-        HStack(spacing: 16) {
-            // Icon
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.1))
-                    .frame(width: 50, height: 50)
+        ZStack {
+            // Glassmorphism background
+            RoundedRectangle(cornerRadius: 24)
+                .fill(
+                    LinearGradient(
+                        gradient: Gradient(colors: [
+                            Color.white.opacity(0.15),
+                            Color.white.opacity(0.08)
+                        ]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 24)
+                        .stroke(
+                            LinearGradient(
+                                gradient: Gradient(colors: [
+                                    Color.white.opacity(0.3),
+                                    Color.white.opacity(0.1)
+                                ]),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            ),
+                            lineWidth: 1.5
+                        )
+                )
+                .shadow(color: Color.black.opacity(0.15), radius: 15, x: 0, y: 8)
 
-                Image(systemName: icon)
-                    .font(.system(size: 20))
-                    .foregroundColor(color)
+            HStack(spacing: 18) {
+                // Gradient Icon
+                ZStack {
+                    // Glow effect
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: gradientColors),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 65, height: 65)
+                        .blur(radius: 15)
+                        .opacity(0.6)
+
+                    // Icon container
+                    Circle()
+                        .fill(
+                            LinearGradient(
+                                gradient: Gradient(colors: gradientColors),
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 60, height: 60)
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white.opacity(0.3), lineWidth: 2)
+                        )
+                        .shadow(color: gradientColors[0].opacity(0.4), radius: 8, x: 0, y: 4)
+
+                    Image(systemName: icon)
+                        .font(.system(size: 26, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+
+                // Text content
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(title)
+                        .font(.system(size: 18, weight: .bold, design: .rounded))
+                        .foregroundColor(.white)
+
+                    Text(subtitle)
+                        .font(.system(size: 14, weight: .medium))
+                        .foregroundColor(.white.opacity(0.7))
+                        .lineLimit(1)
+                }
+
+                Spacer()
+
+                // Arrow
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(.white.opacity(0.6))
             }
-
-            // Text
-            VStack(alignment: .leading, spacing: 4) {
-                Text(title)
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-
-                Text(subtitle)
-                    .font(.system(size: 13))
-                    .foregroundColor(.gray)
-            }
-
-            Spacer()
-
-            // Chevron
-            Image(systemName: "chevron.right")
-                .font(.system(size: 14))
-                .foregroundColor(.gray.opacity(0.5))
+            .padding(.horizontal, 22)
+            .padding(.vertical, 20)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 16)
-        .background(
-            RoundedRectangle(cornerRadius: 12)
-                .fill(colorScheme == .dark ? Color.white.opacity(0.05) : Color.white)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 12)
-                .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
-        )
+        .frame(height: 100)
+    }
+}
+
+// MARK: - Card Button Style
+struct CardButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.96 : 1.0)
+            .animation(.spring(response: 0.3, dampingFraction: 0.6), value: configuration.isPressed)
     }
 }
 
