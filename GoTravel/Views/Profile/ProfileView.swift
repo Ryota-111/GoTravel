@@ -8,39 +8,36 @@ struct ProfileView: View {
     @State private var animateCards = false
 
     var body: some View {
-        NavigationView {
-            ZStack {
-                // Background with mesh gradient effect
-                backgroundGradient
+        ZStack {
+            // Background with mesh gradient effect
+            backgroundGradient
 
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        profileHeaderSection
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    profileHeaderSection
 
-                        VStack(spacing: 16) {
-                            profileEditCard
+                    VStack(spacing: 16) {
+                        profileEditCard
 
-                            accountCard
+                        accountCard
 
-                            helpSupportCard
+                        helpSupportCard
 
-                            // cloudKitTestCard // 開発用：必要時にコメント解除
-                        }
-                        .padding(.horizontal, 24)
-                        .padding(.top, 30)
+                        // cloudKitTestCard // 開発用：必要時にコメント解除
                     }
-                    .padding(.bottom, 40)
+                    .padding(.horizontal, 24)
+                    .padding(.top, 30)
                 }
-            }
-            .navigationTitle("")
-            .navigationBarHidden(true)
-            .onAppear {
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
-                    animateCards = true
-                }
+                .padding(.bottom, 40)
             }
         }
-        .navigationViewStyle(StackNavigationViewStyle())
+        .navigationTitle("プロフィール")
+        .navigationBarTitleDisplayMode(.inline)
+        .onAppear {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
+                animateCards = true
+            }
+        }
     }
 
     // MARK: - Background Gradient
