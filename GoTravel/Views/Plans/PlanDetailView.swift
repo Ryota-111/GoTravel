@@ -56,14 +56,8 @@ struct PlanDetailView: View {
                 }
             }
             .background(
-                LinearGradient(
-                    gradient: Gradient(colors: colorScheme == .dark ?
-                        [planColor.opacity(0.8), .black] :
-                        [planColor.opacity(0.7), .white.opacity(0.1)]),
-                    startPoint: .top,
-                    endPoint: .bottom
-                )
-                .ignoresSafeArea()
+                (colorScheme == .dark ? Color.black : Color.white)
+                    .ignoresSafeArea()
             )
             .offset(x: showSidebar ? 280 : 0)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showSidebar)
@@ -180,51 +174,84 @@ struct PlanDetailView: View {
     // MARK: - View Mode
     private var viewModeView: some View {
         VStack(spacing: 0) {
-            // Header Image
+            // Top Border
+            topBorderView
+
+            // Header Image with Title and Date Overlay
             headerImageView
 
             // Content Card
-            VStack(alignment: .leading, spacing: 15) {
+            VStack(alignment: .leading, spacing: 0) {
                 // Category Tag
                 categoryTag
-
-                // Title
-                titleSection
-
-                // Date & Time Section
-                dateTimeSection
+                    .padding(.horizontal, 24)
+                    .padding(.top, 24)
 
                 // Description Section
                 if let description = plan.description, !description.isEmpty {
+                    gradientSeparator
                     descriptionSection(description)
+                        .padding(.horizontal, 24)
                 }
 
                 // Link Section
                 if let linkURL = plan.linkURL, !linkURL.isEmpty {
+                    gradientSeparator
                     linkSection(linkURL)
+                        .padding(.horizontal, 24)
                 }
 
-                // Schedule Section (おでかけプランのみ)
-                if plan.planType == .outing {
-                    scheduleSection
-                }
+                gradientSeparator
 
-                // Action Buttons
+                // Schedule Section
+                scheduleSection
+                    .padding(.horizontal, 24)
+
+                // Map Section
                 if !plan.places.isEmpty {
-                    actionButtons
+                    gradientSeparator
 
-                    // Map Section (expandable)
-                    if showMap {
-                        mapSection
-                    }
+                    mapSection
+                        .padding(.horizontal, 24)
                 }
 
                 // Places Section
                 if !plan.places.isEmpty {
+                    gradientSeparator
+
                     placesSection
+                        .padding(.horizontal, 24)
+                        .padding(.bottom, 24)
                 }
             }
-            .padding(24)
+        }
+    }
+
+    // MARK: - Top Border
+    private var topBorderView: some View {
+        Rectangle()
+            .fill(planColor)
+            .frame(height: 6)
+    }
+
+    // MARK: - Gradient Separator
+    private var gradientSeparator: some View {
+        LinearGradient(
+            gradient: Gradient(colors: separatorColors),
+            startPoint: .leading,
+            endPoint: .trailing
+        )
+        .frame(height: 1)
+        .padding(.vertical, 15)
+    }
+
+    private var separatorColors: [Color] {
+        if plan.planType == .daily {
+            // オレンジ
+            return [.orange, .orange]
+        } else {
+            // 青
+            return [.blue, .blue]
         }
     }
 
@@ -576,12 +603,13 @@ struct PlanDetailView: View {
 
     // MARK: - Header Image (View Mode)
     private var headerImageView: some View {
-        ZStack {
+        ZStack(alignment: .bottomLeading) {
+            // Background Image
             if let image = displayImage {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .frame(height: 200)
+                    .frame(height: 250)
                     .clipped()
             } else {
                 Rectangle()
@@ -595,17 +623,61 @@ struct PlanDetailView: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(height: 200)
+                    .frame(height: 250)
                     .overlay(
                         Image(systemName: planTypeIcon)
                             .font(.system(size: 80))
                             .foregroundColor(.white.opacity(0.3))
                     )
             }
+
+            // Gradient Overlay for better text readability
+            LinearGradient(
+                gradient: Gradient(colors: [
+                    Color.black.opacity(0),
+                    Color.black.opacity(0.7)
+                ]),
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            .frame(height: 150)
+            .frame(maxHeight: .infinity, alignment: .bottom)
+
+            // Title and Date Overlay
+            VStack(alignment: .leading, spacing: 8) {
+                Text(plan.title)
+                    .font(.system(size: 28, weight: .bold))
+                    .foregroundColor(.white)
+                    .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
+
+                HStack(spacing: 6) {
+                    Image(systemName: "calendar")
+                        .font(.subheadline)
+
+                    if plan.planType == .outing {
+                        Text(dateRangeString(plan.startDate, plan.endDate))
+                            .font(.subheadline)
+                    } else {
+                        Text(formatDate(plan.startDate))
+                            .font(.subheadline)
+                    }
+
+                    if plan.planType == .daily, let time = plan.time {
+                        HStack(spacing: 4) {
+                            Image(systemName: "clock.fill")
+                                .font(.caption)
+                            Text(formatTime(time))
+                                .font(.subheadline)
+                        }
+                        .padding(.leading, 4)
+                    }
+                }
+                .foregroundColor(.white.opacity(0.9))
+                .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
+            }
+            .padding(24)
         }
-        .cornerRadius(15)
-        .padding(.horizontal, 24)
-        .padding(.vertical, 24)
+        .frame(height: 300)
     }
 
     // MARK: - Header Image (Edit Mode)
@@ -615,7 +687,7 @@ struct PlanDetailView: View {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .frame(height: 200)
+                    .frame(height: 300)
                     .clipped()
             } else {
                 Rectangle()
@@ -629,7 +701,7 @@ struct PlanDetailView: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(height: 200)
+                    .frame(height: 300)
                     .overlay(
                         Image(systemName: editedPlanType == .daily ? "house.fill" : "figure.walk")
                             .font(.system(size: 80))
@@ -662,7 +734,6 @@ struct PlanDetailView: View {
                 .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
             }
         }
-        .cornerRadius(15)
         .padding(.horizontal, 24)
         .padding(.vertical, 24)
     }
@@ -733,52 +804,24 @@ struct PlanDetailView: View {
                 }
             }
         }
-        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.secondarySystemBackground))
-        )
     }
 
     // MARK: - Description Section
     private func descriptionSection(_ description: String) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "note.text")
-                    .font(.headline)
-                    .foregroundColor(planColor)
-                Text("予定内容")
-                    .font(.headline.weight(.semibold))
-                    .foregroundColor(.primary)
-            }
-
             Text(description)
                 .font(.body)
                 .foregroundColor(.secondary)
                 .lineSpacing(6)
                 .fixedSize(horizontal: false, vertical: true)
         }
-        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.secondarySystemBackground))
-        )
     }
 
     // MARK: - Link Section
     private func linkSection(_ linkURL: String) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "link")
-                    .font(.headline)
-                    .foregroundColor(planColor)
-                Text("関連リンク")
-                    .font(.headline.weight(.semibold))
-                    .foregroundColor(.primary)
-            }
-
             if let url = URL(string: linkURL) {
                 Link(destination: url) {
                     HStack {
@@ -801,12 +844,7 @@ struct PlanDetailView: View {
                 }
             }
         }
-        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.secondarySystemBackground))
-        )
     }
 
     // MARK: - Action Buttons
@@ -883,20 +921,13 @@ struct PlanDetailView: View {
                 .padding(12)
             }
         }
-        .transition(.asymmetric(
-            insertion: .scale.combined(with: .opacity),
-            removal: .scale.combined(with: .opacity)
-        ))
     }
 
     // MARK: - Schedule Section
     private var scheduleSection: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
-                Image(systemName: "clock.fill")
-                    .font(.headline)
-                    .foregroundColor(planColor)
-                Text("スケジュール")
+                Text("タイムスケジュール")
                     .font(.headline.weight(.semibold))
                     .foregroundColor(.primary)
 
@@ -927,10 +958,6 @@ struct PlanDetailView: View {
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 30)
-                .background(
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(Color(.tertiarySystemBackground))
-                )
             } else {
                 VStack(spacing: 10) {
                     ForEach(sortedScheduleItems) { item in
@@ -939,12 +966,7 @@ struct PlanDetailView: View {
                 }
             }
         }
-        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color(.secondarySystemBackground))
-        )
         .sheet(isPresented: $showScheduleEditor) {
             ScheduleItemEditorView(
                 plan: $plan,
@@ -1017,11 +1039,7 @@ struct PlanDetailView: View {
                     .foregroundColor(.secondary)
             }
         }
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(Color(.tertiarySystemBackground))
-        )
+        .padding(.vertical, 8)
     }
 
     private var sortedScheduleItems: [PlanScheduleItem] {
@@ -1040,14 +1058,9 @@ struct PlanDetailView: View {
     // MARK: - Places Section
     private var placesSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Image(systemName: "mappin.and.ellipse")
-                    .font(.headline)
-                    .foregroundColor(planColor)
-                Text("訪問予定の場所")
-                    .font(.headline.weight(.semibold))
-                    .foregroundColor(.primary)
-            }
+            Text("訪問予定の場所")
+                .font(.headline.weight(.semibold))
+                .foregroundColor(.primary)
 
             VStack(spacing: 12) {
                 ForEach(plan.places) { place in

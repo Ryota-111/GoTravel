@@ -21,6 +21,7 @@ struct TravelPlanDetailView: View {
     @State private var showBudgetSummary = false
     @State private var showShareView = false
     @State private var animateContent = false
+    @State private var dragOffset: CGFloat = 0
 
     // Weather Properties
     @State private var planWeather: WeatherService.DayWeather?
@@ -102,6 +103,8 @@ struct TravelPlanDetailView: View {
                 }
             }
         }
+        .offset(x: dragOffset * 0.3)
+        .opacity(1 - Double(dragOffset) / 500)
         .gesture(swipeBackGesture)
         .sheet(isPresented: $showScheduleEditor) {
             ScheduleEditorView(plan: plan)
@@ -136,10 +139,21 @@ struct TravelPlanDetailView: View {
     }
 
     private var swipeBackGesture: some Gesture {
-        DragGesture()
+        DragGesture(minimumDistance: 20, coordinateSpace: .local)
+            .onChanged { value in
+                // 右方向のドラッグのみを許可
+                if value.translation.width > 0 {
+                    dragOffset = value.translation.width
+                }
+            }
             .onEnded { value in
-                if value.translation.width > 100 {
+                if value.translation.width > 100 && value.translation.height < 50 && value.translation.height > -50 {
+                    // 十分な距離をドラッグし、かつ横方向のスワイプの場合のみdismiss
                     presentationMode.wrappedValue.dismiss()
+                }
+                // アニメーションでオフセットをリセット
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                    dragOffset = 0
                 }
             }
     }
