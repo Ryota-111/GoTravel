@@ -2,13 +2,24 @@ import SwiftUI
 
 struct SplashScreenView: View {
     @State private var isActive = false
+    @State private var showOnboarding = false
     @State private var opacity = 0.0
     @State private var scale = 0.8
 
     var body: some View {
         if isActive {
-            ContentView()
+            if showOnboarding {
+                OnboardingView {
+                    OnboardingManager.shared.completeOnboarding()
+                    withAnimation {
+                        showOnboarding = false
+                    }
+                }
                 .transition(.opacity.combined(with: .scale))
+            } else {
+                ContentView()
+                    .transition(.opacity.combined(with: .scale))
+            }
         } else {
             ZStack {
                 LinearGradient(
@@ -38,6 +49,9 @@ struct SplashScreenView: View {
                 }
 
                 DispatchQueue.main.asyncAfter(deadline: .now() + 2.0) {
+                    // Check if onboarding needs to be shown
+                    showOnboarding = !OnboardingManager.shared.hasCompletedOnboarding
+
                     withAnimation(.easeOut(duration: 0.5)) {
                         isActive = true
                     }
