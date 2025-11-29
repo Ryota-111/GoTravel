@@ -9,30 +9,27 @@ struct ProfileView: View {
 
     var body: some View {
         NavigationView {
-            ZStack {
-                backgroundGradient
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 0) {
+                    profileHeaderSection
 
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 25) {
-                        profileHeaderSection
+                    VStack(spacing: 12) {
+                        profileEditCard
 
-                        VStack(spacing: 16) {
-                            profileEditCard
+                        accountCard
 
-                            accountCard
+                        helpSupportCard
 
-                            helpSupportCard
-
-                            // cloudKitTestCard // 開発用：必要時にコメント解除
-                        }
-                        .padding(.horizontal)
+                        // cloudKitTestCard // 開発用：必要時にコメント解除
                     }
-                    .padding(.top, 5)
-                    .padding(.bottom, 30)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
                 }
-                .navigationTitle("プロフィール")
-                .navigationBarTitleDisplayMode(.large)
+                .padding(.bottom, 30)
             }
+            .background(colorScheme == .dark ? Color.black : Color(UIColor.systemGroupedBackground))
+            .navigationTitle("")
+            .navigationBarHidden(true)
             .onAppear {
                 withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
                     animateCards = true
@@ -43,63 +40,68 @@ struct ProfileView: View {
 
     // MARK: - Profile Header
     private var profileHeaderSection: some View {
-        VStack(spacing: 15) {
-            // Avatar
-            ZStack {
-                if let ui = vm.avatarImage {
-                    Image(uiImage: ui)
-                        .resizable()
-                        .scaledToFill()
-                        .frame(width: 140, height: 140)
-                } else {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    Color.blue.opacity(0.6),
-                                    Color.purple.opacity(0.6)
-                                ]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 120, height: 120)
+        VStack(spacing: 0) {
+            // Gradient Header Background
+            ZStack(alignment: .bottom) {
+                LinearGradient(
+                    gradient: Gradient(colors: [Color.blue, Color.purple]),
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+                .frame(height: 200)
+                .clipShape(RoundedRectangle(cornerRadius: 0))
 
-                    Image(systemName: "person.fill")
-                        .font(.system(size: 60))
-                        .foregroundColor(.white.opacity(0.8))
-                }
-            }
-            .frame(width: 120, height: 120)
-            .clipShape(Circle())
-            .overlay(
-                Circle()
-                    .stroke(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                Color.white.opacity(0.5),
-                                Color.white.opacity(0.2)
-                            ]),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 3
+                // Avatar with online status
+                ZStack(alignment: .bottomTrailing) {
+                    ZStack {
+                        if let ui = vm.avatarImage {
+                            Image(uiImage: ui)
+                                .resizable()
+                                .scaledToFill()
+                                .frame(width: 120, height: 120)
+                        } else {
+                            Circle()
+                                .fill(Color.gray.opacity(0.3))
+                                .frame(width: 120, height: 120)
+
+                            Image(systemName: "person.fill")
+                                .font(.system(size: 60))
+                                .foregroundColor(.white.opacity(0.8))
+                        }
+                    }
+                    .frame(width: 120, height: 120)
+                    .clipShape(Circle())
+                    .overlay(
+                        Circle()
+                            .stroke(Color.white, lineWidth: 4)
                     )
-            )
-            .shadow(color: .black.opacity(0.2), radius: 15, x: 0, y: 8)
+
+                    // Online status indicator
+                    Circle()
+                        .fill(Color.green)
+                        .frame(width: 24, height: 24)
+                        .overlay(
+                            Circle()
+                                .stroke(Color.white, lineWidth: 3)
+                        )
+                        .offset(x: -5, y: -5)
+                }
+                .offset(y: 60)
+            }
 
             // User Info
-            VStack(spacing: 6) {
+            VStack(spacing: 8) {
                 Text(authVM.userFullName ?? "ユーザー")
                     .font(.title2.bold())
                     .foregroundColor(colorScheme == .dark ? .white : .black)
 
                 Text(authVM.userEmail ?? "")
                     .font(.subheadline)
-                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                    .foregroundColor(.gray)
             }
+            .padding(.top, 70)
+            .padding(.bottom, 20)
         }
-        .padding(.vertical, 20)
         .opacity(animateCards ? 1 : 0)
         .offset(y: animateCards ? 0 : -20)
         .animation(.spring(response: 0.6, dampingFraction: 0.8), value: animateCards)
@@ -109,9 +111,9 @@ struct ProfileView: View {
     private var profileEditCard: some View {
         NavigationLink(destination: ProfileEditView(vm: vm)) {
             ProfileMenuCard(
-                icon: "person.crop.circle",
-                title: "プロフィール編集",
-                subtitle: "写真の変更",
+                icon: "pencil",
+                title: "アカウント編集",
+                subtitle: "プロフィール情報を変更",
                 color: .blue
             )
         }
@@ -124,9 +126,9 @@ struct ProfileView: View {
     private var accountCard: some View {
         NavigationLink(destination: AccountActionView(vm: vm)) {
             ProfileMenuCard(
-                icon: "person.badge.key",
-                title: "アカウント",
-                subtitle: "サインアウト、アカウント削除",
+                icon: "gearshape",
+                title: "アカウント管理",
+                subtitle: "セキュリティとプライバシー",
                 color: .orange
             )
         }
@@ -140,8 +142,8 @@ struct ProfileView: View {
         NavigationLink(destination: HelpSupportView()) {
             ProfileMenuCard(
                 icon: "questionmark.circle",
-                title: "ヘルプ・サポート",
-                subtitle: "使い方、お問い合わせ",
+                title: "ヘルプサポート",
+                subtitle: "よくある質問とお問い合わせ",
                 color: .green
             )
         }
@@ -165,17 +167,6 @@ struct ProfileView: View {
         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.25), value: animateCards)
     }
 
-    // MARK: - Background
-    private var backgroundGradient: some View {
-        LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ?
-                [.blue.opacity(0.7), .black] :
-                [.blue.opacity(0.6), .white.opacity(0.3)]),
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .ignoresSafeArea()
-    }
 }
 
 // MARK: - Profile Menu Card
@@ -187,69 +178,46 @@ struct ProfileMenuCard: View {
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
-        HStack(spacing: 15) {
+        HStack(spacing: 16) {
             // Icon
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                color.opacity(0.8),
-                                color.opacity(0.5)
-                            ]),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
+                    .fill(color.opacity(0.1))
                     .frame(width: 50, height: 50)
 
                 Image(systemName: icon)
-                    .font(.title3)
-                    .foregroundColor(.white)
+                    .font(.system(size: 20))
+                    .foregroundColor(color)
             }
 
             // Text
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
-                    .font(.headline)
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(colorScheme == .dark ? .white : .black)
 
                 Text(subtitle)
-                    .font(.caption)
-                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                    .font(.system(size: 13))
+                    .foregroundColor(.gray)
             }
 
             Spacer()
 
             // Chevron
             Image(systemName: "chevron.right")
-                .font(.subheadline)
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.5) : .gray.opacity(0.5))
+                .font(.system(size: 14))
+                .foregroundColor(.gray.opacity(0.5))
         }
-        .padding()
+        .padding(.horizontal, 20)
+        .padding(.vertical, 16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(
-                    colorScheme == .dark ?
-                        Color.white.opacity(0.1) :
-                        Color.white.opacity(0.2)
-                )
+            RoundedRectangle(cornerRadius: 12)
+                .fill(colorScheme == .dark ? Color.white.opacity(0.05) : Color.white)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(
-                    LinearGradient(
-                        gradient: Gradient(colors: [
-                            color.opacity(0.3),
-                            color.opacity(0.1)
-                        ]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.gray.opacity(0.2), lineWidth: 0.5)
         )
-        .shadow(color: color.opacity(0.2), radius: 10, x: 0, y: 5)
     }
 }
 

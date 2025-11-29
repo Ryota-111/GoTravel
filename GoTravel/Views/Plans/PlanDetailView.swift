@@ -677,7 +677,7 @@ struct PlanDetailView: View {
             }
             .padding(24)
         }
-        .frame(height: 300)
+        .frame(height: 250)
     }
 
     // MARK: - Header Image (Edit Mode)
