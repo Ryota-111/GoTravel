@@ -8,6 +8,9 @@ struct GoTravelApp: App {
         let avm = AuthViewModel()
         _authViewModel = StateObject(wrappedValue: avm)
 
+        // Core Dataの初期化（CloudKitとの自動同期を有効化）
+        _ = CoreDataManager.shared
+
         NotificationService.shared.requestAuthorization { granted in
             if granted {
                 NotificationService.shared.checkAuthorizationStatus { status in
@@ -37,6 +40,7 @@ struct GoTravelApp: App {
             SplashScreenView()
                 .environmentObject(authViewModel)
                 .environment(\.locale, Locale(identifier: "ja_JP"))
+                .environment(\.managedObjectContext, CoreDataManager.shared.viewContext)
         }
     }
 }

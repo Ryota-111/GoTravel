@@ -1,125 +1,170 @@
-import SwiftUI
 import Foundation
 import Combine
+import CoreData
 
-final class PlansViewModel: ObservableObject {
+/// Plan管理用ViewModel（Core Data + CloudKit自動同期版）
+final class PlansViewModel: NSObject, ObservableObject {
+    // MARK: - Published Properties
     @Published var plans: [Plan] = []
     @Published var isLoading: Bool = false
-    private var refreshTask: Task<Void, Never>?
 
-    init() {
-        // CloudKitからのデータ取得は各Viewで明示的に呼び出す
+    // MARK: - Private Properties
+    private let context: NSManagedObjectContext
+    private var fetchedResultsController: NSFetchedResultsController<PlanEntity>?
+    private var cancellables = Set<AnyCancellable>()
+
+    // MARK: - Initialization
+    override init() {
+        self.context = CoreDataManager.shared.viewContext
+        super.init()
+        print("🟢 [PlansViewModel] Initialized with Core Data")
     }
 
-    deinit {
-        refreshTask?.cancel()
-    }
+    // MARK: - Core Data Fetch
 
-    // CloudKitからデータを取得（userIdが必要）
-    func refreshFromCloudKit(userId: String? = nil) {
-        refreshTask?.cancel()
+    /// 指定ユーザーのPlanを取得（Core Dataから）
+    func setupFetchedResultsController(userId: String) {
+        print("🟢 [PlansViewModel] Setting up NSFetchedResultsController for userId: \(userId)")
 
-        refreshTask = Task { @MainActor in
-            guard let userId = userId else {
-                return
-            }
+        let fetchRequest: NSFetchRequest<PlanEntity> = PlanEntity.fetchRequest()
 
-            self.isLoading = true
+        // ユーザーIDでフィルタリング
+        fetchRequest.predicate = NSPredicate(format: "userId == %@", userId)
 
-            do {
-                let results = try await CloudKitService.shared.fetchPlans(userId: userId)
-                self.plans = results
-            } catch {
-                self.plans = []
-            }
+        // 開始日で降順ソート
+        fetchRequest.sortDescriptors = [NSSortDescriptor(key: "startDate", ascending: false)]
 
-            self.isLoading = false
+        fetchedResultsController = NSFetchedResultsController(
+            fetchRequest: fetchRequest,
+            managedObjectContext: context,
+            sectionNameKeyPath: nil,
+            cacheName: nil
+        )
+
+        fetchedResultsController?.delegate = self
+
+        do {
+            try fetchedResultsController?.performFetch()
+            updatePlans()
+            print("✅ [PlansViewModel] Fetched \(plans.count) plans from Core Data")
+        } catch {
+            print("❌ [PlansViewModel] Failed to fetch: \(error)")
         }
     }
 
+    /// FetchedResultsControllerの結果をplans配列に変換
+    private func updatePlans() {
+        guard let entities = fetchedResultsController?.fetchedObjects else {
+            plans = []
+            return
+        }
+
+        plans = entities.map { $0.toPlan() }
+    }
+
+    // MARK: - CRUD Operations
+
+    /// Planを追加（Core Dataに保存 → 自動的にCloudKitと同期）
     @MainActor
     func add(_ plan: Plan, userId: String) {
-        print("🟢 [PlansViewModel] add() called")
+        print("🟢 [PlansViewModel] Adding plan to Core Data")
         print("🟢 [PlansViewModel] - plan.id: \(plan.id)")
         print("🟢 [PlansViewModel] - plan.title: \(plan.title)")
-        print("🟢 [PlansViewModel] - userId: \(userId)")
 
-        plans.append(plan)
-        print("🟢 [PlansViewModel] - plan added to local array, plans.count: \(plans.count)")
+        var planToSave = plan
+        planToSave.userId = userId
 
-        Task {
-            do {
-                print("🟢 [PlansViewModel] - calling CloudKitService.savePlan()")
-                let savedPlan = try await CloudKitService.shared.savePlan(plan, userId: userId)
-                print("✅ [PlansViewModel] - CloudKit save SUCCESS")
+        // Core Dataに保存
+        context.perform {
+            _ = PlanEntity.create(from: planToSave, context: self.context)
+            CoreDataManager.shared.saveContext()
+            print("✅ [PlansViewModel] Plan saved to Core Data (will auto-sync to CloudKit)")
 
-                NotificationService.shared.schedulePlanNotifications(for: savedPlan)
-
-                await MainActor.run {
-                    if let index = self.plans.firstIndex(where: { $0.id == plan.id }) {
-                        self.plans[index] = savedPlan
-                        print("✅ [PlansViewModel] - Updated plan in array at index \(index)")
-                    }
-                }
-            } catch {
-                print("❌ [PlansViewModel] - CloudKit save FAILED: \(error)")
-                print("❌ [PlansViewModel] - Error description: \(error.localizedDescription)")
-                await MainActor.run {
-                    self.plans.removeAll { $0.id == plan.id }
-                    print("❌ [PlansViewModel] - Removed plan from local array, plans.count: \(self.plans.count)")
-                }
+            // 通知をスケジュール
+            DispatchQueue.main.async {
+                NotificationService.shared.schedulePlanNotifications(for: planToSave)
             }
         }
     }
 
+    /// Planを更新（Core Dataに保存 → 自動的にCloudKitと同期）
     @MainActor
     func update(_ plan: Plan, userId: String) {
-        if let index = plans.firstIndex(where: { $0.id == plan.id }) {
-            plans[index] = plan
-        }
+        print("🟢 [PlansViewModel] Updating plan in Core Data")
 
-        Task {
+        var planToSave = plan
+        planToSave.userId = userId
+
+        // Core Dataを更新
+        context.perform {
             do {
-                let updatedPlan = try await CloudKitService.shared.savePlan(plan, userId: userId)
-                NotificationService.shared.schedulePlanNotifications(for: updatedPlan)
+                if let entity = try PlanEntity.fetchById(id: plan.id, context: self.context) {
+                    entity.update(from: planToSave)
+                    CoreDataManager.shared.saveContext()
+                    print("✅ [PlansViewModel] Plan updated in Core Data (will auto-sync to CloudKit)")
 
-                await MainActor.run {
-                    if let index = self.plans.firstIndex(where: { $0.id == plan.id }) {
-                        self.plans[index] = updatedPlan
+                    // 通知を更新
+                    DispatchQueue.main.async {
+                        NotificationService.shared.schedulePlanNotifications(for: planToSave)
                     }
                 }
             } catch {
-                // エラー時は何もしない（ローカルは既に更新済み）
+                print("❌ [PlansViewModel] Failed to fetch entity for update: \(error)")
             }
         }
     }
 
+    /// IndexSetから削除
     func delete(at offsets: IndexSet, userId: String? = nil) {
         for index in offsets {
-           let plan = plans[index]
-           Task {
-               await deletePlan(plan, userId: userId)
-           }
+            let plan = plans[index]
+            Task {
+                await deletePlan(plan, userId: userId)
+            }
         }
     }
 
+    /// Planを削除（Core Dataから削除 → 自動的にCloudKitと同期）
     @MainActor
     func deletePlan(_ plan: Plan, userId: String? = nil) async {
+        print("🟢 [PlansViewModel] Deleting plan from Core Data")
+
+        // 通知をキャンセル
         NotificationService.shared.cancelPlanNotifications(for: plan.id)
 
-        // 即座にローカルリストから削除（UI更新）
-        plans.removeAll { $0.id == plan.id }
-
-        // CloudKitから削除（完了するまで待つ）
-        do {
-            try await CloudKitService.shared.deletePlan(planId: plan.id)
-        } catch {
-            // エラーの場合、削除をロールバック
-            if let userId = userId {
-                self.refreshFromCloudKit(userId: userId)
-            } else {
-                self.plans.append(plan)
+        // Core Dataから削除
+        await context.perform {
+            do {
+                if let entity = try PlanEntity.fetchById(id: plan.id, context: self.context) {
+                    self.context.delete(entity)
+                    CoreDataManager.shared.saveContext()
+                    print("✅ [PlansViewModel] Plan deleted from Core Data (will auto-sync to CloudKit)")
+                }
+            } catch {
+                print("❌ [PlansViewModel] Failed to delete: \(error)")
             }
+        }
+    }
+
+    // MARK: - Legacy Support (削除予定)
+
+    /// CloudKitからのリフレッシュ（互換性のために残すが、Core Dataが自動同期するため不要）
+    @available(*, deprecated, message: "Core Dataが自動でCloudKitと同期するため、このメソッドは不要です")
+    func refreshFromCloudKit(userId: String? = nil) {
+        guard let userId = userId else { return }
+        // Core Dataは自動同期するため、FetchedResultsControllerをセットアップするだけ
+        setupFetchedResultsController(userId: userId)
+    }
+}
+
+// MARK: - NSFetchedResultsControllerDelegate
+
+extension PlansViewModel: NSFetchedResultsControllerDelegate {
+    /// Core Dataの変更を検知してUIを自動更新
+    func controllerDidChangeContent(_ controller: NSFetchedResultsController<NSFetchRequestResult>) {
+        print("🔄 [PlansViewModel] Core Data changed, updating UI")
+        DispatchQueue.main.async {
+            self.updatePlans()
         }
     }
 }

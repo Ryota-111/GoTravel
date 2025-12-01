@@ -445,7 +445,8 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Travory;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.travel";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "訪問した場所を記録するために位置情報を使用します";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "現在地を地図に表示し、周辺の場所を検索するために位置情報を使用します";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "現在地を地図上に表示し、訪問した場所を記録するために位置情報へのアクセスが必要です。";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "訪問した場所の写真を保存・表示するためにフォトライブラリへのアクセスが必要です。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -488,7 +489,8 @@
 				INFOPLIST_KEY_CFBundleDisplayName = Travory;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.travel";
 				INFOPLIST_KEY_NSLocationAlwaysAndWhenInUseUsageDescription = "訪問した場所を記録するために位置情報を使用します";
-				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "現在地を地図に表示し、周辺の場所を検索するために位置情報を使用します";
+				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "現在地を地図上に表示し、訪問した場所を記録するために位置情報へのアクセスが必要です。";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "訪問した場所の写真を保存・表示するためにフォトライブラリへのアクセスが必要です。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;

@@ -55,17 +55,15 @@ struct PlacesListView: View {
         }
         .navigationViewStyle(.stack)
         .task {
-            // 初回のみCloudKitからデータを取得
+            // 初回のみCore DataのFetchedResultsControllerをセットアップ
             if !hasLoadedData, let userId = authVM.userId {
-                vm.refreshFromCloudKit(userId: userId)
+                vm.setupFetchedResultsController(userId: userId)
                 hasLoadedData = true
             }
         }
         .refreshable {
-            // Pull to refreshで更新
-            if let userId = authVM.userId {
-                vm.refreshFromCloudKit(userId: userId)
-            }
+            // Pull to refresh（Core Dataは自動同期するため、実際には不要）
+            // 何もしない - Core DataがCloudKitと自動同期
         }
     }
 
