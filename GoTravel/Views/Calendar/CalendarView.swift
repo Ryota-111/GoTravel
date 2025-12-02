@@ -135,11 +135,11 @@ struct CalendarView: View {
                 Text("予定を保存するには、アプリを再起動してApple IDでサインインしてください。")
             }
             .task {
-                // CloudKitからプランを取得（初回のみ）
+                // Core DataのFetchedResultsControllerをセットアップ（初回のみ）
                 if !hasLoadedData, let userId = authVM.userId {
                     hasLoadedData = true
-                    viewModel.refreshFromCloudKit(userId: userId)
-                    travelViewModel.refreshFromCloudKit(userId: userId)
+                    viewModel.setupFetchedResultsController(userId: userId)
+                    travelViewModel.setupFetchedResultsController(userId: userId)
                 }
             }
         }

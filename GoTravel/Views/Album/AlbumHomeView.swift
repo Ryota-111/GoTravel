@@ -71,9 +71,9 @@ struct AlbumHomeView: View {
                 withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
                     animateCards = true
                 }
-                // Fetch travel plans from CloudKit
+                // Setup Core Data FetchedResultsController
                 if let userId = authVM.userId {
-                    travelPlanViewModel.refreshFromCloudKit(userId: userId)
+                    travelPlanViewModel.setupFetchedResultsController(userId: userId)
                 }
             }
         }

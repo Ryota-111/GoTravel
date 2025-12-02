@@ -1,5 +1,4 @@
 import SwiftUI
-import CoreData
 
 struct EnjoyWorldView: View {
 
@@ -232,22 +231,6 @@ struct EnjoyWorldView: View {
                 .font(.title.weight(.bold))
 
             Spacer()
-
-            // Debug: Remove duplicates button
-            Button(action: {
-                removeDuplicates()
-            }) {
-                ZStack {
-                    Circle()
-                        .fill(Color(.systemGray6))
-                        .frame(width: 44, height: 44)
-                        .shadow(color: Color.black.opacity(0.1), radius: 3, x: 0, y: 2)
-
-                    Image(systemName: "trash.circle.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(.red)
-                }
-            }
 
             // Join shared plan button
             Button(action: {
@@ -604,99 +587,6 @@ struct EnjoyWorldView: View {
         let startOfDay = calendar.startOfDay(for: date)
         let planEnd = calendar.startOfDay(for: plan.endDate)
         return planEnd < startOfDay
-    }
-
-    // MARK: - Duplicate Removal
-    private func removeDuplicates() {
-        let context = CoreDataManager.shared.viewContext
-        Task {
-            await context.perform {
-                var totalDeleted = 0
-
-                // Remove TravelPlan duplicates
-                let travelPlanRequest: NSFetchRequest<TravelPlanEntity> = TravelPlanEntity.fetchRequest()
-                do {
-                    let entities = try context.fetch(travelPlanRequest)
-                    var seenIds: Set<String> = []
-                    var deletedCount = 0
-
-                    for entity in entities {
-                        if let id = entity.id {
-                            if seenIds.contains(id) {
-                                context.delete(entity)
-                                deletedCount += 1
-                                print("🗑️ Deleted duplicate TravelPlan: \(entity.title ?? "")")
-                            } else {
-                                seenIds.insert(id)
-                            }
-                        }
-                    }
-
-                    totalDeleted += deletedCount
-                    print("✅ Removed \(deletedCount) duplicate TravelPlans")
-                } catch {
-                    print("❌ Error removing TravelPlan duplicates: \(error)")
-                }
-
-                // Remove Plan duplicates
-                let planRequest: NSFetchRequest<PlanEntity> = PlanEntity.fetchRequest()
-                do {
-                    let entities = try context.fetch(planRequest)
-                    var seenIds: Set<String> = []
-                    var deletedCount = 0
-
-                    for entity in entities {
-                        if let id = entity.id {
-                            if seenIds.contains(id) {
-                                context.delete(entity)
-                                deletedCount += 1
-                                print("🗑️ Deleted duplicate Plan: \(entity.title ?? "")")
-                            } else {
-                                seenIds.insert(id)
-                            }
-                        }
-                    }
-
-                    totalDeleted += deletedCount
-                    print("✅ Removed \(deletedCount) duplicate Plans")
-                } catch {
-                    print("❌ Error removing Plan duplicates: \(error)")
-                }
-
-                // Remove VisitedPlace duplicates
-                let placeRequest: NSFetchRequest<VisitedPlaceEntity> = VisitedPlaceEntity.fetchRequest()
-                do {
-                    let entities = try context.fetch(placeRequest)
-                    var seenIds: Set<String> = []
-                    var deletedCount = 0
-
-                    for entity in entities {
-                        if let id = entity.id {
-                            if seenIds.contains(id) {
-                                context.delete(entity)
-                                deletedCount += 1
-                                print("🗑️ Deleted duplicate VisitedPlace: \(entity.title ?? "")")
-                            } else {
-                                seenIds.insert(id)
-                            }
-                        }
-                    }
-
-                    totalDeleted += deletedCount
-                    print("✅ Removed \(deletedCount) duplicate VisitedPlaces")
-                } catch {
-                    print("❌ Error removing VisitedPlace duplicates: \(error)")
-                }
-
-                // Save all changes at once
-                if totalDeleted > 0 {
-                    CoreDataManager.shared.saveContext()
-                    print("✅✅✅ Total removed: \(totalDeleted) duplicates")
-                } else {
-                    print("ℹ️ No duplicates found")
-                }
-            }
-        }
     }
 }
 

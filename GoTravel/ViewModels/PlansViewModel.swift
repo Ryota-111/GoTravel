@@ -145,16 +145,6 @@ final class PlansViewModel: NSObject, ObservableObject {
             }
         }
     }
-
-    // MARK: - Legacy Support (削除予定)
-
-    /// CloudKitからのリフレッシュ（互換性のために残すが、Core Dataが自動同期するため不要）
-    @available(*, deprecated, message: "Core Dataが自動でCloudKitと同期するため、このメソッドは不要です")
-    func refreshFromCloudKit(userId: String? = nil) {
-        guard let userId = userId else { return }
-        // Core Dataは自動同期するため、FetchedResultsControllerをセットアップするだけ
-        setupFetchedResultsController(userId: userId)
-    }
 }
 
 // MARK: - NSFetchedResultsControllerDelegate
