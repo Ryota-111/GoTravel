@@ -378,6 +378,18 @@ struct TravelPlanDetailView: View {
 
                 Spacer()
 
+                // 共有ボタン
+                Button(action: { showShareView = true }) {
+                    ZStack {
+                        Circle()
+                            .fill(Color.black.opacity(0.3))
+                            .frame(width: 40, height: 40)
+                        Image(systemName: plan.isShared ? "person.2.fill" : "person.2")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(plan.isShared ? .green : .white)
+                    }
+                }
+
                 // 編集ボタン
                 Button(action: { showBasicInfoEditor = true }) {
                     ZStack {
