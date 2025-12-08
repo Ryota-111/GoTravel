@@ -207,13 +207,11 @@ struct PlanDetailView: View {
                 scheduleSection
                     .padding(.horizontal, 24)
 
-                // Map Section
-                if !plan.places.isEmpty {
-                    gradientSeparator
+                gradientSeparator
 
-                    mapSection
-                        .padding(.horizontal, 24)
-                }
+                // Map Section
+                mapSection
+                    .padding(.horizontal, 24)
 
                 // Places Section
                 if !plan.places.isEmpty {
@@ -896,29 +894,56 @@ struct PlanDetailView: View {
                 Text("マップ")
                     .font(.headline.weight(.semibold))
                     .foregroundColor(.primary)
+
+                Spacer()
+
+                Button(action: {
+                    showAddPlaceInEdit = true
+                }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus.circle.fill")
+                            .font(.body)
+                        Text("追加")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .foregroundColor(planColor)
+                }
             }
 
-            Map(position: .constant(.region(calculateMapRegion()))) {
-                ForEach(plan.places) { place in
-                    Marker(place.name, coordinate: place.coordinate)
-                        .tint(planColor)
+            if plan.places.isEmpty {
+                VStack(spacing: 12) {
+                    Image(systemName: "map")
+                        .font(.system(size: 40))
+                        .foregroundColor(.secondary.opacity(0.5))
+                    Text("場所がまだありません")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
                 }
-            }
-            .frame(height: 300)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .overlay(alignment: .bottomTrailing) {
-                HStack(spacing: 6) {
-                    Image(systemName: "mappin.circle.fill")
-                        .font(.caption)
-                    Text("\(plan.places.count)件")
-                        .font(.caption.weight(.medium))
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 30)
+            } else {
+                Map(position: .constant(.region(calculateMapRegion()))) {
+                    ForEach(plan.places) { place in
+                        Marker(place.name, coordinate: place.coordinate)
+                            .tint(planColor)
+                    }
                 }
-                .foregroundColor(.white)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 8)
-                .background(.ultraThinMaterial)
-                .clipShape(Capsule())
-                .padding(12)
+                .frame(height: 300)
+                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .overlay(alignment: .bottomTrailing) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "mappin.circle.fill")
+                            .font(.caption)
+                        Text("\(plan.places.count)件")
+                            .font(.caption.weight(.medium))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .padding(12)
+                }
             }
         }
     }
@@ -1574,7 +1599,21 @@ struct PlanDetailView: View {
             longitude: result.placemark.coordinate.longitude,
             address: result.placemark.title
         )
-        editedPlaces.append(place)
+
+        if isEditMode {
+            // Edit mode: Add to temporary edited places
+            editedPlaces.append(place)
+        } else {
+            // View mode: Add to plan directly and save
+            var updatedPlan = plan
+            updatedPlan.places.append(place)
+            plan = updatedPlan
+
+            if let userId = authVM.userId {
+                viewModel.update(updatedPlan, userId: userId)
+            }
+        }
+
         selectedMapResult = nil
         showAddPlaceInEdit = false
     }
