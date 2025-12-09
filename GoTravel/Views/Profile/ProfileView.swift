@@ -4,6 +4,7 @@ import StoreKit
 struct ProfileView: View {
     @StateObject private var vm = ProfileViewModel()
     @EnvironmentObject var authVM: AuthViewModel
+    @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
     @State private var animateCards = false
 
@@ -22,6 +23,8 @@ struct ProfileView: View {
                         accountCard
 
                         helpSupportCard
+                        
+                        appsettingCard
 
                         // cloudKitTestCard // 開発用：必要時にコメント解除
                     }
@@ -269,6 +272,17 @@ struct ProfileView: View {
         .scaleEffect(animateCards ? 1 : 0.8)
         .offset(y: animateCards ? 0 : 30)
         .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.35), value: animateCards)
+    }
+    
+    private var appsettingCard: some View {
+        NavigationLink(destination: AppSettingView()) {
+            GlassMenuCard(
+                icon: "gearshape",
+                title: "アプリ設定",
+                subtitle: "アプリカラー",
+                gradientColors: [Color(red: 1.0, green: 0.5, blue: 0.3), Color(red: 1.0, green: 0.3, blue: 0.5)]
+            )
+        }
     }
 
     // MARK: - CloudKit Test Card
@@ -979,6 +993,189 @@ struct HelpSupportView: View {
             endPoint: .bottom
         )
         .ignoresSafeArea()
+    }
+}
+
+struct AppSettingView: View {
+    @ObservedObject var themeManager = ThemeManager.shared
+    @Environment(\.colorScheme) var colorScheme
+    @State private var animateCards = false
+
+    var body: some View {
+        ZStack {
+            backgroundGradient
+
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 25) {
+                    // Header
+                    VStack(spacing: 15) {
+                        Image(systemName: "paintpalette.fill")
+                            .font(.system(size: 60))
+                            .foregroundColor(themeManager.currentTheme.primary.opacity(0.8))
+                            .padding(.top, 30)
+
+                        VStack(spacing: 8) {
+                            Text("アプリ設定")
+                                .font(.title2.bold())
+                                .foregroundColor(themeManager.currentTheme.text)
+
+                            Text("テーマカラーをカスタマイズ")
+                                .font(.subheadline)
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
+                        }
+                    }
+                    .opacity(animateCards ? 1 : 0)
+                    .offset(y: animateCards ? 0 : -20)
+
+                    // Current Theme Display
+                    VStack(alignment: .leading, spacing: 12) {
+                        Text("現在のテーマ")
+                            .font(.headline)
+                            .foregroundColor(themeManager.currentTheme.text)
+
+                        HStack {
+                            HStack(spacing: 8) {
+                                Circle()
+                                    .fill(themeManager.currentTheme.primary)
+                                    .frame(width: 30, height: 30)
+                                Circle()
+                                    .fill(themeManager.currentTheme.secondary)
+                                    .frame(width: 30, height: 30)
+                                Circle()
+                                    .fill(themeManager.currentTheme.tertiary)
+                                    .frame(width: 30, height: 30)
+                            }
+
+                            Spacer()
+
+                            Text(themeManager.currentTheme.type.displayName)
+                                .font(.headline)
+                                .foregroundColor(themeManager.currentTheme.text)
+                        }
+                        .padding()
+                        .background(
+                            RoundedRectangle(cornerRadius: 16)
+                                .fill(themeManager.currentTheme.cardBackground)
+                        )
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 16)
+                                .stroke(themeManager.currentTheme.cardBorder, lineWidth: 1)
+                        )
+                        .shadow(color: themeManager.currentTheme.shadow, radius: 10, x: 0, y: 5)
+                    }
+                    .padding(.horizontal)
+                    .opacity(animateCards ? 1 : 0)
+                    .offset(y: animateCards ? 0 : 20)
+                    .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: animateCards)
+
+                    // Theme Selection
+                    VStack(alignment: .leading, spacing: 16) {
+                        Text("テーマを選択")
+                            .font(.headline)
+                            .foregroundColor(themeManager.currentTheme.text)
+                            .padding(.horizontal)
+
+                        ForEach(Array(ThemePreset.ThemeType.allCases.enumerated()), id: \.offset) { index, themeType in
+                            ThemeCard(
+                                themeType: themeType,
+                                isSelected: themeManager.currentTheme.type == themeType,
+                                onSelect: {
+                                    withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                                        themeManager.setTheme(themeType)
+                                    }
+                                }
+                            )
+                            .padding(.horizontal)
+                            .opacity(animateCards ? 1 : 0)
+                            .offset(y: animateCards ? 0 : 20)
+                            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.15 + Double(index) * 0.05), value: animateCards)
+                        }
+                    }
+                }
+                .padding(.bottom, 30)
+            }
+            .navigationTitle("アプリ設定")
+            .navigationBarTitleDisplayMode(.inline)
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
+                animateCards = true
+            }
+        }
+    }
+
+    private var backgroundGradient: some View {
+        LinearGradient(
+            gradient: Gradient(colors: [
+                themeManager.currentTheme.gradientStart,
+                themeManager.currentTheme.gradientEnd
+            ]),
+            startPoint: .top,
+            endPoint: .bottom
+        )
+        .ignoresSafeArea()
+    }
+}
+
+// MARK: - Theme Card
+struct ThemeCard: View {
+    let themeType: ThemePreset.ThemeType
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    @ObservedObject var themeManager = ThemeManager.shared
+
+    var body: some View {
+        Button(action: onSelect) {
+            let previewTheme = ThemePreset(type: themeType)
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack {
+                    Text(themeType.displayName)
+                        .font(.headline)
+                        .foregroundColor(themeManager.currentTheme.text)
+
+                    Spacer()
+
+                    if isSelected {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.title2)
+                            .foregroundColor(themeManager.currentTheme.success)
+                    }
+                }
+
+                // Color Preview
+                HStack(spacing: 8) {
+                    Circle()
+                        .fill(previewTheme.primary)
+                        .frame(width: 40, height: 40)
+                    Circle()
+                        .fill(previewTheme.secondary)
+                        .frame(width: 40, height: 40)
+                    Circle()
+                        .fill(previewTheme.tertiary)
+                        .frame(width: 40, height: 40)
+                    Circle()
+                        .fill(previewTheme.accent1)
+                        .frame(width: 40, height: 40)
+                    Circle()
+                        .fill(previewTheme.accent2)
+                        .frame(width: 40, height: 40)
+                }
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(isSelected ? themeManager.currentTheme.primary.opacity(0.1) : themeManager.currentTheme.cardBackground)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(isSelected ? themeManager.currentTheme.primary : themeManager.currentTheme.cardBorder, lineWidth: isSelected ? 2 : 1)
+            )
+            .shadow(color: isSelected ? themeManager.currentTheme.shadow : Color.clear, radius: isSelected ? 15 : 5, x: 0, y: 5)
+            .scaleEffect(isSelected ? 1.02 : 1.0)
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 }
 

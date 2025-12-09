@@ -6,6 +6,7 @@ struct ScheduleItemCard: View {
 
     // MARK: - Properties
     @Environment(\.colorScheme) var colorScheme
+    @ObservedObject var themeManager = ThemeManager.shared
     let item: ScheduleItem
     @Binding var editingItem: ScheduleItem?
     @State private var showMapView = false
@@ -52,7 +53,7 @@ struct ScheduleItemCard: View {
         }) {
             Image(systemName: "pencil.circle.fill")
                 .font(.system(size: 28))
-                .foregroundColor(.blue)
+                .foregroundColor(themeManager.currentTheme.primary)
         }
         .buttonStyle(.borderless)
     }
@@ -61,7 +62,7 @@ struct ScheduleItemCard: View {
         Button(action: { showMapView = true }) {
             Image(systemName: "map.circle.fill")
                 .font(.system(size: 28))
-                .foregroundColor(.green)
+                .foregroundColor(themeManager.currentTheme.success)
         }
         .buttonStyle(.borderless)
     }
@@ -76,10 +77,10 @@ struct ScheduleItemCard: View {
                     ))) {
                         if let location = item.location {
                             Marker(location, coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude))
-                                .tint(.red)
+                                .tint(themeManager.currentTheme.error)
                         } else {
                             Marker(item.title, coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude))
-                                .tint(.red)
+                                .tint(themeManager.currentTheme.error)
                         }
                     }
                 } else {
@@ -111,10 +112,10 @@ struct ScheduleItemCard: View {
         VStack(spacing: 5) {
             Text(formatTime(item.time))
                 .font(.headline)
-                .foregroundColor(.orange)
+                .foregroundColor(themeManager.currentTheme.accent1)
 
             Image(systemName: "clock.fill")
-                .foregroundColor(.orange.opacity(0.7))
+                .foregroundColor(themeManager.currentTheme.accent1.opacity(0.7))
                 .font(.caption)
         }
         .frame(width: 60)
@@ -148,7 +149,7 @@ struct ScheduleItemCard: View {
         HStack(spacing: 5) {
             Image(systemName: "mappin.circle.fill")
                 .font(.caption)
-                .foregroundColor(.orange)
+                .foregroundColor(themeManager.currentTheme.accent1)
             Text(location)
                 .font(.subheadline)
                 .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .black.opacity(0.7))
@@ -159,10 +160,10 @@ struct ScheduleItemCard: View {
         HStack(spacing: 5) {
             Image(systemName: "yensign.circle.fill")
                 .font(.caption)
-                .foregroundColor(.green)
+                .foregroundColor(themeManager.currentTheme.success)
             Text(formatCurrency(cost))
                 .font(.subheadline)
-                .foregroundColor(.green)
+                .foregroundColor(themeManager.currentTheme.success)
         }
     }
 
@@ -171,10 +172,10 @@ struct ScheduleItemCard: View {
             HStack(spacing: 5) {
                 Image(systemName: "link")
                     .font(.caption)
-                    .foregroundColor(.blue)
+                    .foregroundColor(themeManager.currentTheme.primary)
                 Text("リンク")
                     .font(.subheadline)
-                    .foregroundColor(.blue)
+                    .foregroundColor(themeManager.currentTheme.primary)
             }
         }
     }
@@ -182,7 +183,7 @@ struct ScheduleItemCard: View {
     private func notesInfo(notes: String) -> some View {
         Text(notes)
             .font(.caption)
-            .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+            .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : themeManager.currentTheme.secondaryText)
             .lineLimit(2)
     }
 

@@ -206,6 +206,7 @@ struct PhotoThumbnail: View {
     let image: UIImage
     let albumColor: Color
     let onDelete: () -> Void
+    @ObservedObject var themeManager = ThemeManager.shared
     @State private var showFullScreen = false
     @State private var showDeleteButton = false
 
@@ -246,7 +247,7 @@ struct PhotoThumbnail: View {
                 }) {
                     ZStack {
                         Circle()
-                            .fill(Color.red)
+                            .fill(themeManager.currentTheme.error)
                             .frame(width: 28, height: 28)
 
                         Image(systemName: "xmark.circle.fill")

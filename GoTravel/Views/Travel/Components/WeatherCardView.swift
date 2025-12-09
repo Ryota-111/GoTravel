@@ -3,6 +3,7 @@ import SwiftUI
 @available(iOS 16.0, *)
 struct WeatherCardView: View {
     @Environment(\.colorScheme) var colorScheme
+    @ObservedObject var themeManager = ThemeManager.shared
     let weather: WeatherService.DayWeather
     let dayNumber: Int?
 
@@ -24,7 +25,7 @@ struct WeatherCardView: View {
 
                 Text(weather.condition)
                     .font(.subheadline)
-                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .gray)
+                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : themeManager.currentTheme.secondaryText)
 
                 HStack(spacing: 15) {
                     // Temperature
@@ -72,6 +73,7 @@ struct WeatherCardView: View {
 // Loading State View
 struct WeatherLoadingView: View {
     @Environment(\.colorScheme) var colorScheme
+    @ObservedObject var themeManager = ThemeManager.shared
 
     var body: some View {
         HStack(spacing: 15) {
@@ -81,7 +83,7 @@ struct WeatherLoadingView: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text("天気情報を読み込み中...")
                     .font(.subheadline)
-                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .gray)
+                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : themeManager.currentTheme.secondaryText)
             }
 
             Spacer()
@@ -97,6 +99,7 @@ struct WeatherLoadingView: View {
 // Error State View
 struct WeatherErrorView: View {
     @Environment(\.colorScheme) var colorScheme
+    @ObservedObject var themeManager = ThemeManager.shared
     let error: String
 
     var body: some View {
@@ -109,7 +112,7 @@ struct WeatherErrorView: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text("天気情報を取得できませんでした")
                     .font(.subheadline)
-                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .gray)
+                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : themeManager.currentTheme.secondaryText)
 
                 if !error.isEmpty {
                     Text(error)

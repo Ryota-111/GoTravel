@@ -6,6 +6,7 @@ struct JoinTravelPlanView: View {
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var viewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
+    @ObservedObject var themeManager = ThemeManager.shared
 
     @State private var shareCode: String = ""
     @State private var isJoining: Bool = false
@@ -52,7 +53,7 @@ struct JoinTravelPlanView: View {
         VStack(spacing: 15) {
             Image(systemName: "person.badge.plus.fill")
                 .font(.system(size: 70))
-                .foregroundColor(.green.opacity(0.8))
+                .foregroundColor(themeManager.currentTheme.success.opacity(0.8))
 
             VStack(spacing: 8) {
                 Text("旅行計画に参加")
@@ -61,7 +62,7 @@ struct JoinTravelPlanView: View {
 
                 Text("共有コードを入力して、他のユーザーの旅行計画に参加できます")
                     .font(.subheadline)
-                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : themeManager.currentTheme.secondaryText)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
             }
@@ -86,7 +87,7 @@ struct JoinTravelPlanView: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
-                        .stroke(shareCode.isEmpty ? Color.gray.opacity(0.3) : Color.green.opacity(0.5), lineWidth: 2)
+                        .stroke(shareCode.isEmpty ? themeManager.currentTheme.cardBorder : themeManager.currentTheme.success.opacity(0.5), lineWidth: 2)
                 )
         }
         .padding()
@@ -118,14 +119,14 @@ struct JoinTravelPlanView: View {
             .background(
                 LinearGradient(
                     gradient: Gradient(colors: shareCode.isEmpty ?
-                        [Color.gray, Color.gray.opacity(0.8)] :
-                        [Color.green, Color.green.opacity(0.8)]),
+                        [themeManager.currentTheme.secondaryText.opacity(0.5), themeManager.currentTheme.secondaryText.opacity(0.4)] :
+                        [themeManager.currentTheme.success, themeManager.currentTheme.success.opacity(0.8)]),
                     startPoint: .leading,
                     endPoint: .trailing
                 )
             )
             .cornerRadius(15)
-            .shadow(color: shareCode.isEmpty ? .gray.opacity(0.3) : .green.opacity(0.3), radius: 10, x: 0, y: 5)
+            .shadow(color: shareCode.isEmpty ? themeManager.currentTheme.secondaryText.opacity(0.3) : themeManager.currentTheme.success.opacity(0.3), radius: 10, x: 0, y: 5)
         }
         .disabled(shareCode.isEmpty || isJoining)
     }
@@ -135,26 +136,26 @@ struct JoinTravelPlanView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "info.circle.fill")
-                    .foregroundColor(.green)
+                    .foregroundColor(themeManager.currentTheme.success)
                 Text("参加について")
                     .font(.headline)
                     .foregroundColor(colorScheme == .dark ? .white : .black)
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                InfoRow(icon: "checkmark.circle", text: "共有コードは大文字で入力してください", color: .green)
-                InfoRow(icon: "checkmark.circle", text: "参加後、すぐにスケジュールを編集できます", color: .green)
-                InfoRow(icon: "checkmark.circle", text: "他のメンバーと情報がリアルタイムで共有されます", color: .green)
+                InfoRow(icon: "checkmark.circle", text: "共有コードは大文字で入力してください", color: themeManager.currentTheme.success)
+                InfoRow(icon: "checkmark.circle", text: "参加後、すぐにスケジュールを編集できます", color: themeManager.currentTheme.success)
+                InfoRow(icon: "checkmark.circle", text: "他のメンバーと情報がリアルタイムで共有されます", color: themeManager.currentTheme.success)
             }
         }
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.green.opacity(0.1))
+                .fill(themeManager.currentTheme.success.opacity(0.1))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.green.opacity(0.3), lineWidth: 1)
+                .stroke(themeManager.currentTheme.success.opacity(0.3), lineWidth: 1)
         )
     }
 
@@ -162,8 +163,8 @@ struct JoinTravelPlanView: View {
     private var backgroundGradient: some View {
         LinearGradient(
             gradient: Gradient(colors: colorScheme == .dark ?
-                [.green.opacity(0.7), .black] :
-                [.green.opacity(0.6), .white.opacity(0.3)]),
+                [themeManager.currentTheme.success.opacity(0.7), .black] :
+                [themeManager.currentTheme.success.opacity(0.6), .white.opacity(0.3)]),
             startPoint: .top,
             endPoint: .bottom
         )
@@ -227,6 +228,7 @@ struct ColoredInfoRow: View {
     let text: String
     let color: Color
     @Environment(\.colorScheme) var colorScheme
+    @ObservedObject var themeManager = ThemeManager.shared
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
@@ -236,7 +238,7 @@ struct ColoredInfoRow: View {
 
             Text(text)
                 .font(.caption)
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .gray)
+                .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : themeManager.currentTheme.secondaryText)
         }
     }
 }

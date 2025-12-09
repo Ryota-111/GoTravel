@@ -15,6 +15,7 @@ struct TravelPlanDetailView: View {
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var viewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
+    @ObservedObject var themeManager = ThemeManager.shared
     @State private var selectedDay: Int = 1
     @State private var showScheduleEditor = false
     @State private var showBasicInfoEditor = false
@@ -57,7 +58,7 @@ struct TravelPlanDetailView: View {
 
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ? [Color.blue.opacity(0.7), Color.black] : [Color.blue.opacity(0.8), Color.white]),
+            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.primary.opacity(0.7), Color.black] : [themeManager.currentTheme.primary.opacity(0.8), Color.white]),
             startPoint: .top,
             endPoint: .bottom
         )
@@ -187,11 +188,11 @@ struct TravelPlanDetailView: View {
                     Text("スケジュールを追加/編集")
                         .font(.system(size: 16, weight: .medium))
                 }
-                .foregroundColor(.orange)
+                .foregroundColor(themeManager.currentTheme.accent1)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
                 .padding(.horizontal, 20)
-                .background(Color.orange.opacity(0.15))
+                .background(themeManager.currentTheme.accent1.opacity(0.15))
                 .cornerRadius(12)
             }
             .buttonStyle(PlainButtonStyle())
@@ -206,7 +207,7 @@ struct TravelPlanDetailView: View {
     private var emptyScheduleMessage: some View {
         Text("スケジュールがありません")
             .font(.subheadline)
-            .foregroundColor(.gray)
+            .foregroundColor(themeManager.currentTheme.secondaryText)
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding()
     }
@@ -219,7 +220,7 @@ struct TravelPlanDetailView: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                gradient: Gradient(colors: [Color.orange.opacity(0.4), Color.orange.opacity(0.2)]),
+                                gradient: Gradient(colors: [themeManager.currentTheme.accent1.opacity(0.4), themeManager.currentTheme.accent1.opacity(0.2)]),
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -228,14 +229,14 @@ struct TravelPlanDetailView: View {
 
                     Image(systemName: "clock.fill")
                         .font(.system(size: 20))
-                        .foregroundColor(.orange)
+                        .foregroundColor(themeManager.currentTheme.accent1)
                 }
 
                 if !isLast {
                     Rectangle()
                         .fill(
                             LinearGradient(
-                                gradient: Gradient(colors: [Color.orange.opacity(0.4), Color.orange.opacity(0.1)]),
+                                gradient: Gradient(colors: [themeManager.currentTheme.accent1.opacity(0.4), themeManager.currentTheme.accent1.opacity(0.1)]),
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -249,7 +250,7 @@ struct TravelPlanDetailView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(formatTime(item.time))
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(.orange)
+                    .foregroundColor(themeManager.currentTheme.accent1)
 
                 Text(item.title)
                     .font(.system(size: 16, weight: .medium))
@@ -259,10 +260,10 @@ struct TravelPlanDetailView: View {
                     HStack(spacing: 4) {
                         Image(systemName: "mappin.circle.fill")
                             .font(.system(size: 12))
-                            .foregroundColor(.gray)
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
                         Text(location)
                             .font(.system(size: 14))
-                            .foregroundColor(.gray)
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
                     }
                 }
 
@@ -310,9 +311,9 @@ struct TravelPlanDetailView: View {
                         .fill(
                             LinearGradient(
                                 gradient: Gradient(colors: [
-                                    Color.orange.opacity(0.7),
-                                    Color.pink.opacity(0.6),
-                                    Color.purple.opacity(0.7)
+                                    themeManager.currentTheme.accent1.opacity(0.7),
+                                    themeManager.currentTheme.accent2.opacity(0.6),
+                                    themeManager.currentTheme.secondary.opacity(0.7)
                                 ]),
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -386,7 +387,7 @@ struct TravelPlanDetailView: View {
                             .frame(width: 40, height: 40)
                         Image(systemName: plan.isShared ? "person.2.fill" : "person.2")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(plan.isShared ? .green : .white)
+                            .foregroundColor(plan.isShared ? themeManager.currentTheme.success : .white)
                     }
                 }
 
@@ -426,13 +427,13 @@ struct TravelPlanDetailView: View {
                 Button(action: { showShareView = true }) {
                     HStack(spacing: 4) {
                         Image(systemName: plan.isShared ? "person.2.fill" : "person.2")
-                            .foregroundColor(plan.isShared ? .green : .orange)
+                            .foregroundColor(plan.isShared ? themeManager.currentTheme.success : themeManager.currentTheme.accent1)
                             .font(.title3)
                         if plan.isShared {
                             Text("\(plan.sharedWith.count)")
                                 .font(.caption)
                                 .fontWeight(.semibold)
-                                .foregroundColor(.green)
+                                .foregroundColor(themeManager.currentTheme.success)
                         }
                     }
                     .padding(.horizontal, 12)
@@ -469,7 +470,7 @@ struct TravelPlanDetailView: View {
         HStack(spacing: 5) {
             Image(systemName: "clock.arrow.circlepath")
                 .font(.caption)
-                .foregroundColor(.green)
+                .foregroundColor(themeManager.currentTheme.success)
             Text("最終更新: \(formatDateTime(plan.updatedAt))")
                 .font(.caption)
                 .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
@@ -479,7 +480,7 @@ struct TravelPlanDetailView: View {
     private func destinationInfo(plan: TravelPlan) -> some View {
         HStack(spacing: 5) {
             Image(systemName: "mappin.circle.fill")
-                .foregroundColor(.orange)
+                .foregroundColor(themeManager.currentTheme.accent1)
             Text(plan.destination)
                 .foregroundColor(colorScheme == .dark ? .white : .black)
         }
@@ -488,7 +489,7 @@ struct TravelPlanDetailView: View {
     private func dateInfo(plan: TravelPlan) -> some View {
         HStack(spacing: 5) {
             Image(systemName: "calendar")
-                .foregroundColor(.orange)
+                .foregroundColor(themeManager.currentTheme.accent1)
             Text(dateRangeString(plan: plan))
                 .foregroundColor(colorScheme == .dark ? .white : .black)
         }
@@ -516,7 +517,7 @@ struct TravelPlanDetailView: View {
                         Circle()
                             .fill(
                                 LinearGradient(
-                                    gradient: Gradient(colors: [Color.green.opacity(0.3), Color.green.opacity(0.15)]),
+                                    gradient: Gradient(colors: [themeManager.currentTheme.success.opacity(0.3), themeManager.currentTheme.success.opacity(0.15)]),
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -524,7 +525,7 @@ struct TravelPlanDetailView: View {
                             .frame(width: 40, height: 40)
                         Image(systemName: "yensign.circle.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(.green.opacity(0.8))
+                            .foregroundColor(themeManager.currentTheme.success.opacity(0.8))
                     }
 
                     Text(formatBudgetAmount(plan: plan))
@@ -547,7 +548,7 @@ struct TravelPlanDetailView: View {
             HStack {
                 Image(systemName: "yensign.circle.fill")
                     .font(.title2)
-                    .foregroundColor(.green)
+                    .foregroundColor(themeManager.currentTheme.success)
 
                 VStack(alignment: .leading, spacing: 5) {
                     Text("金額管理")
@@ -615,7 +616,7 @@ struct TravelPlanDetailView: View {
 
     private func dayTabBackground(isSelected: Bool) -> some View {
         RoundedRectangle(cornerRadius: 15)
-            .fill(isSelected ? Color.orange : Color.white.opacity(0.3))
+            .fill(isSelected ? themeManager.currentTheme.accent1 : Color.white.opacity(0.3))
     }
 
     private var emptyScheduleView: some View {
@@ -634,7 +635,7 @@ struct TravelPlanDetailView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 30)
                     .padding(.vertical, 12)
-                    .background(.orange)
+                    .background(themeManager.currentTheme.accent1)
                     .cornerRadius(25)
             }
         }
@@ -669,7 +670,7 @@ struct TravelPlanDetailView: View {
                             Link(destination: attribution.legalPageURL) {
                                 Text("その他のデータソース")
                                     .font(.caption2)
-                                    .foregroundColor(.blue)
+                                    .foregroundColor(themeManager.currentTheme.primary)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .trailing)
@@ -693,11 +694,11 @@ struct TravelPlanDetailView: View {
                         HStack(spacing: 15) {
                             ZStack {
                                 Circle()
-                                    .fill(Color.blue.opacity(0.15))
+                                    .fill(themeManager.currentTheme.primary.opacity(0.15))
                                     .frame(width: 60, height: 60)
                                 Image(systemName: weather.symbolName)
                                     .font(.system(size: 28))
-                                    .foregroundColor(.blue.opacity(0.7))
+                                    .foregroundColor(themeManager.currentTheme.primary.opacity(0.7))
                             }
 
                             VStack(alignment: .leading, spacing: 4) {

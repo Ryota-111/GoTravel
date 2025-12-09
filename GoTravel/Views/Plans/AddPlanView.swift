@@ -5,6 +5,7 @@ struct AddPlanView: View {
 
     // MARK: - Properties
     @Environment(\.presentationMode) var presentationMode
+    @ObservedObject var themeManager = ThemeManager.shared
 
     var onSave: (Plan) -> Void
 
@@ -58,7 +59,7 @@ struct AddPlanView: View {
 
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: selectedPlanType == .outing ? [Color.blue.opacity(0.9), Color.black] : [Color.orange.opacity(0.9), Color.white.opacity(0.8)]),
+            gradient: Gradient(colors: selectedPlanType == .outing ? [themeManager.currentTheme.primary.opacity(0.9), Color.black] : [themeManager.currentTheme.accent1.opacity(0.9), Color.white.opacity(0.8)]),
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -68,24 +69,24 @@ struct AddPlanView: View {
     private var saveButtonGradient: LinearGradient {
         if selectedPlanType == .outing {
             return LinearGradient(
-                gradient: Gradient(colors: [Color.blue.opacity(0.8), Color.black.opacity(0.8)]),
+                gradient: Gradient(colors: [themeManager.currentTheme.primary.opacity(0.8), Color.black.opacity(0.8)]),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
         } else {
             return LinearGradient(
-                gradient: Gradient(colors: [Color.orange.opacity(0.8), Color.red.opacity(0.6)]),
+                gradient: Gradient(colors: [themeManager.currentTheme.accent1.opacity(0.8), themeManager.currentTheme.error.opacity(0.6)]),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
         }
     }
-    
+
     private var addPlaceButtonColor: Color {
         if selectedPlanType == .outing {
-            return Color.blue
+            return themeManager.currentTheme.primary
         } else {
-            return Color.orange
+            return themeManager.currentTheme.accent1
         }
     }
 
@@ -211,7 +212,7 @@ struct AddPlanView: View {
             .padding()
             .background(
                 isSelected
-                    ? (type == .outing ? Color.blue.opacity(0.5) : Color.orange.opacity(0.9))
+                    ? (type == .outing ? themeManager.currentTheme.primary.opacity(0.5) : themeManager.currentTheme.accent1.opacity(0.9))
                     : Color.white.opacity(0.2)
             )
             .cornerRadius(10)
@@ -414,7 +415,7 @@ struct AddPlanView: View {
             .frame(maxWidth: .infinity)
             .background(saveButtonGradient)
             .cornerRadius(15)
-            .shadow(color: selectedPlanType == .outing ? Color.blue.opacity(0.4) : Color.orange.opacity(0.8), radius: 10, x: 0, y: 5)
+            .shadow(color: selectedPlanType == .outing ? themeManager.currentTheme.primary.opacity(0.4) : themeManager.currentTheme.accent1.opacity(0.8), radius: 10, x: 0, y: 5)
         }
         .padding()
         .disabled(!isFormValid || isUploading)
@@ -434,7 +435,7 @@ struct AddPlanView: View {
                 Map(position: $mapPosition, selection: $selectedMapResult) {
                     ForEach(searchResults, id: \.self) { result in
                         Marker(item: result)
-                            .tint(.red)
+                            .tint(themeManager.currentTheme.error)
                     }
                 }
                 .safeAreaInset(edge: .top) {
@@ -526,7 +527,7 @@ struct AddPlanView: View {
             if let address = result.placemark.title {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "mappin.circle.fill")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(themeManager.currentTheme.error)
                         .font(.title3)
                     Text(address)
                         .font(.subheadline)
@@ -537,7 +538,7 @@ struct AddPlanView: View {
             if let phoneNumber = result.phoneNumber {
                 HStack(spacing: 8) {
                     Image(systemName: "phone.circle.fill")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(themeManager.currentTheme.success)
                         .font(.title3)
                     Text(phoneNumber)
                         .font(.subheadline)
@@ -551,7 +552,7 @@ struct AddPlanView: View {
                             .font(.caption)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(Color.green)
+                            .background(themeManager.currentTheme.success)
                             .foregroundStyle(.white)
                             .cornerRadius(8)
                     }
@@ -561,7 +562,7 @@ struct AddPlanView: View {
             if let url = result.url {
                 HStack(spacing: 8) {
                     Image(systemName: "safari.fill")
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(themeManager.currentTheme.primary)
                         .font(.title3)
                     Text(url.host ?? "Website")
                         .font(.subheadline)
@@ -574,7 +575,7 @@ struct AddPlanView: View {
                             .font(.caption)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(Color.blue)
+                            .background(themeManager.currentTheme.primary)
                             .foregroundStyle(.white)
                             .cornerRadius(8)
                     }
@@ -590,8 +591,8 @@ struct AddPlanView: View {
                     Label("経路", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Color.blue.opacity(0.1))
-                        .foregroundStyle(.blue)
+                        .background(themeManager.currentTheme.primary.opacity(0.1))
+                        .foregroundStyle(themeManager.currentTheme.primary)
                         .cornerRadius(10)
                 }
 
@@ -601,8 +602,8 @@ struct AddPlanView: View {
                     Label("追加", systemImage: "plus.circle.fill")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Color.orange.opacity(0.1))
-                        .foregroundStyle(.orange)
+                        .background(themeManager.currentTheme.accent1.opacity(0.1))
+                        .foregroundStyle(themeManager.currentTheme.accent1)
                         .cornerRadius(10)
                 }
             }
@@ -635,7 +636,7 @@ struct AddPlanView: View {
             ZStack(alignment: .leading) {
                 if text.wrappedValue.isEmpty {
                     Text(placeholder)
-                        .foregroundColor(.gray) // 常にライトモードの色で固定
+                        .foregroundColor(themeManager.currentTheme.secondaryText) // 常にライトモードの色で固定
                 }
                 TextField("", text: text)
                     .foregroundColor(primaryTextColor)
@@ -683,7 +684,7 @@ struct AddPlanView: View {
             deletePlace(place)
         }) {
             Image(systemName: "trash")
-                .foregroundColor(.red)
+                .foregroundColor(themeManager.currentTheme.error)
         }
     }
 

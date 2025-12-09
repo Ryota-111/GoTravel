@@ -4,6 +4,7 @@ import SwiftUI
 struct ShareTravelPlanView: View {
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.colorScheme) var colorScheme
+    @ObservedObject var themeManager = ThemeManager.shared
     let plan: TravelPlan
     let onShareCodeGenerated: (String) -> Void
 
@@ -52,7 +53,7 @@ struct ShareTravelPlanView: View {
         VStack(spacing: 15) {
             Image(systemName: "person.2.circle.fill")
                 .font(.system(size: 70))
-                .foregroundColor(.blue.opacity(0.8))
+                .foregroundColor(themeManager.currentTheme.primary.opacity(0.8))
 
             VStack(spacing: 8) {
                 Text("この旅行計画を共有")
@@ -61,11 +62,11 @@ struct ShareTravelPlanView: View {
 
                 Text(plan.title)
                     .font(.headline)
-                    .foregroundColor(.blue)
+                    .foregroundColor(themeManager.currentTheme.primary)
 
                 Text("共有コードを生成して、他のユーザーと一緒に旅行計画を編集できます")
                     .font(.subheadline)
-                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : themeManager.currentTheme.secondaryText)
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
             }
@@ -87,13 +88,13 @@ struct ShareTravelPlanView: View {
             .padding()
             .background(
                 LinearGradient(
-                    gradient: Gradient(colors: [Color.blue, Color.blue.opacity(0.8)]),
+                    gradient: Gradient(colors: [themeManager.currentTheme.primary, themeManager.currentTheme.primary.opacity(0.8)]),
                     startPoint: .leading,
                     endPoint: .trailing
                 )
             )
             .cornerRadius(15)
-            .shadow(color: .blue.opacity(0.3), radius: 10, x: 0, y: 5)
+            .shadow(color: themeManager.currentTheme.primary.opacity(0.3), radius: 10, x: 0, y: 5)
         }
     }
 
@@ -108,16 +109,16 @@ struct ShareTravelPlanView: View {
             HStack {
                 Text(shareCode)
                     .font(.system(size: 24, weight: .bold, design: .monospaced))
-                    .foregroundColor(.blue)
+                    .foregroundColor(themeManager.currentTheme.primary)
                     .padding()
                     .frame(maxWidth: .infinity)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.blue.opacity(0.1))
+                            .fill(colorScheme == .dark ? Color.white.opacity(0.1) : themeManager.currentTheme.primary.opacity(0.1))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.blue.opacity(0.3), lineWidth: 2)
+                            .stroke(themeManager.currentTheme.primary.opacity(0.3), lineWidth: 2)
                     )
             }
 
@@ -133,7 +134,7 @@ struct ShareTravelPlanView: View {
                 .foregroundColor(.white)
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(showCopiedAlert ? Color.green : Color.blue)
+                .background(showCopiedAlert ? themeManager.currentTheme.success : themeManager.currentTheme.primary)
                 .cornerRadius(12)
             }
             .animation(.easeInOut(duration: 0.3), value: showCopiedAlert)
@@ -158,7 +159,7 @@ struct ShareTravelPlanView: View {
 
             HStack {
                 Image(systemName: "person.2.fill")
-                    .foregroundColor(.blue)
+                    .foregroundColor(themeManager.currentTheme.primary)
                     .font(.headline)
 
                 Text("共有メンバー")
@@ -169,10 +170,10 @@ struct ShareTravelPlanView: View {
 
                 Text("\(plan.sharedWith.count)人")
                     .font(.subheadline)
-                    .foregroundColor(.blue)
+                    .foregroundColor(themeManager.currentTheme.primary)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
-                    .background(Color.blue.opacity(0.2))
+                    .background(themeManager.currentTheme.primary.opacity(0.2))
                     .cornerRadius(8)
             }
 
@@ -191,7 +192,7 @@ struct ShareTravelPlanView: View {
             ZStack {
                 Circle()
                     .fill(LinearGradient(
-                        colors: [Color.blue.opacity(0.8), Color.blue.opacity(0.5)],
+                        colors: [themeManager.currentTheme.primary.opacity(0.8), themeManager.currentTheme.primary.opacity(0.5)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ))
@@ -212,17 +213,17 @@ struct ShareTravelPlanView: View {
                     if isOwner {
                         Text("オーナー")
                             .font(.caption2)
-                            .foregroundColor(.orange)
+                            .foregroundColor(themeManager.currentTheme.warning)
                             .padding(.horizontal, 6)
                             .padding(.vertical, 2)
-                            .background(Color.orange.opacity(0.2))
+                            .background(themeManager.currentTheme.warning.opacity(0.2))
                             .cornerRadius(4)
                     }
                 }
 
                 Text("UID: \(userId.prefix(8))...")
                     .font(.caption2)
-                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.5) : .gray)
+                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.5) : themeManager.currentTheme.secondaryText)
             }
 
             Spacer()
@@ -244,7 +245,7 @@ struct ShareTravelPlanView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "info.circle.fill")
-                    .foregroundColor(.blue)
+                    .foregroundColor(themeManager.currentTheme.primary)
                 Text("共有機能について")
                     .font(.headline)
                     .foregroundColor(colorScheme == .dark ? .white : .black)
@@ -260,11 +261,11 @@ struct ShareTravelPlanView: View {
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.blue.opacity(0.1))
+                .fill(themeManager.currentTheme.primary.opacity(0.1))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                .stroke(themeManager.currentTheme.primary.opacity(0.3), lineWidth: 1)
         )
     }
 
@@ -272,8 +273,8 @@ struct ShareTravelPlanView: View {
     private var backgroundGradient: some View {
         LinearGradient(
             gradient: Gradient(colors: colorScheme == .dark ?
-                [.blue.opacity(0.7), .black] :
-                [.blue.opacity(0.6), .white.opacity(0.3)]),
+                [themeManager.currentTheme.primary.opacity(0.7), .black] :
+                [themeManager.currentTheme.primary.opacity(0.6), .white.opacity(0.3)]),
             startPoint: .top,
             endPoint: .bottom
         )
@@ -302,16 +303,17 @@ struct InfoRow: View {
     let icon: String
     let text: String
     @Environment(\.colorScheme) var colorScheme
+    @ObservedObject var themeManager = ThemeManager.shared
 
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: icon)
-                .foregroundColor(.blue)
+                .foregroundColor(themeManager.currentTheme.primary)
                 .font(.caption)
 
             Text(text)
                 .font(.caption)
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .gray)
+                .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : themeManager.currentTheme.secondaryText)
         }
     }
 }

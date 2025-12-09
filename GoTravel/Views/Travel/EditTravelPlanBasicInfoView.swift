@@ -7,6 +7,7 @@ struct EditTravelPlanBasicInfoView: View {
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject var viewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
+    @ObservedObject var themeManager = ThemeManager.shared
 
     let plan: TravelPlan
     @State private var title: String
@@ -49,7 +50,7 @@ struct EditTravelPlanBasicInfoView: View {
 
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: [Color.blue.opacity(0.9), Color.black]),
+            gradient: Gradient(colors: [themeManager.currentTheme.primary.opacity(0.9), Color.black]),
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -58,7 +59,7 @@ struct EditTravelPlanBasicInfoView: View {
 
     private var saveButtonGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: [Color.blue, Color.purple]),
+            gradient: Gradient(colors: [themeManager.currentTheme.primary, themeManager.currentTheme.secondary]),
             startPoint: .leading,
             endPoint: .trailing
         )
@@ -213,7 +214,7 @@ struct EditTravelPlanBasicInfoView: View {
             .foregroundColor(.white)
             .padding(.vertical, 10)
             .frame(maxWidth: .infinity)
-            .background(Color.blue.opacity(0.5))
+            .background(themeManager.currentTheme.primary.opacity(0.5))
             .cornerRadius(10)
         }
     }

@@ -9,6 +9,7 @@ struct DayScheduleView: View {
     @EnvironmentObject var authVM: AuthViewModel
     let daySchedule: DaySchedule
     let plan: TravelPlan
+    @ObservedObject var themeManager = ThemeManager.shared
     @State private var showScheduleEditor = false
     @State private var editingItem: ScheduleItem?
 
@@ -104,11 +105,11 @@ struct DayScheduleView: View {
         VStack(spacing: 10) {
             Image(systemName: "clock.badge.plus")
                 .font(.system(size: 40))
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.5) : .gray.opacity(0.5))
+                .foregroundColor(colorScheme == .dark ? .white.opacity(0.5) : themeManager.currentTheme.secondaryText.opacity(0.5))
 
             Text("予定を追加してください")
                 .font(.subheadline)
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : themeManager.currentTheme.secondaryText)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 30)

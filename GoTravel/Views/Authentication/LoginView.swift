@@ -19,7 +19,7 @@ struct LoginView: View {
     // MARK: - View Components
     private var backgroundView: some View {
         LinearGradient(
-            gradient: Gradient(colors: [Color.orange.opacity(0.8), Color.brown.opacity(0.6)]),
+            gradient: Gradient(colors: [ThemeManager.shared.currentTheme.primary.opacity(0.8), ThemeManager.shared.currentTheme.secondary.opacity(0.6)]),
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )

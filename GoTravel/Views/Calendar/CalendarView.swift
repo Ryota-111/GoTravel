@@ -21,6 +21,7 @@ struct CalendarView: View {
     @EnvironmentObject var viewModel: PlansViewModel
     @EnvironmentObject var travelViewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
+    @ObservedObject var themeManager = ThemeManager.shared
     @State private var selectedDate = Date()
     @State private var currentMonth = Date()
     @State private var showAddSheet = false
@@ -96,7 +97,7 @@ struct CalendarView: View {
                             Text("今日")
                         }
                         .font(.subheadline.weight(.medium))
-                        .foregroundColor(.orange)
+                        .foregroundColor(themeManager.currentTheme.accent1)
                     }
                 }
 
@@ -112,7 +113,7 @@ struct CalendarView: View {
                     }) {
                         Image(systemName: "plus.circle.fill")
                             .font(.title3)
-                            .foregroundColor(.orange)
+                            .foregroundColor(themeManager.currentTheme.accent1)
                     }
                 }
             }
@@ -329,7 +330,7 @@ struct CalendarView: View {
             }) {
                 Image(systemName: "chevron.left")
                     .font(.title3.weight(.semibold))
-                    .foregroundColor(.orange)
+                    .foregroundColor(themeManager.currentTheme.accent1)
             }
 
             Spacer()
@@ -341,7 +342,7 @@ struct CalendarView: View {
             }) {
                 Image(systemName: "chevron.right")
                     .font(.title3.weight(.semibold))
-                    .foregroundColor(.orange)
+                    .foregroundColor(themeManager.currentTheme.accent1)
             }
         }
         .padding(.horizontal, 20)
@@ -411,17 +412,17 @@ struct CalendarView: View {
         return VStack(spacing: 4) {
             Text("\(dayNumber)")
                 .font(.system(size: 16, weight: isSelected ? .bold : .regular))
-                .foregroundColor(isSelected ? .white : (isToday ? .orange : .primary))
+                .foregroundColor(isSelected ? .white : (isToday ? themeManager.currentTheme.accent1 : .primary))
                 .frame(width: 44, height: 44)
                 .background(
                     ZStack {
                         if isSelected {
                             Circle()
-                                .fill(Color.orange)
+                                .fill(themeManager.currentTheme.accent1)
                                 .matchedGeometryEffect(id: "selectedDay", in: animation)
                         } else if isToday {
                             Circle()
-                                .stroke(Color.orange, lineWidth: 2)
+                                .stroke(themeManager.currentTheme.accent1, lineWidth: 2)
                         }
                     }
                 )
@@ -494,11 +495,11 @@ struct CalendarView: View {
     private func colorForEventType(_ type: CalendarItemType) -> Color {
         switch type {
         case .dailyPlan:
-            return .orange
+            return themeManager.currentTheme.accent1
         case .outingPlan:
-            return .blue
+            return themeManager.currentTheme.primary
         case .travel:
-            return .green
+            return themeManager.currentTheme.success
         }
     }
 

@@ -31,6 +31,7 @@ struct MapHomeView: View {
     @EnvironmentObject var auth: AuthViewModel
     @StateObject private var vm = PlacesViewModel()
     @StateObject private var locationManager = LocationManager()
+    @ObservedObject var themeManager = ThemeManager.shared
     @State private var inputText = ""
     @State private var searchResults: [MKMapItem] = []
     @State private var location: CLLocationCoordinate2D = .tokyoStation
@@ -53,18 +54,18 @@ struct MapHomeView: View {
             
             ForEach(searchResults, id: \.self) { result in
                 Marker(item: result)
-                    .tint(.red)
+                    .tint(themeManager.currentTheme.error)
             }
-            
+
             ForEach(vm.places) { place in
                 Annotation(place.title, coordinate: place.coordinate) {
                     ZStack {
                         Circle()
-                            .fill(Color.red.opacity(0.3))
+                            .fill(themeManager.currentTheme.error.opacity(0.3))
                             .frame(width: 32, height: 32)
-                        
+
                         Image(systemName: "mappin.circle.fill")
-                            .foregroundStyle(.red)
+                            .foregroundStyle(themeManager.currentTheme.error)
                             .font(.title2)
                     }
                 }
@@ -148,7 +149,7 @@ struct MapHomeView: View {
             if let address = result.placemark.title {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "mappin.circle.fill")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(themeManager.currentTheme.error)
                         .font(.title3)
                     Text(address)
                         .font(.subheadline)
@@ -159,7 +160,7 @@ struct MapHomeView: View {
             if let phoneNumber = result.phoneNumber {
                 HStack(spacing: 8) {
                     Image(systemName: "phone.circle.fill")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(themeManager.currentTheme.success)
                         .font(.title3)
                     Text(phoneNumber)
                         .font(.subheadline)
@@ -173,7 +174,7 @@ struct MapHomeView: View {
                             .font(.caption)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(Color.green)
+                            .background(themeManager.currentTheme.success)
                             .foregroundStyle(.white)
                             .cornerRadius(8)
                     }
@@ -183,7 +184,7 @@ struct MapHomeView: View {
             if let url = result.url {
                 HStack(spacing: 8) {
                     Image(systemName: "safari.fill")
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(themeManager.currentTheme.primary)
                         .font(.title3)
                     Text(url.host ?? "Website")
                         .font(.subheadline)
@@ -196,7 +197,7 @@ struct MapHomeView: View {
                             .font(.caption)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(Color.blue)
+                            .background(themeManager.currentTheme.primary)
                             .foregroundStyle(.white)
                             .cornerRadius(8)
                     }
@@ -212,8 +213,8 @@ struct MapHomeView: View {
                     Label("経路", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Color.blue.opacity(0.1))
-                        .foregroundStyle(.blue)
+                        .background(themeManager.currentTheme.primary.opacity(0.1))
+                        .foregroundStyle(themeManager.currentTheme.primary)
                         .cornerRadius(10)
                 }
 
@@ -223,8 +224,8 @@ struct MapHomeView: View {
                     Label("保存", systemImage: "bookmark.fill")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Color.orange.opacity(0.1))
-                        .foregroundStyle(.orange)
+                        .background(themeManager.currentTheme.accent1.opacity(0.1))
+                        .foregroundStyle(themeManager.currentTheme.accent1)
                         .cornerRadius(10)
                 }
             }

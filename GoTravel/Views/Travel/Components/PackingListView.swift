@@ -7,6 +7,7 @@ struct PackingListView: View {
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var viewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
+    @ObservedObject var themeManager = ThemeManager.shared
     let plan: TravelPlan
     @State private var newItemName: String = ""
 
@@ -46,7 +47,7 @@ struct PackingListView: View {
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
-                        .stroke(Color.black.opacity(0.2), lineWidth: 1)
+                        .stroke(themeManager.currentTheme.cardBorder, lineWidth: 1)
                 )
 
             Button(action: addItem) {
@@ -54,7 +55,7 @@ struct PackingListView: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                gradient: Gradient(colors: [Color.black.opacity(0.7), Color.black.opacity(0.5)]),
+                                gradient: Gradient(colors: [themeManager.currentTheme.primary.opacity(0.9), themeManager.currentTheme.primary.opacity(0.7)]),
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -74,7 +75,7 @@ struct PackingListView: View {
         VStack(spacing: 12) {
             Image(systemName: "bag")
                 .font(.system(size: 36))
-                .foregroundColor(.black.opacity(0.4))
+                .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.6))
 
             Text("持ち物を追加してください")
                 .font(.system(size: 14))
@@ -123,6 +124,7 @@ struct PackingItemRow: View {
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var viewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
+    @ObservedObject var themeManager = ThemeManager.shared
     let item: PackingItem
     let planId: String
 
@@ -138,12 +140,12 @@ struct PackingItemRow: View {
             Button(action: toggleCheck) {
                 ZStack {
                     Circle()
-                        .stroke(item.isChecked ? Color.purple.opacity(0.5) : Color.gray.opacity(0.3), lineWidth: 2)
+                        .stroke(item.isChecked ? themeManager.currentTheme.success.opacity(0.5) : themeManager.currentTheme.cardBorder, lineWidth: 2)
                         .frame(width: 22, height: 22)
                     if item.isChecked {
                         Image(systemName: "checkmark")
                             .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.purple)
+                            .foregroundColor(themeManager.currentTheme.success)
                     }
                 }
             }
@@ -160,7 +162,7 @@ struct PackingItemRow: View {
             Button(action: deleteItem) {
                 Image(systemName: "xmark.circle.fill")
                     .font(.system(size: 18))
-                    .foregroundColor(.gray.opacity(0.5))
+                    .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
             }
         }
         .padding(.horizontal, 12)
@@ -168,14 +170,14 @@ struct PackingItemRow: View {
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(item.isChecked
-                    ? Color.purple.opacity(0.08)
+                    ? themeManager.currentTheme.success.opacity(0.08)
                     : (colorScheme == .dark ? Color.white.opacity(0.05) : Color.white.opacity(0.6))
                 )
         )
         .overlay(
             RoundedRectangle(cornerRadius: 10)
                 .stroke(
-                    item.isChecked ? Color.purple.opacity(0.3) : Color.clear,
+                    item.isChecked ? themeManager.currentTheme.success.opacity(0.3) : Color.clear,
                     lineWidth: 1
                 )
         )

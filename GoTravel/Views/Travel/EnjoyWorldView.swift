@@ -19,6 +19,7 @@ struct EnjoyWorldView: View {
     @EnvironmentObject var travelPlanViewModel: TravelPlanViewModel
     @EnvironmentObject var plansViewModel: PlansViewModel
     @EnvironmentObject var authVM: AuthViewModel
+    @ObservedObject var themeManager = ThemeManager.shared
     @State private var selectedTab: TabType = .all
     @State private var selectedPlanTab: PlanTabType = .all
     @State private var showAddTravelPlan = false
@@ -226,46 +227,58 @@ struct EnjoyWorldView: View {
 
     // MARK: - View Components
     private var titleSection: some View {
-        HStack {
-            Text("旅行計画")
-                .font(.title.weight(.bold))
+        VStack(alignment: .leading) {
+            Text("2025/12/8")
+                .padding(.horizontal, 30)
+                .font(.caption.weight(.bold))
+            
+            HStack {
+                LinearGradient(
+                        colors: [.white, .black],
+                        startPoint: .top,
+                        endPoint: .bottom
+                    )
+                    .frame(width: 4, height: 40)
+                    .cornerRadius(2)
+                Text("旅行計画")
+                    .font(.system(size: 40))
 
-            Spacer()
+                Spacer()
 
-            // Join shared plan button
-            Button(action: {
-                showJoinPlan = true
-            }) {
-                ZStack {
-                    Circle()
-                        .fill(Color(.systemGray6))
-                        .frame(width: 44, height: 44)
-                        .shadow(color: Color.black.opacity(0.1), radius: 3, x: 0, y: 2)
+                Button(action: {
+                    showJoinPlan = true
+                }) {
+                    ZStack {
+                        Circle()
+                            .fill(Color(.systemGray6))
+                            .frame(width: 44, height: 44)
+                            .shadow(color: Color.black.opacity(0.1), radius: 3, x: 0, y: 2)
 
-                    Image(systemName: "person.badge.plus")
-                        .font(.system(size: 20))
-                        .foregroundColor(.green)
+                        Image(systemName: "person.badge.plus")
+                            .font(.system(size: 20))
+                            .foregroundColor(themeManager.currentTheme.success)
+                    }
+                }
+
+                NavigationLink(destination: ProfileView()) {
+                    ZStack {
+                        Circle()
+                            .fill(Color(.systemGray6))
+                            .frame(width: 44, height: 44)
+                            .shadow(color: Color.black.opacity(0.1), radius: 3, x: 0, y: 2)
+
+                        Image(systemName: "person.crop.circle.fill")
+                            .resizable()
+                            .scaledToFit()
+                            .frame(width: 35, height: 35)
+                            .foregroundStyle(LinearGradient(colors: [.white, themeManager.currentTheme.accent1], startPoint: .topLeading, endPoint: .bottomTrailing))
+                    }
+                    .padding(.trailing, 2)
                 }
             }
-
-            NavigationLink(destination: ProfileView()) {
-                ZStack {
-                    Circle()
-                        .fill(Color(.systemGray6))
-                        .frame(width: 44, height: 44)
-                        .shadow(color: Color.black.opacity(0.1), radius: 3, x: 0, y: 2)
-
-                    Image(systemName: "person.crop.circle.fill")
-                        .resizable()
-                        .scaledToFit()
-                        .frame(width: 35, height: 35)
-                        .foregroundStyle(LinearGradient(colors: [.white, .orange], startPoint: .topLeading, endPoint: .bottomTrailing))
-                }
-                .padding(.trailing, 2)
-            }
+            .padding(.horizontal, 20)
         }
-        .padding(.horizontal, 20)
-        .padding(.top, 10)
+        
     }
 
     private var tabSelectionSection: some View {
@@ -287,7 +300,7 @@ struct EnjoyWorldView: View {
                         .scaleEffect(1.2)
                     Text("旅行計画を読み込み中...")
                         .font(.subheadline)
-                        .foregroundColor(.gray)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
                 .frame(width: 200, height: 200)
                 .background(Color.white.opacity(0.2))
@@ -330,7 +343,7 @@ struct EnjoyWorldView: View {
                         .scaleEffect(1.2)
                     Text("予定を読み込み中...")
                         .font(.subheadline)
-                        .foregroundColor(.gray)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 40)
@@ -354,14 +367,14 @@ struct EnjoyWorldView: View {
             ZStack {
                 if selectedTab == tab {
                     Capsule()
-                        .fill(.orange)
+                        .fill(themeManager.currentTheme.accent1)
                         .matchedGeometryEffect(id: "TAB", in: animation)
                 }
 
                 Text(tab.displayName)
                     .font(.caption)
                     .fontWeight(selectedTab == tab ? .semibold : .regular)
-                    .foregroundColor(selectedTab == tab ? .white : .gray)
+                    .foregroundColor(selectedTab == tab ? .white : themeManager.currentTheme.secondaryText)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
             }
@@ -377,14 +390,14 @@ struct EnjoyWorldView: View {
             ZStack {
                 if selectedPlanTab == tab {
                     Capsule()
-                        .fill(.orange)
+                        .fill(themeManager.currentTheme.accent1)
                         .matchedGeometryEffect(id: "PLAN_TAB", in: animation)
                 }
 
                 Text(tab.displayName)
                     .font(.caption)
                     .fontWeight(selectedPlanTab == tab ? .semibold : .regular)
-                    .foregroundColor(selectedPlanTab == tab ? .white : .gray)
+                    .foregroundColor(selectedPlanTab == tab ? .white : themeManager.currentTheme.secondaryText)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
             }
@@ -398,15 +411,15 @@ struct EnjoyWorldView: View {
             VStack(spacing: 15) {
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 60))
-                    .foregroundColor(.orange)
+                    .foregroundColor(themeManager.currentTheme.accent1)
 
                 Text("旅行計画を作成")
                     .font(.headline)
-                    .foregroundColor(.primary)
+                    .foregroundColor(themeManager.currentTheme.text)
 
                 Text("新しい旅行計画を追加してください")
                     .font(.subheadline)
-                    .foregroundColor(.gray)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
                     .multilineTextAlignment(.center)
             }
             .frame(width: 200, height: 200)
@@ -449,11 +462,11 @@ struct EnjoyWorldView: View {
             VStack {
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 50))
-                    .foregroundColor(.orange)
+                    .foregroundColor(themeManager.currentTheme.accent1)
 
                 Text("予定を追加")
                     .font(.headline)
-                    .foregroundColor(.orange)
+                    .foregroundColor(themeManager.currentTheme.accent1)
             }
             .frame(width: 150, height: 200)
             .background(Color.white.opacity(0.2))
@@ -466,11 +479,11 @@ struct EnjoyWorldView: View {
         VStack(spacing: 15) {
             Image(systemName: "calendar.badge.plus")
                 .font(.system(size: 50))
-                .foregroundColor(.gray.opacity(0.5))
+                .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
 
             Text("まだ予定がありません")
                 .font(.body)
-                .foregroundColor(.gray)
+                .foregroundColor(themeManager.currentTheme.secondaryText)
 
             Button(action: {
                 showAddPlan = true
@@ -480,7 +493,7 @@ struct EnjoyWorldView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 30)
                     .padding(.vertical, 12)
-                    .background(.orange)
+                    .background(themeManager.currentTheme.accent1)
                     .cornerRadius(25)
             }
         }
@@ -522,10 +535,10 @@ struct EnjoyWorldView: View {
         }) {
             HStack {
                 Image(systemName: "plus.circle.fill")
-                    .foregroundColor(.orange)
+                    .foregroundColor(themeManager.currentTheme.accent1)
                 Text("予定を追加")
                     .font(.headline)
-                    .foregroundColor(.orange)
+                    .foregroundColor(themeManager.currentTheme.accent1)
             }
             .padding(.vertical, 15)
             .frame(maxWidth: .infinity)
@@ -538,7 +551,7 @@ struct EnjoyWorldView: View {
 
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ? [.blue.opacity(0.7), .black] : [.blue.opacity(0.6), .white]),
+            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.primary.opacity(0.7), .black] : [themeManager.currentTheme.primary.opacity(0.6), .white]),
             startPoint: .top,
             endPoint: .bottom
         )
@@ -612,4 +625,16 @@ extension EnjoyWorldView {
 
         var displayName: String { rawValue }
     }
+}
+
+// MARK: - Preview
+#Preview {
+    let authVM = AuthViewModel()
+    let travelPlanVM = TravelPlanViewModel()
+    let plansVM = PlansViewModel()
+
+    return EnjoyWorldView()
+        .environmentObject(authVM)
+        .environmentObject(travelPlanVM)
+        .environmentObject(plansVM)
 }

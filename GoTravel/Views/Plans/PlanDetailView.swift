@@ -36,6 +36,7 @@ struct PlanDetailView: View {
     @State private var searchText: String = ""
     @State private var searchResults: [MKMapItem] = []
 
+    @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var viewModel: PlansViewModel
@@ -160,7 +161,7 @@ struct PlanDetailView: View {
 
     // MARK: - Computed Properties
     private var planColor: Color {
-        isEditMode ? (editedPlanType == .daily ? .orange : .blue) : (plan.planType == .daily ? .orange : .blue)
+        isEditMode ? (editedPlanType == .daily ? themeManager.currentTheme.accent1 : themeManager.currentTheme.primary) : (plan.planType == .daily ? themeManager.currentTheme.accent1 : themeManager.currentTheme.primary)
     }
 
     private var planTypeText: String {
@@ -245,11 +246,11 @@ struct PlanDetailView: View {
 
     private var separatorColors: [Color] {
         if plan.planType == .daily {
-            // オレンジ
-            return [.orange, .orange]
+            // 日常プラン
+            return [themeManager.currentTheme.accent1, themeManager.currentTheme.accent1]
         } else {
-            // 青
-            return [.blue, .blue]
+            // おでかけプラン
+            return [themeManager.currentTheme.primary, themeManager.currentTheme.primary]
         }
     }
 
@@ -321,7 +322,7 @@ struct PlanDetailView: View {
                     } label: {
                         HStack {
                             Image(systemName: editedPlanType == .daily ? "house.fill" : "figure.walk")
-                                .foregroundColor(editedPlanType == .daily ? .orange : .blue)
+                                .foregroundColor(editedPlanType == .daily ? themeManager.currentTheme.accent1 : themeManager.currentTheme.primary)
                             Text(editedPlanType == .daily ? "日常" : "おでかけ")
                                 .foregroundColor(.primary)
                             Spacer()
@@ -379,12 +380,12 @@ struct PlanDetailView: View {
                                         Text("時刻を設定")
                                         Spacer()
                                         Image(systemName: "plus.circle.fill")
-                                            .foregroundColor(.orange)
+                                            .foregroundColor(themeManager.currentTheme.accent1)
                                     }
                                     .padding(12)
                                     .background(
                                         RoundedRectangle(cornerRadius: 10)
-                                            .fill(Color.orange.opacity(0.1))
+                                            .fill(themeManager.currentTheme.accent1.opacity(0.1))
                                     )
                                 }
                             }
@@ -501,7 +502,7 @@ struct PlanDetailView: View {
                                     }
                                 }) {
                                     Image(systemName: "trash")
-                                        .foregroundColor(.red)
+                                        .foregroundColor(themeManager.currentTheme.error)
                                 }
                             }
                             .padding(12)
@@ -565,8 +566,8 @@ struct PlanDetailView: View {
                         .padding(.vertical, 16)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(editedTitle.isEmpty ? Color.gray : Color.blue)
-                                .shadow(color: Color.blue.opacity(0.3), radius: 8, x: 0, y: 4)
+                                .fill(editedTitle.isEmpty ? themeManager.currentTheme.secondaryText : themeManager.currentTheme.primary)
+                                .shadow(color: themeManager.currentTheme.primary.opacity(0.3), radius: 8, x: 0, y: 4)
                         )
                     }
                     .disabled(isSaving || editedTitle.isEmpty)
@@ -589,8 +590,8 @@ struct PlanDetailView: View {
                     .padding(.vertical, 16)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(Color.red)
-                            .shadow(color: Color.red.opacity(0.3), radius: 8, x: 0, y: 4)
+                            .fill(themeManager.currentTheme.error)
+                            .shadow(color: themeManager.currentTheme.error.opacity(0.3), radius: 8, x: 0, y: 4)
                     )
                 }
                 .padding(.top, 20)
@@ -1153,15 +1154,15 @@ struct PlanDetailView: View {
                 ZStack {
                     Circle()
                         .fill(schedulePlan.planType == .daily ?
-                              LinearGradient(gradient: Gradient(colors: [.orange, .orange.opacity(0.7)]), startPoint: .topLeading, endPoint: .bottomTrailing) :
-                              LinearGradient(gradient: Gradient(colors: [.blue, .blue.opacity(0.7)]), startPoint: .topLeading, endPoint: .bottomTrailing))
+                              LinearGradient(gradient: Gradient(colors: [themeManager.currentTheme.accent1, themeManager.currentTheme.accent1.opacity(0.7)]), startPoint: .topLeading, endPoint: .bottomTrailing) :
+                              LinearGradient(gradient: Gradient(colors: [themeManager.currentTheme.primary, themeManager.currentTheme.primary.opacity(0.7)]), startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 50, height: 50)
 
                     Image(systemName: schedulePlan.planType == .outing ? "figure.walk" : "house.fill")
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(.white)
                 }
-                .shadow(color: (schedulePlan.planType == .daily ? Color.orange : Color.blue).opacity(0.3), radius: 4, x: 0, y: 2)
+                .shadow(color: (schedulePlan.planType == .daily ? themeManager.currentTheme.accent1 : themeManager.currentTheme.primary).opacity(0.3), radius: 4, x: 0, y: 2)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(schedulePlan.title)
@@ -1188,7 +1189,7 @@ struct PlanDetailView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "mappin.circle.fill")
                                 .font(.caption2)
-                                .foregroundColor(schedulePlan.planType == .daily ? .orange : .blue)
+                                .foregroundColor(schedulePlan.planType == .daily ? themeManager.currentTheme.accent1 : themeManager.currentTheme.primary)
                             Text("\(schedulePlan.places.count)件")
                                 .font(.caption)
                                 .foregroundColor(.secondary)
@@ -1201,20 +1202,20 @@ struct PlanDetailView: View {
                 if schedulePlan.id == plan.id {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 22))
-                        .foregroundColor(schedulePlan.planType == .daily ? .orange : .blue)
+                        .foregroundColor(schedulePlan.planType == .daily ? themeManager.currentTheme.accent1 : themeManager.currentTheme.primary)
                 }
             }
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 14)
                     .fill(schedulePlan.id == plan.id ?
-                          (schedulePlan.planType == .daily ? Color.orange.opacity(0.1) : Color.blue.opacity(0.1)) :
+                          (schedulePlan.planType == .daily ? themeManager.currentTheme.accent1.opacity(0.1) : themeManager.currentTheme.primary.opacity(0.1)) :
                           Color(.tertiarySystemBackground))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
                     .stroke(schedulePlan.id == plan.id ?
-                            (schedulePlan.planType == .daily ? Color.orange.opacity(0.4) : Color.blue.opacity(0.4)) :
+                            (schedulePlan.planType == .daily ? themeManager.currentTheme.accent1.opacity(0.4) : themeManager.currentTheme.primary.opacity(0.4)) :
                             Color.clear, lineWidth: 1.5)
             )
         }
@@ -1411,7 +1412,7 @@ struct PlanDetailView: View {
                 Map(position: $mapPosition, selection: $selectedMapResult) {
                     ForEach(searchResults, id: \.self) { result in
                         Marker(item: result)
-                            .tint(.red)
+                            .tint(themeManager.currentTheme.error)
                     }
                 }
                 .safeAreaInset(edge: .top) {
@@ -1503,7 +1504,7 @@ struct PlanDetailView: View {
             if let address = result.placemark.title {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "mappin.circle.fill")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(themeManager.currentTheme.error)
                         .font(.title3)
                     Text(address)
                         .font(.subheadline)
@@ -1514,7 +1515,7 @@ struct PlanDetailView: View {
             if let phoneNumber = result.phoneNumber {
                 HStack(spacing: 8) {
                     Image(systemName: "phone.circle.fill")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(themeManager.currentTheme.success)
                         .font(.title3)
                     Text(phoneNumber)
                         .font(.subheadline)
@@ -1528,7 +1529,7 @@ struct PlanDetailView: View {
                             .font(.caption)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(Color.green)
+                            .background(themeManager.currentTheme.success)
                             .foregroundStyle(.white)
                             .cornerRadius(8)
                     }
@@ -1538,7 +1539,7 @@ struct PlanDetailView: View {
             if let url = result.url {
                 HStack(spacing: 8) {
                     Image(systemName: "safari.fill")
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(themeManager.currentTheme.primary)
                         .font(.title3)
                     Text(url.host ?? "Website")
                         .font(.subheadline)
@@ -1551,7 +1552,7 @@ struct PlanDetailView: View {
                             .font(.caption)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(Color.blue)
+                            .background(themeManager.currentTheme.primary)
                             .foregroundStyle(.white)
                             .cornerRadius(8)
                     }
@@ -1567,8 +1568,8 @@ struct PlanDetailView: View {
                     Label("経路", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Color.blue.opacity(0.1))
-                        .foregroundStyle(.blue)
+                        .background(themeManager.currentTheme.primary.opacity(0.1))
+                        .foregroundStyle(themeManager.currentTheme.primary)
                         .cornerRadius(10)
                 }
 
@@ -1578,8 +1579,8 @@ struct PlanDetailView: View {
                     Label("追加", systemImage: "plus.circle.fill")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Color.orange.opacity(0.1))
-                        .foregroundStyle(.orange)
+                        .background(themeManager.currentTheme.accent1.opacity(0.1))
+                        .foregroundStyle(themeManager.currentTheme.accent1)
                         .cornerRadius(10)
                 }
             }

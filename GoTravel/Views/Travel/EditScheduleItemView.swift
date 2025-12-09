@@ -7,6 +7,7 @@ struct EditScheduleItemView: View {
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject var viewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
+    @ObservedObject var themeManager = ThemeManager.shared
 
     let plan: TravelPlan
     let daySchedule: DaySchedule
@@ -58,7 +59,7 @@ struct EditScheduleItemView: View {
 
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: [Color.blue.opacity(0.9), Color.black]),
+            gradient: Gradient(colors: [themeManager.currentTheme.primary.opacity(0.9), Color.black]),
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -255,7 +256,7 @@ struct EditScheduleItemView: View {
             .foregroundColor(.white)
             .padding()
             .frame(maxWidth: .infinity)
-            .background(Color.red.opacity(0.8))
+            .background(themeManager.currentTheme.error.opacity(0.8))
             .cornerRadius(10)
         }
         .padding()
@@ -265,7 +266,7 @@ struct EditScheduleItemView: View {
         Button("キャンセル") {
             presentationMode.wrappedValue.dismiss()
         }
-        .foregroundColor(.red)
+        .foregroundColor(themeManager.currentTheme.error)
     }
 
     private var saveButton: some View {
@@ -275,7 +276,7 @@ struct EditScheduleItemView: View {
                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
             } else {
                 Text("保存")
-                    .foregroundColor(.blue)
+                    .foregroundColor(themeManager.currentTheme.primary)
             }
         }
         .disabled(!isFormValid || isSaving)
@@ -348,7 +349,7 @@ struct EditScheduleItemView: View {
                 Map(position: $mapPosition, selection: $selectedMapResult) {
                     ForEach(searchResults, id: \.self) { result in
                         Marker(item: result)
-                            .tint(.red)
+                            .tint(themeManager.currentTheme.error)
                     }
                 }
                 .safeAreaInset(edge: .top) {
@@ -438,7 +439,7 @@ struct EditScheduleItemView: View {
             if let address = result.placemark.title {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "mappin.circle.fill")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(themeManager.currentTheme.error)
                         .font(.title3)
                     Text(address)
                         .font(.subheadline)
@@ -449,7 +450,7 @@ struct EditScheduleItemView: View {
             if let phoneNumber = result.phoneNumber {
                 HStack(spacing: 8) {
                     Image(systemName: "phone.circle.fill")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(themeManager.currentTheme.success)
                         .font(.title3)
                     Text(phoneNumber)
                         .font(.subheadline)
@@ -463,7 +464,7 @@ struct EditScheduleItemView: View {
                             .font(.caption)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(Color.green)
+                            .background(themeManager.currentTheme.success)
                             .foregroundStyle(.white)
                             .cornerRadius(8)
                     }
@@ -473,7 +474,7 @@ struct EditScheduleItemView: View {
             if let url = result.url {
                 HStack(spacing: 8) {
                     Image(systemName: "safari.fill")
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(themeManager.currentTheme.primary)
                         .font(.title3)
                     Text(url.host ?? "Website")
                         .font(.subheadline)
@@ -486,7 +487,7 @@ struct EditScheduleItemView: View {
                             .font(.caption)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(Color.blue)
+                            .background(themeManager.currentTheme.primary)
                             .foregroundStyle(.white)
                             .cornerRadius(8)
                     }
@@ -502,8 +503,8 @@ struct EditScheduleItemView: View {
                     Label("経路", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Color.blue.opacity(0.1))
-                        .foregroundStyle(.blue)
+                        .background(themeManager.currentTheme.primary.opacity(0.1))
+                        .foregroundStyle(themeManager.currentTheme.primary)
                         .cornerRadius(10)
                 }
 
@@ -513,8 +514,8 @@ struct EditScheduleItemView: View {
                     Label("選択", systemImage: "checkmark.circle.fill")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Color.orange.opacity(0.1))
-                        .foregroundStyle(.orange)
+                        .background(themeManager.currentTheme.accent1.opacity(0.1))
+                        .foregroundStyle(themeManager.currentTheme.accent1)
                         .cornerRadius(10)
                 }
             }

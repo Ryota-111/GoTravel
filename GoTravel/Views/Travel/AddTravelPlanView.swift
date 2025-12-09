@@ -6,6 +6,7 @@ import MapKit
 struct AddTravelPlanView: View {
     // MARK: - Properties
     @Environment(\.presentationMode) var presentationMode
+    @ObservedObject var themeManager = ThemeManager.shared
     var onSave: (TravelPlan) -> Void
 
     @State private var title: String = ""
@@ -30,7 +31,7 @@ struct AddTravelPlanView: View {
 
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: [Color.blue.opacity(0.9), Color.black]),
+            gradient: Gradient(colors: [themeManager.currentTheme.primary.opacity(0.9), Color.black]),
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -213,7 +214,7 @@ struct AddTravelPlanView: View {
 
     private var saveButtonGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: [Color.blue, Color.purple]),
+            gradient: Gradient(colors: [themeManager.currentTheme.primary, themeManager.currentTheme.secondary]),
             startPoint: .leading,
             endPoint: .trailing
         )
@@ -303,7 +304,7 @@ struct AddTravelPlanView: View {
             latitude: destinationCoordinate?.latitude,
             longitude: destinationCoordinate?.longitude,
             localImageFileName: fileName,
-            cardColor: Color.blue
+            cardColor: themeManager.currentTheme.primary
         )
 
         #if DEBUG

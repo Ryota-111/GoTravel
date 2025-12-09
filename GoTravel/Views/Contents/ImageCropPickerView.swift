@@ -53,6 +53,7 @@ struct ImageCropperView: View {
     let aspectRatio: CGFloat
     let onCrop: (UIImage) -> Void
     let onCancel: () -> Void
+    @ObservedObject var themeManager = ThemeManager.shared
 
     @State private var scale: CGFloat = 1.0
     @State private var lastScale: CGFloat = 1.0
@@ -112,7 +113,7 @@ struct ImageCropperView: View {
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 30)
                                 .padding(.vertical, 12)
-                                .background(Color.red.opacity(0.8))
+                                .background(themeManager.currentTheme.error.opacity(0.8))
                                 .cornerRadius(25)
                         }
 
@@ -123,7 +124,7 @@ struct ImageCropperView: View {
                                 .foregroundColor(.white)
                                 .padding(.horizontal, 30)
                                 .padding(.vertical, 12)
-                                .background(Color.blue)
+                                .background(themeManager.currentTheme.primary)
                                 .cornerRadius(25)
                         }
                     }

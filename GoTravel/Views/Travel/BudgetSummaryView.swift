@@ -5,6 +5,7 @@ struct BudgetSummaryView: View {
     // MARK: - Properties
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.colorScheme) var colorScheme
+    @ObservedObject var themeManager = ThemeManager.shared
 
     let plan: TravelPlan
 
@@ -46,7 +47,7 @@ struct BudgetSummaryView: View {
 
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ? [Color.blue.opacity(0.7), Color.black] : [Color.blue.opacity(0.8), Color.white]),
+            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.primary.opacity(0.7), Color.black] : [themeManager.currentTheme.primary.opacity(0.8), Color.white]),
             startPoint: .top,
             endPoint: .bottom
         )
@@ -130,7 +131,7 @@ struct BudgetSummaryView: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("合計金額")
                         .font(.headline)
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : themeManager.currentTheme.secondaryText)
 
                     Text(formatCurrency(totalCost))
                         .font(.system(size: 36, weight: .bold))
@@ -150,7 +151,7 @@ struct BudgetSummaryView: View {
             HStack {
                 Image(systemName: "person.2.fill")
                     .font(.title2)
-                    .foregroundColor(.blue)
+                    .foregroundColor(themeManager.currentTheme.primary)
 
                 Text("金額折半")
                     .font(.title2)
@@ -163,7 +164,7 @@ struct BudgetSummaryView: View {
                 HStack {
                     Text("参加人数")
                         .font(.subheadline)
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : themeManager.currentTheme.secondaryText)
 
                     Spacer()
 
@@ -183,18 +184,18 @@ struct BudgetSummaryView: View {
 
                         Text("合計 \(formatCurrency(totalCost)) ÷ \(memberCount)人")
                             .font(.caption)
-                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .gray)
+                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : themeManager.currentTheme.secondaryText)
                     }
 
                     Spacer()
 
                     Text(formatCurrency(costPerPerson))
                         .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(.blue)
+                        .foregroundColor(themeManager.currentTheme.primary)
                 }
             }
             .padding()
-            .background(Color.blue.opacity(0.1))
+            .background(themeManager.currentTheme.primary.opacity(0.1))
             .cornerRadius(10)
         }
         .padding()
@@ -227,7 +228,7 @@ struct BudgetSummaryView: View {
 
                 Text(formatDate(day.date))
                     .font(.caption)
-                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .gray)
+                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : themeManager.currentTheme.secondaryText)
             }
 
             Spacer()
@@ -288,15 +289,15 @@ struct BudgetSummaryView: View {
         VStack(spacing: 15) {
             Image(systemName: "yensign.circle")
                 .font(.system(size: 60))
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.5) : .gray.opacity(0.5))
+                .foregroundColor(colorScheme == .dark ? .white.opacity(0.5) : themeManager.currentTheme.secondaryText.opacity(0.5))
 
             Text("まだ金額が登録されていません")
                 .font(.body)
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : themeManager.currentTheme.secondaryText)
 
             Text("スケジュールに金額を追加すると、ここに表示されます")
                 .font(.caption)
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.5) : .gray.opacity(0.7))
+                .foregroundColor(colorScheme == .dark ? .white.opacity(0.5) : themeManager.currentTheme.secondaryText.opacity(0.7))
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)

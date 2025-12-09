@@ -5,6 +5,7 @@ struct PlacesListView: View {
     // MARK: - Properties
     @EnvironmentObject var authVM: AuthViewModel
     @StateObject private var vm = PlacesViewModel()
+    @ObservedObject var themeManager = ThemeManager.shared
     @State private var selectedCategory: PlaceCategory = .hotel
     @State private var hasLoadedData = false
     @Environment(\.colorScheme) var colorScheme
@@ -17,7 +18,7 @@ struct PlacesListView: View {
 
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ? [.blue.opacity(0.7), .black] : [.blue.opacity(0.6), .white]),
+            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.primary.opacity(0.7), .black] : [themeManager.currentTheme.primary.opacity(0.6), .white]),
             startPoint: .top,
             endPoint: .bottom
         )
@@ -26,7 +27,7 @@ struct PlacesListView: View {
 
     private var cardGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ? [.orange, .black.opacity(0.1)] : [.orange, .white.opacity(0.5)]),
+            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.accent1, .black.opacity(0.1)] : [themeManager.currentTheme.accent1, .white.opacity(0.5)]),
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -84,7 +85,7 @@ struct PlacesListView: View {
         VStack {
             Spacer()
             ProgressView()
-                .progressViewStyle(CircularProgressViewStyle(tint: .orange))
+                .progressViewStyle(CircularProgressViewStyle(tint: themeManager.currentTheme.accent1))
                 .scaleEffect(1.5)
             Text("読み込み中...")
                 .font(.subheadline)
@@ -119,7 +120,7 @@ struct PlacesListView: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 30)
                         .padding(.vertical, 12)
-                        .background(.orange)
+                        .background(themeManager.currentTheme.accent1)
                         .cornerRadius(25)
                 }
             }
@@ -139,7 +140,7 @@ struct PlacesListView: View {
                 NavigationLink(destination: MapHomeView()) {
                     HStack {
                         Image(systemName: "plus.circle.fill")
-                            .foregroundColor(.orange)
+                            .foregroundColor(themeManager.currentTheme.accent1)
                         Text("場所を追加")
                             .font(.headline)
                             .foregroundColor(textColor)
@@ -173,8 +174,8 @@ struct PlacesListView: View {
                     .stroke(
                         LinearGradient(
                             gradient: Gradient(colors: [
-                                .orange.opacity(0.5),
-                                .orange.opacity(0.2)
+                                themeManager.currentTheme.accent1.opacity(0.5),
+                                themeManager.currentTheme.accent1.opacity(0.2)
                             ]),
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -183,7 +184,7 @@ struct PlacesListView: View {
                     )
             )
             .shadow(
-                color: .orange.opacity(0.5),
+                color: themeManager.currentTheme.accent1.opacity(0.5),
                 radius: 10
             )
         }
@@ -241,9 +242,9 @@ struct PlacesListView: View {
                     horizontalEventsCard(
                         menuName: category.displayName,
                         menuImage: category.iconName,
-                        rectColor: selectedCategory == category ? .orange : Color.white,
-                        imageColors: selectedCategory == category ? .white : .orange,
-                        textColor: selectedCategory == category ? .orange : .gray
+                        rectColor: selectedCategory == category ? themeManager.currentTheme.accent1 : Color.white,
+                        imageColors: selectedCategory == category ? .white : themeManager.currentTheme.accent1,
+                        textColor: selectedCategory == category ? themeManager.currentTheme.accent1 : themeManager.currentTheme.secondaryText
                     )
                     .onTapGesture {
                         withAnimation(.spring()) {

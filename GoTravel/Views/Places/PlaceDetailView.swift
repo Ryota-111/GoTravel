@@ -6,6 +6,7 @@ struct PlaceDetailView: View {
     @State private var place: VisitedPlace
 
     @EnvironmentObject var authVM: AuthViewModel
+    @ObservedObject var themeManager = ThemeManager.shared
     @State private var showStreetView = false
     @State private var showMap = true
     @State private var lookAroundScene: MKLookAroundScene?
@@ -42,7 +43,7 @@ struct PlaceDetailView: View {
         }
         .background(
             LinearGradient(
-                gradient: Gradient(colors: colorScheme == .dark ? [.orange.opacity(0.8), .black] : [.orange.opacity(0.7), .white.opacity(0.1)]),
+                gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.accent1.opacity(0.8), .black] : [themeManager.currentTheme.accent1.opacity(0.7), .white.opacity(0.1)]),
                 startPoint: .top,
                 endPoint: .bottom
             )
@@ -68,7 +69,7 @@ struct PlaceDetailView: View {
                             }
                         }
                         .disabled(isSaving || editedTitle.isEmpty)
-                        .foregroundColor(editedTitle.isEmpty ? .secondary : .orange)
+                        .foregroundColor(editedTitle.isEmpty ? .secondary : themeManager.currentTheme.accent1)
                     }
                 } else {
                     Button(action: {
@@ -78,7 +79,7 @@ struct PlaceDetailView: View {
                             Image(systemName: "pencil")
                             Text("編集")
                         }
-                        .foregroundColor(.orange)
+                        .foregroundColor(themeManager.currentTheme.accent1)
                     }
                 }
             }
@@ -204,7 +205,7 @@ struct PlaceDetailView: View {
                     } label: {
                         HStack {
                             Image(systemName: editedCategory.iconName)
-                                .foregroundColor(.orange)
+                                .foregroundColor(themeManager.currentTheme.accent1)
                             Text(editedCategory.displayName)
                                 .foregroundColor(.primary)
                             Spacer()
@@ -320,8 +321,8 @@ struct PlaceDetailView: View {
                         .padding(.vertical, 16)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(editedTitle.isEmpty ? Color.gray : Color.blue)
-                                .shadow(color: Color.blue.opacity(0.3), radius: 8, x: 0, y: 4)
+                                .fill(editedTitle.isEmpty ? themeManager.currentTheme.secondaryText.opacity(0.3) : themeManager.currentTheme.primary)
+                                .shadow(color: themeManager.currentTheme.primary.opacity(0.3), radius: 8, x: 0, y: 4)
                         )
                     }
                     .disabled(isSaving || editedTitle.isEmpty)
@@ -347,8 +348,8 @@ struct PlaceDetailView: View {
                     .fill(
                         LinearGradient(
                             gradient: Gradient(colors: [
-                                Color.orange.opacity(0.6),
-                                Color.orange.opacity(0.3)
+                                themeManager.currentTheme.accent1.opacity(0.6),
+                                themeManager.currentTheme.accent1.opacity(0.3)
                             ]),
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -413,8 +414,8 @@ struct PlaceDetailView: View {
                     .fill(
                         LinearGradient(
                             gradient: Gradient(colors: [
-                                Color.orange.opacity(0.6),
-                                Color.orange.opacity(0.3)
+                                themeManager.currentTheme.accent1.opacity(0.6),
+                                themeManager.currentTheme.accent1.opacity(0.3)
                             ]),
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -465,7 +466,7 @@ struct PlaceDetailView: View {
                 LinearGradient(
                     gradient: Gradient(colors: [
                         Color.clear,
-                        Color.orange.opacity(0.3),
+                        themeManager.currentTheme.accent1.opacity(0.3),
                         Color.clear
                     ]),
                     startPoint: .leading,
@@ -489,9 +490,9 @@ struct PlaceDetailView: View {
         .padding(.vertical, 6)
         .background(
             Capsule()
-                .fill(Color.orange)
+                .fill(themeManager.currentTheme.accent1)
         )
-        .shadow(color: Color.orange.opacity(0.3), radius: 4, x: 0, y: 2)
+        .shadow(color: themeManager.currentTheme.accent1.opacity(0.3), radius: 4, x: 0, y: 2)
     }
 
     // MARK: - Notes Section
@@ -500,7 +501,7 @@ struct PlaceDetailView: View {
             HStack {
                 Image(systemName: "note.text")
                     .font(.headline)
-                    .foregroundColor(.orange)
+                    .foregroundColor(themeManager.currentTheme.accent1)
                 Text("メモ")
                     .font(.headline.weight(.semibold))
                     .foregroundColor(.primary)
@@ -529,7 +530,7 @@ struct PlaceDetailView: View {
             HStack {
                 Image(systemName: "eye.circle.fill")
                     .font(.headline)
-                    .foregroundColor(.orange)
+                    .foregroundColor(themeManager.currentTheme.accent1)
                 Text("ストリートビュー")
                     .font(.headline.weight(.semibold))
                     .foregroundColor(.primary)
@@ -583,7 +584,7 @@ struct PlaceDetailView: View {
             HStack {
                 Image(systemName: "map.circle.fill")
                     .font(.headline)
-                    .foregroundColor(.orange)
+                    .foregroundColor(themeManager.currentTheme.accent1)
                 Text("マップ")
                     .font(.headline.weight(.semibold))
                     .foregroundColor(.primary)
@@ -594,7 +595,7 @@ struct PlaceDetailView: View {
                 span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
             )))) {
                 Marker(place.title, coordinate: place.coordinate)
-                    .tint(.orange)
+                    .tint(themeManager.currentTheme.accent1)
             }
             .frame(height: 300)
             .clipShape(RoundedRectangle(cornerRadius: 16))
@@ -620,7 +621,7 @@ struct PlaceDetailView: View {
         HStack(spacing: 12) {
             Image(systemName: "calendar.circle.fill")
                 .font(.headline)
-                .foregroundColor(.orange)
+                .foregroundColor(themeManager.currentTheme.accent1)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("訪問日")

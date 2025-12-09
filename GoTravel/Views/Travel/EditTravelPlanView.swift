@@ -3,6 +3,7 @@ import SwiftUI
 // TravelPlanの編集（使ってないかも）
 struct EditTravelPlanView: View {
     @Environment(\.presentationMode) var presentationMode
+    @ObservedObject var themeManager = ThemeManager.shared
     var onSave: (TravelPlan) -> Void
 
     let plan: TravelPlan
@@ -40,7 +41,7 @@ struct EditTravelPlanView: View {
     var body: some View {
         ZStack {
             LinearGradient(
-                gradient: Gradient(colors: [Color.blue.opacity(0.9), Color.black]),
+                gradient: Gradient(colors: [themeManager.currentTheme.primary.opacity(0.9), Color.black]),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -211,7 +212,7 @@ struct EditTravelPlanView: View {
                 .foregroundColor(.white)
                 .padding()
                 .frame(maxWidth: .infinity)
-                .background(Color.blue.opacity(0.5))
+                .background(themeManager.currentTheme.primary.opacity(0.5))
                 .cornerRadius(10)
             }
         }
@@ -237,7 +238,7 @@ struct EditTravelPlanView: View {
 
                     Text("\(daySchedule.scheduleItems.count)件の予定")
                         .font(.caption)
-                        .foregroundColor(.orange)
+                        .foregroundColor(themeManager.currentTheme.accent1)
                 }
 
                 Spacer()
@@ -283,7 +284,7 @@ struct EditTravelPlanView: View {
             .frame(maxWidth: .infinity)
             .background(
                 LinearGradient(
-                    gradient: Gradient(colors: [Color.blue, Color.purple]),
+                    gradient: Gradient(colors: [themeManager.currentTheme.primary, themeManager.currentTheme.secondary]),
                     startPoint: .leading,
                     endPoint: .trailing
                 )
@@ -363,7 +364,7 @@ struct EditTravelPlanView: View {
                 endDate: normalizedEnd,
                 destination: destination.trimmingCharacters(in: .whitespacesAndNewlines),
                 localImageFileName: fileName,
-                cardColor: plan.cardColor ?? Color.blue,
+                cardColor: plan.cardColor ?? themeManager.currentTheme.primary,
                 createdAt: plan.createdAt,
                 userId: plan.userId,
                 daySchedules: daySchedules
@@ -408,6 +409,7 @@ struct EditTravelPlanView: View {
 
 struct DayScheduleEditorView: View {
     @Environment(\.presentationMode) var presentationMode
+    @ObservedObject var themeManager = ThemeManager.shared
     @Binding var daySchedule: DaySchedule
     var onSave: (DaySchedule) -> Void
 
@@ -418,7 +420,7 @@ struct DayScheduleEditorView: View {
         NavigationView {
             ZStack {
                 LinearGradient(
-                    gradient: Gradient(colors: [Color.blue.opacity(0.9), Color.black]),
+                    gradient: Gradient(colors: [themeManager.currentTheme.primary.opacity(0.9), Color.black]),
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -439,7 +441,7 @@ struct DayScheduleEditorView: View {
                                 .foregroundColor(.white)
                                 .padding()
                                 .frame(maxWidth: .infinity)
-                                .background(Color.blue.opacity(0.5))
+                                .background(themeManager.currentTheme.primary.opacity(0.5))
                                 .cornerRadius(10)
                             }
                         }
@@ -475,7 +477,7 @@ struct DayScheduleEditorView: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text(formatTime(item.time))
                     .font(.caption)
-                    .foregroundColor(.orange)
+                    .foregroundColor(themeManager.currentTheme.accent1)
 
                 Text(item.title)
                     .font(.headline)
@@ -496,7 +498,7 @@ struct DayScheduleEditorView: View {
                 }
             }) {
                 Image(systemName: "trash")
-                    .foregroundColor(.red)
+                    .foregroundColor(themeManager.currentTheme.error)
             }
         }
         .padding()
@@ -511,6 +513,7 @@ struct DayScheduleEditorView: View {
 
 struct AddScheduleItemEditorView: View {
     @Environment(\.presentationMode) var presentationMode
+    @ObservedObject var themeManager = ThemeManager.shared
     @Binding var daySchedule: DaySchedule
 
     @State private var title: String = ""
@@ -522,7 +525,7 @@ struct AddScheduleItemEditorView: View {
         NavigationView {
             ZStack {
                 LinearGradient(
-                    gradient: Gradient(colors: [Color.blue.opacity(0.9), Color.black]),
+                    gradient: Gradient(colors: [themeManager.currentTheme.primary.opacity(0.9), Color.black]),
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )

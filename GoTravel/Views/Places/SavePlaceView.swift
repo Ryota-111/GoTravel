@@ -61,7 +61,7 @@ struct SavePlaceView: View {
     private func errorSection(error: String) -> some View {
         Section {
             Text(error)
-                .foregroundColor(.red)
+                .foregroundColor(ThemeManager.shared.currentTheme.error)
         }
     }
 

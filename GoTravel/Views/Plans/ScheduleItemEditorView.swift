@@ -7,6 +7,7 @@ struct ScheduleItemEditorView: View {
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.colorScheme) var colorScheme
+    @ObservedObject var themeManager = ThemeManager.shared
 
     @State private var time: Date
     @State private var title: String
@@ -113,7 +114,7 @@ struct ScheduleItemEditorView: View {
                                     if let placeId = selectedPlaceId,
                                        let place = plan.places.first(where: { $0.id == placeId }) {
                                         Image(systemName: "mappin.circle.fill")
-                                            .foregroundColor(.blue)
+                                            .foregroundColor(themeManager.currentTheme.primary)
                                         Text(place.name)
                                             .foregroundColor(.primary)
                                     } else {
@@ -185,8 +186,8 @@ struct ScheduleItemEditorView: View {
             .background(
                 LinearGradient(
                     gradient: Gradient(colors: colorScheme == .dark ?
-                        [Color.blue.opacity(0.8), .black] :
-                        [Color.blue.opacity(0.7), .white.opacity(0.1)]),
+                        [themeManager.currentTheme.primary.opacity(0.8), .black] :
+                        [themeManager.currentTheme.primary.opacity(0.7), .white.opacity(0.1)]),
                     startPoint: .top,
                     endPoint: .bottom
                 )

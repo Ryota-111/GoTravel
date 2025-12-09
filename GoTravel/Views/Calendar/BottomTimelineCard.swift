@@ -7,6 +7,7 @@ struct BottomTimelineCard: View {
 
     @EnvironmentObject var plansViewModel: PlansViewModel
     @EnvironmentObject var travelViewModel: TravelPlanViewModel
+    @ObservedObject var themeManager = ThemeManager.shared
 
     @Environment(\.colorScheme) var colorScheme
     @State private var dragOffset: CGFloat = 0
@@ -90,7 +91,7 @@ struct BottomTimelineCard: View {
             }) {
                 Image(systemName: isExpanded ? "chevron.down.circle.fill" : "chevron.up.circle.fill")
                     .font(.title3)
-                    .foregroundColor(.orange)
+                    .foregroundColor(themeManager.currentTheme.accent1)
             }
         }
     }
@@ -114,7 +115,7 @@ struct BottomTimelineCard: View {
         VStack(spacing: 12) {
             Image(systemName: "calendar.badge.clock")
                 .font(.system(size: 40))
-                .foregroundColor(.orange.opacity(0.4))
+                .foregroundColor(themeManager.currentTheme.accent1.opacity(0.4))
 
             Text("予定がありません")
                 .font(.subheadline)
@@ -175,6 +176,7 @@ struct TimelineItemCard: View {
 
     @EnvironmentObject var plansViewModel: PlansViewModel
     @EnvironmentObject var travelViewModel: TravelPlanViewModel
+    @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
@@ -207,7 +209,7 @@ struct TimelineItemCard: View {
                             LinearGradient(
                                 gradient: Gradient(colors: [
                                     itemColor.opacity(0.5),
-                                    Color.gray.opacity(0.2)
+                                    themeManager.currentTheme.cardBorder.opacity(0.2)
                                 ]),
                                 startPoint: .top,
                                 endPoint: .bottom
@@ -295,9 +297,9 @@ struct TimelineItemCard: View {
 
     private var itemColor: Color {
         switch item.type {
-        case .dailyPlan: return .orange
-        case .outingPlan: return .blue
-        case .travel: return .green
+        case .dailyPlan: return themeManager.currentTheme.accent1
+        case .outingPlan: return themeManager.currentTheme.primary
+        case .travel: return themeManager.currentTheme.success
         }
     }
 

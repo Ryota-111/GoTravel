@@ -7,6 +7,7 @@ struct ScheduleEditorView: View {
     @Environment(\.colorScheme) var colorScheme
     @EnvironmentObject var viewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
+    @ObservedObject var themeManager = ThemeManager.shared
 
     let plan: TravelPlan
     @State private var daySchedules: [DaySchedule]
@@ -32,7 +33,7 @@ struct ScheduleEditorView: View {
         NavigationView {
             ZStack {
                 LinearGradient(
-                    gradient: Gradient(colors: colorScheme == .dark ? [Color.blue.opacity(0.7), Color.black] : [Color.blue.opacity(0.8), Color.white]),
+                    gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.primary.opacity(0.7), Color.black] : [themeManager.currentTheme.primary.opacity(0.8), Color.white]),
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -99,18 +100,18 @@ struct ScheduleEditorView: View {
             HStack(spacing: 15) {
                 HStack(spacing: 5) {
                     Image(systemName: "mappin.circle.fill")
-                        .foregroundColor(.orange)
+                        .foregroundColor(themeManager.currentTheme.accent1)
                     Text(plan.destination)
                         .font(.subheadline)
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .gray)
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : themeManager.currentTheme.secondaryText)
                 }
 
                 HStack(spacing: 5) {
                     Image(systemName: "calendar")
-                        .foregroundColor(.orange)
+                        .foregroundColor(themeManager.currentTheme.accent1)
                     Text(dateRangeString)
                         .font(.subheadline)
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .gray)
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : themeManager.currentTheme.secondaryText)
                 }
             }
         }
@@ -132,23 +133,23 @@ struct ScheduleEditorView: View {
                         VStack(spacing: 5) {
                             Text("Day \(day)")
                                 .font(.headline)
-                                .foregroundColor(selectedDay == day ? .white : (colorScheme == .dark ? .white.opacity(0.6) : .gray))
+                                .foregroundColor(selectedDay == day ? .white : (colorScheme == .dark ? .white.opacity(0.6) : themeManager.currentTheme.secondaryText))
 
                             if let daySchedule = daySchedules.first(where: { $0.dayNumber == day }) {
                                 Text("\(daySchedule.scheduleItems.count)件")
                                     .font(.caption2)
-                                    .foregroundColor(selectedDay == day ? .white.opacity(0.8) : (colorScheme == .dark ? .white.opacity(0.5) : .gray.opacity(0.7)))
+                                    .foregroundColor(selectedDay == day ? .white.opacity(0.8) : (colorScheme == .dark ? .white.opacity(0.5) : themeManager.currentTheme.secondaryText.opacity(0.7)))
                             } else {
                                 Text("0件")
                                     .font(.caption2)
-                                    .foregroundColor(selectedDay == day ? .white.opacity(0.8) : (colorScheme == .dark ? .white.opacity(0.5) : .gray.opacity(0.7)))
+                                    .foregroundColor(selectedDay == day ? .white.opacity(0.8) : (colorScheme == .dark ? .white.opacity(0.5) : themeManager.currentTheme.secondaryText.opacity(0.7)))
                             }
                         }
                         .padding(.horizontal, 20)
                         .padding(.vertical, 12)
                         .background(
                             RoundedRectangle(cornerRadius: 15)
-                                .fill(selectedDay == day ? Color.orange : Color.white.opacity(0.3))
+                                .fill(selectedDay == day ? themeManager.currentTheme.accent1 : Color.white.opacity(0.3))
                         )
                     }
                 }
@@ -173,7 +174,7 @@ struct ScheduleEditorView: View {
                             .font(.subheadline)
                             .fontWeight(.semibold)
                     }
-                    .foregroundColor(.orange)
+                    .foregroundColor(themeManager.currentTheme.accent1)
                 }
             }
 
@@ -215,11 +216,11 @@ struct ScheduleEditorView: View {
         VStack(spacing: 15) {
             Image(systemName: "calendar.badge.plus")
                 .font(.system(size: 50))
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.5) : .gray.opacity(0.5))
+                .foregroundColor(colorScheme == .dark ? .white.opacity(0.5) : themeManager.currentTheme.secondaryText.opacity(0.5))
 
             Text("まだ予定がありません")
                 .font(.subheadline)
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : themeManager.currentTheme.secondaryText)
 
             Button(action: { showAddScheduleItem = true }) {
                 Text("最初の予定を追加")
@@ -227,7 +228,7 @@ struct ScheduleEditorView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 30)
                     .padding(.vertical, 12)
-                    .background(.orange)
+                    .background(themeManager.currentTheme.accent1)
                     .cornerRadius(25)
             }
         }
@@ -297,6 +298,7 @@ struct ScheduleItemEditCard: View {
 
     @State private var showSaveAsVisited = false
     @State private var showMapView = false
+    @ObservedObject var themeManager = ThemeManager.shared
 
     private var hasLocationData: Bool {
         item.latitude != nil && item.longitude != nil
@@ -307,10 +309,10 @@ struct ScheduleItemEditCard: View {
             VStack(spacing: 5) {
                 Text(formatTime(item.time))
                     .font(.headline)
-                    .foregroundColor(.orange)
+                    .foregroundColor(themeManager.currentTheme.accent1)
 
                 Image(systemName: "clock.fill")
-                    .foregroundColor(.orange.opacity(0.7))
+                    .foregroundColor(themeManager.currentTheme.accent1.opacity(0.7))
                     .font(.caption)
             }
             .frame(width: 60)
@@ -324,7 +326,7 @@ struct ScheduleItemEditCard: View {
                     HStack(spacing: 5) {
                         Image(systemName: "mappin.circle.fill")
                             .font(.caption)
-                            .foregroundColor(.orange)
+                            .foregroundColor(themeManager.currentTheme.accent1)
                         Text(location)
                             .font(.subheadline)
                             .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .black.opacity(0.7))
@@ -334,7 +336,7 @@ struct ScheduleItemEditCard: View {
                 if let notes = item.notes {
                     Text(notes)
                         .font(.caption)
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : themeManager.currentTheme.secondaryText)
                         .lineLimit(2)
                 }
             }
@@ -346,7 +348,7 @@ struct ScheduleItemEditCard: View {
                     Button(action: { showMapView = true }) {
                         Image(systemName: "map.circle.fill")
                             .font(.system(size: 28))
-                            .foregroundColor(.green)
+                            .foregroundColor(themeManager.currentTheme.success)
                     }
                     .buttonStyle(.borderless)
                 }
@@ -354,14 +356,14 @@ struct ScheduleItemEditCard: View {
                 Button(action: { showSaveAsVisited = true }) {
                     Image(systemName: "bookmark.circle.fill")
                         .font(.system(size: 28))
-                        .foregroundColor(.orange)
+                        .foregroundColor(themeManager.currentTheme.accent1)
                 }
                 .buttonStyle(.borderless)
 
                 Button(action: onDelete) {
                     Image(systemName: "trash.circle.fill")
                         .font(.system(size: 28))
-                        .foregroundColor(.red)
+                        .foregroundColor(themeManager.currentTheme.error)
                 }
                 .buttonStyle(.borderless)
             }
@@ -391,10 +393,10 @@ struct ScheduleItemEditCard: View {
                     ))) {
                         if let location = item.location {
                             Marker(location, coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude))
-                                .tint(.red)
+                                .tint(themeManager.currentTheme.error)
                         } else {
                             Marker(item.title, coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude))
-                                .tint(.red)
+                                .tint(themeManager.currentTheme.error)
                         }
                     }
                 } else {
@@ -438,6 +440,7 @@ struct ScheduleItemEditCard: View {
 
 struct AddScheduleItemToEditorView: View {
     @Environment(\.presentationMode) var presentationMode
+    @ObservedObject var themeManager = ThemeManager.shared
     let dayNumber: Int
     @Binding var daySchedules: [DaySchedule]
     let plan: TravelPlan
@@ -466,7 +469,7 @@ struct AddScheduleItemToEditorView: View {
         NavigationView {
             ZStack {
                 LinearGradient(
-                    gradient: Gradient(colors: [Color.blue.opacity(0.9), Color.black]),
+                    gradient: Gradient(colors: [themeManager.currentTheme.primary.opacity(0.9), Color.black]),
                     startPoint: .topLeading,
                     endPoint: .bottomTrailing
                 )
@@ -541,13 +544,13 @@ struct AddScheduleItemToEditorView: View {
                     Button("キャンセル") {
                         presentationMode.wrappedValue.dismiss()
                     }
-                    .foregroundColor(.red)
+                    .foregroundColor(themeManager.currentTheme.error)
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("追加") {
                         addScheduleItem()
                     }
-                    .foregroundColor(.blue)
+                    .foregroundColor(themeManager.currentTheme.primary)
                     .disabled(title.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
@@ -691,7 +694,7 @@ struct AddScheduleItemToEditorView: View {
                 Map(position: $mapPosition, selection: $selectedMapResult) {
                     ForEach(searchResults, id: \.self) { result in
                         Marker(item: result)
-                            .tint(.red)
+                            .tint(themeManager.currentTheme.error)
                     }
                 }
                 .safeAreaInset(edge: .top) {
@@ -781,7 +784,7 @@ struct AddScheduleItemToEditorView: View {
             if let address = result.placemark.title {
                 HStack(alignment: .top, spacing: 8) {
                     Image(systemName: "mappin.circle.fill")
-                        .foregroundStyle(.red)
+                        .foregroundStyle(themeManager.currentTheme.error)
                         .font(.title3)
                     Text(address)
                         .font(.subheadline)
@@ -792,7 +795,7 @@ struct AddScheduleItemToEditorView: View {
             if let phoneNumber = result.phoneNumber {
                 HStack(spacing: 8) {
                     Image(systemName: "phone.circle.fill")
-                        .foregroundStyle(.green)
+                        .foregroundStyle(themeManager.currentTheme.success)
                         .font(.title3)
                     Text(phoneNumber)
                         .font(.subheadline)
@@ -806,7 +809,7 @@ struct AddScheduleItemToEditorView: View {
                             .font(.caption)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(Color.green)
+                            .background(themeManager.currentTheme.success)
                             .foregroundStyle(.white)
                             .cornerRadius(8)
                     }
@@ -816,7 +819,7 @@ struct AddScheduleItemToEditorView: View {
             if let url = result.url {
                 HStack(spacing: 8) {
                     Image(systemName: "safari.fill")
-                        .foregroundStyle(.blue)
+                        .foregroundStyle(themeManager.currentTheme.primary)
                         .font(.title3)
                     Text(url.host ?? "Website")
                         .font(.subheadline)
@@ -829,7 +832,7 @@ struct AddScheduleItemToEditorView: View {
                             .font(.caption)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(Color.blue)
+                            .background(themeManager.currentTheme.primary)
                             .foregroundStyle(.white)
                             .cornerRadius(8)
                     }
@@ -845,8 +848,8 @@ struct AddScheduleItemToEditorView: View {
                     Label("経路", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Color.blue.opacity(0.1))
-                        .foregroundStyle(.blue)
+                        .background(themeManager.currentTheme.primary.opacity(0.1))
+                        .foregroundStyle(themeManager.currentTheme.primary)
                         .cornerRadius(10)
                 }
 
@@ -856,8 +859,8 @@ struct AddScheduleItemToEditorView: View {
                     Label("選択", systemImage: "checkmark.circle.fill")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(Color.orange.opacity(0.1))
-                        .foregroundStyle(.orange)
+                        .background(themeManager.currentTheme.accent1.opacity(0.1))
+                        .foregroundStyle(themeManager.currentTheme.accent1)
                         .cornerRadius(10)
                 }
             }

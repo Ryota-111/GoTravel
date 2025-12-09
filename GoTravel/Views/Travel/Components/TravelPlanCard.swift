@@ -3,6 +3,7 @@ import SwiftUI
 // MARK: - Travel Plan Card
 struct TravelPlanCard: View {
     @EnvironmentObject var viewModel: TravelPlanViewModel
+    @ObservedObject var themeManager = ThemeManager.shared
     let plan: TravelPlan
     let onDelete: () -> Void
 
@@ -45,8 +46,8 @@ struct TravelPlanCard: View {
                     .fill(
                         LinearGradient(
                             colors: [
-                                plan.cardColor?.opacity(0.8) ?? Color.blue.opacity(0.8),
-                                plan.cardColor?.opacity(0.4) ?? Color.blue.opacity(0.4)
+                                plan.cardColor?.opacity(0.8) ?? themeManager.currentTheme.primary.opacity(0.8),
+                                plan.cardColor?.opacity(0.4) ?? themeManager.currentTheme.primary.opacity(0.4)
                             ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -86,7 +87,7 @@ struct TravelPlanCard: View {
         .foregroundColor(.white)
         .padding(.horizontal, 8)
         .padding(.vertical, 4)
-        .background(Color.green.opacity(0.8))
+        .background(themeManager.currentTheme.success.opacity(0.8))
         .cornerRadius(12)
     }
 
@@ -96,7 +97,7 @@ struct TravelPlanCard: View {
                 Image(systemName: "trash")
                     .resizable()
                     .frame(width: 20, height: 20)
-                    .foregroundColor(.red)
+                    .foregroundColor(themeManager.currentTheme.error)
             }
         }
         .buttonStyle(BorderlessButtonStyle())
