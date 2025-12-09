@@ -6,13 +6,15 @@ struct PlanEventSectionView: View {
     let plans: [Plan]
     let viewModel: PlansViewModel
     let onDelete: (Plan) -> Void
+    @ObservedObject var themeManager = ThemeManager.shared
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if !plans.isEmpty {
                 Text(title)
                     .font(.headline)
-                    .foregroundColor(.primary)
+                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
 
                 ForEach(plans) { plan in
                     NavigationLink(destination: PlanDetailView(plan: plan).environmentObject(viewModel)) {

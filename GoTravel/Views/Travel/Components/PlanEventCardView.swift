@@ -5,9 +5,9 @@ struct PlanEventCardView: View {
     let plan: Plan
     var onDelete: (() -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
+    @ObservedObject var themeManager = ThemeManager.shared
 
     var body: some View {
-        let textColor = colorScheme == .dark ? Color.white : Color.black
         let secondaryTextColor = colorScheme == .dark ? Color.white.opacity(0.9) : Color.black.opacity(0.7)
 
         return VStack(alignment: .leading, spacing: 10) {
@@ -15,7 +15,7 @@ struct PlanEventCardView: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(plan.title)
                         .font(.headline)
-                        .foregroundColor(textColor)
+                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
 
                     HStack {
                         Image(systemName: "calendar")

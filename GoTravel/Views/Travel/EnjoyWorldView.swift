@@ -227,20 +227,22 @@ struct EnjoyWorldView: View {
 
     // MARK: - View Components
     private var titleSection: some View {
-        VStack(alignment: .leading) {
+        VStack(alignment: .leading, spacing: 0) {
             Text("2025/12/8")
-                .padding(.horizontal, 30)
+                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+                .padding(.horizontal, 40)
                 .font(.caption.weight(.bold))
             
             HStack {
                 LinearGradient(
-                        colors: [.white, .black],
+                    colors: [themeManager.currentTheme.secondary, themeManager.currentTheme.primary],
                         startPoint: .top,
                         endPoint: .bottom
                     )
                     .frame(width: 4, height: 40)
                     .cornerRadius(2)
                 Text("旅行計画")
+                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                     .font(.system(size: 40))
 
                 Spacer()
@@ -271,7 +273,7 @@ struct EnjoyWorldView: View {
                             .resizable()
                             .scaledToFit()
                             .frame(width: 35, height: 35)
-                            .foregroundStyle(LinearGradient(colors: [.white, themeManager.currentTheme.accent1], startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .foregroundStyle(LinearGradient(colors: [.white, themeManager.currentTheme.secondary], startPoint: .topLeading, endPoint: .bottomTrailing))
                     }
                     .padding(.trailing, 2)
                 }
@@ -318,6 +320,7 @@ struct EnjoyWorldView: View {
     private var planEventsTitleSection: some View {
         HStack {
             Text("予定計画")
+                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                 .font(.title.weight(.semibold))
         }
         .padding(.horizontal, 20)
@@ -367,7 +370,7 @@ struct EnjoyWorldView: View {
             ZStack {
                 if selectedTab == tab {
                     Capsule()
-                        .fill(themeManager.currentTheme.accent1)
+                        .fill(themeManager.currentTheme.secondary)
                         .matchedGeometryEffect(id: "TAB", in: animation)
                 }
 
@@ -390,7 +393,7 @@ struct EnjoyWorldView: View {
             ZStack {
                 if selectedPlanTab == tab {
                     Capsule()
-                        .fill(themeManager.currentTheme.accent1)
+                        .fill(themeManager.currentTheme.secondary)
                         .matchedGeometryEffect(id: "PLAN_TAB", in: animation)
                 }
 
@@ -411,7 +414,7 @@ struct EnjoyWorldView: View {
             VStack(spacing: 15) {
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 60))
-                    .foregroundColor(themeManager.currentTheme.accent1)
+                    .foregroundColor(themeManager.currentTheme.secondary)
 
                 Text("旅行計画を作成")
                     .font(.headline)
@@ -423,7 +426,7 @@ struct EnjoyWorldView: View {
                     .multilineTextAlignment(.center)
             }
             .frame(width: 200, height: 200)
-            .background(Color.white)
+            .background(themeManager.currentTheme.tertiary)
             .cornerRadius(25)
             .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
         }
@@ -462,11 +465,11 @@ struct EnjoyWorldView: View {
             VStack {
                 Image(systemName: "plus.circle.fill")
                     .font(.system(size: 50))
-                    .foregroundColor(themeManager.currentTheme.accent1)
+                    .foregroundColor(themeManager.currentTheme.secondary)
 
                 Text("予定を追加")
                     .font(.headline)
-                    .foregroundColor(themeManager.currentTheme.accent1)
+                    .foregroundColor(themeManager.currentTheme.secondary)
             }
             .frame(width: 150, height: 200)
             .background(Color.white.opacity(0.2))
@@ -493,7 +496,7 @@ struct EnjoyWorldView: View {
                     .foregroundColor(.white)
                     .padding(.horizontal, 30)
                     .padding(.vertical, 12)
-                    .background(themeManager.currentTheme.accent1)
+                    .background(themeManager.currentTheme.secondary)
                     .cornerRadius(25)
             }
         }
@@ -535,10 +538,10 @@ struct EnjoyWorldView: View {
         }) {
             HStack {
                 Image(systemName: "plus.circle.fill")
-                    .foregroundColor(themeManager.currentTheme.accent1)
+                    .foregroundColor(themeManager.currentTheme.secondary)
                 Text("予定を追加")
                     .font(.headline)
-                    .foregroundColor(themeManager.currentTheme.accent1)
+                    .foregroundColor(themeManager.currentTheme.secondary)
             }
             .padding(.vertical, 15)
             .frame(maxWidth: .infinity)
@@ -551,7 +554,7 @@ struct EnjoyWorldView: View {
 
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.primary.opacity(0.7), .black] : [themeManager.currentTheme.primary.opacity(0.6), .white]),
+            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.gradientDark, themeManager.currentTheme.dark] : [themeManager.currentTheme.gradientLight, themeManager.currentTheme.light]),
             startPoint: .top,
             endPoint: .bottom
         )

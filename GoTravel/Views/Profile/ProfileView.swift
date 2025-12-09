@@ -1107,8 +1107,8 @@ struct AppSettingView: View {
     private var backgroundGradient: some View {
         LinearGradient(
             gradient: Gradient(colors: [
-                themeManager.currentTheme.gradientStart,
-                themeManager.currentTheme.gradientEnd
+                themeManager.currentTheme.gradientLight,
+                themeManager.currentTheme.gradientDark
             ]),
             startPoint: .top,
             endPoint: .bottom

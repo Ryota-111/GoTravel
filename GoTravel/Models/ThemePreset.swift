@@ -6,11 +6,7 @@ struct ThemePreset {
         case originalColor = "デフォルトカラー"
         case whiteBlack = "白黒(白色メイン)"
         case blackWhite = "白黒(黒色メイン)"
-        case orangePink = "Orange & Pink"
-        case greenCyan = "Green & Cyan"
-        case sunset = "Sunset"
-        case ocean = "Ocean"
-        case forest = "Forest"
+        case pastelPink = "パステルピンク"
 
         var displayName: String { rawValue }
     }
@@ -18,7 +14,7 @@ struct ThemePreset {
     // MARK: - Properties
     let type: ThemeType
 
-    // MARK: - Primary Colors
+    // MARK: - 主カラー
     var primary: Color
     var secondary: Color
     var tertiary: Color
@@ -49,251 +45,161 @@ struct ThemePreset {
     var cardBorder: Color
     var shadow: Color
 
-    // MARK: - Gradient Colors
-    var gradientStart: Color
-    var gradientEnd: Color
+    // MARK: - グラデーションの色（ライトモードとダークモード）
+    var gradientLight: Color
+    var gradientDark: Color
+    var light: Color
+    var dark: Color
+    
+    // MARK: - plansの予定
+    var dailyPlanColor: Color
+    var outingPlanColor: Color
+    var travelColor: Color
 
     // MARK: - Initializer
     init(type: ThemeType) {
         self.type = type
 
         switch type {
-        case .whiteBlack:
-            primary = Color.black
-            secondary = Color.white
-            tertiary = Color.gray
-
-            background = Color.white
-            secondaryBackground = Color(white: 0.95)
-            tertiaryBackground = Color(white: 0.9)
-
-            text = Color.black
-            secondaryText = Color.gray
-            tertiaryText = Color(white: 0.5)
-
-            accent1 = Color.black
-            accent2 = Color.gray
-            accent3 = Color.white
-
-            success = Color.green
-            warning = Color.orange
-            error = Color.red
-            info = Color.blue
-
-            cardBackground = Color.white
-            cardBorder = Color.gray.opacity(0.3)
-            shadow = Color.black.opacity(0.15)
-
-            gradientStart = Color.white
-            gradientEnd = Color.gray.opacity(0.3)
-            
-        case .blackWhite:
-            primary = Color.white
-            secondary = Color.black
-            tertiary = Color.gray
-
-            background = Color.black
-            secondaryBackground = Color(white: 0.95)
-            tertiaryBackground = Color(white: 0.9)
-
-            text = Color.white
-            secondaryText = Color.gray
-            tertiaryText = Color(white: 0.5)
-
-            accent1 = Color.white
-            accent2 = Color.gray
-            accent3 = Color.black
-
-            success = Color.green
-            warning = Color.orange
-            error = Color.red
-            info = Color.blue
-
-            cardBackground = Color.black
-            cardBorder = Color.gray.opacity(0.3)
-            shadow = Color.white.opacity(0.15)
-
-            gradientStart = Color.black
-            gradientEnd = Color.gray.opacity(0.3)
-
         case .originalColor:
             primary = Color.blue
-            secondary = Color.purple
-            tertiary = Color.indigo
-
+            secondary = Color.orange
+            tertiary = Color.white
+            
             background = Color(red: 0.95, green: 0.96, blue: 1.0)
             secondaryBackground = Color(red: 0.9, green: 0.92, blue: 0.98)
             tertiaryBackground = Color(red: 0.85, green: 0.88, blue: 0.96)
-
+            
             text = Color(white: 0.1)
             secondaryText = Color(white: 0.4)
             tertiaryText = Color(white: 0.6)
-
-            accent1 = Color.orange
-            accent2 = Color.purple
-            accent3 = Color.pink
-
+            
+            accent1 = Color.black
+            accent2 = Color.white
+            accent3 = Color.gray
+            
             success = Color.green
             warning = Color.orange
             error = Color.red
             info = Color.blue
-
+            
             cardBackground = Color.white.opacity(0.8)
             cardBorder = Color.blue.opacity(0.3)
             shadow = Color.blue.opacity(0.2)
-
-            gradientStart = Color.blue.opacity(0.6)
-            gradientEnd = Color.purple.opacity(0.6)
-
-        case .orangePink:
-            // Orange & Pink Theme
-            primary = Color.orange
-            secondary = Color.pink
-            tertiary = Color.red
-
+            
+            gradientLight = Color.blue.opacity(0.6)
+            gradientDark = Color.blue.opacity(0.7)
+            light = Color.white
+            dark = Color.black
+            
+            dailyPlanColor = Color.orange
+            outingPlanColor = Color.blue
+            travelColor = Color.green
+            
+        case .whiteBlack:
+            primary = Color.white
+            secondary = Color.black
+            tertiary = Color.white
+            
+            background = Color.white
+            secondaryBackground = Color(white: 0.95)
+            tertiaryBackground = Color(white: 0.9)
+            
+            text = Color.black
+            secondaryText = Color.gray
+            tertiaryText = Color(white: 0.5)
+            
+            accent1 = Color.black
+            accent2 = Color.black
+            accent3 = Color.gray
+            
+            success = Color.green
+            warning = Color.orange
+            error = Color.red
+            info = Color.blue
+            
+            cardBackground = Color.white
+            cardBorder = Color.gray.opacity(0.3)
+            shadow = Color.black.opacity(0.15)
+            
+            gradientLight = Color.white
+            gradientDark = Color.white
+            light = Color.white
+            dark = Color.white
+            
+            dailyPlanColor = Color.orange
+            outingPlanColor = Color.blue
+            travelColor = Color.green
+            
+        case .blackWhite:
+            primary = Color.black
+            secondary = Color.white
+            tertiary = Color.gray
+            
+            background = Color.black
+            secondaryBackground = Color(white: 0.95)
+            tertiaryBackground = Color(white: 0.9)
+            
+            text = Color.white
+            secondaryText = Color.gray
+            tertiaryText = Color(white: 0.5)
+            
+            accent1 = Color.white
+            accent2 = Color.white
+            accent3 = Color.gray
+            
+            success = Color.green
+            warning = Color.orange
+            error = Color.red
+            info = Color.blue
+            
+            cardBackground = Color.black
+            cardBorder = Color.gray.opacity(0.3)
+            shadow = Color.white.opacity(0.15)
+            
+            gradientLight = Color.black
+            gradientDark = Color.black
+            light = Color.black
+            dark = Color.black
+            
+            dailyPlanColor = Color.orange
+            outingPlanColor = Color.blue
+            travelColor = Color.green
+            
+        case .pastelPink:
+            primary = Color.white
+            secondary = Color(red: 255/255, green: 209/255, blue: 220/255)
+            tertiary = Color.gray
+            
             background = Color(red: 1.0, green: 0.96, blue: 0.95)
             secondaryBackground = Color(red: 1.0, green: 0.92, blue: 0.9)
             tertiaryBackground = Color(red: 1.0, green: 0.88, blue: 0.85)
-
-            text = Color(white: 0.1)
-            secondaryText = Color(white: 0.4)
+            
+            text = Color.white
+            secondaryText = Color.gray
             tertiaryText = Color(white: 0.6)
-
-            accent1 = Color.orange
-            accent2 = Color.pink
-            accent3 = Color.red
-
+            
+            accent1 = Color(red: 255/255, green: 209/255, blue: 220/255)
+            accent2 = Color(red: 255/255, green: 209/255, blue: 220/255)
+            accent3 = Color.gray
+            
             success = Color.green
             warning = Color.orange
             error = Color.red
             info = Color.blue
-
+            
             cardBackground = Color.white.opacity(0.8)
             cardBorder = Color.orange.opacity(0.3)
             shadow = Color.orange.opacity(0.2)
-
-            gradientStart = Color.orange.opacity(0.6)
-            gradientEnd = Color.pink.opacity(0.6)
-
-        case .greenCyan:
-            // Green & Cyan Theme
-            primary = Color.green
-            secondary = Color.cyan
-            tertiary = Color.teal
-
-            background = Color(red: 0.95, green: 1.0, blue: 0.98)
-            secondaryBackground = Color(red: 0.9, green: 0.98, blue: 0.96)
-            tertiaryBackground = Color(red: 0.85, green: 0.96, blue: 0.94)
-
-            text = Color(white: 0.1)
-            secondaryText = Color(white: 0.4)
-            tertiaryText = Color(white: 0.6)
-
-            accent1 = Color.green
-            accent2 = Color.cyan
-            accent3 = Color.blue
-
-            success = Color.green
-            warning = Color.orange
-            error = Color.red
-            info = Color.cyan
-
-            cardBackground = Color.white.opacity(0.8)
-            cardBorder = Color.green.opacity(0.3)
-            shadow = Color.green.opacity(0.2)
-
-            gradientStart = Color.green.opacity(0.6)
-            gradientEnd = Color.cyan.opacity(0.6)
-
-        case .sunset:
-            // Sunset Theme
-            primary = Color.orange
-            secondary = Color.purple
-            tertiary = Color.pink
-
-            background = Color(red: 1.0, green: 0.94, blue: 0.9)
-            secondaryBackground = Color(red: 0.98, green: 0.9, blue: 0.88)
-            tertiaryBackground = Color(red: 0.96, green: 0.86, blue: 0.86)
-
-            text = Color(white: 0.1)
-            secondaryText = Color(white: 0.4)
-            tertiaryText = Color(white: 0.6)
-
-            accent1 = Color.orange
-            accent2 = Color.pink
-            accent3 = Color.purple
-
-            success = Color.green
-            warning = Color.orange
-            error = Color.red
-            info = Color.purple
-
-            cardBackground = Color.white.opacity(0.8)
-            cardBorder = Color.orange.opacity(0.3)
-            shadow = Color.orange.opacity(0.2)
-
-            gradientStart = Color.orange.opacity(0.7)
-            gradientEnd = Color.purple.opacity(0.6)
-
-        case .ocean:
-            // Ocean Theme
-            primary = Color.blue
-            secondary = Color.cyan
-            tertiary = Color.teal
-
-            background = Color(red: 0.93, green: 0.97, blue: 1.0)
-            secondaryBackground = Color(red: 0.88, green: 0.94, blue: 0.98)
-            tertiaryBackground = Color(red: 0.83, green: 0.91, blue: 0.96)
-
-            text = Color(white: 0.1)
-            secondaryText = Color(white: 0.4)
-            tertiaryText = Color(white: 0.6)
-
-            accent1 = Color.blue
-            accent2 = Color.cyan
-            accent3 = Color.purple
-
-            success = Color.green
-            warning = Color.orange
-            error = Color.red
-            info = Color.blue
-
-            cardBackground = Color.white.opacity(0.8)
-            cardBorder = Color.blue.opacity(0.3)
-            shadow = Color.blue.opacity(0.2)
-
-            gradientStart = Color.blue.opacity(0.7)
-            gradientEnd = Color.cyan.opacity(0.5)
-
-        case .forest:
-            // Forest Theme
-            primary = Color.green
-            secondary = Color(red: 0.4, green: 0.6, blue: 0.3)
-            tertiary = Color(red: 0.3, green: 0.5, blue: 0.2)
-
-            background = Color(red: 0.95, green: 0.98, blue: 0.93)
-            secondaryBackground = Color(red: 0.92, green: 0.96, blue: 0.9)
-            tertiaryBackground = Color(red: 0.89, green: 0.94, blue: 0.87)
-
-            text = Color(white: 0.1)
-            secondaryText = Color(white: 0.4)
-            tertiaryText = Color(white: 0.6)
-
-            accent1 = Color.green
-            accent2 = Color(red: 0.6, green: 0.8, blue: 0.4)
-            accent3 = Color(red: 0.4, green: 0.6, blue: 0.3)
-
-            success = Color.green
-            warning = Color.orange
-            error = Color.red
-            info = Color.blue
-
-            cardBackground = Color.white.opacity(0.8)
-            cardBorder = Color.green.opacity(0.3)
-            shadow = Color.green.opacity(0.2)
-
-            gradientStart = Color.green.opacity(0.6)
-            gradientEnd = Color(red: 0.4, green: 0.6, blue: 0.3).opacity(0.6)
+            
+            gradientLight = Color.white
+            gradientDark = Color.white
+            light = Color.white
+            dark = Color.white
+            
+            dailyPlanColor = Color.orange
+            outingPlanColor = Color.blue
+            travelColor = Color.green
         }
     }
 }

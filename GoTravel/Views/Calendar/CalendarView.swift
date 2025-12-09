@@ -42,9 +42,8 @@ struct CalendarView: View {
     var body: some View {
         NavigationView {
             ZStack(alignment: .bottom) {
-                // Background gradient
                 LinearGradient(
-                    gradient: Gradient(colors: colorScheme == .dark ? [.blue.opacity(0.7), .black] : [.blue.opacity(0.6), .white]),
+                    gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.gradientDark, themeManager.currentTheme.dark] : [themeManager.currentTheme.gradientLight, themeManager.currentTheme.light]),
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -97,14 +96,14 @@ struct CalendarView: View {
                             Text("今日")
                         }
                         .font(.subheadline.weight(.medium))
-                        .foregroundColor(themeManager.currentTheme.accent1)
+                        .foregroundColor(themeManager.currentTheme.secondary)
                     }
                 }
 
                 ToolbarItem(placement: .principal) {
                     Text(monthYearString)
                         .font(.headline)
-                        .foregroundColor(.primary)
+                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -113,7 +112,7 @@ struct CalendarView: View {
                     }) {
                         Image(systemName: "plus.circle.fill")
                             .font(.title3)
-                            .foregroundColor(themeManager.currentTheme.accent1)
+                            .foregroundColor(themeManager.currentTheme.secondary)
                     }
                 }
             }
@@ -330,7 +329,7 @@ struct CalendarView: View {
             }) {
                 Image(systemName: "chevron.left")
                     .font(.title3.weight(.semibold))
-                    .foregroundColor(themeManager.currentTheme.accent1)
+                    .foregroundColor(themeManager.currentTheme.secondary)
             }
 
             Spacer()
@@ -342,7 +341,7 @@ struct CalendarView: View {
             }) {
                 Image(systemName: "chevron.right")
                     .font(.title3.weight(.semibold))
-                    .foregroundColor(themeManager.currentTheme.accent1)
+                    .foregroundColor(themeManager.currentTheme.secondary)
             }
         }
         .padding(.horizontal, 20)
@@ -356,7 +355,7 @@ struct CalendarView: View {
                 ForEach(daysOfWeek, id: \.self) { day in
                     Text(day)
                         .font(.caption.weight(.semibold))
-                        .foregroundColor(.secondary)
+                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                         .frame(maxWidth: .infinity)
                 }
             }
@@ -412,17 +411,18 @@ struct CalendarView: View {
         return VStack(spacing: 4) {
             Text("\(dayNumber)")
                 .font(.system(size: 16, weight: isSelected ? .bold : .regular))
-                .foregroundColor(isSelected ? .white : (isToday ? themeManager.currentTheme.accent1 : .primary))
+                .foregroundColor(isSelected ? (colorScheme == .dark ? themeManager.currentTheme.dark : themeManager.currentTheme.light) : (isToday ? themeManager.currentTheme.secondary : (colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+))
                 .frame(width: 44, height: 44)
                 .background(
                     ZStack {
                         if isSelected {
                             Circle()
-                                .fill(themeManager.currentTheme.accent1)
+                                .fill(themeManager.currentTheme.secondary)
                                 .matchedGeometryEffect(id: "selectedDay", in: animation)
                         } else if isToday {
                             Circle()
-                                .stroke(themeManager.currentTheme.accent1, lineWidth: 2)
+                                .stroke(themeManager.currentTheme.secondary, lineWidth: 2)
                         }
                     }
                 )
@@ -495,11 +495,11 @@ struct CalendarView: View {
     private func colorForEventType(_ type: CalendarItemType) -> Color {
         switch type {
         case .dailyPlan:
-            return themeManager.currentTheme.accent1
+            return themeManager.currentTheme.dailyPlanColor
         case .outingPlan:
-            return themeManager.currentTheme.primary
+            return themeManager.currentTheme.outingPlanColor
         case .travel:
-            return themeManager.currentTheme.success
+            return themeManager.currentTheme.travelColor
         }
     }
 
@@ -526,6 +526,6 @@ struct CalendarView: View {
     }
 }
 
-#Preview {
-    CalendarView()
-}
+//#Preview {
+//    CalendarView()
+//}

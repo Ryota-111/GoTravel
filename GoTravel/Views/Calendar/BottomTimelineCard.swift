@@ -75,11 +75,12 @@ struct BottomTimelineCard: View {
             VStack(alignment: .leading, spacing: 4) {
                 Text(formattedDate)
                     .font(.headline.bold())
-                    .foregroundColor(.primary)
+                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+
 
                 Text("\(timelineItems.count)件の予定")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(themeManager.currentTheme.accent3)
             }
 
             Spacer()
@@ -91,7 +92,7 @@ struct BottomTimelineCard: View {
             }) {
                 Image(systemName: isExpanded ? "chevron.down.circle.fill" : "chevron.up.circle.fill")
                     .font(.title3)
-                    .foregroundColor(themeManager.currentTheme.accent1)
+                    .foregroundColor(themeManager.currentTheme.secondary)
             }
         }
     }
@@ -115,11 +116,11 @@ struct BottomTimelineCard: View {
         VStack(spacing: 12) {
             Image(systemName: "calendar.badge.clock")
                 .font(.system(size: 40))
-                .foregroundColor(themeManager.currentTheme.accent1.opacity(0.4))
+                .foregroundColor(themeManager.currentTheme.secondary.opacity(0.4))
 
             Text("予定がありません")
                 .font(.subheadline)
-                .foregroundColor(.secondary)
+                .foregroundColor(themeManager.currentTheme.accent3)
         }
         .frame(maxWidth: .infinity)
     }
