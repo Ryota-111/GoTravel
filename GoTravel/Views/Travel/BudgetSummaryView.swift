@@ -47,7 +47,7 @@ struct BudgetSummaryView: View {
 
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.primary.opacity(0.7), Color.black] : [themeManager.currentTheme.primary.opacity(0.8), Color.white]),
+            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.gradientDark, themeManager.currentTheme.dark] : [themeManager.currentTheme.gradientLight, themeManager.currentTheme.light]),
             startPoint: .top,
             endPoint: .bottom
         )
@@ -101,22 +101,22 @@ struct BudgetSummaryView: View {
 
             Text("金額管理")
                 .font(.headline)
-                .foregroundColor(.white)
+                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
 
             Spacer()
         }
         .padding()
-        .background(Color.black.opacity(0.2))
+        .background(themeManager.currentTheme.accent1.opacity(0.2))
     }
 
     private var backButton: some View {
         Button(action: { presentationMode.wrappedValue.dismiss() }) {
             HStack {
                 Image(systemName: "chevron.left")
-                    .foregroundColor(.white)
+                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                     .imageScale(.large)
                 Text("戻る")
-                    .foregroundColor(.white)
+                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
             }
         }
     }
@@ -131,18 +131,18 @@ struct BudgetSummaryView: View {
                 VStack(alignment: .leading, spacing: 5) {
                     Text("合計金額")
                         .font(.headline)
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : themeManager.currentTheme.secondaryText)
+                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.budgetDarkText : themeManager.currentTheme.budgetLightText)
 
                     Text(formatCurrency(totalCost))
                         .font(.system(size: 36, weight: .bold))
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                 }
 
                 Spacer()
             }
         }
         .padding()
-        .background(Color.white.opacity(0.2))
+        .background(themeManager.currentTheme.accent2.opacity(0.2))
         .cornerRadius(15)
     }
 
@@ -156,7 +156,7 @@ struct BudgetSummaryView: View {
                 Text("金額折半")
                     .font(.title2)
                     .fontWeight(.bold)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
             }
 
             // Member count and per-person cost
@@ -164,42 +164,41 @@ struct BudgetSummaryView: View {
                 HStack {
                     Text("参加人数")
                         .font(.subheadline)
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : themeManager.currentTheme.secondaryText)
-
+                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.budgetDarkText : themeManager.currentTheme.budgetLightText)
                     Spacer()
 
                     Text("\(memberCount)人")
                         .font(.headline)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                 }
 
                 Divider()
-                    .background(Color.white.opacity(0.3))
+                    .background(themeManager.currentTheme.accent2.opacity(0.3))
 
                 HStack {
                     VStack(alignment: .leading, spacing: 5) {
                         Text("1人あたりの金額")
                             .font(.headline)
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                            .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
 
                         Text("合計 \(formatCurrency(totalCost)) ÷ \(memberCount)人")
                             .font(.caption)
-                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : themeManager.currentTheme.secondaryText)
+                            .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.budgetDarkText : themeManager.currentTheme.budgetLightText)
                     }
 
                     Spacer()
 
                     Text(formatCurrency(costPerPerson))
                         .font(.system(size: 28, weight: .bold))
-                        .foregroundColor(themeManager.currentTheme.primary)
+                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                 }
             }
             .padding()
-            .background(themeManager.currentTheme.primary.opacity(0.1))
+            .background(themeManager.currentTheme.accent2.opacity(0.1))
             .cornerRadius(10)
         }
         .padding()
-        .background(Color.white.opacity(0.2))
+        .background(themeManager.currentTheme.accent2.opacity(0.2))
         .cornerRadius(15)
     }
 
@@ -208,14 +207,14 @@ struct BudgetSummaryView: View {
             Text("日別の支出")
                 .font(.title2)
                 .fontWeight(.bold)
-                .foregroundColor(colorScheme == .dark ? .white : .black)
+                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
 
             ForEach(costByDay, id: \.dayNumber) { day in
                 dayBudgetRow(day: day)
             }
         }
         .padding()
-        .background(Color.white.opacity(0.2))
+        .background(themeManager.currentTheme.accent2.opacity(0.2))
         .cornerRadius(15)
     }
 
@@ -224,11 +223,11 @@ struct BudgetSummaryView: View {
             VStack(alignment: .leading, spacing: 5) {
                 Text("Day \(day.dayNumber)")
                     .font(.headline)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
 
                 Text(formatDate(day.date))
                     .font(.caption)
-                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : themeManager.currentTheme.secondaryText)
+                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.budgetDarkText : themeManager.currentTheme.budgetLightText)
             }
 
             Spacer()
@@ -238,7 +237,7 @@ struct BudgetSummaryView: View {
                 .foregroundColor(.green)
         }
         .padding()
-        .background(Color.white.opacity(0.15))
+        .background(themeManager.currentTheme.accent2.opacity(0.15))
         .cornerRadius(10)
     }
 
@@ -247,14 +246,14 @@ struct BudgetSummaryView: View {
             Text("支出の内訳")
                 .font(.title2)
                 .fontWeight(.bold)
-                .foregroundColor(colorScheme == .dark ? .white : .black)
+                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
 
             ForEach(costByCategory, id: \.category) { category in
                 categoryItemsList(category: category)
             }
         }
         .padding()
-        .background(Color.white.opacity(0.2))
+        .background(themeManager.currentTheme.accent2.opacity(0.2))
         .cornerRadius(15)
     }
 
@@ -266,7 +265,7 @@ struct BudgetSummaryView: View {
                     HStack {
                         Text(item.title)
                             .font(.subheadline)
-                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.9) : .black.opacity(0.8))
+                            .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
 
                         Spacer()
 
@@ -278,7 +277,7 @@ struct BudgetSummaryView: View {
 
                     if index < category.items.count - 1 {
                         Divider()
-                            .background(Color.white.opacity(0.3))
+                            .background(themeManager.currentTheme.accent2.opacity(0.3))
                     }
                 }
             }
@@ -289,20 +288,20 @@ struct BudgetSummaryView: View {
         VStack(spacing: 15) {
             Image(systemName: "yensign.circle")
                 .font(.system(size: 60))
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.5) : themeManager.currentTheme.secondaryText.opacity(0.5))
+                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.budgetDarkText : themeManager.currentTheme.budgetLightText)
 
             Text("まだ金額が登録されていません")
                 .font(.body)
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : themeManager.currentTheme.secondaryText)
+                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.budgetDarkText : themeManager.currentTheme.budgetLightText)
 
             Text("スケジュールに金額を追加すると、ここに表示されます")
                 .font(.caption)
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.5) : themeManager.currentTheme.secondaryText.opacity(0.7))
+                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.budgetDarkText : themeManager.currentTheme.budgetLightText)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)
-        .background(Color.white.opacity(0.2))
+        .background(themeManager.currentTheme.accent2.opacity(0.2))
         .cornerRadius(15)
     }
 

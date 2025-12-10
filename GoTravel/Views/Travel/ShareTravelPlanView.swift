@@ -53,20 +53,20 @@ struct ShareTravelPlanView: View {
         VStack(spacing: 15) {
             Image(systemName: "person.2.circle.fill")
                 .font(.system(size: 70))
-                .foregroundColor(themeManager.currentTheme.primary.opacity(0.8))
+                .foregroundColor(themeManager.currentTheme.accent2.opacity(0.8))
 
             VStack(spacing: 8) {
                 Text("この旅行計画を共有")
                     .font(.title2.bold())
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
 
                 Text(plan.title)
                     .font(.headline)
-                    .foregroundColor(themeManager.currentTheme.primary)
+                    .foregroundColor(themeManager.currentTheme.accent2)
 
                 Text("共有コードを生成して、他のユーザーと一緒に旅行計画を編集できます")
                     .font(.subheadline)
-                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : themeManager.currentTheme.secondaryText)
+                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2.opacity(0.7) : themeManager.currentTheme.accent1.opacity(0.7))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
             }
@@ -83,18 +83,18 @@ struct ShareTravelPlanView: View {
                 Text("共有コードを生成")
                     .font(.headline)
             }
-            .foregroundColor(.white)
+            .foregroundColor(themeManager.currentTheme.dark)
             .frame(maxWidth: .infinity)
             .padding()
             .background(
                 LinearGradient(
-                    gradient: Gradient(colors: [themeManager.currentTheme.primary, themeManager.currentTheme.primary.opacity(0.8)]),
+                    gradient: Gradient(colors: [themeManager.currentTheme.accent2, themeManager.currentTheme.accent2.opacity(0.8)]),
                     startPoint: .leading,
                     endPoint: .trailing
                 )
             )
             .cornerRadius(15)
-            .shadow(color: themeManager.currentTheme.primary.opacity(0.3), radius: 10, x: 0, y: 5)
+            .shadow(color: themeManager.currentTheme.accent2.opacity(0.3), radius: 10, x: 0, y: 5)
         }
     }
 
@@ -103,22 +103,22 @@ struct ShareTravelPlanView: View {
         VStack(spacing: 15) {
             Text("共有コード")
                 .font(.headline)
-                .foregroundColor(colorScheme == .dark ? .white : .black)
+                .foregroundColor(themeManager.currentTheme.dark)
 
             // Code Display
             HStack {
                 Text(shareCode)
                     .font(.system(size: 24, weight: .bold, design: .monospaced))
-                    .foregroundColor(themeManager.currentTheme.primary)
+                    .foregroundColor(themeManager.currentTheme.dark)
                     .padding()
                     .frame(maxWidth: .infinity)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(colorScheme == .dark ? Color.white.opacity(0.1) : themeManager.currentTheme.primary.opacity(0.1))
+                            .fill(themeManager.currentTheme.accent2.opacity(0.1))
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(themeManager.currentTheme.primary.opacity(0.3), lineWidth: 2)
+                            .stroke(themeManager.currentTheme.accent2.opacity(0.3), lineWidth: 2)
                     )
             }
 
@@ -131,10 +131,10 @@ struct ShareTravelPlanView: View {
                     Text(showCopiedAlert ? "コピーしました！" : "コードをコピー")
                         .font(.headline)
                 }
-                .foregroundColor(.white)
+                .foregroundColor(themeManager.currentTheme.dark)
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(showCopiedAlert ? themeManager.currentTheme.success : themeManager.currentTheme.primary)
+                .background(showCopiedAlert ? themeManager.currentTheme.success : themeManager.currentTheme.light.opacity(0.3))
                 .cornerRadius(12)
             }
             .animation(.easeInOut(duration: 0.3), value: showCopiedAlert)
@@ -147,9 +147,9 @@ struct ShareTravelPlanView: View {
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(colorScheme == .dark ? Color.white.opacity(0.05) : Color.white.opacity(0.5))
+                .fill(themeManager.currentTheme.accent2)
         )
-        .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+        .shadow(color: themeManager.currentTheme.accent1.opacity(0.1), radius: 10, x: 0, y: 5)
     }
 
     // MARK: - Shared Users Section
@@ -159,21 +159,21 @@ struct ShareTravelPlanView: View {
 
             HStack {
                 Image(systemName: "person.2.fill")
-                    .foregroundColor(themeManager.currentTheme.primary)
+                    .foregroundColor(themeManager.currentTheme.dark)
                     .font(.headline)
 
                 Text("共有メンバー")
                     .font(.headline)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .foregroundColor(themeManager.currentTheme.dark)
 
                 Spacer()
 
                 Text("\(plan.sharedWith.count)人")
                     .font(.subheadline)
-                    .foregroundColor(themeManager.currentTheme.primary)
+                    .foregroundColor(themeManager.currentTheme.dark)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
-                    .background(themeManager.currentTheme.primary.opacity(0.2))
+                    .background(themeManager.currentTheme.accent2.opacity(0.2))
                     .cornerRadius(8)
             }
 
@@ -208,7 +208,7 @@ struct ShareTravelPlanView: View {
                 HStack(spacing: 6) {
                     Text(formatUserId(userId))
                         .font(.subheadline)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .foregroundColor(themeManager.currentTheme.dark)
 
                     if isOwner {
                         Text("オーナー")
@@ -223,14 +223,14 @@ struct ShareTravelPlanView: View {
 
                 Text("UID: \(userId.prefix(8))...")
                     .font(.caption2)
-                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.5) : themeManager.currentTheme.secondaryText)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
             }
 
             Spacer()
         }
         .padding(.vertical, 6)
         .padding(.horizontal, 8)
-        .background(Color.white.opacity(0.05))
+        .background(themeManager.currentTheme.light.opacity(0.05))
         .cornerRadius(8)
     }
 
@@ -245,10 +245,10 @@ struct ShareTravelPlanView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "info.circle.fill")
-                    .foregroundColor(themeManager.currentTheme.primary)
+                    .foregroundColor(themeManager.currentTheme.accent2)
                 Text("共有機能について")
                     .font(.headline)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .foregroundColor(themeManager.currentTheme.accent2)
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -261,22 +261,20 @@ struct ShareTravelPlanView: View {
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(themeManager.currentTheme.primary.opacity(0.1))
+                .fill(themeManager.currentTheme.accent2.opacity(0.1))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(themeManager.currentTheme.primary.opacity(0.3), lineWidth: 1)
+                .stroke(themeManager.currentTheme.accent2.opacity(0.3), lineWidth: 1)
         )
     }
 
     // MARK: - Background
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ?
-                [themeManager.currentTheme.primary.opacity(0.7), .black] :
-                [themeManager.currentTheme.primary.opacity(0.6), .white.opacity(0.3)]),
-            startPoint: .top,
-            endPoint: .bottom
+            gradient: Gradient(colors: [themeManager.currentTheme.gradientDark, themeManager.currentTheme.dark]),
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
         )
         .ignoresSafeArea()
     }
@@ -308,12 +306,12 @@ struct InfoRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: icon)
-                .foregroundColor(themeManager.currentTheme.primary)
+                .foregroundColor(themeManager.currentTheme.accent2)
                 .font(.caption)
 
             Text(text)
                 .font(.caption)
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : themeManager.currentTheme.secondaryText)
+                .foregroundColor(themeManager.currentTheme.secondaryText)
         }
     }
 }

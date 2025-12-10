@@ -24,10 +24,12 @@ struct ThemePreset {
     var secondaryBackground: Color
     var tertiaryBackground: Color
 
-    // MARK: - Text Colors
+    // MARK: - テキストの色
     var text: Color
     var secondaryText: Color
     var tertiaryText: Color
+    var budgetLightText: Color
+    var budgetDarkText: Color
 
     // MARK: - Accent Colors
     var accent1: Color
@@ -74,6 +76,8 @@ struct ThemePreset {
             text = Color(white: 0.1)
             secondaryText = Color(white: 0.4)
             tertiaryText = Color(white: 0.6)
+            budgetLightText = Color(white: 0.4)
+            budgetDarkText = Color.white.opacity(0.7)
             
             accent1 = Color.black
             accent2 = Color.white
@@ -110,6 +114,8 @@ struct ThemePreset {
             text = Color.black
             secondaryText = Color.gray
             tertiaryText = Color(white: 0.5)
+            budgetLightText = Color(white: 0.4)
+            budgetDarkText = Color(white: 0.4)
             
             accent1 = Color.black
             accent2 = Color.black
@@ -146,6 +152,8 @@ struct ThemePreset {
             text = Color.white
             secondaryText = Color.gray
             tertiaryText = Color(white: 0.5)
+            budgetLightText = Color(white: 0.4)
+            budgetDarkText = Color(white: 0.4)
             
             accent1 = Color.white
             accent2 = Color.white
@@ -182,6 +190,8 @@ struct ThemePreset {
             text = Color.white
             secondaryText = Color.gray
             tertiaryText = Color(white: 0.6)
+            budgetLightText = Color(white: 0.4)
+            budgetDarkText = Color(white: 0.4)
             
             accent1 = Color(red: 255/255, green: 209/255, blue: 220/255)
             accent2 = Color(red: 255/255, green: 209/255, blue: 220/255)

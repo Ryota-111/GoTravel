@@ -1,5 +1,6 @@
 import SwiftUI
 
+// Notused
 @available(iOS 16.0, *)
 struct WeatherCardView: View {
     @Environment(\.colorScheme) var colorScheme
