@@ -234,8 +234,7 @@ struct BudgetSummaryView: View {
 
             Text(formatCurrency(day.cost))
                 .font(.headline)
-                .foregroundColor(.green)
-        }
+                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.budgetDarkText : themeManager.currentTheme.budgetLightText)        }
         .padding()
         .background(themeManager.currentTheme.accent2.opacity(0.15))
         .cornerRadius(10)
@@ -271,7 +270,7 @@ struct BudgetSummaryView: View {
 
                         Text(formatCurrency(item.cost))
                             .font(.subheadline)
-                            .foregroundColor(.green)
+                            .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.budgetDarkText : themeManager.currentTheme.budgetLightText)
                     }
                     .padding(.vertical, 8)
 

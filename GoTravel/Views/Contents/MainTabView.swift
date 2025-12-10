@@ -7,6 +7,7 @@ struct MainTabView: View {
     @State private var hasCheckedICloud = false
     @StateObject private var plansViewModel = PlansViewModel()
     @StateObject private var travelPlanViewModel = TravelPlanViewModel()
+    @ObservedObject var themeManager = ThemeManager.shared
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -25,7 +26,7 @@ struct MainTabView: View {
         }
         .environmentObject(plansViewModel)
         .environmentObject(travelPlanViewModel)
-        .accentColor(.orange)
+        .accentColor(themeManager.currentTheme.secondary)
         .onChange(of: selectedTab) { oldValue, newValue in
             if oldValue != newValue {
                 let impact = UIImpactFeedbackGenerator(style: .light)

@@ -1069,7 +1069,25 @@ struct PlanDetailView: View {
     }
 
     private var sortedScheduleItems: [PlanScheduleItem] {
-        plan.scheduleItems.sorted { $0.time < $1.time }
+        let calendar = Calendar.current
+
+        return plan.scheduleItems.sorted { item1, item2 in
+            // Extract hour and minute components only (ignore date)
+            let components1 = calendar.dateComponents([.hour, .minute], from: item1.time)
+            let components2 = calendar.dateComponents([.hour, .minute], from: item2.time)
+
+            let hour1 = components1.hour ?? 0
+            let minute1 = components1.minute ?? 0
+            let hour2 = components2.hour ?? 0
+            let minute2 = components2.minute ?? 0
+
+            // Compare by hour first, then by minute
+            if hour1 != hour2 {
+                return hour1 < hour2
+            } else {
+                return minute1 < minute2
+            }
+        }
     }
 
     private func deleteScheduleItem(_ item: PlanScheduleItem) {
