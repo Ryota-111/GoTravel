@@ -164,7 +164,7 @@ struct TravelPlanDetailView: View {
         VStack(alignment: .leading, spacing: 20) {
             Text("タイムスケジュール")
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(colorScheme == .dark ? .white : .black)
+                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
 
             if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }) {
                 if daySchedule.scheduleItems.isEmpty {
@@ -188,11 +188,11 @@ struct TravelPlanDetailView: View {
                     Text("スケジュールを追加/編集")
                         .font(.system(size: 16, weight: .medium))
                 }
-                .foregroundColor(themeManager.currentTheme.accent1)
+                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
                 .padding(.horizontal, 20)
-                .background(themeManager.currentTheme.accent1.opacity(0.15))
+                .background(colorScheme == .dark ? themeManager.currentTheme.accent2.opacity(0.15) : themeManager.currentTheme.accent1.opacity(0.15))
                 .cornerRadius(12)
             }
             .buttonStyle(PlainButtonStyle())
@@ -220,23 +220,23 @@ struct TravelPlanDetailView: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                gradient: Gradient(colors: [themeManager.currentTheme.accent1.opacity(0.4), themeManager.currentTheme.accent1.opacity(0.2)]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
+                                gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.accent2.opacity(0.4), themeManager.currentTheme.accent2.opacity(0.2)] : [themeManager.currentTheme.accent1.opacity(0.4), themeManager.currentTheme.accent1.opacity(0.2)]),
+                                startPoint: .top,
+                                endPoint: .bottom
                             )
                         )
                         .frame(width: 50, height: 50)
 
                     Image(systemName: "clock.fill")
                         .font(.system(size: 20))
-                        .foregroundColor(themeManager.currentTheme.accent1)
+                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                 }
 
                 if !isLast {
                     Rectangle()
                         .fill(
                             LinearGradient(
-                                gradient: Gradient(colors: [themeManager.currentTheme.accent1.opacity(0.4), themeManager.currentTheme.accent1.opacity(0.1)]),
+                                gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.accent2.opacity(0.4), themeManager.currentTheme.accent2.opacity(0.2)] : [themeManager.currentTheme.accent1.opacity(0.4), themeManager.currentTheme.accent1.opacity(0.2)]),
                                 startPoint: .top,
                                 endPoint: .bottom
                             )
@@ -250,11 +250,11 @@ struct TravelPlanDetailView: View {
             VStack(alignment: .leading, spacing: 8) {
                 Text(formatTime(item.time))
                     .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(themeManager.currentTheme.accent1)
+                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
 
                 Text(item.title)
                     .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
 
                 if let location = item.location, !location.isEmpty {
                     HStack(spacing: 4) {
@@ -270,7 +270,7 @@ struct TravelPlanDetailView: View {
                 if let notes = item.notes, !notes.isEmpty {
                     Text(notes)
                         .font(.system(size: 13))
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2.opacity(0.7) : themeManager.currentTheme.accent1.opacity(0.7))
                         .lineLimit(2)
                 }
             }
@@ -280,18 +280,18 @@ struct TravelPlanDetailView: View {
         }
     }
 
-    private func scheduleSection(plan: TravelPlan) -> some View {
-        Group {
-            if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }) {
-                DayScheduleView(daySchedule: daySchedule, plan: plan)
-                    .environmentObject(viewModel)
-            } else {
-                emptyScheduleView
-            }
-        }
-    }
+//    private func scheduleSection(plan: TravelPlan) -> some View {
+//        Group {
+//            if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }) {
+//                DayScheduleView(daySchedule: daySchedule, plan: plan)
+//                    .environmentObject(viewModel)
+//            } else {
+//                emptyScheduleView
+//            }
+//        }
+//    }
 
-    // 新しいヘッダーセクション：画像背景にタイトル、日付、時刻を表示
+    // ヘッダーセクション：画像背景にタイトル、日付、時刻を表示
     private func planHeaderSection(plan: TravelPlan) -> some View {
         ZStack {
             // 背景画像
@@ -372,7 +372,7 @@ struct TravelPlanDetailView: View {
                             .frame(width: 40, height: 40)
                         Image(systemName: "chevron.left")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(Color.white)
                     }
                 }
                 .padding(.leading, 20)
@@ -387,7 +387,7 @@ struct TravelPlanDetailView: View {
                             .frame(width: 40, height: 40)
                         Image(systemName: plan.isShared ? "person.2.fill" : "person.2")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(plan.isShared ? themeManager.currentTheme.success : .white)
+                            .foregroundColor(plan.isShared ? themeManager.currentTheme.success : Color.white)
                     }
                 }
 
@@ -399,7 +399,7 @@ struct TravelPlanDetailView: View {
                             .frame(width: 40, height: 40)
                         Image(systemName: "pencil")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(Color.white)
                     }
                 }
                 .padding(.trailing, 20)
@@ -413,96 +413,96 @@ struct TravelPlanDetailView: View {
         .animation(.spring(response: 0.6, dampingFraction: 0.8), value: animateContent)
     }
 
-    private func planInfoCard(plan: TravelPlan) -> some View {
-        VStack(spacing: 15) {
-            HStack {
-                Text(plan.title)
-                    .font(.title)
-                    .fontWeight(.bold)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
-
-                Spacer()
-
-                // Share Button
-                Button(action: { showShareView = true }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: plan.isShared ? "person.2.fill" : "person.2")
-                            .foregroundColor(plan.isShared ? themeManager.currentTheme.success : themeManager.currentTheme.accent1)
-                            .font(.title3)
-                        if plan.isShared {
-                            Text("\(plan.sharedWith.count)")
-                                .font(.caption)
-                                .fontWeight(.semibold)
-                                .foregroundColor(themeManager.currentTheme.success)
-                        }
-                    }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .background(Color.white.opacity(0.3))
-                    .cornerRadius(10)
-                }
-            }
-
-            HStack(spacing: 20) {
-                destinationInfo(plan: plan)
-                dateInfo(plan: plan)
-            }
-            .font(.subheadline)
-
-            if plan.isShared {
-                lastUpdatedInfo(plan: plan)
-            }
-
-            // 画像を表示: planImagesキャッシュを優先、なければローカルファイルから読み込む
-            if let planId = plan.id, let image = viewModel.planImages[planId] {
-                planImage(image: image)
-            } else if let localImageFileName = plan.localImageFileName,
-                      let image = FileManager.documentsImage(named: localImageFileName) {
-                planImage(image: image)
-            }
-        }
-        .padding()
-        .background(Color.white.opacity(0.2))
-        .cornerRadius(15)
-    }
-
-    private func lastUpdatedInfo(plan: TravelPlan) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: "clock.arrow.circlepath")
-                .font(.caption)
-                .foregroundColor(themeManager.currentTheme.success)
-            Text("最終更新: \(formatDateTime(plan.updatedAt))")
-                .font(.caption)
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
-        }
-    }
-
-    private func destinationInfo(plan: TravelPlan) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: "mappin.circle.fill")
-                .foregroundColor(themeManager.currentTheme.accent1)
-            Text(plan.destination)
-                .foregroundColor(colorScheme == .dark ? .white : .black)
-        }
-    }
-
-    private func dateInfo(plan: TravelPlan) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: "calendar")
-                .foregroundColor(themeManager.currentTheme.accent1)
-            Text(dateRangeString(plan: plan))
-                .foregroundColor(colorScheme == .dark ? .white : .black)
-        }
-    }
-
-    private func planImage(image: UIImage) -> some View {
-        Image(uiImage: image)
-            .resizable()
-            .aspectRatio(contentMode: .fill)
-            .frame(height: 200)
-            .cornerRadius(15)
-            .clipped()
-    }
+//    private func planInfoCard(plan: TravelPlan) -> some View {
+//        VStack(spacing: 15) {
+//            HStack {
+//                Text(plan.title)
+//                    .font(.title)
+//                    .fontWeight(.bold)
+//                    .foregroundColor(colorScheme == .dark ? .white : .black)
+//
+//                Spacer()
+//
+//                // Share Button
+//                Button(action: { showShareView = true }) {
+//                    HStack(spacing: 4) {
+//                        Image(systemName: plan.isShared ? "person.2.fill" : "person.2")
+//                            .foregroundColor(plan.isShared ? themeManager.currentTheme.success : themeManager.currentTheme.accent1)
+//                            .font(.title3)
+//                        if plan.isShared {
+//                            Text("\(plan.sharedWith.count)")
+//                                .font(.caption)
+//                                .fontWeight(.semibold)
+//                                .foregroundColor(themeManager.currentTheme.success)
+//                        }
+//                    }
+//                    .padding(.horizontal, 12)
+//                    .padding(.vertical, 8)
+//                    .background(Color.white.opacity(0.3))
+//                    .cornerRadius(10)
+//                }
+//            }
+//
+//            HStack(spacing: 20) {
+//                destinationInfo(plan: plan)
+//                dateInfo(plan: plan)
+//            }
+//            .font(.subheadline)
+//
+//            if plan.isShared {
+//                lastUpdatedInfo(plan: plan)
+//            }
+//
+//            // 画像を表示: planImagesキャッシュを優先、なければローカルファイルから読み込む
+//            if let planId = plan.id, let image = viewModel.planImages[planId] {
+//                planImage(image: image)
+//            } else if let localImageFileName = plan.localImageFileName,
+//                      let image = FileManager.documentsImage(named: localImageFileName) {
+//                planImage(image: image)
+//            }
+//        }
+//        .padding()
+//        .background(Color.white.opacity(0.2))
+//        .cornerRadius(15)
+//    }
+//
+//    private func lastUpdatedInfo(plan: TravelPlan) -> some View {
+//        HStack(spacing: 5) {
+//            Image(systemName: "clock.arrow.circlepath")
+//                .font(.caption)
+//                .foregroundColor(themeManager.currentTheme.success)
+//            Text("最終更新: \(formatDateTime(plan.updatedAt))")
+//                .font(.caption)
+//                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+//        }
+//    }
+//
+//    private func destinationInfo(plan: TravelPlan) -> some View {
+//        HStack(spacing: 5) {
+//            Image(systemName: "mappin.circle.fill")
+//                .foregroundColor(themeManager.currentTheme.accent1)
+//            Text(plan.destination)
+//                .foregroundColor(colorScheme == .dark ? .white : .black)
+//        }
+//    }
+//
+//    private func dateInfo(plan: TravelPlan) -> some View {
+//        HStack(spacing: 5) {
+//            Image(systemName: "calendar")
+//                .foregroundColor(themeManager.currentTheme.accent1)
+//            Text(dateRangeString(plan: plan))
+//                .foregroundColor(colorScheme == .dark ? .white : .black)
+//        }
+//    }
+//
+//    private func planImage(image: UIImage) -> some View {
+//        Image(uiImage: image)
+//            .resizable()
+//            .aspectRatio(contentMode: .fill)
+//            .frame(height: 200)
+//            .cornerRadius(15)
+//            .clipped()
+//    }
 
     // 新しい予算カード
     private func budgetCard(plan: TravelPlan) -> some View {
@@ -510,14 +510,14 @@ struct TravelPlanDetailView: View {
             VStack(alignment: .leading, spacing: 15) {
                 Text("予算")
                     .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
 
                 HStack(spacing: 12) {
                     ZStack {
                         Circle()
                             .fill(
                                 LinearGradient(
-                                    gradient: Gradient(colors: [themeManager.currentTheme.success.opacity(0.3), themeManager.currentTheme.success.opacity(0.15)]),
+                                    gradient: Gradient(colors: [Color.green.opacity(0.3), Color.green.opacity(0.15)]),
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
@@ -525,12 +525,12 @@ struct TravelPlanDetailView: View {
                             .frame(width: 40, height: 40)
                         Image(systemName: "yensign.circle.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(themeManager.currentTheme.success.opacity(0.8))
+                            .foregroundColor(Color.green.opacity(0.8))
                     }
 
                     Text(formatBudgetAmount(plan: plan))
                         .font(.system(size: 30, weight: .bold))
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
 
                     Spacer()
                 }
@@ -543,33 +543,33 @@ struct TravelPlanDetailView: View {
         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: animateContent)
     }
 
-    private func budgetButton(plan: TravelPlan) -> some View {
-        Button(action: { showBudgetSummary = true }) {
-            HStack {
-                Image(systemName: "yensign.circle.fill")
-                    .font(.title2)
-                    .foregroundColor(themeManager.currentTheme.success)
-
-                VStack(alignment: .leading, spacing: 5) {
-                    Text("金額管理")
-                        .font(.headline)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
-
-                    Text(formatTotalCost(plan: plan))
-                        .font(.headline)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
-                }
-
-                Spacer()
-
-                Image(systemName: "chevron.right")
-                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .gray)
-            }
-            .padding()
-            .background(Color.white.opacity(0.2))
-            .cornerRadius(15)
-        }
-    }
+//    private func budgetButton(plan: TravelPlan) -> some View {
+//        Button(action: { showBudgetSummary = true }) {
+//            HStack {
+//                Image(systemName: "yensign.circle.fill")
+//                    .font(.title2)
+//                    .foregroundColor(themeManager.currentTheme.success)
+//
+//                VStack(alignment: .leading, spacing: 5) {
+//                    Text("金額管理")
+//                        .font(.headline)
+//                        .foregroundColor(colorScheme == .dark ? .white : .black)
+//
+//                    Text(formatTotalCost(plan: plan))
+//                        .font(.headline)
+//                        .foregroundColor(colorScheme == .dark ? .white : .black)
+//                }
+//
+//                Spacer()
+//
+//                Image(systemName: "chevron.right")
+//                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .gray)
+//            }
+//            .padding()
+//            .background(Color.white.opacity(0.2))
+//            .cornerRadius(15)
+//        }
+//    }
 
     private func daySelectionTabs(plan: TravelPlan) -> some View {
         ScrollView(.horizontal, showsIndicators: false) {
@@ -607,43 +607,43 @@ struct TravelPlanDetailView: View {
     }
 
     private func dayTabTextColor(isSelected: Bool) -> Color {
-        isSelected ? .white : (colorScheme == .dark ? .white.opacity(0.6) : .gray)
+        isSelected ? themeManager.currentTheme.light : (colorScheme == .dark ? themeManager.currentTheme.light.opacity(0.6) : .gray)
     }
 
     private func dayTabSubtextColor(isSelected: Bool) -> Color {
-        isSelected ? .white.opacity(0.8) : (colorScheme == .dark ? .white.opacity(0.5) : .gray.opacity(0.7))
+        isSelected ? themeManager.currentTheme.light.opacity(0.8) : (colorScheme == .dark ? themeManager.currentTheme.light.opacity(0.5) : .gray.opacity(0.7))
     }
 
     private func dayTabBackground(isSelected: Bool) -> some View {
         RoundedRectangle(cornerRadius: 15)
-            .fill(isSelected ? themeManager.currentTheme.accent1 : Color.white.opacity(0.3))
+            .fill(isSelected ? themeManager.currentTheme.accent1 : themeManager.currentTheme.accent2.opacity(0.3))
     }
 
-    private var emptyScheduleView: some View {
-        VStack(spacing: 15) {
-            Image(systemName: "calendar.badge.plus")
-                .font(.system(size: 50))
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.5) : .gray.opacity(0.5))
-
-            Text("この日のスケジュールはまだありません")
-                .font(.body)
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
-
-            Button(action: { showScheduleEditor = true }) {
-                Text("スケジュールを追加")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 30)
-                    .padding(.vertical, 12)
-                    .background(themeManager.currentTheme.accent1)
-                    .cornerRadius(25)
-            }
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
-        .background(Color.white.opacity(0.2))
-        .cornerRadius(15)
-    }
+//    private var emptyScheduleView: some View {
+//        VStack(spacing: 15) {
+//            Image(systemName: "calendar.badge.plus")
+//                .font(.system(size: 50))
+//                .foregroundColor(colorScheme == .dark ? .white.opacity(0.5) : .gray.opacity(0.5))
+//
+//            Text("この日のスケジュールはまだありません")
+//                .font(.body)
+//                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+//
+//            Button(action: { showScheduleEditor = true }) {
+//                Text("スケジュールを追加")
+//                    .font(.headline)
+//                    .foregroundColor(.white)
+//                    .padding(.horizontal, 30)
+//                    .padding(.vertical, 12)
+//                    .background(themeManager.currentTheme.accent1)
+//                    .cornerRadius(25)
+//            }
+//        }
+//        .frame(maxWidth: .infinity)
+//        .padding(.vertical, 40)
+//        .background(Color.white.opacity(0.2))
+//        .cornerRadius(15)
+//    }
 
     // MARK: - Weather Section
     @ViewBuilder
@@ -653,11 +653,11 @@ struct TravelPlanDetailView: View {
                 HStack {
                     Text("天気")
                         .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                     
                     if let attribution = weatherAttribution {
                         VStack(alignment: .trailing, spacing: 4) {
-                            AsyncImage(url: colorScheme == .dark ? attribution.combinedMarkLightURL : attribution.combinedMarkDarkURL) { image in
+                            AsyncImage(url: colorScheme == .dark ? attribution.combinedMarkDarkURL : attribution.combinedMarkLightURL) { image in
                                 image
                                     .resizable()
                                     .scaledToFit()
@@ -670,7 +670,7 @@ struct TravelPlanDetailView: View {
                             Link(destination: attribution.legalPageURL) {
                                 Text("その他のデータソース")
                                     .font(.caption2)
-                                    .foregroundColor(themeManager.currentTheme.primary)
+                                    .foregroundColor(themeManager.currentTheme.accent2)
                             }
                         }
                         .frame(maxWidth: .infinity, alignment: .trailing)
@@ -694,20 +694,20 @@ struct TravelPlanDetailView: View {
                         HStack(spacing: 15) {
                             ZStack {
                                 Circle()
-                                    .fill(themeManager.currentTheme.primary.opacity(0.15))
+                                    .fill(Color.blue.opacity(0.15))
                                     .frame(width: 60, height: 60)
                                 Image(systemName: weather.symbolName)
                                     .font(.system(size: 28))
-                                    .foregroundColor(themeManager.currentTheme.primary.opacity(0.7))
+                                    .foregroundColor(Color.blue.opacity(0.7))
                             }
 
                             VStack(alignment: .leading, spacing: 4) {
                                 Text(weather.condition)
                                     .font(.system(size: 20, weight: .medium))
-                                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                                 Text("\(Int(weather.highTemperature))°C")
                                     .font(.system(size: 32, weight: .bold))
-                                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                             }
                             Spacer()
                         }
@@ -726,7 +726,7 @@ struct TravelPlanDetailView: View {
         VStack(alignment: .leading, spacing: 20) {
             Text("持ち物リスト")
                 .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(colorScheme == .dark ? .white : .black)
+                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
 
             if let currentPlan = currentPlan {
                 PackingListView(plan: currentPlan)
@@ -853,6 +853,111 @@ struct TravelPlanDetailView: View {
                 self.isLoadingPlanWeather = false
             }
         }
+    }
+}
+
+// MARK: - Preview
+#Preview {
+    let viewModel = TravelPlanViewModel()
+    let authVM = AuthViewModel()
+
+    // サンプルのスケジュールアイテムを作成
+    let sampleScheduleItems = [
+        ScheduleItem(
+            id: UUID().uuidString,
+            time: Calendar.current.date(bySettingHour: 9, minute: 0, second: 0, of: Date())!,
+            title: "東京タワー観光",
+            location: "東京タワー",
+            notes: "展望台からの眺めを楽しむ",
+            latitude: 35.6586,
+            longitude: 139.7454,
+            cost: 1200,
+            mapURL: nil,
+            linkURL: "https://www.tokyotower.co.jp"
+        ),
+        ScheduleItem(
+            id: UUID().uuidString,
+            time: Calendar.current.date(bySettingHour: 12, minute: 30, second: 0, of: Date())!,
+            title: "ランチ",
+            location: "レストラン芝",
+            notes: "和食のコース料理",
+            latitude: 35.6560,
+            longitude: 139.7470,
+            cost: 3500,
+            mapURL: nil,
+            linkURL: nil
+        ),
+        ScheduleItem(
+            id: UUID().uuidString,
+            time: Calendar.current.date(bySettingHour: 15, minute: 0, second: 0, of: Date())!,
+            title: "浅草観光",
+            location: "浅草寺",
+            notes: "雷門と仲見世通りを散策",
+            latitude: 35.7148,
+            longitude: 139.7967,
+            cost: 0,
+            mapURL: nil,
+            linkURL: nil
+        )
+    ]
+
+    // サンプルのDayScheduleを作成
+    let sampleDaySchedules = [
+        DaySchedule(
+            dayNumber: 1,
+            date: Date(),
+            scheduleItems: sampleScheduleItems
+        ),
+        DaySchedule(
+            dayNumber: 2,
+            date: Calendar.current.date(byAdding: .day, value: 1, to: Date())!,
+            scheduleItems: [
+                ScheduleItem(
+                    id: UUID().uuidString,
+                    time: Calendar.current.date(bySettingHour: 10, minute: 0, second: 0, of: Date())!,
+                    title: "スカイツリー",
+                    location: "東京スカイツリー",
+                    notes: "展望デッキと水族館",
+                    latitude: 35.7101,
+                    longitude: 139.8107,
+                    cost: 2500,
+                    mapURL: nil,
+                    linkURL: nil
+                )
+            ]
+        )
+    ]
+
+    // サンプルのTravelPlanを作成
+    let samplePlan = TravelPlan(
+        id: UUID().uuidString,
+        title: "東京旅行",
+        startDate: Date(),
+        endDate: Calendar.current.date(byAdding: .day, value: 2, to: Date())!,
+        destination: "東京",
+        latitude: 35.6762,
+        longitude: 139.6503,
+        localImageFileName: nil,
+        cardColor: nil,
+        createdAt: Date(),
+        userId: "sample-user-id",
+        daySchedules: sampleDaySchedules,
+        packingItems: [],
+        isShared: true,
+        shareCode: "ABC123",
+        sharedWith: ["user1", "user2"],
+        ownerId: "sample-user-id",
+        lastEditedBy: "sample-user-id",
+        updatedAt: Date()
+    )
+
+    // ViewModelにサンプルプランを追加
+    viewModel.travelPlans = [samplePlan]
+
+    return NavigationView {
+        TravelPlanDetailView(plan: samplePlan)
+            .environmentObject(viewModel)
+            .environmentObject(authVM)
     }
 }
 

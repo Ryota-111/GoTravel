@@ -52,7 +52,7 @@ extension View {
     }
 
     func themedCardBackground() -> some View {
-        self.background(ThemeManager.shared.currentTheme.cardBackground)
+        self.background(ThemeManager.shared.currentTheme.cardBackground2)
     }
 
     func themedText() -> some View {

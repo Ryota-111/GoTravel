@@ -40,8 +40,9 @@ struct ThemePreset {
     var error: Color
     var info: Color
 
-    // MARK: - Special Colors
-    var cardBackground: Color
+    // MARK: - カードの背景や縁や影の色
+    var cardBackground1: Color
+    var cardBackground2: Color
     var cardBorder: Color
     var shadow: Color
 
@@ -83,7 +84,8 @@ struct ThemePreset {
             error = Color.red
             info = Color.blue
             
-            cardBackground = Color.white.opacity(0.8)
+            cardBackground1 = Color.white.opacity(0.08)
+            cardBackground2 = Color.white.opacity(0.6)
             cardBorder = Color.blue.opacity(0.3)
             shadow = Color.blue.opacity(0.2)
             
@@ -118,8 +120,9 @@ struct ThemePreset {
             error = Color.red
             info = Color.blue
             
-            cardBackground = Color.white
-            cardBorder = Color.gray.opacity(0.3)
+            cardBackground1 = Color.black.opacity(0.08)
+            cardBackground2 = Color.black.opacity(0.08)
+            cardBorder = Color.black.opacity(0.3)
             shadow = Color.black.opacity(0.15)
             
             gradientLight = Color.white
@@ -153,8 +156,9 @@ struct ThemePreset {
             error = Color.red
             info = Color.blue
             
-            cardBackground = Color.black
-            cardBorder = Color.gray.opacity(0.3)
+            cardBackground1 = Color.white.opacity(0.08)
+            cardBackground2 = Color.white.opacity(0.08)
+            cardBorder = Color.white.opacity(0.3)
             shadow = Color.white.opacity(0.15)
             
             gradientLight = Color.black
@@ -188,8 +192,9 @@ struct ThemePreset {
             error = Color.red
             info = Color.blue
             
-            cardBackground = Color.white.opacity(0.8)
-            cardBorder = Color.orange.opacity(0.3)
+            cardBackground1 = Color(red: 255/255, green: 209/255, blue: 220/255).opacity(0.08)
+            cardBackground2 = Color(red: 255/255, green: 209/255, blue: 220/255).opacity(0.08)
+            cardBorder = Color(red: 255/255, green: 209/255, blue: 220/255).opacity(0.3)
             shadow = Color.orange.opacity(0.2)
             
             gradientLight = Color.white

@@ -1055,7 +1055,7 @@ struct AppSettingView: View {
                         .padding()
                         .background(
                             RoundedRectangle(cornerRadius: 16)
-                                .fill(themeManager.currentTheme.cardBackground)
+                                .fill(themeManager.currentTheme.cardBackground2)
                         )
                         .overlay(
                             RoundedRectangle(cornerRadius: 16)
@@ -1166,7 +1166,7 @@ struct ThemeCard: View {
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(isSelected ? themeManager.currentTheme.primary.opacity(0.1) : themeManager.currentTheme.cardBackground)
+                    .fill(isSelected ? themeManager.currentTheme.primary.opacity(0.1) : themeManager.currentTheme.cardBackground2)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16)

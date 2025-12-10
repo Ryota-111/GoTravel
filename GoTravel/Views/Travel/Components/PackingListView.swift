@@ -43,7 +43,7 @@ struct PackingListView: View {
                 .padding(10)
                 .background(
                     RoundedRectangle(cornerRadius: 10)
-                        .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.white.opacity(0.6))
+                        .fill(colorScheme == .dark ? themeManager.currentTheme.accent2.opacity(0.08) : themeManager.currentTheme.accent2.opacity(0.08))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 10)
@@ -55,7 +55,7 @@ struct PackingListView: View {
                     Circle()
                         .fill(
                             LinearGradient(
-                                gradient: Gradient(colors: [themeManager.currentTheme.primary.opacity(0.9), themeManager.currentTheme.primary.opacity(0.7)]),
+                                gradient: Gradient(colors: [themeManager.currentTheme.cardBorder.opacity(0.9), themeManager.currentTheme.cardBorder.opacity(0.9)]),
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
@@ -63,7 +63,7 @@ struct PackingListView: View {
                         .frame(width: 36, height: 36)
                     Image(systemName: "plus")
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(themeManager.currentTheme.accent2)
                 }
             }
             .disabled(newItemName.trimmingCharacters(in: .whitespaces).isEmpty)
@@ -79,13 +79,13 @@ struct PackingListView: View {
 
             Text("持ち物を追加してください")
                 .font(.system(size: 14))
-                .foregroundColor(.secondary)
+                .foregroundColor(themeManager.currentTheme.secondaryText)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 24)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(colorScheme == .dark ? Color.white.opacity(0.08) : Color.white.opacity(0.6))
+                .fill(colorScheme == .dark ? themeManager.currentTheme.cardBackground1 : themeManager.currentTheme.cardBackground2)
         )
     }
 
@@ -153,7 +153,7 @@ struct PackingItemRow: View {
             // Item name
             Text(item.name)
                 .font(.system(size: 15))
-                .foregroundColor(item.isChecked ? .secondary : (colorScheme == .dark ? .white : .black))
+                .foregroundColor(item.isChecked ? themeManager.currentTheme.secondaryText : (colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1))
                 .strikethrough(item.isChecked, color: .secondary)
 
             Spacer()
@@ -171,7 +171,7 @@ struct PackingItemRow: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(item.isChecked
                     ? themeManager.currentTheme.success.opacity(0.08)
-                    : (colorScheme == .dark ? Color.white.opacity(0.05) : Color.white.opacity(0.6))
+                      : (colorScheme == .dark ? themeManager.currentTheme.cardBackground1 : themeManager.currentTheme.cardBackground2)
                 )
         )
         .overlay(
