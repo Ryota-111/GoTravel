@@ -58,7 +58,7 @@ struct TravelPlanDetailView: View {
 
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.primary.opacity(0.7), Color.black] : [themeManager.currentTheme.primary.opacity(0.8), Color.white]),
+            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.gradientDark, themeManager.currentTheme.dark] : [themeManager.currentTheme.gradientLight, themeManager.currentTheme.light]),
             startPoint: .top,
             endPoint: .bottom
         )

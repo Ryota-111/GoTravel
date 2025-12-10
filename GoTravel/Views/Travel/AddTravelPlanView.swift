@@ -31,7 +31,7 @@ struct AddTravelPlanView: View {
 
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: [themeManager.currentTheme.primary.opacity(0.9), Color.black]),
+            gradient: Gradient(colors: [themeManager.currentTheme.gradientDark, themeManager.currentTheme.dark]),
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -61,22 +61,22 @@ struct AddTravelPlanView: View {
 
             Text("新しい旅行計画")
                 .font(.headline)
-                .foregroundColor(.white)
+                .foregroundColor(themeManager.currentTheme.accent2)
 
             Spacer()
         }
         .padding()
-        .background(Color.black.opacity(0.2))
+        .background(themeManager.currentTheme.accent2.opacity(0.2))
     }
 
     private var backButton: some View {
         Button(action: { presentationMode.wrappedValue.dismiss() }) {
             HStack {
                 Image(systemName: "chevron.left")
-                    .foregroundColor(.white)
+                    .foregroundColor(themeManager.currentTheme.accent2)
                     .imageScale(.large)
                 Text("戻る")
-                    .foregroundColor(.white)
+                    .foregroundColor(themeManager.currentTheme.accent2)
             }
         }
     }
@@ -96,7 +96,7 @@ struct AddTravelPlanView: View {
             Text("旅行の詳細")
                 .font(.title2)
                 .fontWeight(.bold)
-                .foregroundColor(.white)
+                .foregroundColor(themeManager.currentTheme.accent2)
 
             customTextField(
                 icon: "text.alignleft",
@@ -109,7 +109,7 @@ struct AddTravelPlanView: View {
                 placeholder: "目的地",
                 text: $destination
             )
-            .onChange(of: destination) { newValue in
+            .onChange(of: destination) { oldValue, newValue in
                 searchLocationCoordinate(for: newValue)
             }
 
@@ -119,7 +119,7 @@ struct AddTravelPlanView: View {
             }
         }
         .padding()
-        .background(Color.white.opacity(0.1))
+        .background(themeManager.currentTheme.accent2.opacity(0.1))
         .cornerRadius(15)
     }
 
@@ -128,7 +128,7 @@ struct AddTravelPlanView: View {
             Text("カード表紙の写真")
                 .font(.title2)
                 .fontWeight(.bold)
-                .foregroundColor(.white)
+                .foregroundColor(themeManager.currentTheme.accent2)
 
             if let image = selectedImage {
                 selectedImageView(image: image)
@@ -137,7 +137,7 @@ struct AddTravelPlanView: View {
             }
         }
         .padding()
-        .background(Color.white.opacity(0.1))
+        .background(themeManager.currentTheme.accent2.opacity(0.1))
         .cornerRadius(15)
         .sheet(isPresented: $showImagePicker) {
             ImageCropPickerView(image: $selectedImage, aspectRatio: 1.0)
@@ -163,8 +163,8 @@ struct AddTravelPlanView: View {
         }) {
             Image(systemName: "xmark.circle.fill")
                 .font(.system(size: 30))
-                .foregroundColor(.white)
-                .background(Circle().fill(Color.black.opacity(0.5)))
+                .foregroundColor(themeManager.currentTheme.error)
+                .background(Circle().fill(themeManager.currentTheme.accent1.opacity(0.5)))
         }
         .padding(8)
     }
@@ -176,15 +176,15 @@ struct AddTravelPlanView: View {
             VStack(spacing: 10) {
                 Image(systemName: "photo.fill")
                     .font(.system(size: 50))
-                    .foregroundColor(.white.opacity(0.7))
+                    .foregroundColor(themeManager.currentTheme.accent2.opacity(0.7))
 
                 Text("写真を選択")
-                    .foregroundColor(.white)
+                    .foregroundColor(themeManager.currentTheme.accent2)
                     .font(.headline)
             }
             .frame(maxWidth: .infinity)
             .frame(height: 200)
-            .background(Color.white.opacity(0.2))
+            .background(themeManager.currentTheme.accent2.opacity(0.2))
             .cornerRadius(15)
         }
     }
@@ -194,12 +194,12 @@ struct AddTravelPlanView: View {
             HStack {
                 if isUploading {
                     ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                        .progressViewStyle(CircularProgressViewStyle(tint: themeManager.currentTheme.accent2))
                     Text("保存中...")
-                        .foregroundColor(.white)
+                        .foregroundColor(themeManager.currentTheme.accent2)
                 } else {
                     Text("旅行計画を保存")
-                        .foregroundColor(.white)
+                        .foregroundColor(themeManager.currentTheme.accent2)
                 }
             }
             .padding()
@@ -229,14 +229,14 @@ struct AddTravelPlanView: View {
                 .foregroundColor(.white)
         }
         .padding()
-        .background(Color.white.opacity(0.2))
+        .background(themeManager.currentTheme.accent2.opacity(0.2))
         .cornerRadius(10)
     }
 
     private func datePickerCard(title: String, date: Binding<Date>) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(title)
-                .foregroundColor(.white)
+                .foregroundColor(themeManager.currentTheme.accent2)
                 .font(.headline)
             DatePicker("", selection: date, displayedComponents: .date)
                 .datePickerStyle(CompactDatePickerStyle())
@@ -244,7 +244,7 @@ struct AddTravelPlanView: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding()
-        .background(Color.white.opacity(0.2))
+        .background(themeManager.currentTheme.accent2.opacity(0.2))
         .cornerRadius(10)
     }
 

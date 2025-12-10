@@ -377,7 +377,7 @@ struct EnjoyWorldView: View {
                 Text(tab.displayName)
                     .font(.caption)
                     .fontWeight(selectedTab == tab ? .semibold : .regular)
-                    .foregroundColor(selectedTab == tab ? .white : themeManager.currentTheme.secondaryText)
+                    .foregroundColor(selectedTab == tab ? themeManager.currentTheme.light : themeManager.currentTheme.secondaryText)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
             }
@@ -400,7 +400,7 @@ struct EnjoyWorldView: View {
                 Text(tab.displayName)
                     .font(.caption)
                     .fontWeight(selectedPlanTab == tab ? .semibold : .regular)
-                    .foregroundColor(selectedPlanTab == tab ? .white : themeManager.currentTheme.secondaryText)
+                    .foregroundColor(selectedPlanTab == tab ? themeManager.currentTheme.light : themeManager.currentTheme.secondaryText)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
             }
@@ -428,7 +428,7 @@ struct EnjoyWorldView: View {
             .frame(width: 200, height: 200)
             .background(themeManager.currentTheme.tertiary)
             .cornerRadius(25)
-            .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
+            .shadow(color: themeManager.currentTheme.accent1.opacity(0.1), radius: 10, x: 0, y: 5)
         }
         .padding(.horizontal, 20)
     }
@@ -472,9 +472,9 @@ struct EnjoyWorldView: View {
                     .foregroundColor(themeManager.currentTheme.secondary)
             }
             .frame(width: 150, height: 200)
-            .background(Color.white.opacity(0.2))
+            .background(themeManager.currentTheme.accent2.opacity(0.2))
             .cornerRadius(25)
-            .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
+            .shadow(color: themeManager.currentTheme.accent1.opacity(0.1), radius: 10, x: 0, y: 5)
         }
     }
 
@@ -545,9 +545,9 @@ struct EnjoyWorldView: View {
             }
             .padding(.vertical, 15)
             .frame(maxWidth: .infinity)
-            .background(Color.white.opacity(0.2))
+            .background(themeManager.currentTheme.accent2.opacity(0.2))
             .cornerRadius(15)
-            .shadow(color: Color.black.opacity(0.05), radius: 5, x: 0, y: 2)
+            .shadow(color: themeManager.currentTheme.accent1.opacity(0.05), radius: 5, x: 0, y: 2)
         }
     }
 
