@@ -200,7 +200,7 @@ struct TimelineItemCard: View {
 
                     Image(systemName: iconName)
                         .font(.title3)
-                        .foregroundColor(.white)
+                        .foregroundColor(themeManager.currentTheme.light)
                 }
 
                 // Connecting line
@@ -298,8 +298,8 @@ struct TimelineItemCard: View {
 
     private var itemColor: Color {
         switch item.type {
-        case .dailyPlan: return themeManager.currentTheme.accent1
-        case .outingPlan: return themeManager.currentTheme.primary
+        case .dailyPlan: return themeManager.currentTheme.xsecondary
+        case .outingPlan: return themeManager.currentTheme.xprimary
         case .travel: return themeManager.currentTheme.success
         }
     }

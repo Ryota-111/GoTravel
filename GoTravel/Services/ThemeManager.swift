@@ -48,7 +48,7 @@ class ThemeManager: ObservableObject {
 // MARK: - View Extension for Easy Theme Access
 extension View {
     func themedBackground() -> some View {
-        self.background(ThemeManager.shared.currentTheme.background.ignoresSafeArea())
+        self.background(ThemeManager.shared.currentTheme.backgroundLight.ignoresSafeArea())
     }
 
     func themedCardBackground() -> some View {

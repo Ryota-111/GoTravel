@@ -58,7 +58,7 @@ struct ShareTravelPlanView: View {
             VStack(spacing: 8) {
                 Text("この旅行計画を共有")
                     .font(.title2.bold())
-                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+                    .foregroundColor(themeManager.currentTheme.accent2)
 
                 Text(plan.title)
                     .font(.headline)
@@ -66,7 +66,7 @@ struct ShareTravelPlanView: View {
 
                 Text("共有コードを生成して、他のユーザーと一緒に旅行計画を編集できます")
                     .font(.subheadline)
-                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2.opacity(0.7) : themeManager.currentTheme.accent1.opacity(0.7))
+                    .foregroundColor(themeManager.currentTheme.accent2.opacity(0.7))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
             }
@@ -94,7 +94,7 @@ struct ShareTravelPlanView: View {
                 )
             )
             .cornerRadius(15)
-            .shadow(color: themeManager.currentTheme.accent2.opacity(0.3), radius: 10, x: 0, y: 5)
+            .shadow(color: themeManager.currentTheme.accent1.opacity(0.3), radius: 10, x: 0, y: 5)
         }
     }
 

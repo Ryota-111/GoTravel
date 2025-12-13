@@ -8,14 +8,14 @@ struct PlanEventCardView: View {
     @ObservedObject var themeManager = ThemeManager.shared
 
     var body: some View {
-        let secondaryTextColor = colorScheme == .dark ? Color.white.opacity(0.9) : Color.black.opacity(0.7)
+        let secondaryTextColor = colorScheme == .dark ? themeManager.currentTheme.light.opacity(0.9) : themeManager.currentTheme.dark.opacity(0.9)
 
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
                 VStack(alignment: .leading, spacing: 5) {
                     Text(plan.title)
                         .font(.headline)
-                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.light : themeManager.currentTheme.dark)
 
                     HStack {
                         Image(systemName: "calendar")
@@ -43,7 +43,7 @@ struct PlanEventCardView: View {
                 if let onDelete = onDelete {
                     Button(action: onDelete) {
                         Image(systemName: "trash")
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                            .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                             .padding(8)
                     }
                     .buttonStyle(PlainButtonStyle())
@@ -52,11 +52,11 @@ struct PlanEventCardView: View {
 
             if !plan.places.isEmpty {
                 Divider()
-                    .background(colorScheme == .dark ? Color.white.opacity(0.5) : Color.black.opacity(0.3))
+                    .background(colorScheme == .dark ? themeManager.currentTheme.accent2.opacity(0.5) : themeManager.currentTheme.accent1.opacity(0.5))
 
                 HStack {
                     Image(systemName: "mappin.circle.fill")
-                        .foregroundColor(plan.planType == .daily ? .orange : .blue)
+                        .foregroundColor(secondaryTextColor)
 
                     Text("\(plan.places.count) 件の場所")
                         .font(.caption)
@@ -67,7 +67,7 @@ struct PlanEventCardView: View {
         .padding()
         .background(
             LinearGradient(
-                gradient: Gradient(colors: plan.planType == .daily ? [.orange, colorScheme == .dark ? .black.opacity(0.1) : .white.opacity(0.1)] : [.blue.opacity(0.8), colorScheme == .dark ? .black.opacity(0.1) : .white.opacity(0.1)]),
+                gradient: Gradient(colors: plan.planType == .daily ? [themeManager.currentTheme.xsecondary, colorScheme == .dark ? themeManager.currentTheme.dark.opacity(0.1) : themeManager.currentTheme.light.opacity(0.1)] : [themeManager.currentTheme.xprimary, colorScheme == .dark ? themeManager.currentTheme.dark.opacity(0.1) : themeManager.currentTheme.light.opacity(0.1)]),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -77,7 +77,7 @@ struct PlanEventCardView: View {
             RoundedRectangle(cornerRadius: 15)
                 .stroke(
                     LinearGradient(
-                        gradient: Gradient(colors: plan.planType == .daily ? [.orange.opacity(0.5), .orange.opacity(0.2)] : [.blue.opacity(0.5), .blue.opacity(0.2)]),
+                        gradient: Gradient(colors: plan.planType == .daily ? [themeManager.currentTheme.dailyPlanColor.opacity(0.5), themeManager.currentTheme.dailyPlanColor.opacity(0.2)] : [themeManager.currentTheme.outingPlanColor.opacity(0.5), themeManager.currentTheme.outingPlanColor.opacity(0.2)]),
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
@@ -85,7 +85,7 @@ struct PlanEventCardView: View {
                 )
         )
         .shadow(
-            color: plan.planType == .daily ? .orange.opacity(0.5) : .blue.opacity(0.5),
+            color: plan.planType == .daily ? themeManager.currentTheme.xsecondary.opacity(0.5) : themeManager.currentTheme.xprimary.opacity(0.5),
             radius: 10
         )
     }

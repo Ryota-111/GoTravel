@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct SplashScreenView: View {
+    @ObservedObject var themeManager = ThemeManager.shared
     @State private var isActive = false
     @State private var showOnboarding = false
     @State private var opacity = 0.0
@@ -23,7 +24,7 @@ struct SplashScreenView: View {
         } else {
             ZStack {
                 LinearGradient(
-                    gradient: Gradient(colors: [.blue.opacity(0.6), .white]),
+                    gradient: Gradient(colors: [themeManager.currentTheme.primary.opacity(0.6), themeManager.currentTheme.light]),
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -32,12 +33,12 @@ struct SplashScreenView: View {
                 VStack(spacing: 20) {
                     Image(systemName: "airplane.departure")
                         .font(.system(size: 80))
-                        .foregroundColor(.white)
+                        .foregroundColor(themeManager.currentTheme.accent2)
 
                     Text("Travory")
                         .font(.largeTitle)
                         .fontWeight(.bold)
-                        .foregroundColor(.white)
+                        .foregroundColor(themeManager.currentTheme.accent2)
                 }
                 .opacity(opacity)
                 .scaleEffect(scale)

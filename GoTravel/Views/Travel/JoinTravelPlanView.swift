@@ -7,7 +7,6 @@ struct JoinTravelPlanView: View {
     @EnvironmentObject var viewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
-
     @State private var shareCode: String = ""
     @State private var isJoining: Bool = false
     @State private var showError: Bool = false
@@ -53,16 +52,16 @@ struct JoinTravelPlanView: View {
         VStack(spacing: 15) {
             Image(systemName: "person.badge.plus.fill")
                 .font(.system(size: 70))
-                .foregroundColor(themeManager.currentTheme.success.opacity(0.8))
+                .foregroundColor(themeManager.currentTheme.accent2.opacity(0.8))
 
             VStack(spacing: 8) {
                 Text("旅行計画に参加")
                     .font(.title2.bold())
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
 
                 Text("共有コードを入力して、他のユーザーの旅行計画に参加できます")
                     .font(.subheadline)
-                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : themeManager.currentTheme.secondaryText)
+                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2.opacity(0.7) : themeManager.currentTheme.accent1.opacity(0.7))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
             }
@@ -74,7 +73,7 @@ struct JoinTravelPlanView: View {
         VStack(alignment: .leading, spacing: 10) {
             Text("共有コード")
                 .font(.headline)
-                .foregroundColor(colorScheme == .dark ? .white : .black)
+                .foregroundColor(themeManager.currentTheme.accent2)
 
             TextField("例: TRAVEL-ABCD1234", text: $shareCode)
                 .font(.system(size: 20, weight: .medium, design: .monospaced))
@@ -83,7 +82,7 @@ struct JoinTravelPlanView: View {
                 .padding()
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.white)
+                        .fill(themeManager.currentTheme.accent2.opacity(0.1))
                 )
                 .overlay(
                     RoundedRectangle(cornerRadius: 12)
@@ -93,9 +92,10 @@ struct JoinTravelPlanView: View {
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(colorScheme == .dark ? Color.white.opacity(0.05) : Color.white.opacity(0.5))
+                .fill(themeManager.currentTheme.accent2.opacity(0.05))
         )
-        .shadow(color: .black.opacity(0.1), radius: 10, x: 0, y: 5)
+        .shadow(color: themeManager.currentTheme.accent1.opacity(0.3), radius: 10, x: 0, y: 5)
+
     }
 
     // MARK: - Join Button
@@ -113,7 +113,7 @@ struct JoinTravelPlanView: View {
                         .font(.headline)
                 }
             }
-            .foregroundColor(.white)
+            .foregroundColor(themeManager.currentTheme.accent2)
             .frame(maxWidth: .infinity)
             .padding()
             .background(
@@ -126,7 +126,7 @@ struct JoinTravelPlanView: View {
                 )
             )
             .cornerRadius(15)
-            .shadow(color: shareCode.isEmpty ? themeManager.currentTheme.secondaryText.opacity(0.3) : themeManager.currentTheme.success.opacity(0.3), radius: 10, x: 0, y: 5)
+            .shadow(color: themeManager.currentTheme.accent1.opacity(0.3), radius: 10, x: 0, y: 5)
         }
         .disabled(shareCode.isEmpty || isJoining)
     }
@@ -136,35 +136,33 @@ struct JoinTravelPlanView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "info.circle.fill")
-                    .foregroundColor(themeManager.currentTheme.success)
+                    .foregroundColor(themeManager.currentTheme.accent2)
                 Text("参加について")
                     .font(.headline)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .foregroundColor(themeManager.currentTheme.accent2)
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                InfoRow(icon: "checkmark.circle", text: "共有コードは大文字で入力してください", color: themeManager.currentTheme.success)
-                InfoRow(icon: "checkmark.circle", text: "参加後、すぐにスケジュールを編集できます", color: themeManager.currentTheme.success)
-                InfoRow(icon: "checkmark.circle", text: "他のメンバーと情報がリアルタイムで共有されます", color: themeManager.currentTheme.success)
+                InfoRow(icon: "checkmark.circle", text: "共有コードは大文字で入力してください", color: themeManager.currentTheme.secondary)
+                InfoRow(icon: "checkmark.circle", text: "参加後、すぐにスケジュールを編集できます", color: themeManager.currentTheme.secondary)
+                InfoRow(icon: "checkmark.circle", text: "他のメンバーと情報がリアルタイムで共有されます", color: themeManager.currentTheme.secondary)
             }
         }
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(themeManager.currentTheme.success.opacity(0.1))
+                .fill(themeManager.currentTheme.accent2.opacity(0.1))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(themeManager.currentTheme.success.opacity(0.3), lineWidth: 1)
+                .stroke(themeManager.currentTheme.accent2.opacity(0.3), lineWidth: 1)
         )
     }
 
     // MARK: - Background
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ?
-                [themeManager.currentTheme.success.opacity(0.7), .black] :
-                [themeManager.currentTheme.success.opacity(0.6), .white.opacity(0.3)]),
+            gradient: Gradient(colors: [themeManager.currentTheme.gradientDark, themeManager.currentTheme.dark]),
             startPoint: .top,
             endPoint: .bottom
         )
@@ -238,7 +236,7 @@ struct ColoredInfoRow: View {
 
             Text(text)
                 .font(.caption)
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : themeManager.currentTheme.secondaryText)
+                .foregroundColor(themeManager.currentTheme.accent2.opacity(0.8))
         }
     }
 }

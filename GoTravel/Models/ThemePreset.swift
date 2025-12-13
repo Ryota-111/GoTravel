@@ -18,11 +18,19 @@ struct ThemePreset {
     var primary: Color
     var secondary: Color
     var tertiary: Color
+    
+    // MARK: - 逆主カラー
+    var xprimary: Color
+    var xsecondary: Color
 
-    // MARK: - Background Colors
-    var background: Color
-    var secondaryBackground: Color
+    // MARK: - ボックスの背景の色
+    var backgroundLight: Color
+    var secondaryBackgroundLight: Color
+    var backgroundDark: Color
+    var secondaryBackgroundDark: Color
     var tertiaryBackground: Color
+    var separatorLight: Color
+    var separatorDark: Color
 
     // MARK: - テキストの色
     var text: Color
@@ -69,9 +77,16 @@ struct ThemePreset {
             secondary = Color.orange
             tertiary = Color.white
             
-            background = Color(red: 0.95, green: 0.96, blue: 1.0)
-            secondaryBackground = Color(red: 0.9, green: 0.92, blue: 0.98)
+            xprimary = Color.blue
+            xsecondary = Color.orange
+            
+            backgroundLight = Color(red: 1, green: 1, blue: 1)
+            secondaryBackgroundLight = Color(red: 0.95, green: 0.95, blue: 0.97)
+            backgroundDark = Color(red:0.0, green: 0.0, blue: 0.0)
+            secondaryBackgroundDark = Color(red: 0.11, green: 0.11, blue: 0.12)
             tertiaryBackground = Color(red: 0.85, green: 0.88, blue: 0.96)
+            separatorLight = Color(red: 0.24, green: 0.24, blue: 0.26).opacity(0.29)
+            separatorDark = Color(red: 0.33, green: 0.33, blue: 0.35).opacity(0.6)
             
             text = Color(white: 0.1)
             secondaryText = Color(white: 0.4)
@@ -107,9 +122,16 @@ struct ThemePreset {
             secondary = Color.black
             tertiary = Color.white
             
-            background = Color.white
-            secondaryBackground = Color(white: 0.95)
+            xprimary = Color.black
+            xsecondary = Color.black
+            
+            backgroundLight = Color(red: 1, green: 1, blue: 1)
+            secondaryBackgroundLight = Color(red: 0.95, green: 0.95, blue: 0.97)
+            backgroundDark = Color(red: 1, green: 1, blue: 1)
+            secondaryBackgroundDark = Color(red: 0.95, green: 0.95, blue: 0.97)
             tertiaryBackground = Color(white: 0.9)
+            separatorLight = Color(red: 0.24, green: 0.24, blue: 0.26).opacity(0.29)
+            separatorDark = Color(red: 0.24, green: 0.24, blue: 0.26).opacity(0.29)
             
             text = Color.black
             secondaryText = Color.gray
@@ -145,9 +167,16 @@ struct ThemePreset {
             secondary = Color.white
             tertiary = Color.gray
             
-            background = Color.black
-            secondaryBackground = Color(white: 0.95)
+            xprimary = Color.white
+            xsecondary = Color.white
+            
+            backgroundLight = Color(red:0.0, green: 0.0, blue: 0.0)
+            secondaryBackgroundLight = Color(red: 0.11, green: 0.11, blue: 0.12)
+            backgroundDark = Color(red:0.0, green: 0.0, blue: 0.0)
+            secondaryBackgroundDark = Color(red: 0.11, green: 0.11, blue: 0.12)
             tertiaryBackground = Color(white: 0.9)
+            separatorLight = Color(red: 0.33, green: 0.33, blue: 0.35).opacity(0.6)
+            separatorDark = Color(red: 0.33, green: 0.33, blue: 0.35).opacity(0.6)
             
             text = Color.white
             secondaryText = Color.gray
@@ -183,9 +212,16 @@ struct ThemePreset {
             secondary = Color(red: 255/255, green: 209/255, blue: 220/255)
             tertiary = Color.gray
             
-            background = Color(red: 1.0, green: 0.96, blue: 0.95)
-            secondaryBackground = Color(red: 1.0, green: 0.92, blue: 0.9)
+            xprimary = Color(red: 255/255, green: 209/255, blue: 220/255)
+            xsecondary = Color(red: 255/255, green: 209/255, blue: 220/255)
+            
+            backgroundLight = Color(red: 1, green: 1, blue: 1)
+            secondaryBackgroundLight = Color(red: 0.95, green: 0.95, blue: 0.97)
+            backgroundDark = Color(red: 1, green: 1, blue: 1)
+            secondaryBackgroundDark = Color(red: 0.95, green: 0.95, blue: 0.97)
             tertiaryBackground = Color(red: 1.0, green: 0.88, blue: 0.85)
+            separatorLight = Color(red: 0.24, green: 0.24, blue: 0.26).opacity(0.29)
+            separatorDark = Color(red: 0.24, green: 0.24, blue: 0.26).opacity(0.29)
             
             text = Color.white
             secondaryText = Color.gray
