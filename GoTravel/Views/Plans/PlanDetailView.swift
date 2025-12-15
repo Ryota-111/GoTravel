@@ -1040,14 +1040,14 @@ struct PlanDetailView: View {
                             .foregroundColor(planColor.opacity(0.7))
                         Text(place.name)
                             .font(.caption)
-                            .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.separatorDark : themeManager.currentTheme.separatorLight)
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
                     }
                 }
 
                 if let note = item.note, !note.isEmpty {
                     Text(note)
                         .font(.caption)
-                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.separatorDark : themeManager.currentTheme.separatorLight)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
                         .lineLimit(2)
                 }
             }
@@ -1131,14 +1131,14 @@ struct PlanDetailView: View {
                 HStack {
                     Text("スケジュール")
                         .font(.title2.bold())
-                        .foregroundColor(.white)
+                        .foregroundColor(themeManager.currentTheme.light)
 
                     Spacer()
                 }
 
                 Text("\(sortedPlans.count)件のプラン")
                     .font(.subheadline)
-                    .foregroundColor(.white.opacity(0.9))
+                    .foregroundColor(themeManager.currentTheme.light)
             }
             .padding(20)
             .background(
@@ -1161,10 +1161,10 @@ struct PlanDetailView: View {
                 }
                 .padding(12)
             }
-            .background(Color(.systemBackground))
+            .background(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
         }
         .frame(width: 280)
-        .background(Color(.systemBackground))
+        .background(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
         .shadow(color: .black.opacity(0.2), radius: 15, x: 5, y: 0)
     }
 
@@ -1187,28 +1187,28 @@ struct PlanDetailView: View {
 
                     Image(systemName: schedulePlan.planType == .outing ? "figure.walk" : "house.fill")
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.white)
+                        .foregroundColor(themeManager.currentTheme.accent1)
                 }
-                .shadow(color: (schedulePlan.planType == .daily ? themeManager.currentTheme.accent1 : themeManager.currentTheme.primary).opacity(0.3), radius: 4, x: 0, y: 2)
+                .shadow(color: (schedulePlan.planType == .daily ? themeManager.currentTheme.dailyPlanColor : themeManager.currentTheme.outingPlanColor).opacity(0.3), radius: 4, x: 0, y: 2)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(schedulePlan.title)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .foregroundColor(themeManager.currentTheme.light)
                         .lineLimit(1)
 
                     HStack(spacing: 4) {
                         Image(systemName: "calendar")
                             .font(.caption2)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
                         if schedulePlan.planType == .outing {
                             Text(dateRangeString(schedulePlan.startDate, schedulePlan.endDate))
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
                         } else {
                             Text(formatDate(schedulePlan.startDate))
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
                         }
                     }
 
@@ -1216,10 +1216,10 @@ struct PlanDetailView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "mappin.circle.fill")
                                 .font(.caption2)
-                                .foregroundColor(schedulePlan.planType == .daily ? themeManager.currentTheme.accent1 : themeManager.currentTheme.primary)
+                                .foregroundColor(schedulePlan.planType == .daily ? themeManager.currentTheme.dailyPlanColor : themeManager.currentTheme.outingPlanColor)
                             Text("\(schedulePlan.places.count)件")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
                         }
                     }
                 }
@@ -1229,20 +1229,20 @@ struct PlanDetailView: View {
                 if schedulePlan.id == plan.id {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 22))
-                        .foregroundColor(schedulePlan.planType == .daily ? themeManager.currentTheme.accent1 : themeManager.currentTheme.primary)
+                        .foregroundColor(schedulePlan.planType == .daily ? themeManager.currentTheme.dailyPlanColor : themeManager.currentTheme.outingPlanColor)
                 }
             }
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 14)
                     .fill(schedulePlan.id == plan.id ?
-                          (schedulePlan.planType == .daily ? themeManager.currentTheme.accent1.opacity(0.1) : themeManager.currentTheme.primary.opacity(0.1)) :
+                          (schedulePlan.planType == .daily ? themeManager.currentTheme.dailyPlanColor.opacity(0.1) : themeManager.currentTheme.outingPlanColor.opacity(0.1)) :
                           Color(.tertiarySystemBackground))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
                     .stroke(schedulePlan.id == plan.id ?
-                            (schedulePlan.planType == .daily ? themeManager.currentTheme.accent1.opacity(0.4) : themeManager.currentTheme.primary.opacity(0.4)) :
+                            (schedulePlan.planType == .daily ? themeManager.currentTheme.dailyPlanColor.opacity(0.4) : themeManager.currentTheme.outingPlanColor.opacity(0.4)) :
                             Color.clear, lineWidth: 1.5)
             )
         }

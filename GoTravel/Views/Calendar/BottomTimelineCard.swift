@@ -39,8 +39,8 @@ struct BottomTimelineCard: View {
                 .frame(maxWidth: .infinity)
                 .background(
                     RoundedRectangle(cornerRadius: 24)
-                        .fill(.ultraThinMaterial)
-                        .shadow(color: Color.black.opacity(0.15), radius: 20, x: 0, y: -5)
+                        .fill(colorScheme == .dark ? themeManager.currentTheme.dark : themeManager.currentTheme.light)
+                        .shadow(color: themeManager.currentTheme.accent1.opacity(0.15), radius: 20, x: 0, y: -5)
                 )
                 .offset(y: max(0, dragOffset))
             }
@@ -226,7 +226,7 @@ struct TimelineItemCard: View {
                 // Time badge
                 Text(formatTimeOrDate(item.time, type: item.type))
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(itemColor)
+                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 6)
                     .background(
@@ -237,14 +237,14 @@ struct TimelineItemCard: View {
                 // Title
                 Text(item.title)
                     .font(.headline.bold())
-                    .foregroundColor(.primary)
+                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                     .lineLimit(2)
 
                 // Subtitle
                 if let subtitle = item.subtitle, !subtitle.isEmpty {
                     Text(subtitle)
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
                         .lineLimit(2)
                 }
             }
@@ -254,8 +254,8 @@ struct TimelineItemCard: View {
                 RoundedRectangle(cornerRadius: 16)
                     .fill(
                         colorScheme == .dark ?
-                        Color(.secondarySystemBackground) :
-                        Color.white.opacity(0.9)
+                        themeManager.currentTheme.cardBackground1:
+                            themeManager.currentTheme.cardBackground2
                     )
                     .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
             )

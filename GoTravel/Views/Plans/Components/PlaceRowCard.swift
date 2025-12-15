@@ -3,6 +3,8 @@ import MapKit
 
 // MARK: - Place Row Card
 struct PlaceRowCard: View {
+    @Environment(\.colorScheme) var colorScheme
+    @ObservedObject var themeManager = ThemeManager.shared
     let place: PlannedPlace
     let planColor: Color
     @State private var showMapView = false
@@ -29,7 +31,7 @@ struct PlaceRowCard: View {
 
                     Image(systemName: "mappin.circle.fill")
                         .font(.title3)
-                        .foregroundColor(.white)
+                        .foregroundColor(themeManager.currentTheme.light)
                 }
                 .shadow(color: planColor.opacity(0.3), radius: 4, x: 0, y: 2)
 
@@ -37,13 +39,13 @@ struct PlaceRowCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(place.name)
                         .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(.primary)
+                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                         .lineLimit(1)
 
                     if let address = place.address {
                         Text(address)
                             .font(.caption)
-                            .foregroundColor(.secondary)
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
                             .lineLimit(2)
                     }
                 }
@@ -53,14 +55,14 @@ struct PlaceRowCard: View {
                 // Arrow
                 Image(systemName: "chevron.right")
                     .font(.caption.weight(.semibold))
-                    .foregroundColor(.secondary)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
             }
             .padding(16)
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(Color(.secondarySystemBackground))
+                    .fill(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
             )
-            .shadow(color: Color.black.opacity(0.04), radius: 6, x: 0, y: 2)
+            .shadow(color: themeManager.currentTheme.accent1.opacity(0.04), radius: 6, x: 0, y: 2)
         }
         .fullScreenCover(isPresented: $showMapView) {
             PlaceDetailMapView(place: place, planColor: planColor)
