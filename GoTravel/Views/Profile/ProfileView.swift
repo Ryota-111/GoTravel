@@ -416,6 +416,7 @@ struct CardButtonStyle: ButtonStyle {
 struct ProfileEditView: View {
     @StateObject var vm: ProfileViewModel
     @EnvironmentObject var authVM: AuthViewModel
+    @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.colorScheme) var colorScheme
     @State private var showImagePicker = false
@@ -462,8 +463,8 @@ struct ProfileEditView: View {
     private var backgroundGradient: some View {
         LinearGradient(
             gradient: Gradient(colors: colorScheme == .dark ?
-                [.blue.opacity(0.7), .black] :
-                [.blue.opacity(0.6), .white.opacity(0.3)]),
+                [themeManager.currentTheme.primary.opacity(0.7), .black] :
+                [themeManager.currentTheme.primary.opacity(0.6), .white.opacity(0.3)]),
             startPoint: .top,
             endPoint: .bottom
         )
@@ -476,10 +477,10 @@ struct ProfileEditView: View {
                 HStack {
                     Image(systemName: "person.fill")
                         .font(.caption)
-                        .foregroundColor(.blue)
+                        .foregroundColor(themeManager.currentTheme.primary)
                     Text("名前")
                         .font(.caption.bold())
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
 
                 Text(authVM.userFullName ?? "ユーザー")
@@ -497,7 +498,7 @@ struct ProfileEditView: View {
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                            .stroke(themeManager.currentTheme.primary.opacity(0.3), lineWidth: 1)
                     )
             }
 
@@ -505,10 +506,10 @@ struct ProfileEditView: View {
                 HStack {
                     Image(systemName: "envelope.fill")
                         .font(.caption)
-                        .foregroundColor(.blue)
+                        .foregroundColor(themeManager.currentTheme.primary)
                     Text("メールアドレス")
                         .font(.caption.bold())
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
 
                 Text(authVM.userEmail ?? "")
@@ -526,7 +527,7 @@ struct ProfileEditView: View {
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                            .stroke(themeManager.currentTheme.primary.opacity(0.3), lineWidth: 1)
                     )
             }
         }
@@ -544,8 +545,8 @@ struct ProfileEditView: View {
                 .stroke(
                     LinearGradient(
                         gradient: Gradient(colors: [
-                            Color.blue.opacity(0.3),
-                            Color.blue.opacity(0.1)
+                            themeManager.currentTheme.primary.opacity(0.3),
+                            themeManager.currentTheme.primary.opacity(0.1)
                         ]),
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -553,7 +554,7 @@ struct ProfileEditView: View {
                     lineWidth: 1
                 )
         )
-        .shadow(color: Color.blue.opacity(0.2), radius: 10, x: 0, y: 5)
+        .shadow(color: themeManager.currentTheme.primary.opacity(0.2), radius: 10, x: 0, y: 5)
         .opacity(animateContent ? 1 : 0)
         .offset(y: animateContent ? 0 : -20)
         .animation(.spring(response: 0.6, dampingFraction: 0.8), value: animateContent)
@@ -563,7 +564,7 @@ struct ProfileEditView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: "info.circle.fill")
-                    .foregroundColor(.blue)
+                    .foregroundColor(themeManager.currentTheme.primary)
                 Text("お知らせ")
                     .font(.caption.bold())
                     .foregroundColor(colorScheme == .dark ? .white : .black)
@@ -571,16 +572,16 @@ struct ProfileEditView: View {
 
             Text("名前とメールアドレスはApple IDから取得されます。変更する場合は、Apple IDの設定から変更してください。")
                 .font(.caption)
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                .foregroundColor(themeManager.currentTheme.secondaryText)
         }
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(Color.blue.opacity(0.1))
+                .fill(themeManager.currentTheme.primary.opacity(0.1))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.blue.opacity(0.3), lineWidth: 1)
+                .stroke(themeManager.currentTheme.primary.opacity(0.3), lineWidth: 1)
         )
         .opacity(animateContent ? 1 : 0)
         .offset(y: animateContent ? 0 : 20)
@@ -601,8 +602,8 @@ struct ProfileEditView: View {
                             .fill(
                                 LinearGradient(
                                     gradient: Gradient(colors: [
-                                        Color.blue.opacity(0.6),
-                                        Color.purple.opacity(0.6)
+                                        themeManager.currentTheme.primary.opacity(0.6),
+                                        themeManager.currentTheme.secondary.opacity(0.6)
                                     ]),
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -641,20 +642,20 @@ struct ProfileEditView: View {
                 } label: {
                     ZStack {
                         Circle()
-                            .fill(Color.blue.opacity(0.8))
+                            .fill(themeManager.currentTheme.primary.opacity(0.8))
                             .frame(width: 36, height: 36)
                         Image(systemName: "pencil")
                             .foregroundColor(.white)
                             .font(.system(size: 14, weight: .semibold))
                     }
-                    .shadow(color: .blue.opacity(0.3), radius: 5, x: 0, y: 2)
+                    .shadow(color: themeManager.currentTheme.primary.opacity(0.3), radius: 5, x: 0, y: 2)
                 }
                 .offset(x: -5, y: -5)
             }
 
             Text("プロフィール写真")
                 .font(.caption)
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                .foregroundColor(themeManager.currentTheme.secondaryText)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
@@ -671,8 +672,8 @@ struct ProfileEditView: View {
                 .stroke(
                     LinearGradient(
                         gradient: Gradient(colors: [
-                            Color.blue.opacity(0.3),
-                            Color.blue.opacity(0.1)
+                            themeManager.currentTheme.primary.opacity(0.3),
+                            themeManager.currentTheme.primary.opacity(0.1)
                         ]),
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -680,7 +681,7 @@ struct ProfileEditView: View {
                     lineWidth: 1
                 )
         )
-        .shadow(color: Color.blue.opacity(0.2), radius: 10, x: 0, y: 5)
+        .shadow(color: themeManager.currentTheme.primary.opacity(0.2), radius: 10, x: 0, y: 5)
         .opacity(animateContent ? 1 : 0)
         .offset(y: animateContent ? 0 : -20)
         .animation(.spring(response: 0.6, dampingFraction: 0.8), value: animateContent)
@@ -691,6 +692,7 @@ struct ProfileEditView: View {
 struct AccountActionView: View {
     @StateObject var vm: ProfileViewModel
     @EnvironmentObject var authVM: AuthViewModel
+    @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
     @State private var showSignOutConfirm = false
     @State private var showDeleteConfirm = false

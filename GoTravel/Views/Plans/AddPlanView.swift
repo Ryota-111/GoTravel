@@ -42,24 +42,20 @@ struct AddPlanView: View {
     }
 
     private var primaryTextColor: Color {
-        selectedPlanType == .outing ? .white : .black
+        selectedPlanType == .outing ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
     }
 
     private var secondaryTextColor: Color {
-        selectedPlanType == .outing ? .white.opacity(0.7) : .black.opacity(0.7)
-    }
-
-    private var sectionBackgroundColor: Color {
-        selectedPlanType == .outing ? Color.white.opacity(0.1) : Color.white.opacity(0.3)
+        selectedPlanType == .outing ? themeManager.currentTheme.accent2.opacity(0.7) : themeManager.currentTheme.accent1.opacity(0.7)
     }
 
     private var fieldBackgroundColor: Color {
-        selectedPlanType == .outing ? Color.white.opacity(0.2) : Color.white.opacity(0.4)
+        Color.white.opacity(0.3)
     }
 
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: selectedPlanType == .outing ? [themeManager.currentTheme.primary.opacity(0.9), Color.black] : [themeManager.currentTheme.accent1.opacity(0.9), Color.white.opacity(0.8)]),
+            gradient: Gradient(colors: selectedPlanType == .outing ? [themeManager.currentTheme.yprimary, themeManager.currentTheme.dark] : [themeManager.currentTheme.ysecondary, themeManager.currentTheme.light]),
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -69,13 +65,13 @@ struct AddPlanView: View {
     private var saveButtonGradient: LinearGradient {
         if selectedPlanType == .outing {
             return LinearGradient(
-                gradient: Gradient(colors: [themeManager.currentTheme.primary.opacity(0.8), Color.black.opacity(0.8)]),
+                gradient: Gradient(colors: [themeManager.currentTheme.outingPlanColor, themeManager.currentTheme.dark]),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
         } else {
             return LinearGradient(
-                gradient: Gradient(colors: [themeManager.currentTheme.accent1.opacity(0.8), themeManager.currentTheme.error.opacity(0.6)]),
+                gradient: Gradient(colors: [themeManager.currentTheme.dailyPlanColor, themeManager.currentTheme.light]),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -84,9 +80,9 @@ struct AddPlanView: View {
 
     private var addPlaceButtonColor: Color {
         if selectedPlanType == .outing {
-            return themeManager.currentTheme.primary
+            return themeManager.currentTheme.outingPlanColor.opacity(0.6)
         } else {
-            return themeManager.currentTheme.accent1
+            return themeManager.currentTheme.dailyPlanColor.opacity(0.6)
         }
     }
 
@@ -147,22 +143,22 @@ struct AddPlanView: View {
 
             Text("新しい予定計画")
                 .font(.headline)
-                .foregroundColor(primaryTextColor)
+                .foregroundColor(themeManager.currentTheme.accent2)
 
             Spacer()
         }
         .padding()
-        .background(Color.black.opacity(0.2))
+        .background(selectedPlanType == .outing ? themeManager.currentTheme.outingPlanColor.opacity(0.6) : themeManager.currentTheme.dailyPlanColor.opacity(0.6))
     }
 
     private var backButton: some View {
         Button(action: { presentationMode.wrappedValue.dismiss() }) {
             HStack {
                 Image(systemName: "chevron.left")
-                    .foregroundColor(primaryTextColor)
+                    .foregroundColor(themeManager.currentTheme.accent2)
                     .imageScale(.large)
                 Text("戻る")
-                    .foregroundColor(primaryTextColor)
+                    .foregroundColor(themeManager.currentTheme.accent2)
             }
         }
     }
@@ -172,7 +168,7 @@ struct AddPlanView: View {
             Text("プランの種類")
                 .font(.title2)
                 .fontWeight(.bold)
-                .foregroundColor(primaryTextColor)
+                .foregroundColor(selectedPlanType == .outing ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
 
             HStack(spacing: 15) {
                 planTypeButton(type: .outing, title: "おでかけ用", icon: "figure.walk")
@@ -180,7 +176,7 @@ struct AddPlanView: View {
             }
         }
         .padding()
-        .background(sectionBackgroundColor)
+        .background(themeManager.currentTheme.accent2.opacity(0.1))
         .cornerRadius(15)
     }
 
@@ -188,9 +184,9 @@ struct AddPlanView: View {
         let isSelected = selectedPlanType == type
         let textColor: Color = {
             if isSelected {
-                return .white
+                return selectedPlanType == .outing ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
             } else {
-                return selectedPlanType == .outing ? .white.opacity(0.5) : .black.opacity(0.5)
+                return selectedPlanType == .outing ? themeManager.currentTheme.accent2.opacity(0.5) : themeManager.currentTheme.accent1.opacity(0.5)
             }
         }()
 
@@ -212,8 +208,8 @@ struct AddPlanView: View {
             .padding()
             .background(
                 isSelected
-                    ? (type == .outing ? themeManager.currentTheme.primary.opacity(0.5) : themeManager.currentTheme.accent1.opacity(0.9))
-                    : Color.white.opacity(0.2)
+                ? (type == .outing ? themeManager.currentTheme.outingPlanColor.opacity(0.5): themeManager.currentTheme.dailyPlanColor.opacity(0.5))
+                : themeManager.currentTheme.accent2.opacity(0.2)
             )
             .cornerRadius(10)
         }
@@ -224,8 +220,8 @@ struct AddPlanView: View {
             Text("予定の詳細")
                 .font(.title2)
                 .fontWeight(.bold)
-                .foregroundColor(primaryTextColor)
-
+                .foregroundColor(themeManager.currentTheme.accent1)
+            
             customTextField(
                 icon: "text.alignleft",
                 placeholder: "タイトル",
@@ -235,9 +231,10 @@ struct AddPlanView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("日付")
-                        .foregroundColor(primaryTextColor)
+                        .foregroundColor(themeManager.currentTheme.accent1)
                         .font(.headline)
                     DatePicker("", selection: $dailyDate, displayedComponents: .date)
+                        .colorMultiply(themeManager.currentTheme.accent1)
                         .datePickerStyle(CompactDatePickerStyle())
                         .labelsHidden()
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -248,9 +245,10 @@ struct AddPlanView: View {
 
                 VStack(alignment: .leading, spacing: 10) {
                     Text("時間")
-                        .foregroundColor(primaryTextColor)
+                        .foregroundColor(themeManager.currentTheme.accent1)
                         .font(.headline)
                     DatePicker("", selection: $dailyTime, displayedComponents: .hourAndMinute)
+                        .colorMultiply(themeManager.currentTheme.accent1)
                         .datePickerStyle(CompactDatePickerStyle())
                         .labelsHidden()
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -261,7 +259,7 @@ struct AddPlanView: View {
             }
         }
         .padding()
-        .background(sectionBackgroundColor)
+        .background(themeManager.currentTheme.accent2.opacity(0.1))
         .cornerRadius(15)
     }
 
@@ -270,18 +268,18 @@ struct AddPlanView: View {
             Text("何をするのか")
                 .font(.title2)
                 .fontWeight(.bold)
-                .foregroundColor(primaryTextColor)
+                .foregroundColor(themeManager.currentTheme.accent1)
 
             TextEditor(text: $description)
                 .frame(height: 120)
-                .foregroundColor(primaryTextColor)
+                .foregroundColor(themeManager.currentTheme.accent1)
                 .scrollContentBackground(.hidden)
                 .padding()
                 .background(fieldBackgroundColor)
                 .cornerRadius(10)
         }
         .padding()
-        .background(sectionBackgroundColor)
+        .background(themeManager.currentTheme.accent2.opacity(0.1))
         .cornerRadius(15)
     }
 
@@ -290,7 +288,7 @@ struct AddPlanView: View {
             Text("リンク（任意）")
                 .font(.title2)
                 .fontWeight(.bold)
-                .foregroundColor(primaryTextColor)
+                .foregroundColor(themeManager.currentTheme.accent1)
 
             customTextField(
                 icon: "link",
@@ -299,7 +297,7 @@ struct AddPlanView: View {
             )
         }
         .padding()
-        .background(sectionBackgroundColor)
+        .background(themeManager.currentTheme.accent2.opacity(0.1))
         .cornerRadius(15)
     }
 
@@ -308,7 +306,7 @@ struct AddPlanView: View {
             Text("予定の詳細")
                 .font(.title2)
                 .fontWeight(.bold)
-                .foregroundColor(primaryTextColor)
+                .foregroundColor(themeManager.currentTheme.accent2)
 
             customTextField(
                 icon: "text.alignleft",
@@ -319,9 +317,10 @@ struct AddPlanView: View {
             HStack {
                 VStack(alignment: .leading, spacing: 10) {
                     Text("開始日")
-                        .foregroundColor(primaryTextColor)
+                        .foregroundColor(themeManager.currentTheme.accent2)
                         .font(.headline)
                     DatePicker("", selection: $startDate, displayedComponents: .date)
+                        .colorMultiply(themeManager.currentTheme.accent2)
                         .datePickerStyle(CompactDatePickerStyle())
                         .labelsHidden()
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -332,9 +331,10 @@ struct AddPlanView: View {
 
                 VStack(alignment: .leading, spacing: 10) {
                     Text("終了日")
-                        .foregroundColor(primaryTextColor)
+                        .foregroundColor(themeManager.currentTheme.accent2)
                         .font(.headline)
                     DatePicker("", selection: $endDate, displayedComponents: .date)
+                        .colorMultiply(themeManager.currentTheme.accent2)
                         .datePickerStyle(CompactDatePickerStyle())
                         .labelsHidden()
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -345,7 +345,7 @@ struct AddPlanView: View {
             }
         }
         .padding()
-        .background(sectionBackgroundColor)
+        .background(themeManager.currentTheme.accent2.opacity(0.1))
         .cornerRadius(15)
     }
 
@@ -354,7 +354,7 @@ struct AddPlanView: View {
             Text("行きたい場所")
                 .font(.title2)
                 .fontWeight(.bold)
-                .foregroundColor(primaryTextColor)
+                .foregroundColor(selectedPlanType == .outing ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
 
             if places.isEmpty {
                 emptyPlacesView
@@ -367,13 +367,13 @@ struct AddPlanView: View {
             addPlaceButton
         }
         .padding()
-        .background(sectionBackgroundColor)
+        .background(themeManager.currentTheme.accent2.opacity(0.1))
         .cornerRadius(15)
     }
 
     private var emptyPlacesView: some View {
         Text("まだ場所が追加されていません")
-            .foregroundColor(secondaryTextColor)
+            .foregroundColor(selectedPlanType == .outing ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
             .padding()
             .frame(maxWidth: .infinity)
             .background(fieldBackgroundColor)
@@ -386,7 +386,7 @@ struct AddPlanView: View {
                 Image(systemName: "plus.circle.fill")
                 Text("場所を追加")
             }
-            .foregroundColor(.white)
+            .foregroundColor(themeManager.currentTheme.accent2)
             .padding()
             .frame(maxWidth: .infinity)
             .background(addPlaceButtonColor)
@@ -401,13 +401,13 @@ struct AddPlanView: View {
                     ProgressView()
                         .progressViewStyle(CircularProgressViewStyle(tint: .white))
                     Text("保存中...")
-                        .foregroundColor(.white)
+                        .foregroundColor(themeManager.currentTheme.accent2)
                         .fontWeight(.semibold)
                 } else {
                     Image(systemName: selectedPlanType == .outing ? "airplane.departure" : "calendar.badge.clock")
-                        .foregroundColor(.white)
+                        .foregroundColor(selectedPlanType == .outing ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                     Text(selectedPlanType == .outing ? "おでかけプランを保存" : "日常プランを保存")
-                        .foregroundColor(.white)
+                        .foregroundColor(selectedPlanType == .outing ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                         .fontWeight(.bold)
                 }
             }
@@ -415,7 +415,7 @@ struct AddPlanView: View {
             .frame(maxWidth: .infinity)
             .background(saveButtonGradient)
             .cornerRadius(15)
-            .shadow(color: selectedPlanType == .outing ? themeManager.currentTheme.primary.opacity(0.4) : themeManager.currentTheme.accent1.opacity(0.8), radius: 10, x: 0, y: 5)
+            .shadow(color: selectedPlanType == .outing ? themeManager.currentTheme.outingPlanColor.opacity(0.8) : themeManager.currentTheme.dailyPlanColor.opacity(0.8), radius: 10, x: 0, y: 5)
         }
         .padding()
         .disabled(!isFormValid || isUploading)
@@ -636,10 +636,10 @@ struct AddPlanView: View {
             ZStack(alignment: .leading) {
                 if text.wrappedValue.isEmpty {
                     Text(placeholder)
-                        .foregroundColor(themeManager.currentTheme.secondaryText) // 常にライトモードの色で固定
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
                 TextField("", text: text)
-                    .foregroundColor(primaryTextColor)
+                    .foregroundColor(.white)
             }
         }
         .padding()
@@ -729,5 +729,12 @@ struct AddPlanView: View {
         onSave(plan)
         isUploading = false
         presentationMode.wrappedValue.dismiss()
+    }
+}
+
+// MARK: - Preview
+#Preview {
+    AddPlanView { plan in
+        print("保存されたプラン: \(plan.title)")
     }
 }

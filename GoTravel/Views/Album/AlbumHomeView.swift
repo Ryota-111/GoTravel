@@ -5,6 +5,7 @@ struct AlbumHomeView: View {
     @StateObject private var albumManager = AlbumManager.shared
     @StateObject private var travelPlanViewModel = TravelPlanViewModel()
     @EnvironmentObject var authVM: AuthViewModel
+    @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
     @State private var showCreateAlbum = false
     @State private var selectedAlbum: Album?
@@ -40,8 +41,8 @@ struct AlbumHomeView: View {
                                     .fill(
                                         LinearGradient(
                                             gradient: Gradient(colors: [
-                                                Color.orange,
-                                                Color.orange.opacity(0.8)
+                                                themeManager.currentTheme.primary,
+                                                themeManager.currentTheme.primary.opacity(0.8)
                                             ]),
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
@@ -49,7 +50,7 @@ struct AlbumHomeView: View {
                                     )
                                     .frame(width: 60, height: 60)
                                     .shadow(
-                                        color: Color.orange.opacity(0.5),
+                                        color: themeManager.currentTheme.primary.opacity(0.5),
                                         radius: 15,
                                         x: 0,
                                         y: 5
@@ -101,8 +102,8 @@ struct AlbumHomeView: View {
     private var backgroundGradient: some View {
         LinearGradient(
             gradient: Gradient(colors: colorScheme == .dark ?
-                [.blue.opacity(0.7), .black] :
-                [.blue.opacity(0.6), .white.opacity(0.3)]),
+                [themeManager.currentTheme.primary.opacity(0.7), .black] :
+                [themeManager.currentTheme.primary.opacity(0.6), .white.opacity(0.3)]),
             startPoint: .top,
             endPoint: .bottom
         )
@@ -184,6 +185,7 @@ struct AlbumCard: View {
     let album: Album
     @Binding var isPressed: Bool
     @StateObject private var albumManager = AlbumManager.shared
+    @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
 
     private var recentPhotos: [UIImage] {
@@ -211,8 +213,8 @@ struct AlbumCard: View {
                 .stroke(
                     LinearGradient(
                         gradient: Gradient(colors: [
-                            (album.coverColor ?? .blue).opacity(0.5),
-                            (album.coverColor ?? .blue).opacity(0.2)
+                            (album.coverColor ?? themeManager.currentTheme.primary).opacity(0.5),
+                            (album.coverColor ?? themeManager.currentTheme.primary).opacity(0.2)
                         ]),
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -221,7 +223,7 @@ struct AlbumCard: View {
                 )
         )
         .shadow(
-            color: (album.coverColor ?? .blue).opacity(0.3),
+            color: (album.coverColor ?? themeManager.currentTheme.primary).opacity(0.3),
             radius: 10,
             x: 0,
             y: 5
@@ -234,7 +236,7 @@ struct AlbumCard: View {
                 if isPressed && !album.isDefaultAlbum {
                     ZStack {
                         RoundedRectangle(cornerRadius: 20)
-                            .fill(Color.red.opacity(0.3))
+                            .fill(themeManager.currentTheme.error.opacity(0.3))
 
                         VStack(spacing: 8) {
                             Image(systemName: "trash.fill")
@@ -272,8 +274,8 @@ struct AlbumCard: View {
         ZStack {
             LinearGradient(
                 gradient: Gradient(colors: [
-                    (album.coverColor ?? .blue).opacity(0.6),
-                    (album.coverColor ?? .blue).opacity(0.3)
+                    (album.coverColor ?? themeManager.currentTheme.primary).opacity(0.6),
+                    (album.coverColor ?? themeManager.currentTheme.primary).opacity(0.3)
                 ]),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -312,8 +314,8 @@ struct AlbumCard: View {
                             .fill(
                                 LinearGradient(
                                     gradient: Gradient(colors: [
-                                        (album.coverColor ?? .blue).opacity(0.4),
-                                        (album.coverColor ?? .blue).opacity(0.2)
+                                        (album.coverColor ?? themeManager.currentTheme.primary).opacity(0.4),
+                                        (album.coverColor ?? themeManager.currentTheme.primary).opacity(0.2)
                                     ]),
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -332,7 +334,7 @@ struct AlbumCard: View {
             HStack(spacing: 8) {
                 Image(systemName: album.icon)
                     .font(.subheadline)
-                    .foregroundColor(album.coverColor ?? .blue)
+                    .foregroundColor(album.coverColor ?? themeManager.currentTheme.primary)
 
                 Text(album.title)
                     .font(.system(size: 15, weight: .semibold))
@@ -359,6 +361,7 @@ struct AlbumCard: View {
 struct CreateAlbumView: View {
     @Environment(\.dismiss) var dismiss
     @StateObject private var albumManager = AlbumManager.shared
+    @ObservedObject var themeManager = ThemeManager.shared
     @State private var creationMode: CreationMode = .manual
     @State private var albumTitle = ""
     @State private var selectedType: AlbumType = .custom
@@ -440,7 +443,7 @@ struct CreateAlbumView: View {
             TextField("アルバム名", text: $albumTitle)
                 .font(.title3)
                 .padding()
-                .background(Color.gray.opacity(0.2))
+                .background(themeManager.currentTheme.secondaryText.opacity(0.2))
                 .cornerRadius(15)
 
             VStack(alignment: .leading, spacing: 12) {
@@ -473,11 +476,11 @@ struct CreateAlbumView: View {
                 VStack(spacing: 10) {
                     Image(systemName: "airplane.departure")
                         .font(.system(size: 50))
-                        .foregroundColor(.gray.opacity(0.7))
+                        .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.7))
 
                     Text("旅行計画がありません")
                         .font(.subheadline)
-                        .foregroundColor(.gray.opacity(0.7))
+                        .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.7))
                 }
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 40)
@@ -555,27 +558,28 @@ struct ModeButton: View {
     let icon: String
     let isSelected: Bool
     let action: () -> Void
+    @ObservedObject var themeManager = ThemeManager.shared
 
     var body: some View {
         Button(action: action) {
             VStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.title2)
-                    .foregroundColor(.gray)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
 
                 Text(title)
                     .font(.caption)
-                    .foregroundColor(.gray)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
             }
             .frame(maxWidth: .infinity)
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? Color.orange.opacity(0.3) : Color.white.opacity(0.1))
+                    .fill(isSelected ? themeManager.currentTheme.primary.opacity(0.3) : Color.white.opacity(0.1))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? Color.orange : Color.gray, lineWidth: 2)
+                    .stroke(isSelected ? themeManager.currentTheme.primary : themeManager.currentTheme.secondaryText, lineWidth: 2)
             )
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
@@ -587,6 +591,7 @@ struct TravelPlanSelectionCard: View {
     let plan: TravelPlan
     let isSelected: Bool
     let action: () -> Void
+    @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
@@ -598,8 +603,8 @@ struct TravelPlanSelectionCard: View {
                         .fill(
                             LinearGradient(
                                 gradient: Gradient(colors: [
-                                    (plan.cardColor ?? .blue).opacity(0.8),
-                                    (plan.cardColor ?? .white).opacity(0.5)
+                                    (plan.cardColor ?? themeManager.currentTheme.primary).opacity(0.8),
+                                    (plan.cardColor ?? themeManager.currentTheme.primary).opacity(0.5)
                                 ]),
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -609,18 +614,18 @@ struct TravelPlanSelectionCard: View {
 
                     Image(systemName: "airplane.departure")
                         .font(.title3)
-                        .foregroundColor(.black)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
                 }
 
                 // Info
                 VStack(alignment: .leading, spacing: 4) {
                     Text(plan.title)
                         .font(.headline)
-                        .foregroundColor(.gray)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
 
                     Text(plan.destination)
                         .font(.caption)
-                        .foregroundColor(.gray)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
 
                 Spacer()
@@ -629,7 +634,7 @@ struct TravelPlanSelectionCard: View {
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title2)
-                        .foregroundColor(.orange)
+                        .foregroundColor(themeManager.currentTheme.primary)
                 }
             }
             .padding()
@@ -644,7 +649,7 @@ struct TravelPlanSelectionCard: View {
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(
-                        isSelected ? Color.blue : Color.gray,
+                        isSelected ? themeManager.currentTheme.primary : themeManager.currentTheme.secondaryText,
                         lineWidth: 2
                     )
             )
@@ -658,6 +663,7 @@ struct AlbumTypeButton: View {
     let type: AlbumType
     let isSelected: Bool
     let action: () -> Void
+    @ObservedObject var themeManager = ThemeManager.shared
 
     var body: some View {
         Button(action: action) {
@@ -690,7 +696,7 @@ struct AlbumTypeButton: View {
 
                 Text(type.title)
                     .font(.caption)
-                    .foregroundColor(.gray)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
                     .lineLimit(1)
             }
             .frame(width: 80)

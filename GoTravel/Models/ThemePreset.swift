@@ -19,9 +19,13 @@ struct ThemePreset {
     var secondary: Color
     var tertiary: Color
     
-    // MARK: - 逆主カラー
+    // MARK: - 逆主カラー(反転)
     var xprimary: Color
     var xsecondary: Color
+    
+    // MARK: - 逆主カラー
+    var yprimary: Color
+    var ysecondary: Color
 
     // MARK: - ボックスの背景の色
     var backgroundLight: Color
@@ -80,6 +84,9 @@ struct ThemePreset {
             xprimary = Color.blue
             xsecondary = Color.orange
             
+            yprimary = Color.blue
+            ysecondary = Color.orange
+            
             backgroundLight = Color(red: 1, green: 1, blue: 1)
             secondaryBackgroundLight = Color(red: 0.95, green: 0.95, blue: 0.97)
             backgroundDark = Color(red:0.0, green: 0.0, blue: 0.0)
@@ -124,6 +131,9 @@ struct ThemePreset {
             
             xprimary = Color.black
             xsecondary = Color.black
+            
+            yprimary = Color.white
+            ysecondary = Color.white
             
             backgroundLight = Color(red: 1, green: 1, blue: 1)
             secondaryBackgroundLight = Color(red: 0.95, green: 0.95, blue: 0.97)
@@ -170,6 +180,9 @@ struct ThemePreset {
             xprimary = Color.white
             xsecondary = Color.white
             
+            yprimary = Color.black
+            ysecondary = Color.black
+            
             backgroundLight = Color(red:0.0, green: 0.0, blue: 0.0)
             secondaryBackgroundLight = Color(red: 0.11, green: 0.11, blue: 0.12)
             backgroundDark = Color(red:0.0, green: 0.0, blue: 0.0)
@@ -214,6 +227,9 @@ struct ThemePreset {
             
             xprimary = Color(red: 255/255, green: 209/255, blue: 220/255)
             xsecondary = Color(red: 255/255, green: 209/255, blue: 220/255)
+            
+            yprimary = Color(red: 255/255, green: 209/255, blue: 220/255)
+            ysecondary = Color(red: 255/255, green: 209/255, blue: 220/255)
             
             backgroundLight = Color(red: 1, green: 1, blue: 1)
             secondaryBackgroundLight = Color(red: 0.95, green: 0.95, blue: 0.97)

@@ -219,14 +219,24 @@ struct AddTravelPlanView: View {
             endPoint: .trailing
         )
     }
+    
+    private var secondaryTextColor: Color {
+        themeManager.currentTheme.accent2.opacity(0.7)
+    }
 
     // MARK: - Helper Views
     private func customTextField(icon: String, placeholder: String, text: Binding<String>) -> some View {
         HStack {
             Image(systemName: icon)
                 .foregroundColor(.white.opacity(0.7))
-            TextField(placeholder, text: text)
-                .foregroundColor(.white)
+            ZStack(alignment: .leading) {
+                if text.wrappedValue.isEmpty {
+                    Text(placeholder)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                }
+                TextField("", text: text)
+                    .foregroundColor(.white)
+            }
         }
         .padding()
         .background(themeManager.currentTheme.accent2.opacity(0.2))

@@ -298,8 +298,8 @@ struct TimelineItemCard: View {
 
     private var itemColor: Color {
         switch item.type {
-        case .dailyPlan: return themeManager.currentTheme.xsecondary
-        case .outingPlan: return themeManager.currentTheme.xprimary
+        case .dailyPlan: return themeManager.currentTheme.dailyPlanColor
+        case .outingPlan: return themeManager.currentTheme.outingPlanColor
         case .travel: return themeManager.currentTheme.success
         }
     }

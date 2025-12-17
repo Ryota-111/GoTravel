@@ -201,7 +201,7 @@ struct ScheduleEditorView: View {
             }
         }
         .padding()
-        .background(themeManager.currentTheme.accent2.opacity(0.2))
+        .background(themeManager.currentTheme.accent2.opacity(0.1))
         .cornerRadius(15)
         .sheet(isPresented: $showAddScheduleItem) {
             AddScheduleItemToEditorView(
