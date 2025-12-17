@@ -3,6 +3,7 @@ import SwiftUI
 struct EditVisitedPlaceView: View {
     let place: VisitedPlace
     @EnvironmentObject var authVM: AuthViewModel
+    @StateObject private var placesVM = PlacesViewModel()
     @Environment(\.presentationMode) var presentationMode
 
     @State private var title: String
@@ -87,19 +88,10 @@ struct EditVisitedPlaceView: View {
         updatedPlace.category = selectedCategory
         updatedPlace.visitedAt = visitedDate
 
-        Task {
-            do {
-                _ = try await CloudKitService.shared.saveVisitedPlace(updatedPlace, userId: userId, image: nil)
-                await MainActor.run {
-                    isSaving = false
-                    presentationMode.wrappedValue.dismiss()
-                }
-            } catch {
-                await MainActor.run {
-                    isSaving = false
-                    print("❌ Failed to update place: \(error)")
-                }
-            }
+        Task { @MainActor in
+            placesVM.update(updatedPlace, userId: userId, image: nil)
+            isSaving = false
+            presentationMode.wrappedValue.dismiss()
         }
     }
 }

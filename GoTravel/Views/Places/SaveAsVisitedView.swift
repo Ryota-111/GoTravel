@@ -6,6 +6,7 @@ struct SaveAsVisitedView: View {
     let travelPlanId: String?
 
     @EnvironmentObject var authVM: AuthViewModel
+    @StateObject private var placesVM = PlacesViewModel()
     @Environment(\.presentationMode) var presentationMode
     @State private var notes: String = ""
     @State private var selectedCategory: PlaceCategory = .other
@@ -96,19 +97,10 @@ struct SaveAsVisitedView: View {
             category: selectedCategory
         )
 
-        Task {
-            do {
-                _ = try await CloudKitService.shared.saveVisitedPlace(visitedPlace, userId: userId, image: nil)
-                await MainActor.run {
-                    isSaving = false
-                    presentationMode.wrappedValue.dismiss()
-                }
-            } catch {
-                await MainActor.run {
-                    isSaving = false
-                    print("❌ Failed to save place: \(error)")
-                }
-            }
+        Task { @MainActor in
+            placesVM.add(visitedPlace, userId: userId, image: nil)
+            isSaving = false
+            presentationMode.wrappedValue.dismiss()
         }
     }
 }

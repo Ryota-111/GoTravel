@@ -87,9 +87,9 @@ struct MapHomeView: View {
         }) {
             if let result = selectedResult {
                 SavePlaceView(vm: {
-                    let vm = SavePlaceViewModel(coord: result.placemark.coordinate)
-                    vm.title = result.name ?? ""
-                    return vm
+                    let saveVM = SavePlaceViewModel(coord: result.placemark.coordinate, placesVM: vm)
+                    saveVM.title = result.name ?? ""
+                    return saveVM
                 }())
                 .environmentObject(auth)
             }

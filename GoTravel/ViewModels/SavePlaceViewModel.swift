@@ -13,9 +13,11 @@ final class SavePlaceViewModel: ObservableObject {
     @Published var error: String?
 
     let coordinate: CLLocationCoordinate2D?
+    let placesVM: PlacesViewModel
 
-    init(coord: CLLocationCoordinate2D?) {
+    init(coord: CLLocationCoordinate2D?, placesVM: PlacesViewModel) {
         self.coordinate = coord
+        self.placesVM = placesVM
     }
 
     func save(userId: String, completion: @escaping (Result<Void, Error>) -> Void) {
@@ -35,32 +37,15 @@ final class SavePlaceViewModel: ObservableObject {
             category: category
         )
 
-        // CloudKitに保存
-        print("🟢 [SavePlaceViewModel] Starting CloudKit save")
+        // Core Dataに保存
+        print("🟢 [SavePlaceViewModel] Starting Core Data save")
         print("🟢 [SavePlaceViewModel] - has image: \(image != nil)")
 
-        Task {
-            do {
-                let savedPlace = try await CloudKitService.shared.saveVisitedPlace(
-                    place,
-                    userId: userId,
-                    image: self.image
-                )
-
-                await MainActor.run {
-                    print("✅ [SavePlaceViewModel] CloudKit save completed")
-                    print("✅ [SavePlaceViewModel] - saved place ID: \(savedPlace.id ?? "nil")")
-                    self.isSaving = false
-                    completion(.success(()))
-                }
-            } catch {
-                await MainActor.run {
-                    print("❌ [SavePlaceViewModel] CloudKit save failed: \(error.localizedDescription)")
-                    self.isSaving = false
-                    self.error = error.localizedDescription
-                    completion(.failure(error))
-                }
-            }
+        Task { @MainActor in
+            placesVM.add(place, userId: userId, image: self.image)
+            print("✅ [SavePlaceViewModel] Core Data save completed")
+            self.isSaving = false
+            completion(.success(()))
         }
     }
 }

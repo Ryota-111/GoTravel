@@ -6,6 +6,7 @@ struct PlaceDetailView: View {
     @State private var place: VisitedPlace
 
     @EnvironmentObject var authVM: AuthViewModel
+    @StateObject private var placesVM = PlacesViewModel()
     @ObservedObject var themeManager = ThemeManager.shared
     @State private var showStreetView = false
     @State private var showMap = true
@@ -697,41 +698,24 @@ struct PlaceDetailView: View {
         print("🔵 [PlaceDetail] updatedPlace.localPhotoFileName: \(updatedPlace.localPhotoFileName ?? "nil")")
         print("🔵 [PlaceDetail] updatedPlace.visitedAt: \(editedVisitedAt)")
 
-        // 即座にUIを更新（CloudKit保存を待たない）
+        // 即座にUIを更新
         place = updatedPlace
         selectedImage = nil
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             isEditMode = false
         }
 
-        // バックグラウンドでCloudKitに保存
-        Task {
+        // Core Dataに保存
+        Task { @MainActor in
             guard let userId = authVM.userId else {
-                await MainActor.run {
-                    isSaving = false
-                }
+                isSaving = false
                 return
             }
 
-            do {
-                print("🔵 [PlaceDetail] Saving to CloudKit (background)...")
-                let savedPlace = try await CloudKitService.shared.saveVisitedPlace(updatedPlace, userId: userId, image: nil)
-                print("✅ [PlaceDetail] CloudKit save successful")
-                print("✅ [PlaceDetail] savedPlace.id: \(savedPlace.id ?? "nil")")
-                print("✅ [PlaceDetail] savedPlace.localPhotoFileName: \(savedPlace.localPhotoFileName ?? "nil")")
-                await MainActor.run {
-                    isSaving = false
-                    // CloudKitから返された最新のデータでplaceを更新
-                    place = savedPlace
-                }
-            } catch {
-                print("❌ [PlaceDetail] CloudKit save failed: \(error)")
-                await MainActor.run {
-                    isSaving = false
-                    // エラーの場合はユーザーに通知するが、ローカルの変更は保持
-                    handleSaveError(error)
-                }
-            }
+            print("🔵 [PlaceDetail] Saving to Core Data...")
+            placesVM.update(updatedPlace, userId: userId, image: nil)
+            print("✅ [PlaceDetail] Core Data save successful")
+            isSaving = false
         }
     }
 
