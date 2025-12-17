@@ -18,7 +18,7 @@ struct PlacesListView: View {
 
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.primary.opacity(0.7), .black] : [themeManager.currentTheme.primary.opacity(0.6), .white]),
+            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.gradientDark, themeManager.currentTheme.dark] : [themeManager.currentTheme.gradientLight, themeManager.currentTheme.light]),
             startPoint: .top,
             endPoint: .bottom
         )
@@ -27,18 +27,30 @@ struct PlacesListView: View {
 
     private var cardGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.accent1, .black.opacity(0.1)] : [themeManager.currentTheme.accent1, .white.opacity(0.5)]),
+            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.xsecondary, themeManager.currentTheme.dark.opacity(0.1)] : [themeManager.currentTheme.xsecondary, themeManager.currentTheme.light.opacity(0.1)]),
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
     }
 
     private var textColor: Color {
-        colorScheme == .dark ? .white : .black
+        colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
+    }
+    
+    private var xtextColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.accent1 : themeManager.currentTheme.accent2
+    }
+    
+    private var DLtextColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.light : themeManager.currentTheme.dark
+    }
+    
+    private var xDLtextColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.dark : themeManager.currentTheme.light
     }
 
     private var secondaryTextColor: Color {
-        colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.6)
+        colorScheme == .dark ? themeManager.currentTheme.accent2.opacity(0.7) : themeManager.currentTheme.accent1.opacity(0.6)
     }
 
     // MARK: - Body
@@ -61,10 +73,6 @@ struct PlacesListView: View {
                 vm.setupFetchedResultsController(userId: userId)
                 hasLoadedData = true
             }
-        }
-        .refreshable {
-            // Pull to refresh（Core Dataは自動同期するため、実際には不要）
-            // 何もしない - Core DataがCloudKitと自動同期
         }
     }
 
@@ -117,10 +125,10 @@ struct PlacesListView: View {
                 NavigationLink(destination: MapHomeView()) {
                     Text("場所を追加")
                         .font(.headline)
-                        .foregroundColor(.white)
+                        .foregroundColor(xDLtextColor)
                         .padding(.horizontal, 30)
                         .padding(.vertical, 12)
-                        .background(themeManager.currentTheme.accent1)
+                        .background(textColor)
                         .cornerRadius(25)
                 }
             }
@@ -140,14 +148,14 @@ struct PlacesListView: View {
                 NavigationLink(destination: MapHomeView()) {
                     HStack {
                         Image(systemName: "plus.circle.fill")
-                            .foregroundColor(themeManager.currentTheme.accent1)
+                            .foregroundColor(textColor)
                         Text("場所を追加")
                             .font(.headline)
                             .foregroundColor(textColor)
                     }
                     .frame(maxWidth: .infinity)
                     .padding()
-                    .background(Color.white.opacity(0.2))
+                    .background(themeManager.currentTheme.accent2.opacity(0.2))
                     .cornerRadius(15)
                 }
                 .padding(.top, 10)
@@ -174,8 +182,8 @@ struct PlacesListView: View {
                     .stroke(
                         LinearGradient(
                             gradient: Gradient(colors: [
-                                themeManager.currentTheme.accent1.opacity(0.5),
-                                themeManager.currentTheme.accent1.opacity(0.2)
+                                themeManager.currentTheme.secondary.opacity(0.5),
+                                themeManager.currentTheme.secondary.opacity(0.2)
                             ]),
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -184,7 +192,7 @@ struct PlacesListView: View {
                     )
             )
             .shadow(
-                color: themeManager.currentTheme.accent1.opacity(0.5),
+                color: themeManager.currentTheme.secondary.opacity(0.5),
                 radius: 10
             )
         }
@@ -196,22 +204,22 @@ struct PlacesListView: View {
     private func placeHeader(place: VisitedPlace) -> some View {
         HStack {
             Image(systemName: place.category.iconName)
-                .foregroundColor(textColor)
+                .foregroundColor(DLtextColor)
 
             Text(place.title)
                 .font(.headline)
-                .foregroundColor(textColor)
+                .foregroundColor(DLtextColor)
         }
     }
 
     private func placeDate(place: VisitedPlace) -> some View {
         HStack {
             Image(systemName: "calendar")
-                .foregroundColor(secondaryTextColor)
+                .foregroundColor(DLtextColor)
 
             Text(formattedDate(place))
                 .font(.subheadline)
-                .foregroundColor(secondaryTextColor)
+                .foregroundColor(DLtextColor)
         }
     }
 
@@ -242,9 +250,9 @@ struct PlacesListView: View {
                     horizontalEventsCard(
                         menuName: category.displayName,
                         menuImage: category.iconName,
-                        rectColor: selectedCategory == category ? themeManager.currentTheme.accent1 : Color.white,
-                        imageColors: selectedCategory == category ? .white : themeManager.currentTheme.accent1,
-                        textColor: selectedCategory == category ? themeManager.currentTheme.accent1 : themeManager.currentTheme.secondaryText
+                        rectColor: selectedCategory == category ? themeManager.currentTheme.xsecondary : themeManager.currentTheme.light,
+                        imageColors: selectedCategory == category ? themeManager.currentTheme.light : themeManager.currentTheme.xsecondary,
+                        textColor: selectedCategory == category ? themeManager.currentTheme.xsecondary : themeManager.currentTheme.secondaryText
                     )
                     .onTapGesture {
                         withAnimation(.spring()) {
