@@ -37,7 +37,7 @@ struct PlaceDetailView: View {
     }
     
     var xtextColor : Color {
-        colorScheme == .dark ?  themeManager.currentTheme.accent1 : themeManager.currentTheme.accent2
+        colorScheme == .dark ?  themeManager.currentTheme.dark : themeManager.currentTheme.light
 
     }
 
@@ -246,8 +246,7 @@ struct PlaceDetailView: View {
 
                     DatePicker("", selection: $editedVisitedAt, displayedComponents: .date)
                         .datePickerStyle(.graphical)
-                        .colorInvert()
-                        .colorMultiply(textColor)
+                        .tint(textColor)
                         .labelsHidden()
                         .frame(maxWidth: .infinity)
                         .padding(8)
@@ -407,6 +406,17 @@ struct PlaceDetailView: View {
             .padding(24)
         }
         .frame(height: 250)
+        .overlay(
+            RoundedRectangle(cornerRadius: 0)
+                .stroke(
+                    LinearGradient(
+                        gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.accent2.opacity(0.5), themeManager.currentTheme.accent2.opacity(0.2)] : [themeManager.currentTheme.accent1.opacity(0.5), themeManager.currentTheme.accent1.opacity(0.2)]),
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+            )
+        )
     }
 
     // MARK: - Header Image (Edit Mode)
@@ -494,14 +504,14 @@ struct PlaceDetailView: View {
             Text(place.category.displayName)
                 .font(.subheadline.weight(.semibold))
         }
-        .foregroundColor(colorScheme == .dark ? .black : .white)
+        .foregroundColor(xtextColor)
         .padding(.horizontal, 13)
         .padding(.vertical, 6)
         .background(
             Capsule()
-                .fill(colorScheme == .dark ? .white : .black)
+                .fill(textColor)
         )
-        .shadow(color: colorScheme == .dark ? .white.opacity(0.3) : .black.opacity(0.3), radius: 4, x: 0, y: 2)
+        .shadow(color: textColor.opacity(0.3), radius: 4, x: 0, y: 2)
     }
 
     // MARK: - Notes Section
