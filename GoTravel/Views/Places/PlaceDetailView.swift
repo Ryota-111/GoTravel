@@ -247,6 +247,7 @@ struct PlaceDetailView: View {
                     DatePicker("", selection: $editedVisitedAt, displayedComponents: .date)
                         .datePickerStyle(.graphical)
                         .tint(textColor)
+                        .colorMultiply(textColor)
                         .labelsHidden()
                         .frame(maxWidth: .infinity)
                         .padding(8)
