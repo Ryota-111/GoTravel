@@ -742,22 +742,11 @@ struct PlanDetailView: View {
                 .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
             }
         }
+        .cornerRadius(15)
+
         .padding(.horizontal, 24)
         .padding(.vertical, 24)
     }
-
-    // MARK: - Title Section
-//    private var titleSection: some View {
-//        HStack(alignment: .top) {
-//            VStack(alignment: .leading, spacing: 8) {
-//                Text(plan.title)
-//                    .font(.system(size: 32, weight: .bold))
-//                    .foregroundColor(.primary)
-//            }
-//
-//            Spacer()
-//        }
-//    }
 
     // MARK: - Category Tag
     private var categoryTag: some View {

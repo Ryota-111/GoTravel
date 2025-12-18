@@ -31,6 +31,15 @@ struct PlaceDetailView: View {
     init(place: VisitedPlace) {
         _place = State(initialValue: place)
     }
+    
+    var textColor : Color {
+        colorScheme == .dark ?  themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
+    }
+    
+    var xtextColor : Color {
+        colorScheme == .dark ?  themeManager.currentTheme.accent1 : themeManager.currentTheme.accent2
+
+    }
 
     var body: some View {
         ScrollView(showsIndicators: false) {
@@ -43,12 +52,8 @@ struct PlaceDetailView: View {
             }
         }
         .background(
-            LinearGradient(
-                gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.accent1.opacity(0.8), .black] : [themeManager.currentTheme.accent1.opacity(0.7), .white.opacity(0.1)]),
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .ignoresSafeArea()
+            (colorScheme == .dark ? themeManager.currentTheme.dark : themeManager.currentTheme.light)
+                .ignoresSafeArea()
         )
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -58,7 +63,7 @@ struct PlaceDetailView: View {
                         Button("キャンセル") {
                             cancelEdit()
                         }
-                        .foregroundColor(.secondary)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
 
                         Button(action: saveChanges) {
                             if isSaving {
@@ -70,7 +75,7 @@ struct PlaceDetailView: View {
                             }
                         }
                         .disabled(isSaving || editedTitle.isEmpty)
-                        .foregroundColor(editedTitle.isEmpty ? .secondary : themeManager.currentTheme.accent1)
+                        .foregroundColor(editedTitle.isEmpty ? themeManager.currentTheme.secondaryText : textColor)
                     }
                 } else {
                     Button(action: {
@@ -80,7 +85,7 @@ struct PlaceDetailView: View {
                             Image(systemName: "pencil")
                             Text("編集")
                         }
-                        .foregroundColor(themeManager.currentTheme.accent1)
+                        .foregroundColor(textColor)
                     }
                 }
             }
@@ -162,23 +167,24 @@ struct PlaceDetailView: View {
                     Text("場所の名前")
                         .font(.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(textColor)
 
                     TextField("例：東京タワー", text: $editedTitle)
                         .font(.body)
                         .padding(12)
-                        .background(Color(.systemBackground))
+                        .foregroundColor(textColor)
+                        .background(colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight)
                         .cornerRadius(10)
                         .overlay(
                             RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color(.separator).opacity(0.5), lineWidth: 1)
+                                .stroke(colorScheme == .dark ? themeManager.currentTheme.backgroundDark.opacity(0.5) : themeManager.currentTheme.backgroundLight.opacity(0.5), lineWidth: 1)
                         )
                 }
                 .padding(16)
                 .background(
                     RoundedRectangle(cornerRadius: 16)
-                        .fill(Color(.secondarySystemBackground))
-                        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+                        .fill(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
+                        .shadow(color: themeManager.currentTheme.dark.opacity(0.05), radius: 8, x: 0, y: 2)
                 )
 
                 // Category Card
@@ -186,7 +192,7 @@ struct PlaceDetailView: View {
                     Text("カテゴリ")
                         .font(.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(textColor)
 
                     Menu {
                         ForEach(PlaceCategory.allCases) { category in
@@ -206,29 +212,29 @@ struct PlaceDetailView: View {
                     } label: {
                         HStack {
                             Image(systemName: editedCategory.iconName)
-                                .foregroundColor(themeManager.currentTheme.accent1)
+                                .foregroundColor(textColor)
                             Text(editedCategory.displayName)
-                                .foregroundColor(.primary)
+                                .foregroundColor(textColor)
                             Spacer()
                             Image(systemName: "chevron.down")
                                 .font(.caption)
-                                .foregroundColor(.secondary)
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
                         }
                         .font(.body)
                         .padding(12)
-                        .background(Color(.systemBackground))
+                        .background(colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight)
                         .cornerRadius(10)
                         .overlay(
                             RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color(.separator).opacity(0.5), lineWidth: 1)
+                                .stroke(colorScheme == .dark ? themeManager.currentTheme.backgroundDark.opacity(0.5) : themeManager.currentTheme.backgroundLight.opacity(0.5), lineWidth: 1)
                         )
                     }
                 }
                 .padding(16)
                 .background(
                     RoundedRectangle(cornerRadius: 16)
-                        .fill(Color(.secondarySystemBackground))
-                        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+                        .fill(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
+                        .shadow(color: themeManager.currentTheme.dark.opacity(0.05), radius: 8, x: 0, y: 2)
                 )
 
                 // Visit Date Card
@@ -236,25 +242,27 @@ struct PlaceDetailView: View {
                     Text("訪問日")
                         .font(.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(textColor)
 
                     DatePicker("", selection: $editedVisitedAt, displayedComponents: .date)
                         .datePickerStyle(.graphical)
+                        .colorInvert()
+                        .colorMultiply(textColor)
                         .labelsHidden()
                         .frame(maxWidth: .infinity)
                         .padding(8)
-                        .background(Color(.systemBackground))
+                        .background(colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight)
                         .cornerRadius(10)
                         .overlay(
                             RoundedRectangle(cornerRadius: 10)
-                                .stroke(Color(.separator).opacity(0.5), lineWidth: 1)
+                                .stroke(colorScheme == .dark ? themeManager.currentTheme.backgroundDark.opacity(0.5) : themeManager.currentTheme.backgroundLight.opacity(0.5), lineWidth: 1)
                         )
                 }
                 .padding(16)
                 .background(
                     RoundedRectangle(cornerRadius: 16)
-                        .fill(Color(.secondarySystemBackground))
-                        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+                        .fill(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
+                        .shadow(color: themeManager.currentTheme.dark.opacity(0.05), radius: 8, x: 0, y: 2)
                 )
 
                 // Notes Card
@@ -262,12 +270,12 @@ struct PlaceDetailView: View {
                     Text("メモ")
                         .font(.subheadline)
                         .fontWeight(.semibold)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(textColor)
 
                     ZStack(alignment: .topLeading) {
                         if editedNotes.isEmpty {
                             Text("この場所についてのメモを記入...")
-                                .foregroundColor(.secondary.opacity(0.5))
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
                                 .padding(.horizontal, 16)
                                 .padding(.vertical, 20)
                         }
@@ -277,19 +285,19 @@ struct PlaceDetailView: View {
                             .frame(minHeight: 120)
                             .padding(8)
                             .scrollContentBackground(.hidden)
-                            .background(Color(.systemBackground))
+                            .background(colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight)
                             .cornerRadius(10)
                             .overlay(
                                 RoundedRectangle(cornerRadius: 10)
-                                    .stroke(Color(.separator).opacity(0.5), lineWidth: 1)
+                                    .stroke(colorScheme == .dark ? themeManager.currentTheme.backgroundDark.opacity(0.5) : themeManager.currentTheme.backgroundLight.opacity(0.5), lineWidth: 1)
                             )
                     }
                 }
                 .padding(16)
                 .background(
                     RoundedRectangle(cornerRadius: 16)
-                        .fill(Color(.secondarySystemBackground))
-                        .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+                        .fill(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
+                        .shadow(color: themeManager.currentTheme.dark.opacity(0.05), radius: 8, x: 0, y: 2)
                 )
 
                 // Action Buttons
@@ -297,12 +305,12 @@ struct PlaceDetailView: View {
                     Button(action: cancelEdit) {
                         Text("キャンセル")
                             .font(.headline)
-                            .foregroundColor(.primary)
+                            .foregroundColor(textColor)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
-                                    .fill(Color(.secondarySystemBackground))
+                                    .fill(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
                             )
                     }
 
@@ -317,13 +325,13 @@ struct PlaceDetailView: View {
                                     .fontWeight(.semibold)
                             }
                         }
-                        .foregroundColor(.white)
+                        .foregroundColor(textColor)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(
                             RoundedRectangle(cornerRadius: 12)
-                                .fill(editedTitle.isEmpty ? themeManager.currentTheme.secondaryText.opacity(0.3) : themeManager.currentTheme.primary)
-                                .shadow(color: themeManager.currentTheme.primary.opacity(0.3), radius: 8, x: 0, y: 4)
+                                .fill(editedTitle.isEmpty ? themeManager.currentTheme.secondaryText : themeManager.currentTheme.info)
+                                .shadow(color: themeManager.currentTheme.info.opacity(0.3), radius: 8, x: 0, y: 4)
                         )
                     }
                     .disabled(isSaving || editedTitle.isEmpty)
@@ -360,7 +368,7 @@ struct PlaceDetailView: View {
                     .overlay(
                         Image(systemName: place.category.iconName)
                             .font(.system(size: 80))
-                            .foregroundColor(.white.opacity(0.3))
+                            .foregroundColor(themeManager.currentTheme.accent2.opacity(0.5))
                     )
             }
 
@@ -467,7 +475,7 @@ struct PlaceDetailView: View {
                 LinearGradient(
                     gradient: Gradient(colors: [
                         Color.clear,
-                        themeManager.currentTheme.accent1.opacity(0.3),
+                        textColor.opacity(0.6),
                         Color.clear
                     ]),
                     startPoint: .leading,
@@ -486,14 +494,14 @@ struct PlaceDetailView: View {
             Text(place.category.displayName)
                 .font(.subheadline.weight(.semibold))
         }
-        .foregroundColor(.white)
+        .foregroundColor(colorScheme == .dark ? .black : .white)
         .padding(.horizontal, 13)
         .padding(.vertical, 6)
         .background(
             Capsule()
-                .fill(themeManager.currentTheme.accent1)
+                .fill(colorScheme == .dark ? .white : .black)
         )
-        .shadow(color: themeManager.currentTheme.accent1.opacity(0.3), radius: 4, x: 0, y: 2)
+        .shadow(color: colorScheme == .dark ? .white.opacity(0.3) : .black.opacity(0.3), radius: 4, x: 0, y: 2)
     }
 
     // MARK: - Notes Section
@@ -502,22 +510,22 @@ struct PlaceDetailView: View {
             HStack {
                 Image(systemName: "note.text")
                     .font(.headline)
-                    .foregroundColor(themeManager.currentTheme.accent1)
+                    .foregroundColor(textColor)
                 Text("メモ")
                     .font(.headline.weight(.semibold))
-                    .foregroundColor(.primary)
+                    .foregroundColor(textColor)
             }
 
             if let notes = place.notes, !notes.isEmpty {
                 Text(notes)
                     .font(.body)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
                     .lineSpacing(6)
                     .fixedSize(horizontal: false, vertical: true)
             } else {
                 Text("メモがありません")
                     .font(.body)
-                    .foregroundColor(.secondary.opacity(0.5))
+                    .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
                     .italic()
             }
         }
@@ -531,10 +539,10 @@ struct PlaceDetailView: View {
             HStack {
                 Image(systemName: "eye.circle.fill")
                     .font(.headline)
-                    .foregroundColor(themeManager.currentTheme.accent1)
+                    .foregroundColor(textColor)
                 Text("ストリートビュー")
                     .font(.headline.weight(.semibold))
-                    .foregroundColor(.primary)
+                    .foregroundColor(textColor)
             }
 
             if let scene = lookAroundScene {
@@ -554,7 +562,7 @@ struct PlaceDetailView: View {
                         Text(place.title)
                             .font(.caption.weight(.medium))
                     }
-                    .foregroundColor(.white)
+                    .foregroundColor(colorScheme == .dark ? .white : .black)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
                     .background(.ultraThinMaterial)
@@ -567,7 +575,7 @@ struct PlaceDetailView: View {
                         .scaleEffect(1.2)
                     Text("Street Viewを読み込み中...")
                         .font(.caption)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 200)
@@ -585,10 +593,10 @@ struct PlaceDetailView: View {
             HStack {
                 Image(systemName: "map.circle.fill")
                     .font(.headline)
-                    .foregroundColor(themeManager.currentTheme.accent1)
+                    .foregroundColor(textColor)
                 Text("マップ")
                     .font(.headline.weight(.semibold))
-                    .foregroundColor(.primary)
+                    .foregroundColor(textColor)
             }
 
             Map(position: .constant(.region(MKCoordinateRegion(
@@ -607,7 +615,7 @@ struct PlaceDetailView: View {
                     Text(place.title)
                         .font(.caption.weight(.medium))
                 }
-                .foregroundColor(.white)
+                .foregroundColor(colorScheme == .dark ? .white : .black)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 8)
                 .background(.ultraThinMaterial)
@@ -622,21 +630,21 @@ struct PlaceDetailView: View {
         HStack(spacing: 12) {
             Image(systemName: "calendar.circle.fill")
                 .font(.headline)
-                .foregroundColor(themeManager.currentTheme.accent1)
+                .foregroundColor(textColor)
 
             VStack(alignment: .leading, spacing: 4) {
                 Text("訪問日")
                     .font(.headline.weight(.semibold))
-                    .foregroundColor(.primary)
+                    .foregroundColor(textColor)
 
                 if let visitedAt = place.visitedAt {
                     Text(visitedAt.japaneseYearMonthDay())
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(textColor)
                 } else {
                     Text("未設定")
                         .font(.subheadline)
-                        .foregroundColor(.secondary)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
             }
 
