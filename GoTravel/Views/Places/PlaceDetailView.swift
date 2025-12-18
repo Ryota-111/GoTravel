@@ -247,7 +247,6 @@ struct PlaceDetailView: View {
                     DatePicker("", selection: $editedVisitedAt, displayedComponents: .date)
                         .datePickerStyle(.graphical)
                         .tint(textColor)
-                        .colorMultiply(textColor)
                         .labelsHidden()
                         .frame(maxWidth: .infinity)
                         .padding(8)
@@ -257,6 +256,7 @@ struct PlaceDetailView: View {
                             RoundedRectangle(cornerRadius: 10)
                                 .stroke(colorScheme == .dark ? themeManager.currentTheme.backgroundDark.opacity(0.5) : themeManager.currentTheme.backgroundLight.opacity(0.5), lineWidth: 1)
                         )
+                        .environment(\.colorScheme, isBackgroundDark() ? .dark : .light)
                 }
                 .padding(16)
                 .background(
@@ -800,6 +800,23 @@ struct PlaceDetailView: View {
             lookAroundScene = try await request.scene
         } catch {
         }
+    }
+
+    private func isBackgroundDark() -> Bool {
+        let bgColor = colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight
+        // UIColorに変換して輝度を計算
+        let uiColor = UIColor(bgColor)
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        uiColor.getRed(&red, green: &green, blue: &blue, alpha: &alpha)
+
+        // 輝度を計算 (0.0 = 黒, 1.0 = 白)
+        let luminance = 0.299 * red + 0.587 * green + 0.114 * blue
+
+        // 輝度が0.5未満なら暗い背景
+        return luminance < 0.5
     }
 }
 
