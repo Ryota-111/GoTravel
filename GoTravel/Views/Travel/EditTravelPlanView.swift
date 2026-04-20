@@ -394,7 +394,6 @@ struct EditTravelPlanView: View {
                     }
                     saveWithImage(fileName)
                 } catch {
-                    print("❌ Failed to save image: \(error)")
                     saveWithImage(plan.localImageFileName)
                 }
             }

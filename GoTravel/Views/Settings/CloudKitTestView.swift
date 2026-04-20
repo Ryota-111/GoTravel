@@ -593,7 +593,6 @@ struct CloudKitTestView: View {
                         record["userId"] = currentUserId
                         _ = try await CloudKitService.shared.save(record)
                         updatedCount += 1
-                        print("✅ Updated VisitedPlace: \(record.recordID.recordName)")
                     }
                 }
 
@@ -605,7 +604,6 @@ struct CloudKitTestView: View {
                         record["userId"] = currentUserId
                         _ = try await CloudKitService.shared.save(record)
                         updatedCount += 1
-                        print("✅ Updated Plan: \(record.recordID.recordName)")
                     }
                 }
 
@@ -617,7 +615,6 @@ struct CloudKitTestView: View {
                         record["userId"] = currentUserId
                         _ = try await CloudKitService.shared.save(record)
                         updatedCount += 1
-                        print("✅ Updated TravelPlan: \(record.recordID.recordName)")
                     }
                 }
 

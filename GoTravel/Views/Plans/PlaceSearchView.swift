@@ -111,7 +111,6 @@ struct PlaceSearchView: View {
                 isSearching = false
 
                 if let error = error {
-                    print("検索エラー: \(error.localizedDescription)")
                     searchResults = []
                     return
                 }

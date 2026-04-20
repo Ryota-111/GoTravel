@@ -283,7 +283,6 @@ struct AddTravelPlanView: View {
             try FileManager.saveImageDataToDocuments(data: imageData, named: fileName)
             createAndSavePlan(withImageFileName: fileName)
         } catch {
-            print("❌ Failed to save image: \(error)")
             createAndSavePlan(withImageFileName: nil)
         }
     }
@@ -294,16 +293,9 @@ struct AddTravelPlanView: View {
 
     private func createAndSavePlan(withImageFileName fileName: String?) {
         #if DEBUG
-        print("💾 Creating travel plan:")
-        print("   Title: \(title)")
-        print("   Destination: \(destination)")
         if let coord = destinationCoordinate {
-            print("   Coordinates: (\(coord.latitude), \(coord.longitude))")
         } else {
-            print("   Coordinates: nil")
         }
-        print("   Start Date: \(startDate)")
-        print("   End Date: \(normalizedEndDate)")
         #endif
 
         let plan = TravelPlan(
@@ -319,9 +311,7 @@ struct AddTravelPlanView: View {
 
         #if DEBUG
         if let lat = plan.latitude, let lon = plan.longitude {
-            print("✅ Travel plan created with coordinates: (\(lat), \(lon))")
         } else {
-            print("✅ Travel plan created without coordinates")
         }
         #endif
 
@@ -335,12 +325,10 @@ struct AddTravelPlanView: View {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
         #if DEBUG
-        print("🔍 Searching location for: '\(trimmedQuery)'")
         #endif
 
         guard !trimmedQuery.isEmpty else {
             #if DEBUG
-            print("⚠️ Empty query, clearing coordinates")
             #endif
             destinationCoordinate = nil
             return
@@ -353,7 +341,6 @@ struct AddTravelPlanView: View {
         search.start { response, error in
             if let error = error {
                 #if DEBUG
-                print("❌ Location search error: \(error.localizedDescription)")
                 #endif
                 return
             }
@@ -361,7 +348,6 @@ struct AddTravelPlanView: View {
             guard let response = response,
                   let firstItem = response.mapItems.first else {
                 #if DEBUG
-                print("❌ No search results found for: '\(trimmedQuery)'")
                 #endif
                 return
             }
@@ -370,8 +356,6 @@ struct AddTravelPlanView: View {
             let foundLocation = (coordinate.latitude, coordinate.longitude)
 
             #if DEBUG
-            print("✅ Location found: \(firstItem.name ?? "Unknown")")
-            print("   Coordinates: (\(coordinate.latitude), \(coordinate.longitude))")
             #endif
 
             DispatchQueue.main.async {

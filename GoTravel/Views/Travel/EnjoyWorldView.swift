@@ -33,6 +33,7 @@ struct EnjoyWorldView: View {
     @State private var hasLoadedData = false
     @Environment(\.colorScheme) var colorScheme
     @Namespace private var animation
+    @State private var showTodayDate = true
 
     // MARK: - Computed Properties
     private var travelPlansState: ViewState {
@@ -128,6 +129,42 @@ struct EnjoyWorldView: View {
         return travelPlanViewModel.travelPlans.contains { isOngoing(plan: $0, at: now) }
     }
 
+    private var todayDateString: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "yyyy/M/d"
+        formatter.locale = Locale(identifier: "ja_JP")
+        return formatter.string(from: Date())
+    }
+
+    private var nextPlanSummary: String {
+        let calendar = Calendar.current
+        let now = Date()
+        let todayStart = calendar.startOfDay(for: now)
+        let upcoming = plansViewModel.plans
+            .filter { plan in
+                let planDayStart = calendar.startOfDay(for: plan.startDate)
+                if planDayStart > todayStart { return true }
+                if planDayStart == todayStart {
+                    if let t = plan.time { return t > now }
+                    return true
+                }
+                return false
+            }
+            .sorted { $0.startDate < $1.startDate }
+        if let next = upcoming.first {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "ja_JP")
+            if let t = next.time {
+                formatter.dateFormat = "M月d日 HH:mm"
+                return "\(next.title) \(formatter.string(from: t))"
+            } else {
+                formatter.dateFormat = "M月d日"
+                return "\(next.title) \(formatter.string(from: next.startDate))"
+            }
+        }
+        return "今後の予定はありません"
+    }
+
     // MARK: - Body
     var body: some View {
         NavigationView {
@@ -135,6 +172,7 @@ struct EnjoyWorldView: View {
                 VStack(alignment: .leading, spacing: 20) {
                     Spacer()
                     titleSection
+                    travelEventsTitleSection
                     tabSelectionSection
                     travelPlansSection
                     planEventsTitleSection
@@ -153,13 +191,9 @@ struct EnjoyWorldView: View {
             }
             .sheet(isPresented: $showAddPlan) {
                 AddPlanView { newPlan in
-                    print("🌍 [EnjoyWorldView] AddPlanView onSave called")
-                    print("🌍 [EnjoyWorldView] - authVM.userId: \(authVM.userId ?? "nil")")
                     if let userId = authVM.userId {
-                        print("🌍 [EnjoyWorldView] - userId is valid, calling plansViewModel.add()")
                         plansViewModel.add(newPlan, userId: userId)
                     } else {
-                        print("❌ [EnjoyWorldView] - userId is NIL! Plan will NOT be saved!")
                         showAuthError = true
                     }
                 }
@@ -201,6 +235,14 @@ struct EnjoyWorldView: View {
             } message: { plan in
                 Text("「\(plan.title)」を本当に削除しますか？")
             }
+            .task {
+                while !Task.isCancelled {
+                    try? await Task.sleep(nanoseconds: 5_000_000_000)
+                    withAnimation(.easeInOut(duration: 0.6)) {
+                        showTodayDate.toggle()
+                    }
+                }
+            }
             .onAppear {
                 selectedTab = hasOngoingPlans ? .ongoing : .all
 
@@ -211,7 +253,6 @@ struct EnjoyWorldView: View {
                         do {
                             try await CloudKitMigrationService.shared.migrateAllData(userId: userId)
                         } catch {
-                            print("❌ [EnjoyWorldView] Migration failed: \(error)")
                         }
                     }
 
@@ -228,10 +269,16 @@ struct EnjoyWorldView: View {
     // MARK: - View Components
     private var titleSection: some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text("2025/12/8")
-                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-                .padding(.horizontal, 40)
-                .font(.caption.weight(.bold))
+            ZStack(alignment: .leading) {
+                Text("Travory")
+                    .opacity(showTodayDate ? 1 : 0)
+                Text("次の予定")
+                    .opacity(showTodayDate ? 0 : 1)
+            }
+            .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+            .padding(.horizontal, 40)
+            .font(.caption.weight(.bold))
+            .animation(.easeInOut(duration: 0.6), value: showTodayDate)
             
             HStack {
                 LinearGradient(
@@ -241,9 +288,17 @@ struct EnjoyWorldView: View {
                     )
                     .frame(width: 4, height: 40)
                     .cornerRadius(2)
-                Text("旅行計画")
-                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-                    .font(.system(size: 40))
+                ZStack(alignment: .leading) {
+                    Text(todayDateString)
+                        .opacity(showTodayDate ? 1 : 0)
+                    Text(nextPlanSummary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                        .opacity(showTodayDate ? 0 : 1)
+                }
+                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+                .font(.system(size: 40))
+                .animation(.easeInOut(duration: 0.6), value: showTodayDate)
 
                 Spacer()
 
@@ -281,6 +336,16 @@ struct EnjoyWorldView: View {
             .padding(.horizontal, 20)
         }
         
+    }
+    
+    private var travelEventsTitleSection: some View {
+        HStack {
+            Text("旅行計画")
+                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+                .font(.title.weight(.semibold))
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 10)
     }
 
     private var tabSelectionSection: some View {

@@ -706,7 +706,6 @@ struct PlaceDetailView: View {
     }
 
     private func updatePlaceData(with localFileName: String?) {
-        print("🔵 [PlaceDetail] updatePlaceData called with fileName: \(localFileName ?? "nil")")
         var updatedPlace = place
         updatedPlace.title = editedTitle
         updatedPlace.notes = editedNotes.isEmpty ? nil : editedNotes
@@ -714,8 +713,6 @@ struct PlaceDetailView: View {
         updatedPlace.visitedAt = editedVisitedAt
         updatedPlace.localPhotoFileName = localFileName
 
-        print("🔵 [PlaceDetail] updatedPlace.localPhotoFileName: \(updatedPlace.localPhotoFileName ?? "nil")")
-        print("🔵 [PlaceDetail] updatedPlace.visitedAt: \(editedVisitedAt)")
 
         // 即座にUIを更新
         place = updatedPlace
@@ -731,9 +728,7 @@ struct PlaceDetailView: View {
                 return
             }
 
-            print("🔵 [PlaceDetail] Saving to Core Data...")
             placesVM.update(updatedPlace, userId: userId, image: nil)
-            print("✅ [PlaceDetail] Core Data save successful")
             isSaving = false
         }
     }
@@ -748,23 +743,17 @@ struct PlaceDetailView: View {
 
     // MARK: - Image Storage Functions
     private func saveImageLocally(_ image: UIImage, completion: @escaping (Result<String, Error>) -> Void) {
-        print("🔵 [PlaceDetail] saveImageLocally called")
         guard let imageData = image.jpegData(compressionQuality: 0.7) else {
-            print("❌ [PlaceDetail] Failed to convert image to JPEG data")
             completion(.failure(NSError(domain: "PlaceDetailView", code: -1, userInfo: [NSLocalizedDescriptionKey: "画像データの変換に失敗しました"])))
             return
         }
 
         let fileName = "place_\(place.id ?? UUID().uuidString).jpg"
-        print("🔵 [PlaceDetail] Saving image with fileName: \(fileName)")
-        print("🔵 [PlaceDetail] place.id: \(place.id ?? "nil")")
 
         do {
             try FileManager.saveImageDataToDocuments(data: imageData, named: fileName)
-            print("✅ [PlaceDetail] Image saved successfully: \(fileName)")
             completion(.success(fileName))
         } catch {
-            print("❌ [PlaceDetail] Failed to save image: \(error)")
             completion(.failure(error))
         }
     }
@@ -774,19 +763,14 @@ struct PlaceDetailView: View {
     }
 
     private func loadImageFromLocal() -> UIImage? {
-        print("🔵 [PlaceDetail] loadImageFromLocal called")
-        print("🔵 [PlaceDetail] place.localPhotoFileName: \(place.localPhotoFileName ?? "nil")")
 
         guard let fileName = place.localPhotoFileName else {
-            print("⚠️ [PlaceDetail] No localPhotoFileName set")
             return nil
         }
 
         if let image = FileManager.documentsImage(named: fileName) {
-            print("✅ [PlaceDetail] Image loaded successfully: \(fileName)")
             return image
         } else {
-            print("❌ [PlaceDetail] Image not found: \(fileName)")
             return nil
         }
     }

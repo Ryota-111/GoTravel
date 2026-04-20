@@ -19,14 +19,12 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
     override init() {
         self.context = CoreDataManager.shared.viewContext
         super.init()
-        print("🟣 [TravelPlanViewModel] Initialized with Core Data")
     }
 
     // MARK: - Core Data Fetch
 
     /// 指定ユーザーのTravelPlanを取得（Core Dataから）
     func setupFetchedResultsController(userId: String) {
-        print("🟣 [TravelPlanViewModel] Setting up NSFetchedResultsController for userId: \(userId)")
 
         let fetchRequest: NSFetchRequest<TravelPlanEntity> = TravelPlanEntity.fetchRequest()
 
@@ -50,9 +48,7 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
         do {
             try fetchedResultsController?.performFetch()
             updateTravelPlans()
-            print("✅ [TravelPlanViewModel] Fetched \(travelPlans.count) plans from Core Data")
         } catch {
-            print("❌ [TravelPlanViewModel] Failed to fetch: \(error)")
         }
     }
 
@@ -86,7 +82,6 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
     /// TravelPlanを追加（Core Dataに保存 → 自動的にCloudKitと同期）
     @MainActor
     func add(_ plan: TravelPlan, userId: String, image: UIImage? = nil) {
-        print("🟣 [TravelPlanViewModel] Adding plan to Core Data")
 
         var planToSave = plan
         planToSave.userId = userId
@@ -98,9 +93,7 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
                 do {
                     try FileManager.saveImageDataToDocuments(data: imageData, named: fileName)
                     planToSave.localImageFileName = fileName
-                    print("✅ [TravelPlanViewModel] Image saved locally: \(fileName)")
                 } catch {
-                    print("❌ [TravelPlanViewModel] Failed to save image: \(error)")
                 }
             }
         }
@@ -109,7 +102,6 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
         context.perform {
             _ = TravelPlanEntity.create(from: planToSave, context: self.context)
             CoreDataManager.shared.saveContext()
-            print("✅ [TravelPlanViewModel] Plan saved to Core Data (will auto-sync to CloudKit)")
 
             // 通知をスケジュール
             DispatchQueue.main.async {
@@ -121,10 +113,8 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
     /// TravelPlanを更新（Core Dataに保存 → 自動的にCloudKitと同期）
     @MainActor
     func update(_ plan: TravelPlan, userId: String, image: UIImage? = nil) {
-        print("🟣 [TravelPlanViewModel] Updating plan in Core Data")
 
         guard let planId = plan.id else {
-            print("❌ [TravelPlanViewModel] Plan has no ID")
             return
         }
 
@@ -144,9 +134,7 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
                 do {
                     try FileManager.saveImageDataToDocuments(data: imageData, named: fileName)
                     planToSave.localImageFileName = fileName
-                    print("✅ [TravelPlanViewModel] New image saved locally: \(fileName)")
                 } catch {
-                    print("❌ [TravelPlanViewModel] Failed to save image: \(error)")
                 }
             }
         }
@@ -157,7 +145,6 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
                 if let entity = try TravelPlanEntity.fetchById(id: planId, context: self.context) {
                     entity.update(from: planToSave)
                     CoreDataManager.shared.saveContext()
-                    print("✅ [TravelPlanViewModel] Plan updated in Core Data (will auto-sync to CloudKit)")
 
                     // 通知を更新
                     DispatchQueue.main.async {
@@ -165,7 +152,6 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
                     }
                 }
             } catch {
-                print("❌ [TravelPlanViewModel] Failed to fetch entity for update: \(error)")
             }
         }
     }
@@ -173,10 +159,8 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
     /// TravelPlanを削除（Core Dataから削除 → 自動的にCloudKitと同期）
     @MainActor
     func delete(_ plan: TravelPlan, userId: String? = nil) {
-        print("🟣 [TravelPlanViewModel] Deleting plan from Core Data")
 
         guard let planId = plan.id else {
-            print("❌ [TravelPlanViewModel] Plan has no ID")
             return
         }
 
@@ -194,10 +178,8 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
                 if let entity = try TravelPlanEntity.fetchById(id: planId, context: self.context) {
                     self.context.delete(entity)
                     CoreDataManager.shared.saveContext()
-                    print("✅ [TravelPlanViewModel] Plan deleted from Core Data (will auto-sync to CloudKit)")
                 }
             } catch {
-                print("❌ [TravelPlanViewModel] Failed to delete: \(error)")
             }
         }
     }
@@ -264,7 +246,6 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
                     // Core Dataを更新
                     entity.update(from: plan)
                     CoreDataManager.shared.saveContext()
-                    print("✅ [TravelPlanViewModel] User added to shared plan (will auto-sync to CloudKit)")
 
                     DispatchQueue.main.async {
                         completion(.success(plan))
@@ -288,7 +269,6 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
 extension TravelPlanViewModel: NSFetchedResultsControllerDelegate {
     /// Core Dataの変更を検知してUIを自動更新
     func controllerDidChangeContent(_ controller: NSFetchedResultsController<NSFetchRequestResult>) {
-        print("🔄 [TravelPlanViewModel] Core Data changed, updating UI")
         DispatchQueue.main.async {
             self.updateTravelPlans()
         }

@@ -32,7 +32,6 @@ final class CloudKitService {
             let status = try await checkAccountStatus()
             return status == .available
         } catch {
-            print("❌ [CloudKit] Account status check failed: \(error)")
             return false
         }
     }
@@ -41,17 +40,11 @@ final class CloudKitService {
 
     /// レコードを保存
     func save(_ record: CKRecord) async throws -> CKRecord {
-        print("🔷 [CloudKit] Saving record to privateDatabase")
-        print("🔷 [CloudKit] - recordType: \(record.recordType)")
-        print("🔷 [CloudKit] - recordID: \(record.recordID.recordName)")
 
         do {
             let savedRecord = try await privateDatabase.save(record)
-            print("✅ [CloudKit] Record saved to database successfully")
             return savedRecord
         } catch {
-            print("❌ [CloudKit] Database save failed: \(error)")
-            print("❌ [CloudKit] Error: \(error.localizedDescription)")
             throw error
         }
     }
@@ -176,13 +169,8 @@ final class CloudKitService {
 
     /// VisitedPlaceをCloudKitに保存（画像付き）
     func saveVisitedPlace(_ place: VisitedPlace, userId: String, image: UIImage? = nil) async throws -> VisitedPlace {
-        print("🔵 [CloudKit] Starting saveVisitedPlace")
-        print("🔵 [CloudKit] - userId: \(userId)")
-        print("🔵 [CloudKit] - title: \(place.title)")
-        print("🔵 [CloudKit] - has image: \(image != nil)")
 
         let recordName = place.id ?? UUID().uuidString
-        print("🔵 [CloudKit] - recordName: \(recordName)")
 
         let recordID = CKRecord.ID(recordName: recordName)
 
@@ -191,17 +179,13 @@ final class CloudKitService {
         if place.id != nil {
             // 既存レコードの取得を試みる
             do {
-                print("🔵 [CloudKit] Fetching existing record...")
                 record = try await privateDatabase.record(for: recordID)
-                print("✅ [CloudKit] Existing record found, will update")
             } catch {
                 // レコードが存在しない場合は新規作成
-                print("⚠️ [CloudKit] Record not found, creating new one")
                 record = CKRecord(recordType: "VisitedPlace", recordID: recordID)
             }
         } else {
             // idがnilの場合は新規作成
-            print("🔵 [CloudKit] Creating new record (no id)")
             record = CKRecord(recordType: "VisitedPlace", recordID: recordID)
         }
 
@@ -215,26 +199,21 @@ final class CloudKitService {
         // Optional fields
         if let notes = place.notes {
             record["notes"] = notes
-            print("🔵 [CloudKit] - notes: \(notes)")
         }
         if let visitedAt = place.visitedAt {
             record["visitedDate"] = visitedAt
-            print("🔵 [CloudKit] - visitedDate: \(visitedAt)")
         }
         if let tags = place.tags, !tags.isEmpty {
             record["tags"] = tags
-            print("🔵 [CloudKit] - tags: \(tags)")
         }
         if let address = place.address {
             record["address"] = address
-            print("🔵 [CloudKit] - address: \(address)")
         }
         if let travelPlanId = place.travelPlanId {
             record["travelPlanId"] = travelPlanId
         }
 
         record["category"] = place.category.rawValue
-        print("🔵 [CloudKit] - category: \(place.category.rawValue)")
 
         // 画像ファイル名（ローカルファイル名を保持）
         if let fileName = place.localPhotoFileName {
@@ -244,36 +223,27 @@ final class CloudKitService {
         // 画像をCKAssetとして保存
         var tempURL: URL?
         if let image = image {
-            print("🔵 [CloudKit] Processing image...")
             guard let imageData = image.jpegData(compressionQuality: 0.8) else {
-                print("❌ [CloudKit] Failed to convert image to JPEG")
                 throw CloudKitError.invalidImageData
             }
 
             let imageSize = Double(imageData.count) / 1024.0 / 1024.0
-            print("🔵 [CloudKit] - image size: \(String(format: "%.2f", imageSize)) MB")
 
             // 一時ファイルに保存
             let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".jpg")
             try imageData.write(to: url)
             tempURL = url
-            print("🔵 [CloudKit] - temp file created: \(url.path)")
 
             let asset = CKAsset(fileURL: url)
             record["image"] = asset
-            print("🔵 [CloudKit] - CKAsset created")
         }
 
         // レコードを保存（CloudKitが一時ファイルをアップロード）
-        print("🔵 [CloudKit] Saving record to CloudKit...")
         let savedRecord = try await save(record)
-        print("✅ [CloudKit] Record saved successfully!")
-        print("✅ [CloudKit] - saved recordID: \(savedRecord.recordID.recordName)")
 
         // アップロード完了後に一時ファイルを削除
         if let tempURL = tempURL {
             try? FileManager.default.removeItem(at: tempURL)
-            print("🔵 [CloudKit] - temp file removed")
         }
 
         // 保存されたレコードからVisitedPlaceを再構築
@@ -358,22 +328,14 @@ final class CloudKitService {
 
     /// PlanをCloudKitに保存
     func savePlan(_ plan: Plan, userId: String) async throws -> Plan {
-        print("🟠 [CloudKit] Starting savePlan")
-        print("🟠 [CloudKit] - plan.id: \(plan.id)")
-        print("🟠 [CloudKit] - plan.title: \(plan.title)")
-        print("🟠 [CloudKit] - userId: \(userId)")
 
         let recordID = CKRecord.ID(recordName: plan.id)
 
         // 既存のレコードを取得してから更新、存在しない場合は新規作成
         let record: CKRecord
         do {
-            print("🟠 [CloudKit] Attempting to fetch existing record...")
             record = try await privateDatabase.record(for: recordID)
-            print("✅ [CloudKit] Existing record found, will update")
         } catch {
-            print("⚠️ [CloudKit] Record not found, creating new one")
-            print("⚠️ [CloudKit] Error details: \(error)")
             record = CKRecord(recordType: "Plan", recordID: recordID)
         }
 
@@ -418,10 +380,7 @@ final class CloudKitService {
             record["scheduleItemsJSON"] = scheduleItemsJSON
         }
 
-        print("🟠 [CloudKit] Saving record to CloudKit...")
         let savedRecord = try await save(record)
-        print("✅ [CloudKit] Plan record saved successfully!")
-        print("✅ [CloudKit] - saved recordID: \(savedRecord.recordID.recordName)")
 
         // 保存されたレコードからPlanを再構築
         var updatedPlan = plan
@@ -504,14 +463,8 @@ final class CloudKitService {
 
     /// TravelPlanをCloudKitに保存（画像付き）
     func saveTravelPlan(_ plan: TravelPlan, userId: String, image: UIImage? = nil) async throws -> TravelPlan {
-        print("🟣 [CloudKit] Starting saveTravelPlan")
-        print("🟣 [CloudKit] - userId: \(userId)")
-        print("🟣 [CloudKit] - title: \(plan.title)")
-        print("🟣 [CloudKit] - destination: \(plan.destination)")
-        print("🟣 [CloudKit] - has image: \(image != nil)")
 
         let recordName = plan.id ?? UUID().uuidString
-        print("🟣 [CloudKit] - recordName: \(recordName)")
 
         let recordID = CKRecord.ID(recordName: recordName)
 
@@ -520,17 +473,13 @@ final class CloudKitService {
         if plan.id != nil {
             // 既存レコードの取得を試みる
             do {
-                print("🟣 [CloudKit] Fetching existing record...")
                 record = try await privateDatabase.record(for: recordID)
-                print("✅ [CloudKit] Existing record found, will update")
             } catch {
                 // レコードが存在しない場合は新規作成
-                print("⚠️ [CloudKit] Record not found, creating new one")
                 record = CKRecord(recordType: "TravelPlan", recordID: recordID)
             }
         } else {
             // idがnilの場合は新規作成
-            print("🟣 [CloudKit] Creating new record (no id)")
             record = CKRecord(recordType: "TravelPlan", recordID: recordID)
         }
 
@@ -597,35 +546,26 @@ final class CloudKitService {
         // 画像をCKAssetとして保存
         var tempURL: URL?
         if let image = image {
-            print("🟣 [CloudKit] Processing image...")
             guard let imageData = image.jpegData(compressionQuality: 0.8) else {
-                print("❌ [CloudKit] Failed to convert image to JPEG")
                 throw CloudKitError.invalidImageData
             }
 
             let imageSize = Double(imageData.count) / 1024.0 / 1024.0
-            print("🟣 [CloudKit] - image size: \(String(format: "%.2f", imageSize)) MB")
 
             let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".jpg")
             try imageData.write(to: url)
             tempURL = url
-            print("🟣 [CloudKit] - temp file created: \(url.path)")
 
             let asset = CKAsset(fileURL: url)
             record["image"] = asset
-            print("🟣 [CloudKit] - CKAsset created")
         }
 
         // レコードを保存
-        print("🟣 [CloudKit] Saving record to CloudKit...")
         let savedRecord = try await save(record)
-        print("✅ [CloudKit] TravelPlan record saved successfully!")
-        print("✅ [CloudKit] - saved recordID: \(savedRecord.recordID.recordName)")
 
         // アップロード完了後に一時ファイルを削除
         if let tempURL = tempURL {
             try? FileManager.default.removeItem(at: tempURL)
-            print("🟣 [CloudKit] - temp file removed")
         }
 
         // 保存されたレコードからTravelPlanを再構築
@@ -638,27 +578,21 @@ final class CloudKitService {
 
     /// ユーザーのTravelPlanを全て取得（画像付き）
     func fetchTravelPlans(userId: String) async throws -> [(plan: TravelPlan, image: UIImage?)] {
-        print("🟣 [CloudKit] Fetching TravelPlans for userId: \(userId)")
 
         // CloudKitはOR条件をサポートしていないため、2つのクエリを実行してマージ
 
         // 1. 自分が所有しているプランを取得
-        print("🟣 [CloudKit] - Fetching owned plans...")
         let ownedPredicate = NSPredicate(format: "userId == %@", userId)
         let ownedRecords = try await query(recordType: "TravelPlan", predicate: ownedPredicate)
-        print("🟣 [CloudKit] - Found \(ownedRecords.count) owned plans")
 
         // 2. 共有されているプランを取得（sharedWithフィールドが存在しない場合はスキップ）
         var sharedRecords: [CKRecord] = []
         do {
-            print("🟣 [CloudKit] - Fetching shared plans...")
             let sharedPredicate = NSPredicate(format: "sharedWith CONTAINS %@", userId)
             sharedRecords = try await query(recordType: "TravelPlan", predicate: sharedPredicate)
-            print("🟣 [CloudKit] - Found \(sharedRecords.count) shared plans")
         } catch {
             // sharedWithフィールドがまだCloudKitスキーマに存在しない場合
             if let ckError = error as? CKError, ckError.code == .invalidArguments {
-                print("⚠️ [CloudKit] - sharedWith field not in schema yet, skipping shared plans query")
             } else {
                 // その他のエラーは再スロー
                 throw error
@@ -675,7 +609,6 @@ final class CloudKitService {
         }
 
         let allRecords = Array(recordsMap.values)
-        print("🟣 [CloudKit] - Total unique plans: \(allRecords.count)")
 
         var results: [(plan: TravelPlan, image: UIImage?)] = []
 
@@ -686,7 +619,6 @@ final class CloudKitService {
             }
         }
 
-        print("✅ [CloudKit] Successfully fetched \(results.count) TravelPlans with images")
 
         return results
     }

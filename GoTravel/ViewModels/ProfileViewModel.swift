@@ -28,7 +28,6 @@ final class ProfileViewModel: ObservableObject {
                     UserDefaults.standard.set(fileName, forKey: self.avatarFileNameKey)
                 }
             } catch {
-                print("❌ [ProfileViewModel] Failed to save avatar: \(error)")
             }
         }
     }

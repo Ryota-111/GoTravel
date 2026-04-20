@@ -735,6 +735,5 @@ struct AddPlanView: View {
 // MARK: - Preview
 #Preview {
     AddPlanView { plan in
-        print("保存されたプラン: \(plan.title)")
     }
 }

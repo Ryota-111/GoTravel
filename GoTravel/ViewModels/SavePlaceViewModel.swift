@@ -38,12 +38,9 @@ final class SavePlaceViewModel: ObservableObject {
         )
 
         // Core Dataに保存
-        print("🟢 [SavePlaceViewModel] Starting Core Data save")
-        print("🟢 [SavePlaceViewModel] - has image: \(image != nil)")
 
         Task { @MainActor in
             placesVM.add(place, userId: userId, image: self.image)
-            print("✅ [SavePlaceViewModel] Core Data save completed")
             self.isSaving = false
             completion(.success(()))
         }

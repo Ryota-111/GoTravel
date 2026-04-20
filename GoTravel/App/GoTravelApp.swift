@@ -11,28 +11,7 @@ struct GoTravelApp: App {
         // Core Dataの初期化（CloudKitとの自動同期を有効化）
         _ = CoreDataManager.shared
 
-        NotificationService.shared.requestAuthorization { granted in
-            if granted {
-                NotificationService.shared.checkAuthorizationStatus { status in
-                    switch status {
-                    case .authorized:
-                        break
-                    case .denied:
-                        break
-                    case .notDetermined:
-                        break
-                    case .provisional:
-                        break
-                    case .ephemeral:
-                        break
-                    @unknown default:
-                        break
-                    }
-                }
-            } else {
-                // Authorization denied
-            }
-        }
+        NotificationService.shared.requestAuthorization { _ in }
     }
 
     var body: some Scene {

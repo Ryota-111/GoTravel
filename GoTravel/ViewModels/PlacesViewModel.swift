@@ -20,14 +20,12 @@ final class PlacesViewModel: NSObject, ObservableObject {
     override init() {
         self.context = CoreDataManager.shared.viewContext
         super.init()
-        print("🟡 [PlacesViewModel] Initialized with Core Data")
     }
 
     // MARK: - Core Data Fetch
 
     /// 指定ユーザーのVisitedPlaceを取得（Core Dataから）
     func setupFetchedResultsController(userId: String) {
-        print("🟡 [PlacesViewModel] Setting up NSFetchedResultsController for userId: \(userId)")
 
         let fetchRequest: NSFetchRequest<VisitedPlaceEntity> = VisitedPlaceEntity.fetchRequest()
 
@@ -49,9 +47,7 @@ final class PlacesViewModel: NSObject, ObservableObject {
         do {
             try fetchedResultsController?.performFetch()
             updatePlaces()
-            print("✅ [PlacesViewModel] Fetched \(places.count) places from Core Data")
         } catch {
-            print("❌ [PlacesViewModel] Failed to fetch: \(error)")
         }
     }
 
@@ -85,7 +81,6 @@ final class PlacesViewModel: NSObject, ObservableObject {
     /// VisitedPlaceを追加（Core Dataに保存 → 自動的にCloudKitと同期）
     @MainActor
     func add(_ place: VisitedPlace, userId: String, image: UIImage? = nil) {
-        print("🟡 [PlacesViewModel] Adding place to Core Data")
 
         var placeToSave = place
         placeToSave.userId = userId
@@ -97,9 +92,7 @@ final class PlacesViewModel: NSObject, ObservableObject {
                 do {
                     try FileManager.saveImageDataToDocuments(data: imageData, named: fileName)
                     placeToSave.localPhotoFileName = fileName
-                    print("✅ [PlacesViewModel] Image saved locally: \(fileName)")
                 } catch {
-                    print("❌ [PlacesViewModel] Failed to save image: \(error)")
                 }
             }
         }
@@ -108,17 +101,14 @@ final class PlacesViewModel: NSObject, ObservableObject {
         context.perform {
             _ = VisitedPlaceEntity.create(from: placeToSave, context: self.context)
             CoreDataManager.shared.saveContext()
-            print("✅ [PlacesViewModel] Place saved to Core Data (will auto-sync to CloudKit)")
         }
     }
 
     /// VisitedPlaceを更新（Core Dataに保存 → 自動的にCloudKitと同期）
     @MainActor
     func update(_ place: VisitedPlace, userId: String, image: UIImage? = nil) {
-        print("🟡 [PlacesViewModel] Updating place in Core Data")
 
         guard let placeId = place.id else {
-            print("❌ [PlacesViewModel] Place has no ID")
             return
         }
 
@@ -138,9 +128,7 @@ final class PlacesViewModel: NSObject, ObservableObject {
                 do {
                     try FileManager.saveImageDataToDocuments(data: imageData, named: fileName)
                     placeToSave.localPhotoFileName = fileName
-                    print("✅ [PlacesViewModel] New image saved locally: \(fileName)")
                 } catch {
-                    print("❌ [PlacesViewModel] Failed to save image: \(error)")
                 }
             }
         }
@@ -151,10 +139,8 @@ final class PlacesViewModel: NSObject, ObservableObject {
                 if let entity = try VisitedPlaceEntity.fetchById(id: placeId, context: self.context) {
                     entity.update(from: placeToSave)
                     CoreDataManager.shared.saveContext()
-                    print("✅ [PlacesViewModel] Place updated in Core Data (will auto-sync to CloudKit)")
                 }
             } catch {
-                print("❌ [PlacesViewModel] Failed to fetch entity for update: \(error)")
             }
         }
     }
@@ -162,10 +148,8 @@ final class PlacesViewModel: NSObject, ObservableObject {
     /// VisitedPlaceを削除（Core Dataから削除 → 自動的にCloudKitと同期）
     @MainActor
     func delete(_ place: VisitedPlace, userId: String? = nil) {
-        print("🟡 [PlacesViewModel] Deleting place from Core Data")
 
         guard let placeId = place.id else {
-            print("❌ [PlacesViewModel] Place has no ID")
             return
         }
 
@@ -180,10 +164,8 @@ final class PlacesViewModel: NSObject, ObservableObject {
                 if let entity = try VisitedPlaceEntity.fetchById(id: placeId, context: self.context) {
                     self.context.delete(entity)
                     CoreDataManager.shared.saveContext()
-                    print("✅ [PlacesViewModel] Place deleted from Core Data (will auto-sync to CloudKit)")
                 }
             } catch {
-                print("❌ [PlacesViewModel] Failed to delete: \(error)")
             }
         }
     }
@@ -220,7 +202,6 @@ final class PlacesViewModel: NSObject, ObservableObject {
 extension PlacesViewModel: NSFetchedResultsControllerDelegate {
     /// Core Dataの変更を検知してUIを自動更新
     func controllerDidChangeContent(_ controller: NSFetchedResultsController<NSFetchRequestResult>) {
-        print("🔄 [PlacesViewModel] Core Data changed, updating UI")
         DispatchQueue.main.async {
             self.updatePlaces()
         }

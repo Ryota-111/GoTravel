@@ -17,14 +17,12 @@ final class PlansViewModel: NSObject, ObservableObject {
     override init() {
         self.context = CoreDataManager.shared.viewContext
         super.init()
-        print("🟢 [PlansViewModel] Initialized with Core Data")
     }
 
     // MARK: - Core Data Fetch
 
     /// 指定ユーザーのPlanを取得（Core Dataから）
     func setupFetchedResultsController(userId: String) {
-        print("🟢 [PlansViewModel] Setting up NSFetchedResultsController for userId: \(userId)")
 
         let fetchRequest: NSFetchRequest<PlanEntity> = PlanEntity.fetchRequest()
 
@@ -46,9 +44,7 @@ final class PlansViewModel: NSObject, ObservableObject {
         do {
             try fetchedResultsController?.performFetch()
             updatePlans()
-            print("✅ [PlansViewModel] Fetched \(plans.count) plans from Core Data")
         } catch {
-            print("❌ [PlansViewModel] Failed to fetch: \(error)")
         }
     }
 
@@ -67,9 +63,6 @@ final class PlansViewModel: NSObject, ObservableObject {
     /// Planを追加（Core Dataに保存 → 自動的にCloudKitと同期）
     @MainActor
     func add(_ plan: Plan, userId: String) {
-        print("🟢 [PlansViewModel] Adding plan to Core Data")
-        print("🟢 [PlansViewModel] - plan.id: \(plan.id)")
-        print("🟢 [PlansViewModel] - plan.title: \(plan.title)")
 
         var planToSave = plan
         planToSave.userId = userId
@@ -78,7 +71,6 @@ final class PlansViewModel: NSObject, ObservableObject {
         context.perform {
             _ = PlanEntity.create(from: planToSave, context: self.context)
             CoreDataManager.shared.saveContext()
-            print("✅ [PlansViewModel] Plan saved to Core Data (will auto-sync to CloudKit)")
 
             // 通知をスケジュール
             DispatchQueue.main.async {
@@ -90,7 +82,6 @@ final class PlansViewModel: NSObject, ObservableObject {
     /// Planを更新（Core Dataに保存 → 自動的にCloudKitと同期）
     @MainActor
     func update(_ plan: Plan, userId: String) {
-        print("🟢 [PlansViewModel] Updating plan in Core Data")
 
         var planToSave = plan
         planToSave.userId = userId
@@ -101,7 +92,6 @@ final class PlansViewModel: NSObject, ObservableObject {
                 if let entity = try PlanEntity.fetchById(id: plan.id, context: self.context) {
                     entity.update(from: planToSave)
                     CoreDataManager.shared.saveContext()
-                    print("✅ [PlansViewModel] Plan updated in Core Data (will auto-sync to CloudKit)")
 
                     // 通知を更新
                     DispatchQueue.main.async {
@@ -109,7 +99,6 @@ final class PlansViewModel: NSObject, ObservableObject {
                     }
                 }
             } catch {
-                print("❌ [PlansViewModel] Failed to fetch entity for update: \(error)")
             }
         }
     }
@@ -127,7 +116,6 @@ final class PlansViewModel: NSObject, ObservableObject {
     /// Planを削除（Core Dataから削除 → 自動的にCloudKitと同期）
     @MainActor
     func deletePlan(_ plan: Plan, userId: String? = nil) async {
-        print("🟢 [PlansViewModel] Deleting plan from Core Data")
 
         // 通知をキャンセル
         NotificationService.shared.cancelPlanNotifications(for: plan.id)
@@ -138,10 +126,8 @@ final class PlansViewModel: NSObject, ObservableObject {
                 if let entity = try PlanEntity.fetchById(id: plan.id, context: self.context) {
                     self.context.delete(entity)
                     CoreDataManager.shared.saveContext()
-                    print("✅ [PlansViewModel] Plan deleted from Core Data (will auto-sync to CloudKit)")
                 }
             } catch {
-                print("❌ [PlansViewModel] Failed to delete: \(error)")
             }
         }
     }
@@ -152,7 +138,6 @@ final class PlansViewModel: NSObject, ObservableObject {
 extension PlansViewModel: NSFetchedResultsControllerDelegate {
     /// Core Dataの変更を検知してUIを自動更新
     func controllerDidChangeContent(_ controller: NSFetchedResultsController<NSFetchRequestResult>) {
-        print("🔄 [PlansViewModel] Core Data changed, updating UI")
         DispatchQueue.main.async {
             self.updatePlans()
         }

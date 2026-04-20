@@ -118,13 +118,9 @@ struct CalendarView: View {
             }
             .sheet(isPresented: $showAddSheet) {
                 AddPlanView { newPlan in
-                    print("📅 [CalendarView] AddPlanView onSave called")
-                    print("📅 [CalendarView] - authVM.userId: \(authVM.userId ?? "nil")")
                     if let userId = authVM.userId {
-                        print("📅 [CalendarView] - userId is valid, calling viewModel.add()")
                         viewModel.add(newPlan, userId: userId)
                     } else {
-                        print("❌ [CalendarView] - userId is NIL! Plan will NOT be saved!")
                         showAuthError = true
                     }
                 }

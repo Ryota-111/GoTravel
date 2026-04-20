@@ -67,22 +67,16 @@ struct SavePlaceView: View {
 
     private var saveButton: some View {
         Button("保存") {
-            print("🔴 [SavePlaceView] Save button pressed")
-            print("🔴 [SavePlaceView] - authVM.userId: \(authVM.userId ?? "nil")")
 
             guard let userId = authVM.userId else {
-                print("❌ [SavePlaceView] userId is nil, cannot save")
                 return
             }
 
-            print("🔴 [SavePlaceView] Calling vm.save with userId: \(userId)")
             vm.save(userId: userId) { result in
                 switch result {
                 case .success:
-                    print("✅ [SavePlaceView] Save completed successfully")
                     presentationMode.wrappedValue.dismiss()
-                case .failure(let error):
-                    print("❌ [SavePlaceView] Save failed: \(error.localizedDescription)")
+                case .failure:
                     break
                 }
             }

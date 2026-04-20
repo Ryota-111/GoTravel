@@ -331,7 +331,6 @@ struct EditTravelPlanBasicInfoView: View {
             deleteOldImageIfExists()
             saveUpdatedPlan(with: fileName)
         } catch {
-            print("❌ Failed to save image: \(error)")
             saveUpdatedPlan(with: plan.localImageFileName)
         }
     }
@@ -349,13 +348,8 @@ struct EditTravelPlanBasicInfoView: View {
 
     private func saveUpdatedPlan(with fileName: String?) {
         #if DEBUG
-        print("💾 [Edit] Updating travel plan:")
-        print("   Title: \(title)")
-        print("   Destination: \(destination)")
         if let coord = destinationCoordinate {
-            print("   Coordinates: (\(coord.latitude), \(coord.longitude))")
         } else {
-            print("   Coordinates: nil")
         }
         #endif
 
@@ -370,9 +364,7 @@ struct EditTravelPlanBasicInfoView: View {
 
         #if DEBUG
         if let lat = updatedPlan.latitude, let lon = updatedPlan.longitude {
-            print("✅ [Edit] Updated plan with coordinates: (\(lat), \(lon))")
         } else {
-            print("✅ [Edit] Updated plan without coordinates")
         }
         #endif
 
@@ -391,12 +383,10 @@ struct EditTravelPlanBasicInfoView: View {
         let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
 
         #if DEBUG
-        print("🔍 [Edit] Searching location for: '\(trimmedQuery)'")
         #endif
 
         guard !trimmedQuery.isEmpty else {
             #if DEBUG
-            print("⚠️ [Edit] Empty query, clearing coordinates")
             #endif
             destinationCoordinate = nil
             return
@@ -409,7 +399,6 @@ struct EditTravelPlanBasicInfoView: View {
         search.start { response, error in
             if let error = error {
                 #if DEBUG
-                print("❌ [Edit] Location search error: \(error.localizedDescription)")
                 #endif
                 return
             }
@@ -417,7 +406,6 @@ struct EditTravelPlanBasicInfoView: View {
             guard let response = response,
                   let firstItem = response.mapItems.first else {
                 #if DEBUG
-                print("❌ [Edit] No search results found for: '\(trimmedQuery)'")
                 #endif
                 return
             }
@@ -426,8 +414,6 @@ struct EditTravelPlanBasicInfoView: View {
             let foundLocation = (coordinate.latitude, coordinate.longitude)
 
             #if DEBUG
-            print("✅ [Edit] Location found: \(firstItem.name ?? "Unknown")")
-            print("   Coordinates: (\(coordinate.latitude), \(coordinate.longitude))")
             #endif
 
             DispatchQueue.main.async {
