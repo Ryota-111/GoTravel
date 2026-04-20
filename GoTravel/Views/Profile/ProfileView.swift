@@ -46,24 +46,20 @@ struct ProfileView: View {
     // MARK: - Background Gradient
     private var backgroundGradient: some View {
         ZStack {
-            // Multi-layer gradient background
             LinearGradient(
-                gradient: Gradient(colors: [
-                    Color(red: 0.1, green: 0.05, blue: 0.2),
-                    Color(red: 0.15, green: 0.1, blue: 0.25),
-                    Color(red: 0.05, green: 0.05, blue: 0.15)
-                ]),
+                gradient: Gradient(colors: colorScheme == .dark ?
+                    [themeManager.currentTheme.backgroundDark, themeManager.currentTheme.secondaryBackgroundDark] :
+                    [themeManager.currentTheme.backgroundLight, themeManager.currentTheme.secondaryBackgroundLight]),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
             .ignoresSafeArea()
 
-            // Animated gradient circles
             Circle()
                 .fill(
                     RadialGradient(
                         gradient: Gradient(colors: [
-                            Color.purple.opacity(0.3),
+                            themeManager.currentTheme.primary.opacity(0.3),
                             Color.clear
                         ]),
                         center: .topLeading,
@@ -78,7 +74,7 @@ struct ProfileView: View {
                 .fill(
                     RadialGradient(
                         gradient: Gradient(colors: [
-                            Color.blue.opacity(0.25),
+                            themeManager.currentTheme.secondary.opacity(0.25),
                             Color.clear
                         ]),
                         center: .bottomTrailing,
@@ -93,7 +89,7 @@ struct ProfileView: View {
                 .fill(
                     RadialGradient(
                         gradient: Gradient(colors: [
-                            Color.pink.opacity(0.2),
+                            themeManager.currentTheme.primary.opacity(0.2),
                             Color.clear
                         ]),
                         center: .center,
@@ -122,9 +118,9 @@ struct ProfileView: View {
                             .fill(
                                 LinearGradient(
                                     gradient: Gradient(colors: [
-                                        Color.purple.opacity(0.6),
-                                        Color.pink.opacity(0.4),
-                                        Color.blue.opacity(0.5)
+                                        themeManager.currentTheme.primary.opacity(0.6),
+                                        themeManager.currentTheme.secondary.opacity(0.4),
+                                        themeManager.currentTheme.primary.opacity(0.5)
                                     ]),
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -146,8 +142,8 @@ struct ProfileView: View {
                                         .fill(
                                             LinearGradient(
                                                 gradient: Gradient(colors: [
-                                                    Color.purple.opacity(0.5),
-                                                    Color.pink.opacity(0.3)
+                                                    themeManager.currentTheme.primary.opacity(0.5),
+                                                    themeManager.currentTheme.secondary.opacity(0.3)
                                                 ]),
                                                 startPoint: .topLeading,
                                                 endPoint: .bottomTrailing
@@ -168,8 +164,8 @@ struct ProfileView: View {
                                         LinearGradient(
                                             gradient: Gradient(colors: [
                                                 Color.white.opacity(0.8),
-                                                Color.purple.opacity(0.4),
-                                                Color.pink.opacity(0.4)
+                                                themeManager.currentTheme.primary.opacity(0.4),
+                                                themeManager.currentTheme.secondary.opacity(0.4)
                                             ]),
                                             startPoint: .topLeading,
                                             endPoint: .bottomTrailing
@@ -177,7 +173,7 @@ struct ProfileView: View {
                                         lineWidth: 4
                                     )
                             )
-                            .shadow(color: Color.purple.opacity(0.4), radius: 20, x: 0, y: 10)
+                            .shadow(color: themeManager.currentTheme.primary.opacity(0.4), radius: 20, x: 0, y: 10)
                         }
                     }
 
@@ -185,32 +181,20 @@ struct ProfileView: View {
                     VStack(spacing: 12) {
                         Text(authVM.userFullName ?? "ユーザー")
                             .font(.system(size: 28, weight: .bold, design: .rounded))
-                            .foregroundStyle(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [.white, Color.white.opacity(0.8)]),
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
+                            .foregroundColor(themeManager.currentTheme.text)
 
                         Text(authVM.userEmail ?? "")
                             .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(.white.opacity(0.7))
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
                             .padding(.horizontal, 20)
                             .padding(.vertical, 8)
                             .background(
                                 Capsule()
-                                    .fill(Color.white.opacity(0.15))
+                                    .fill(themeManager.currentTheme.cardBackground2)
                                     .overlay(
                                         Capsule()
-                                            .stroke(Color.white.opacity(0.2), lineWidth: 1)
+                                            .stroke(themeManager.currentTheme.cardBorder, lineWidth: 1)
                                     )
-                            )
-                            .background(
-                                Capsule()
-                                    .fill(Color.white.opacity(0.05))
-                                    .blur(radius: 10)
-                                    .offset(y: 5)
                             )
                     }
                     .padding(.top, 15)
@@ -230,7 +214,7 @@ struct ProfileView: View {
                 icon: "pencil",
                 title: "アカウント編集",
                 subtitle: "プロフィール情報を変更",
-                gradientColors: [Color(red: 0.4, green: 0.5, blue: 1.0), Color(red: 0.5, green: 0.3, blue: 0.9)]
+                gradientColors: [themeManager.currentTheme.xprimary, themeManager.currentTheme.xprimary.opacity(0.7)]
             )
         }
         .buttonStyle(CardButtonStyle())
@@ -247,7 +231,7 @@ struct ProfileView: View {
                 icon: "gearshape",
                 title: "アカウント管理",
                 subtitle: "セキュリティとプライバシー",
-                gradientColors: [Color(red: 1.0, green: 0.5, blue: 0.3), Color(red: 1.0, green: 0.3, blue: 0.5)]
+                gradientColors: [themeManager.currentTheme.warning, themeManager.currentTheme.error]
             )
         }
         .buttonStyle(CardButtonStyle())
@@ -264,7 +248,7 @@ struct ProfileView: View {
                 icon: "questionmark.circle",
                 title: "ヘルプサポート",
                 subtitle: "よくある質問とお問い合わせ",
-                gradientColors: [Color(red: 0.2, green: 0.8, blue: 0.5), Color(red: 0.3, green: 0.6, blue: 0.9)]
+                gradientColors: [themeManager.currentTheme.success, themeManager.currentTheme.info]
             )
         }
         .buttonStyle(CardButtonStyle())
@@ -277,10 +261,10 @@ struct ProfileView: View {
     private var appsettingCard: some View {
         NavigationLink(destination: AppSettingView()) {
             GlassMenuCard(
-                icon: "gearshape",
+                icon: "paintpalette.fill",
                 title: "アプリ設定",
                 subtitle: "アプリカラー",
-                gradientColors: [Color(red: 1.0, green: 0.5, blue: 0.3), Color(red: 1.0, green: 0.3, blue: 0.5)]
+                gradientColors: [themeManager.currentTheme.secondary, themeManager.currentTheme.secondary.opacity(0.7)]
             )
         }
     }
@@ -310,41 +294,21 @@ struct GlassMenuCard: View {
     let title: String
     let subtitle: String
     let gradientColors: [Color]
+    @ObservedObject var themeManager = ThemeManager.shared
 
     var body: some View {
         ZStack {
-            // Glassmorphism background
             RoundedRectangle(cornerRadius: 24)
-                .fill(
-                    LinearGradient(
-                        gradient: Gradient(colors: [
-                            Color.white.opacity(0.15),
-                            Color.white.opacity(0.08)
-                        ]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
+                .fill(themeManager.currentTheme.cardBackground2)
                 .overlay(
                     RoundedRectangle(cornerRadius: 24)
-                        .stroke(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    Color.white.opacity(0.3),
-                                    Color.white.opacity(0.1)
-                                ]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 1.5
-                        )
+                        .stroke(themeManager.currentTheme.cardBorder, lineWidth: 1.5)
                 )
-                .shadow(color: Color.black.opacity(0.15), radius: 15, x: 0, y: 8)
+                .shadow(color: themeManager.currentTheme.shadow, radius: 15, x: 0, y: 8)
 
             HStack(spacing: 18) {
                 // Gradient Icon
                 ZStack {
-                    // Glow effect
                     Circle()
                         .fill(
                             LinearGradient(
@@ -357,7 +321,6 @@ struct GlassMenuCard: View {
                         .blur(radius: 15)
                         .opacity(0.6)
 
-                    // Icon container
                     Circle()
                         .fill(
                             LinearGradient(
@@ -369,7 +332,7 @@ struct GlassMenuCard: View {
                         .frame(width: 60, height: 60)
                         .overlay(
                             Circle()
-                                .stroke(Color.white.opacity(0.3), lineWidth: 2)
+                                .stroke(themeManager.currentTheme.cardBorder, lineWidth: 2)
                         )
                         .shadow(color: gradientColors[0].opacity(0.4), radius: 8, x: 0, y: 4)
 
@@ -378,24 +341,22 @@ struct GlassMenuCard: View {
                         .foregroundColor(.white)
                 }
 
-                // Text content
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title)
                         .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundColor(.white)
+                        .foregroundColor(themeManager.currentTheme.text)
 
                     Text(subtitle)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(.white.opacity(0.7))
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
                         .lineLimit(1)
                 }
 
                 Spacer()
 
-                // Arrow
                 Image(systemName: "arrow.right")
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(.white.opacity(0.6))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
             }
             .padding(.horizontal, 22)
             .padding(.vertical, 20)
@@ -463,8 +424,8 @@ struct ProfileEditView: View {
     private var backgroundGradient: some View {
         LinearGradient(
             gradient: Gradient(colors: colorScheme == .dark ?
-                [themeManager.currentTheme.primary.opacity(0.7), .black] :
-                [themeManager.currentTheme.primary.opacity(0.6), .white.opacity(0.3)]),
+                [themeManager.currentTheme.backgroundDark, themeManager.currentTheme.secondaryBackgroundDark] :
+                [themeManager.currentTheme.backgroundLight, themeManager.currentTheme.secondaryBackgroundLight]),
             startPoint: .top,
             endPoint: .bottom
         )
@@ -477,7 +438,7 @@ struct ProfileEditView: View {
                 HStack {
                     Image(systemName: "person.fill")
                         .font(.caption)
-                        .foregroundColor(themeManager.currentTheme.primary)
+                        .foregroundColor(themeManager.currentTheme.xprimary)
                     Text("名前")
                         .font(.caption.bold())
                         .foregroundColor(themeManager.currentTheme.secondaryText)
@@ -485,20 +446,16 @@ struct ProfileEditView: View {
 
                 Text(authVM.userFullName ?? "ユーザー")
                     .font(.body)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .foregroundColor(themeManager.currentTheme.text)
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(
-                                colorScheme == .dark ?
-                                    Color.white.opacity(0.05) :
-                                    Color.white.opacity(0.5)
-                            )
+                            .fill(themeManager.currentTheme.cardBackground2)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(themeManager.currentTheme.primary.opacity(0.3), lineWidth: 1)
+                            .stroke(themeManager.currentTheme.xprimary.opacity(0.3), lineWidth: 1)
                     )
             }
 
@@ -506,7 +463,7 @@ struct ProfileEditView: View {
                 HStack {
                     Image(systemName: "envelope.fill")
                         .font(.caption)
-                        .foregroundColor(themeManager.currentTheme.primary)
+                        .foregroundColor(themeManager.currentTheme.xprimary)
                     Text("メールアドレス")
                         .font(.caption.bold())
                         .foregroundColor(themeManager.currentTheme.secondaryText)
@@ -514,39 +471,31 @@ struct ProfileEditView: View {
 
                 Text(authVM.userEmail ?? "")
                     .font(.body)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .foregroundColor(themeManager.currentTheme.text)
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
-                            .fill(
-                                colorScheme == .dark ?
-                                    Color.white.opacity(0.05) :
-                                    Color.white.opacity(0.5)
-                            )
+                            .fill(themeManager.currentTheme.cardBackground2)
                     )
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
-                            .stroke(themeManager.currentTheme.primary.opacity(0.3), lineWidth: 1)
+                            .stroke(themeManager.currentTheme.xprimary.opacity(0.3), lineWidth: 1)
                     )
             }
         }
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(
-                    colorScheme == .dark ?
-                        Color.white.opacity(0.1) :
-                        Color.white.opacity(0.2)
-                )
+                .fill(themeManager.currentTheme.cardBackground2)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16)
                 .stroke(
                     LinearGradient(
                         gradient: Gradient(colors: [
-                            themeManager.currentTheme.primary.opacity(0.3),
-                            themeManager.currentTheme.primary.opacity(0.1)
+                            themeManager.currentTheme.xprimary.opacity(0.3),
+                            themeManager.currentTheme.xprimary.opacity(0.1)
                         ]),
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -554,7 +503,7 @@ struct ProfileEditView: View {
                     lineWidth: 1
                 )
         )
-        .shadow(color: themeManager.currentTheme.primary.opacity(0.2), radius: 10, x: 0, y: 5)
+        .shadow(color: themeManager.currentTheme.xprimary.opacity(0.2), radius: 10, x: 0, y: 5)
         .opacity(animateContent ? 1 : 0)
         .offset(y: animateContent ? 0 : -20)
         .animation(.spring(response: 0.6, dampingFraction: 0.8), value: animateContent)
@@ -564,10 +513,10 @@ struct ProfileEditView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Image(systemName: "info.circle.fill")
-                    .foregroundColor(themeManager.currentTheme.primary)
+                    .foregroundColor(themeManager.currentTheme.xprimary)
                 Text("お知らせ")
                     .font(.caption.bold())
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .foregroundColor(themeManager.currentTheme.text)
             }
 
             Text("名前とメールアドレスはApple IDから取得されます。変更する場合は、Apple IDの設定から変更してください。")
@@ -577,11 +526,11 @@ struct ProfileEditView: View {
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(themeManager.currentTheme.primary.opacity(0.1))
+                .fill(themeManager.currentTheme.xprimary.opacity(0.1))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(themeManager.currentTheme.primary.opacity(0.3), lineWidth: 1)
+                .stroke(themeManager.currentTheme.xprimary.opacity(0.3), lineWidth: 1)
         )
         .opacity(animateContent ? 1 : 0)
         .offset(y: animateContent ? 0 : 20)
@@ -602,8 +551,8 @@ struct ProfileEditView: View {
                             .fill(
                                 LinearGradient(
                                     gradient: Gradient(colors: [
-                                        themeManager.currentTheme.primary.opacity(0.6),
-                                        themeManager.currentTheme.secondary.opacity(0.6)
+                                        themeManager.currentTheme.xprimary.opacity(0.6),
+                                        themeManager.currentTheme.xsecondary.opacity(0.6)
                                     ]),
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -613,26 +562,16 @@ struct ProfileEditView: View {
 
                         Image(systemName: "person.fill")
                             .font(.system(size: 60))
-                            .foregroundColor(.white.opacity(0.8))
+                            .foregroundColor(themeManager.currentTheme.accent2.opacity(0.8))
                     }
                 }
                 .frame(width: 120, height: 120)
                 .clipShape(Circle())
                 .overlay(
                     Circle()
-                        .stroke(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    Color.white.opacity(0.5),
-                                    Color.white.opacity(0.2)
-                                ]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            ),
-                            lineWidth: 3
-                        )
+                        .stroke(themeManager.currentTheme.cardBorder, lineWidth: 3)
                 )
-                .shadow(color: .black.opacity(0.2), radius: 15, x: 0, y: 8)
+                .shadow(color: themeManager.currentTheme.shadow, radius: 15, x: 0, y: 8)
 
                 Menu {
                     Button("写真を選択") { showImagePicker = true }
@@ -642,13 +581,13 @@ struct ProfileEditView: View {
                 } label: {
                     ZStack {
                         Circle()
-                            .fill(themeManager.currentTheme.primary.opacity(0.8))
+                            .fill(themeManager.currentTheme.xprimary.opacity(0.8))
                             .frame(width: 36, height: 36)
                         Image(systemName: "pencil")
-                            .foregroundColor(.white)
+                            .foregroundColor(themeManager.currentTheme.accent2)
                             .font(.system(size: 14, weight: .semibold))
                     }
-                    .shadow(color: themeManager.currentTheme.primary.opacity(0.3), radius: 5, x: 0, y: 2)
+                    .shadow(color: themeManager.currentTheme.xprimary.opacity(0.3), radius: 5, x: 0, y: 2)
                 }
                 .offset(x: -5, y: -5)
             }
@@ -661,19 +600,15 @@ struct ProfileEditView: View {
         .padding(.vertical, 20)
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(
-                    colorScheme == .dark ?
-                        Color.white.opacity(0.1) :
-                        Color.white.opacity(0.2)
-                )
+                .fill(themeManager.currentTheme.cardBackground2)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16)
                 .stroke(
                     LinearGradient(
                         gradient: Gradient(colors: [
-                            themeManager.currentTheme.primary.opacity(0.3),
-                            themeManager.currentTheme.primary.opacity(0.1)
+                            themeManager.currentTheme.xprimary.opacity(0.3),
+                            themeManager.currentTheme.xprimary.opacity(0.1)
                         ]),
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -681,7 +616,7 @@ struct ProfileEditView: View {
                     lineWidth: 1
                 )
         )
-        .shadow(color: themeManager.currentTheme.primary.opacity(0.2), radius: 10, x: 0, y: 5)
+        .shadow(color: themeManager.currentTheme.xprimary.opacity(0.2), radius: 10, x: 0, y: 5)
         .opacity(animateContent ? 1 : 0)
         .offset(y: animateContent ? 0 : -20)
         .animation(.spring(response: 0.6, dampingFraction: 0.8), value: animateContent)
@@ -708,7 +643,7 @@ struct AccountActionView: View {
                     VStack(spacing: 15) {
                         Image(systemName: "exclamationmark.triangle.fill")
                             .font(.system(size: 60))
-                            .foregroundColor(.orange.opacity(0.8))
+                            .foregroundColor(themeManager.currentTheme.warning.opacity(0.8))
                             .padding(.top, 30)
 
                         VStack(spacing: 8) {
@@ -851,8 +786,8 @@ struct AccountActionView: View {
     private var backgroundGradient: some View {
         LinearGradient(
             gradient: Gradient(colors: colorScheme == .dark ?
-                [.orange.opacity(0.7), .black] :
-                [.orange.opacity(0.6), .white.opacity(0.3)]),
+                [themeManager.currentTheme.warning.opacity(0.7), themeManager.currentTheme.dark] :
+                [themeManager.currentTheme.warning.opacity(0.6), themeManager.currentTheme.light.opacity(0.3)]),
             startPoint: .top,
             endPoint: .bottom
         )
@@ -862,6 +797,7 @@ struct AccountActionView: View {
 
 // MARK: - Help Support View
 struct HelpSupportView: View {
+    @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
     @State private var animateCards = false
     @State private var showUserGuide = false
@@ -877,7 +813,7 @@ struct HelpSupportView: View {
                     VStack(spacing: 15) {
                         Image(systemName: "questionmark.circle.fill")
                             .font(.system(size: 60))
-                            .foregroundColor(.green.opacity(0.8))
+                            .foregroundColor(themeManager.currentTheme.success.opacity(0.8))
                             .padding(.top, 30)
 
                         VStack(spacing: 8) {
@@ -989,8 +925,8 @@ struct HelpSupportView: View {
     private var backgroundGradient: some View {
         LinearGradient(
             gradient: Gradient(colors: colorScheme == .dark ?
-                [.green.opacity(0.7), .black] :
-                [.green.opacity(0.6), .white.opacity(0.3)]),
+                [themeManager.currentTheme.success.opacity(0.7), themeManager.currentTheme.dark] :
+                [themeManager.currentTheme.success.opacity(0.6), themeManager.currentTheme.light.opacity(0.3)]),
             startPoint: .top,
             endPoint: .bottom
         )
@@ -1243,6 +1179,7 @@ struct HelpCard: View {
 
 // MARK: - User Guide View
 struct UserGuideView: View {
+    @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.colorScheme) var colorScheme
     @State private var selectedSection: Int = 0
@@ -1327,7 +1264,7 @@ struct UserGuideView: View {
                         VStack(spacing: 10) {
                             Image(systemName: "book.fill")
                                 .font(.system(size: 50))
-                                .foregroundColor(.blue.opacity(0.8))
+                                .foregroundColor(themeManager.currentTheme.primary.opacity(0.8))
                                 .padding(.top, 20)
 
                             Text("使い方ガイド")
@@ -1397,8 +1334,8 @@ struct UserGuideView: View {
     private var backgroundGradient: some View {
         LinearGradient(
             gradient: Gradient(colors: colorScheme == .dark ?
-                [.blue.opacity(0.7), .black] :
-                [.blue.opacity(0.6), .white.opacity(0.3)]),
+                [themeManager.currentTheme.primary.opacity(0.7), themeManager.currentTheme.dark] :
+                [themeManager.currentTheme.primary.opacity(0.6), themeManager.currentTheme.light.opacity(0.3)]),
             startPoint: .top,
             endPoint: .bottom
         )

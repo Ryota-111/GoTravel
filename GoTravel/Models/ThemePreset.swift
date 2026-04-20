@@ -250,33 +250,33 @@ struct ThemePreset {
             custom = Color.white
             
         case .pastelPink:
-            primary = Color.white
+            primary = Color(red: 255/255, green: 182/255, blue: 193/255)
             secondary = Color(red: 255/255, green: 209/255, blue: 220/255)
             tertiary = Color.gray
-            
-            xprimary = Color(red: 255/255, green: 209/255, blue: 220/255)
+
+            xprimary = Color(red: 255/255, green: 182/255, blue: 193/255)
             xsecondary = Color(red: 255/255, green: 209/255, blue: 220/255)
-            
-            yprimary = Color(red: 255/255, green: 209/255, blue: 220/255)
+
+            yprimary = Color(red: 255/255, green: 182/255, blue: 193/255)
             ysecondary = Color(red: 255/255, green: 209/255, blue: 220/255)
-            
+
             backgroundLight = Color(red: 1, green: 1, blue: 1)
-            secondaryBackgroundLight = Color(red: 0.95, green: 0.95, blue: 0.97)
+            secondaryBackgroundLight = Color(red: 0.98, green: 0.94, blue: 0.96)
             backgroundDark = Color(red: 1, green: 1, blue: 1)
-            secondaryBackgroundDark = Color(red: 0.95, green: 0.95, blue: 0.97)
+            secondaryBackgroundDark = Color(red: 0.98, green: 0.94, blue: 0.96)
             tertiaryBackground = Color(red: 1.0, green: 0.88, blue: 0.85)
             separatorLight = Color(red: 0.24, green: 0.24, blue: 0.26).opacity(0.29)
             separatorDark = Color(red: 0.24, green: 0.24, blue: 0.26).opacity(0.29)
-            
-            text = Color.white
-            secondaryText = Color.gray
-            tertiaryText = Color(white: 0.6)
+
+            text = Color(red: 0.2, green: 0.2, blue: 0.2)
+            secondaryText = Color(red: 0.5, green: 0.4, blue: 0.45)
+            tertiaryText = Color(red: 0.6, green: 0.5, blue: 0.55)
             budgetLightText = Color(white: 0.4)
             budgetDarkText = Color(white: 0.4)
-            
-            accent1 = Color(red: 255/255, green: 209/255, blue: 220/255)
-            accent2 = Color(red: 255/255, green: 209/255, blue: 220/255)
-            accent3 = Color.gray
+
+            accent1 = Color(red: 0.2, green: 0.2, blue: 0.2)
+            accent2 = Color.white
+            accent3 = Color(red: 0.5, green: 0.4, blue: 0.45)
             
             success = Color.green
             warning = Color.orange
