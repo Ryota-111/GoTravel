@@ -21,6 +21,8 @@ struct JapanPhotoView: View {
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 24) {
                         headerSection
+                        
+                        gradientSeparator
 
                         mapCardSection
 
@@ -39,7 +41,7 @@ struct JapanPhotoView: View {
                     Button("閉じる") {
                         dismiss()
                     }
-                    .foregroundColor(themeManager.currentTheme.primary)
+                    .foregroundColor(textColor)
                 }
             }
             .onAppear {
@@ -60,13 +62,45 @@ struct JapanPhotoView: View {
     // MARK: - Background
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ?
-                [themeManager.currentTheme.primary.opacity(0.7), .black] :
-                [themeManager.currentTheme.primary.opacity(0.6), .white.opacity(0.3)]),
+            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.gradientDark, themeManager.currentTheme.dark] : [themeManager.currentTheme.gradientLight, themeManager.currentTheme.light]),
             startPoint: .top,
             endPoint: .bottom
         )
         .ignoresSafeArea()
+    }
+    
+    // MARK: - Color
+    private var textColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
+    }
+    
+    private var xtextColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.accent1 : themeManager.currentTheme.accent2
+    }
+    
+    private var DLtextColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.light : themeManager.currentTheme.dark
+    }
+    
+    private var secondaryTextColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.accent2.opacity(0.7) : themeManager.currentTheme.accent1.opacity(0.6)
+    }
+    
+    // MARK: - Gradient Separator
+    private var gradientSeparator: some View {
+        Rectangle()
+            .fill(
+                LinearGradient(
+                    gradient: Gradient(colors: [
+                        Color.clear,
+                        textColor.opacity(0.6),
+                        Color.clear
+                    ]),
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .frame(height: 1)
     }
 
     // MARK: - Header Section
@@ -78,8 +112,8 @@ struct JapanPhotoView: View {
                         .fill(
                             LinearGradient(
                                 gradient: Gradient(colors: [
-                                    themeManager.currentTheme.primary.opacity(0.8),
-                                    themeManager.currentTheme.primary.opacity(0.5)
+                                    themeManager.currentTheme.xprimary.opacity(0.8),
+                                    themeManager.currentTheme.xprimary.opacity(0.5)
                                 ]),
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
@@ -89,16 +123,18 @@ struct JapanPhotoView: View {
 
                     Image(systemName: "map.fill")
                         .font(.title2)
-                        .foregroundColor(.white)
+                        .foregroundColor(textColor)
                 }
-                .shadow(color: themeManager.currentTheme.primary.opacity(0.4), radius: 8, x: 0, y: 4)
+                .shadow(color: themeManager.currentTheme.xprimary.opacity(0.4), radius: 8, x: 0, y: 4)
 
                 VStack(alignment: .leading, spacing: 4) {
                     Text("日本全国フォトマップ")
                         .font(.title2.bold())
+                        .foregroundColor(textColor)
 
                     Text("訪れた都道府県の思い出を記録")
                         .font(.subheadline)
+                        .foregroundColor(textColor)
                 }
 
                 Spacer()
@@ -112,8 +148,10 @@ struct JapanPhotoView: View {
     private var mapCardSection: some View {
         VStack(spacing: 16) {
             HStack {
-                Text("インタラクティブマップ")
+                Text("日本地図")
                     .font(.headline)
+                    .foregroundColor(textColor)
+                    .padding(.horizontal)
 
                 Spacer()
 
@@ -123,7 +161,7 @@ struct JapanPhotoView: View {
                     Text("ピンチ・ドラッグで操作")
                         .font(.caption)
                 }
-                .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.7))
+                .foregroundColor(textColor.opacity(0.7))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 6)
                 .background(
@@ -286,7 +324,7 @@ struct JapanPhotoView: View {
                 icon: "photo.on.rectangle",
                 title: "登録済み",
                 value: "\(viewModel.photos.count)",
-                color: themeManager.currentTheme.primary
+                color: themeManager.currentTheme.xprimary
             )
 
             JapanStatCard(
@@ -300,7 +338,7 @@ struct JapanPhotoView: View {
                 icon: "percent",
                 title: "達成率",
                 value: String(format: "%.0f%%", Double(viewModel.photos.count) / 47.0 * 100),
-                color: themeManager.currentTheme.accent1
+                color: themeManager.currentTheme.error
             )
         }
         .opacity(animateCards ? 1 : 0)
@@ -312,7 +350,7 @@ struct JapanPhotoView: View {
         VStack(alignment: .leading, spacing: 16) {
             Text("都道府県一覧")
                 .font(.headline)
-                .foregroundColor(.white)
+                .foregroundColor(themeManager.currentTheme.accent2)
 
             LazyVGrid(columns: [
                 GridItem(.flexible(), spacing: 12),
@@ -342,6 +380,7 @@ struct JapanStatCard: View {
     let title: String
     let value: String
     let color: Color
+    @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
@@ -364,8 +403,8 @@ struct JapanStatCard: View {
             RoundedRectangle(cornerRadius: 16)
                 .fill(
                     colorScheme == .dark ?
-                        Color.white.opacity(0.1) :
-                        Color.white.opacity(0.25)
+                    themeManager.currentTheme.accent2.opacity(0.1) :
+                        themeManager.currentTheme.accent1.opacity(0.1)
                 )
         )
         .overlay(
@@ -514,13 +553,15 @@ struct PrefecturePhotoEditorView: View {
 
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ?
-                [themeManager.currentTheme.primary.opacity(0.7), .black] :
-                [themeManager.currentTheme.primary.opacity(0.6), .white.opacity(0.3)]),
+            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.gradientDark, themeManager.currentTheme.dark] : [themeManager.currentTheme.gradientLight, themeManager.currentTheme.light]),
             startPoint: .top,
             endPoint: .bottom
         )
         .ignoresSafeArea()
+    }
+    
+    private var DLtextColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.light : themeManager.currentTheme.dark
     }
 
     private var prefectureHeaderSection: some View {
@@ -530,8 +571,8 @@ struct PrefecturePhotoEditorView: View {
                     .fill(
                         LinearGradient(
                             gradient: Gradient(colors: [
-                                themeManager.currentTheme.primary.opacity(0.8),
-                                themeManager.currentTheme.primary.opacity(0.5)
+                                themeManager.currentTheme.xprimary.opacity(0.8),
+                                themeManager.currentTheme.xprimary.opacity(0.5)
                             ]),
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
@@ -541,9 +582,9 @@ struct PrefecturePhotoEditorView: View {
 
                 Image(systemName: "location.fill")
                     .font(.system(size: 30))
-                    .foregroundColor(.white)
+                    .foregroundColor(DLtextColor)
             }
-            .shadow(color: themeManager.currentTheme.primary.opacity(0.4), radius: 10, x: 0, y: 5)
+            .shadow(color: themeManager.currentTheme.xprimary.opacity(0.4), radius: 10, x: 0, y: 5)
 
             Text(prefecture.name)
                 .font(.title.bold())
@@ -617,21 +658,21 @@ struct PrefecturePhotoEditorView: View {
             }) {
                 Label("写真を選択", systemImage: "photo.on.rectangle")
                     .font(.headline)
-                    .foregroundColor(.white)
+                    .foregroundColor(DLtextColor)
                     .frame(maxWidth: .infinity)
                     .padding()
                     .background(
                         LinearGradient(
                             gradient: Gradient(colors: [
-                                themeManager.currentTheme.primary,
-                                themeManager.currentTheme.primary.opacity(0.8)
+                                themeManager.currentTheme.xprimary,
+                                themeManager.currentTheme.xprimary.opacity(0.8)
                             ]),
                             startPoint: .leading,
                             endPoint: .trailing
                         )
                     )
                     .cornerRadius(16)
-                    .shadow(color: themeManager.currentTheme.primary.opacity(0.4), radius: 10, x: 0, y: 5)
+                    .shadow(color: themeManager.currentTheme.xprimary.opacity(0.4), radius: 10, x: 0, y: 5)
             }
 
             if selectedImage != nil {

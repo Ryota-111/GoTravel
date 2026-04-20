@@ -7,6 +7,7 @@ struct Album: Identifiable, Codable, Equatable {
     var title: String
     var photoFileNames: [String]
     var coverColor: Color?
+    var defaultCoverColor: Color?
     var icon: String
     var createdAt: Date
     var updatedAt: Date
@@ -110,13 +111,25 @@ enum AlbumType {
     }
 
     var coverColor: Color {
+        let themeManager = ThemeManager.shared
+        switch self {
+        case .japan: return themeManager.currentTheme.japan
+        case .travel: return themeManager.currentTheme.travel
+        case .family: return themeManager.currentTheme.family
+        case .landscape: return themeManager.currentTheme.landscape
+        case .food: return themeManager.currentTheme.food
+        case .custom: return themeManager.currentTheme.custom
+        }
+    }
+    
+    var defaultCoverColor: Color {
         switch self {
         case .japan: return .blue
         case .travel: return .orange
         case .family: return .pink
         case .landscape: return .green
         case .food: return .red
-        case .custom: return .blue
+        case .custom: return .purple
         }
     }
 }

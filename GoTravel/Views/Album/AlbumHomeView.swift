@@ -17,66 +17,68 @@ struct AlbumHomeView: View {
         NavigationView {
             ZStack {
                 backgroundGradient
-
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 20) {
-                        headerSection
-
-                        albumGridSection
-                    }
-                    .padding()
-                    .padding(.bottom, 80) // Add space for floating button
-                }
-
-                // Floating Action Button
+                
                 VStack {
-                    Spacer()
-                    HStack {
-                        Spacer()
-                        Button(action: {
-                            showCreateAlbum = true
-                        }) {
-                            ZStack {
-                                Circle()
-                                    .fill(
-                                        LinearGradient(
-                                            gradient: Gradient(colors: [
-                                                themeManager.currentTheme.primary,
-                                                themeManager.currentTheme.primary.opacity(0.8)
-                                            ]),
-                                            startPoint: .topLeading,
-                                            endPoint: .bottomTrailing
-                                        )
-                                    )
-                                    .frame(width: 60, height: 60)
-                                    .shadow(
-                                        color: themeManager.currentTheme.primary.opacity(0.5),
-                                        radius: 15,
-                                        x: 0,
-                                        y: 5
-                                    )
-
-                                Image(systemName: "plus")
-                                    .font(.title2.bold())
-                                    .foregroundColor(.white)
-                            }
+                    planEventsTitleSection
+                    
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 20) {
+                            headerSection
+                            
+                            albumGridSection
                         }
-                        .padding(.trailing, 20)
-                        .padding(.bottom, 20)
+                        .padding()
+                    }
+                    
+                    // Floating Action Button
+                    ZStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            Button(action: {
+                                showCreateAlbum = true
+                            }) {
+                                ZStack {
+                                    Circle()
+                                        .fill(
+                                            LinearGradient(
+                                                gradient: Gradient(colors: [
+                                                    themeManager.currentTheme.xprimary,
+                                                    themeManager.currentTheme.xprimary.opacity(0.8)
+                                                ]),
+                                                startPoint: .topLeading,
+                                                endPoint: .bottomTrailing
+                                            )
+                                        )
+                                        .frame(width: 60, height: 60)
+                                        .shadow(
+                                            color: themeManager.currentTheme.xprimary.opacity(0.5),
+                                            radius: 15,
+                                            x: 0,
+                                            y: 5
+                                        )
+                                    
+                                    Image(systemName: "plus")
+                                        .font(.title2.bold())
+                                        .foregroundColor(DLtextColor)
+                                }
+                            }
+                            .padding(.trailing, 20)
+                            .padding(.bottom, 20)
+                        }
+                    }
+                }
+                .onAppear {
+                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
+                        animateCards = true
+                    }
+                    // Setup Core Data FetchedResultsController
+                    if let userId = authVM.userId {
+                        travelPlanViewModel.setupFetchedResultsController(userId: userId)
                     }
                 }
             }
-            .navigationTitle("アルバム")
-            .navigationBarTitleDisplayMode(.large)
-            .onAppear {
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
-                    animateCards = true
-                }
-                // Setup Core Data FetchedResultsController
-                if let userId = authVM.userId {
-                    travelPlanViewModel.setupFetchedResultsController(userId: userId)
-                }
-            }
+            .navigationBarHidden(true)
         }
         .navigationViewStyle(.stack)
         .sheet(isPresented: $showCreateAlbum) {
@@ -101,13 +103,41 @@ struct AlbumHomeView: View {
     // MARK: - Background
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ?
-                [themeManager.currentTheme.primary.opacity(0.7), .black] :
-                [themeManager.currentTheme.primary.opacity(0.6), .white.opacity(0.3)]),
+            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.gradientDark, themeManager.currentTheme.dark] : [themeManager.currentTheme.gradientLight, themeManager.currentTheme.light]),
             startPoint: .top,
             endPoint: .bottom
         )
         .ignoresSafeArea()
+    }
+    
+    // MARK: - Color
+    private var textColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
+    }
+    
+    private var xtextColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.accent1 : themeManager.currentTheme.accent2
+    }
+    
+    private var DLtextColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.light : themeManager.currentTheme.dark
+    }
+    
+    private var secondaryTextColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.accent2.opacity(0.7) : themeManager.currentTheme.accent1.opacity(0.6)
+    }
+    
+    // MARK: - Title Section
+    private var planEventsTitleSection: some View {
+        HStack {
+            Text("アルバム")
+                .font(.title.weight(.semibold))
+                .foregroundColor(textColor)
+
+            Spacer()
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 10)
     }
 
     // MARK: - Header Section
@@ -115,11 +145,11 @@ struct AlbumHomeView: View {
         VStack(alignment: .leading, spacing: 8) {
             Text("思い出をアルバムに")
                 .font(.title2.bold())
-                .foregroundColor(.white)
+                .foregroundColor(textColor)
 
             Text("\(albumManager.albums.count)個のアルバム")
                 .font(.subheadline)
-                .foregroundColor(.white.opacity(0.8))
+                .foregroundColor(secondaryTextColor)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.top, 10)
@@ -191,6 +221,14 @@ struct AlbumCard: View {
     private var recentPhotos: [UIImage] {
         albumManager.getRecentPhotos(from: album, limit: 4)
     }
+    
+    private var textColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
+    }
+    
+    private var secondaryTextColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.accent2.opacity(0.7) : themeManager.currentTheme.accent1.opacity(0.6)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
@@ -204,8 +242,8 @@ struct AlbumCard: View {
             RoundedRectangle(cornerRadius: 20)
                 .fill(
                     colorScheme == .dark ?
-                        Color.white.opacity(0.15) :
-                        Color.white.opacity(0.9)
+                    themeManager.currentTheme.light.opacity(0.15) :
+                        themeManager.currentTheme.light.opacity(0.9)
                 )
         )
         .overlay(
@@ -213,8 +251,8 @@ struct AlbumCard: View {
                 .stroke(
                     LinearGradient(
                         gradient: Gradient(colors: [
-                            (album.coverColor ?? themeManager.currentTheme.primary).opacity(0.5),
-                            (album.coverColor ?? themeManager.currentTheme.primary).opacity(0.2)
+                            (album.coverColor ?? themeManager.currentTheme.xprimary).opacity(0.5),
+                            (album.coverColor ?? themeManager.currentTheme.xprimary).opacity(0.2)
                         ]),
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -223,7 +261,7 @@ struct AlbumCard: View {
                 )
         )
         .shadow(
-            color: (album.coverColor ?? themeManager.currentTheme.primary).opacity(0.3),
+            color: (album.coverColor ?? themeManager.currentTheme.xprimary).opacity(0.5),
             radius: 10,
             x: 0,
             y: 5
@@ -274,8 +312,8 @@ struct AlbumCard: View {
         ZStack {
             LinearGradient(
                 gradient: Gradient(colors: [
-                    (album.coverColor ?? themeManager.currentTheme.primary).opacity(0.6),
-                    (album.coverColor ?? themeManager.currentTheme.primary).opacity(0.3)
+                    (album.coverColor ?? themeManager.currentTheme.xprimary).opacity(0.6),
+                    (album.coverColor ?? themeManager.currentTheme.xprimary).opacity(0.3)
                 ]),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -314,8 +352,8 @@ struct AlbumCard: View {
                             .fill(
                                 LinearGradient(
                                     gradient: Gradient(colors: [
-                                        (album.coverColor ?? themeManager.currentTheme.primary).opacity(0.4),
-                                        (album.coverColor ?? themeManager.currentTheme.primary).opacity(0.2)
+                                        (album.coverColor ?? themeManager.currentTheme.xprimary).opacity(0.4),
+                                        (album.coverColor ?? themeManager.currentTheme.xprimary).opacity(0.2)
                                     ]),
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -334,22 +372,22 @@ struct AlbumCard: View {
             HStack(spacing: 8) {
                 Image(systemName: album.icon)
                     .font(.subheadline)
-                    .foregroundColor(album.coverColor ?? themeManager.currentTheme.primary)
+                    .foregroundColor(album.coverColor ?? themeManager.currentTheme.xprimary)
 
                 Text(album.title)
                     .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(.primary)
+                    .foregroundColor(textColor)
                     .lineLimit(1)
             }
 
             HStack(spacing: 4) {
                 Image(systemName: "photo.on.rectangle.angled")
                     .font(.caption2)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(secondaryTextColor)
 
                 Text("\(album.photoFileNames.count)枚")
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundColor(secondaryTextColor)
             }
         }
         .padding(12)
@@ -357,200 +395,7 @@ struct AlbumCard: View {
     }
 }
 
-// MARK: - Create Album View
-struct CreateAlbumView: View {
-    @Environment(\.dismiss) var dismiss
-    @StateObject private var albumManager = AlbumManager.shared
-    @ObservedObject var themeManager = ThemeManager.shared
-    @State private var creationMode: CreationMode = .manual
-    @State private var albumTitle = ""
-    @State private var selectedType: AlbumType = .custom
-    @State private var selectedTravelPlan: TravelPlan?
-    @Environment(\.colorScheme) var colorScheme
 
-    let travelPlans: [TravelPlan]
-    let albumTypes: [AlbumType] = [.travel, .family, .landscape, .food, .custom]
-
-    enum CreationMode {
-        case manual
-        case fromTravelPlan
-    }
-
-    var body: some View {
-        NavigationView {
-            ZStack {
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 30) {
-                        // Mode Selection
-                        modeSelectionSection
-
-                        if creationMode == .manual {
-                            manualCreationSection
-                        } else {
-                            travelPlanSelectionSection
-                        }
-
-                        Spacer()
-
-                        createButton
-                    }
-                    .padding()
-                }
-            }
-            .navigationTitle("新規アルバム")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("キャンセル") {
-                        dismiss()
-                    }
-                }
-            }
-        }
-        .navigationViewStyle(.stack)
-    }
-
-    // MARK: - Mode Selection
-    private var modeSelectionSection: some View {
-        VStack(spacing: 12) {
-            Text("アルバムの作成方法")
-                .font(.headline)
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-            HStack(spacing: 12) {
-                ModeButton(
-                    title: "手動作成",
-                    icon: "square.and.pencil",
-                    isSelected: creationMode == .manual
-                ) {
-                    creationMode = .manual
-                }
-
-                ModeButton(
-                    title: "旅行計画から",
-                    icon: "airplane.departure",
-                    isSelected: creationMode == .fromTravelPlan
-                ) {
-                    creationMode = .fromTravelPlan
-                }
-            }
-        }
-    }
-
-    // MARK: - Manual Creation
-    private var manualCreationSection: some View {
-        VStack(spacing: 20) {
-            TextField("アルバム名", text: $albumTitle)
-                .font(.title3)
-                .padding()
-                .background(themeManager.currentTheme.secondaryText.opacity(0.2))
-                .cornerRadius(15)
-
-            VStack(alignment: .leading, spacing: 12) {
-                Text("アルバムの種類")
-                    .font(.headline)
-
-                ScrollView(.horizontal, showsIndicators: false) {
-                    HStack(spacing: 12) {
-                        ForEach(albumTypes, id: \.self) { type in
-                            AlbumTypeButton(
-                                type: type,
-                                isSelected: selectedType == type
-                            ) {
-                                selectedType = type
-                            }
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    // MARK: - Travel Plan Selection
-    private var travelPlanSelectionSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("旅行計画を選択")
-                .font(.headline)
-
-            if travelPlans.isEmpty {
-                VStack(spacing: 10) {
-                    Image(systemName: "airplane.departure")
-                        .font(.system(size: 50))
-                        .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.7))
-
-                    Text("旅行計画がありません")
-                        .font(.subheadline)
-                        .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.7))
-                }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 40)
-            } else {
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 12) {
-                        ForEach(travelPlans) { plan in
-                            TravelPlanSelectionCard(
-                                plan: plan,
-                                isSelected: selectedTravelPlan?.id == plan.id
-                            ) {
-                                selectedTravelPlan = plan
-                            }
-                        }
-                    }
-                }
-                .frame(maxHeight: 300)
-            }
-        }
-    }
-
-    // MARK: - Create Button
-    private var createButton: some View {
-        Button(action: createAlbum) {
-            Text("作成")
-                .font(.headline)
-                .frame(maxWidth: .infinity)
-                .foregroundColor(.white)
-                .padding()
-                .background(
-                    LinearGradient(
-                        gradient: Gradient(colors: [
-                            buttonColor,
-                            buttonColor.opacity(0.7)
-                        ]),
-                        startPoint: .leading,
-                        endPoint: .trailing
-                    )
-                )
-                .cornerRadius(15)
-        }
-        .disabled(!canCreate)
-        .opacity(canCreate ? 1 : 0.5)
-    }
-
-    private var buttonColor: Color {
-        if creationMode == .fromTravelPlan {
-            return selectedTravelPlan?.cardColor ?? .blue
-        } else {
-            return selectedType.coverColor
-        }
-    }
-
-    private var canCreate: Bool {
-        if creationMode == .manual {
-            return !albumTitle.isEmpty
-        } else {
-            return selectedTravelPlan != nil
-        }
-    }
-
-    private func createAlbum() {
-        if creationMode == .manual {
-            albumManager.createAlbum(title: albumTitle, type: selectedType)
-        } else if let travelPlan = selectedTravelPlan {
-            albumManager.createTravelPlanAlbum(from: travelPlan)
-        }
-        dismiss()
-    }
-}
 
 // MARK: - Mode Button
 struct ModeButton: View {
@@ -559,27 +404,48 @@ struct ModeButton: View {
     let isSelected: Bool
     let action: () -> Void
     @ObservedObject var themeManager = ThemeManager.shared
+    @Environment(\.colorScheme) var colorScheme
+
+    private var textColor: Color {
+        themeManager.currentTheme.accent2
+    }
+
+    private var buttonTextColor: Color {
+        isSelected ? textColor : themeManager.currentTheme.secondaryText
+    }
+
+    private var backgroundColor: Color {
+        if isSelected {
+            return themeManager.currentTheme.primary.opacity(0.3)
+        } else {
+            return themeManager.currentTheme.dark.opacity(0.1)
+        }
+    }
+
+    private var borderColor: Color {
+        isSelected ? textColor : themeManager.currentTheme.secondaryText.opacity(0.5)
+    }
 
     var body: some View {
         Button(action: action) {
             VStack(spacing: 8) {
                 Image(systemName: icon)
                     .font(.title2)
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .foregroundColor(buttonTextColor)
 
                 Text(title)
                     .font(.caption)
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .foregroundColor(buttonTextColor)
             }
             .frame(maxWidth: .infinity)
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(isSelected ? themeManager.currentTheme.primary.opacity(0.3) : Color.white.opacity(0.1))
+                    .fill(backgroundColor)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
-                    .stroke(isSelected ? themeManager.currentTheme.primary : themeManager.currentTheme.secondaryText, lineWidth: 2)
+                    .stroke(borderColor, lineWidth: 2)
             )
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
@@ -614,18 +480,18 @@ struct TravelPlanSelectionCard: View {
 
                     Image(systemName: "airplane.departure")
                         .font(.title3)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .foregroundColor(themeManager.currentTheme.accent2)
                 }
 
                 // Info
                 VStack(alignment: .leading, spacing: 4) {
                     Text(plan.title)
                         .font(.headline)
-                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .foregroundColor(themeManager.currentTheme.accent2)
 
                     Text(plan.destination)
                         .font(.caption)
-                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .foregroundColor(themeManager.currentTheme.accent2)
                 }
 
                 Spacer()
@@ -634,22 +500,18 @@ struct TravelPlanSelectionCard: View {
                 if isSelected {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.title2)
-                        .foregroundColor(themeManager.currentTheme.primary)
+                        .foregroundColor(themeManager.currentTheme.success)
                 }
             }
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 12)
-                    .fill(
-                        colorScheme == .dark ?
-                            Color.white.opacity(0.1) :
-                            Color.white.opacity(0.2)
-                    )
+                    .fill(themeManager.currentTheme.light)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
                     .stroke(
-                        isSelected ? themeManager.currentTheme.primary : themeManager.currentTheme.secondaryText,
+                        isSelected ? themeManager.currentTheme.success : themeManager.currentTheme.accent2.opacity(0.5),
                         lineWidth: 2
                     )
             )
@@ -664,6 +526,11 @@ struct AlbumTypeButton: View {
     let isSelected: Bool
     let action: () -> Void
     @ObservedObject var themeManager = ThemeManager.shared
+    @Environment(\.colorScheme) var colorScheme
+
+    private var textColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
+    }
 
     var body: some View {
         Button(action: action) {
@@ -674,21 +541,26 @@ struct AlbumTypeButton: View {
                             LinearGradient(
                                 gradient: Gradient(colors: [
                                     type.coverColor,
-                                    type.coverColor.opacity(0.7)
+                                    type.coverColor
                                 ]),
                                 startPoint: .topLeading,
                                 endPoint: .bottomTrailing
                             )
                         )
                         .frame(width: 60, height: 60)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 100)
+                                .stroke(type.defaultCoverColor, lineWidth: 2
+                                )
+                        )
 
                     Image(systemName: type.icon)
                         .font(.title2)
-                        .foregroundColor(.white)
+                        .foregroundColor(themeManager.currentTheme.light)
                 }
                 .scaleEffect(isSelected ? 1.1 : 1.0)
                 .shadow(
-                    color: isSelected ? type.coverColor.opacity(0.6) : .clear,
+                    color: isSelected ? type.defaultCoverColor.opacity(0.6) : .clear,
                     radius: 10,
                     x: 0,
                     y: 5
@@ -696,10 +568,11 @@ struct AlbumTypeButton: View {
 
                 Text(type.title)
                     .font(.caption)
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .foregroundColor(type.defaultCoverColor)
                     .lineLimit(1)
             }
-            .frame(width: 80)
+            .frame(width: 45)
+            .padding()
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
     }
@@ -709,4 +582,5 @@ extension AlbumType: Hashable {}
 
 #Preview {
     AlbumHomeView()
+        .environmentObject(AuthViewModel())
 }

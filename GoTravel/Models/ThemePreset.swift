@@ -70,6 +70,14 @@ struct ThemePreset {
     var dailyPlanColor: Color
     var outingPlanColor: Color
     var travelColor: Color
+    
+    // MARK: - Album Color
+    var japan: Color
+    var travel: Color
+    var family: Color
+    var landscape: Color
+    var food: Color
+    var custom: Color
 
     // MARK: - Initializer
     init(type: ThemeType) {
@@ -124,6 +132,13 @@ struct ThemePreset {
             outingPlanColor = Color.blue
             travelColor = Color.green
             
+            japan = Color.blue
+            travel = Color.orange
+            family = Color.pink
+            landscape = Color.green
+            food = Color.red
+            custom = Color.purple
+            
         case .whiteBlack:
             primary = Color.white
             secondary = Color.black
@@ -171,6 +186,13 @@ struct ThemePreset {
             dailyPlanColor = Color.orange
             outingPlanColor = Color.blue
             travelColor = Color.green
+            
+            japan = Color.black
+            travel = Color.black
+            family = Color.black
+            landscape = Color.black
+            food = Color.black
+            custom = Color.black
             
         case .blackWhite:
             primary = Color.black
@@ -220,6 +242,13 @@ struct ThemePreset {
             outingPlanColor = Color.blue
             travelColor = Color.green
             
+            japan = Color.white
+            travel = Color.white
+            family = Color.white
+            landscape = Color.white
+            food = Color.white
+            custom = Color.white
+            
         case .pastelPink:
             primary = Color.white
             secondary = Color(red: 255/255, green: 209/255, blue: 220/255)
@@ -267,6 +296,13 @@ struct ThemePreset {
             dailyPlanColor = Color.orange
             outingPlanColor = Color.blue
             travelColor = Color.green
+            
+            japan = Color(red: 255/255, green: 209/255, blue: 220/255).opacity(0.08)
+            travel = Color(red: 255/255, green: 209/255, blue: 220/255).opacity(0.08)
+            family = Color(red: 255/255, green: 209/255, blue: 220/255).opacity(0.08)
+            landscape = Color(red: 255/255, green: 209/255, blue: 220/255).opacity(0.08)
+            food = Color(red: 255/255, green: 209/255, blue: 220/255).opacity(0.08)
+            custom = Color(red: 255/255, green: 209/255, blue: 220/255).opacity(0.08)
         }
     }
 }
