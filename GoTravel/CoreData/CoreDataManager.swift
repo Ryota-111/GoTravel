@@ -80,7 +80,7 @@ class CoreDataManager {
                 try context.save()
                 // CloudKitに自動的に同期される
             } catch {
-                let nsError = error as NSError
+                _ = error as NSError
             }
         }
     }

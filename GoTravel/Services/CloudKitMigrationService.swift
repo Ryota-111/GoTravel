@@ -79,7 +79,7 @@ final class CloudKitMigrationService {
                 guard let planId = plan.id else { continue }
 
                 do {
-                    if let existingEntity = try TravelPlanEntity.fetchById(id: planId, context: self.context) {
+                    if (try TravelPlanEntity.fetchById(id: planId, context: self.context)) != nil {
                         continue
                     }
                 } catch {
@@ -125,7 +125,7 @@ final class CloudKitMigrationService {
 
                 // 既存のエンティティをチェック
                 do {
-                    if let existingEntity = try PlanEntity.fetchById(id: plan.id, context: self.context) {
+                    if (try PlanEntity.fetchById(id: plan.id, context: self.context)) != nil {
                         continue
                     }
                 } catch {
@@ -159,7 +159,7 @@ final class CloudKitMigrationService {
                 guard let placeId = place.id else { continue }
 
                 do {
-                    if let existingEntity = try VisitedPlaceEntity.fetchById(id: placeId, context: self.context) {
+                    if (try VisitedPlaceEntity.fetchById(id: placeId, context: self.context)) != nil {
                         continue
                     }
                 } catch {

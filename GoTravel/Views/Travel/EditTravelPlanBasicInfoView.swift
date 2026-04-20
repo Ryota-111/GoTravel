@@ -348,7 +348,7 @@ struct EditTravelPlanBasicInfoView: View {
 
     private func saveUpdatedPlan(with fileName: String?) {
         #if DEBUG
-        if let coord = destinationCoordinate {
+        if destinationCoordinate != nil {
         } else {
         }
         #endif
@@ -397,7 +397,7 @@ struct EditTravelPlanBasicInfoView: View {
 
         let search = MKLocalSearch(request: searchRequest)
         search.start { response, error in
-            if let error = error {
+            if error != nil {
                 #if DEBUG
                 #endif
                 return

@@ -293,7 +293,7 @@ struct AddTravelPlanView: View {
 
     private func createAndSavePlan(withImageFileName fileName: String?) {
         #if DEBUG
-        if let coord = destinationCoordinate {
+        if destinationCoordinate != nil {
         } else {
         }
         #endif
@@ -339,7 +339,7 @@ struct AddTravelPlanView: View {
 
         let search = MKLocalSearch(request: searchRequest)
         search.start { response, error in
-            if let error = error {
+            if error != nil {
                 #if DEBUG
                 #endif
                 return

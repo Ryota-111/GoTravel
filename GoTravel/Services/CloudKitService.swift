@@ -227,7 +227,7 @@ final class CloudKitService {
                 throw CloudKitError.invalidImageData
             }
 
-            let imageSize = Double(imageData.count) / 1024.0 / 1024.0
+            _ = Double(imageData.count) / 1024.0 / 1024.0
 
             // 一時ファイルに保存
             let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".jpg")
@@ -380,7 +380,7 @@ final class CloudKitService {
             record["scheduleItemsJSON"] = scheduleItemsJSON
         }
 
-        let savedRecord = try await save(record)
+        _ = try await save(record)
 
         // 保存されたレコードからPlanを再構築
         var updatedPlan = plan
@@ -550,7 +550,7 @@ final class CloudKitService {
                 throw CloudKitError.invalidImageData
             }
 
-            let imageSize = Double(imageData.count) / 1024.0 / 1024.0
+            _ = Double(imageData.count) / 1024.0 / 1024.0
 
             let url = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".jpg")
             try imageData.write(to: url)

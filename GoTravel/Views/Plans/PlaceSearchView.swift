@@ -110,7 +110,7 @@ struct PlaceSearchView: View {
             DispatchQueue.main.async {
                 isSearching = false
 
-                if let error = error {
+                if error != nil {
                     searchResults = []
                     return
                 }
