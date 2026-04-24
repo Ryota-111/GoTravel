@@ -168,17 +168,14 @@ struct EnjoyWorldView: View {
     // MARK: - Body
     var body: some View {
         NavigationView {
-            ScrollView(.vertical, showsIndicators: false) {
-                VStack(alignment: .leading, spacing: 20) {
-                    Spacer()
-                    titleSection
-                    travelEventsTitleSection
-                    tabSelectionSection
-                    travelPlansSection
-                    planEventsTitleSection
-                    planTabSelectionSection
-                    planEventsListSection
-                }
+            VStack(alignment: .leading, spacing: 15) {
+                titleSection
+                travelEventsTitleSection
+                tabSelectionSection
+                travelPlansSection
+                planEventsTitleSection
+                planTabSelectionSection
+                planEventsListSection
             }
             .background(backgroundGradient)
             .navigationBarHidden(true)
@@ -279,6 +276,7 @@ struct EnjoyWorldView: View {
             .padding(.horizontal, 40)
             .font(.caption.weight(.bold))
             .animation(.easeInOut(duration: 0.6), value: showTodayDate)
+            .padding(.top, 10)
             
             HStack {
                 LinearGradient(
@@ -432,20 +430,19 @@ struct EnjoyWorldView: View {
                 selectedTab = tab
             }
         }) {
-            ZStack {
-                if selectedTab == tab {
-                    Capsule()
-                        .fill(themeManager.currentTheme.secondary)
-                        .matchedGeometryEffect(id: "TAB", in: animation)
+            Text(tab.displayName)
+                .font(.callout)
+                .fontWeight(selectedTab == tab ? .semibold : .regular)
+                .foregroundColor(selectedTab == tab ? themeManager.currentTheme.light : themeManager.currentTheme.secondaryText)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background {
+                    if selectedTab == tab {
+                        Capsule()
+                            .fill(themeManager.currentTheme.secondary)
+                            .matchedGeometryEffect(id: "TAB", in: animation)
+                    }
                 }
-
-                Text(tab.displayName)
-                    .font(.caption)
-                    .fontWeight(selectedTab == tab ? .semibold : .regular)
-                    .foregroundColor(selectedTab == tab ? themeManager.currentTheme.light : themeManager.currentTheme.secondaryText)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-            }
         }
     }
 
@@ -455,20 +452,19 @@ struct EnjoyWorldView: View {
                 selectedPlanTab = tab
             }
         }) {
-            ZStack {
-                if selectedPlanTab == tab {
-                    Capsule()
-                        .fill(themeManager.currentTheme.secondary)
-                        .matchedGeometryEffect(id: "PLAN_TAB", in: animation)
+            Text(tab.displayName)
+                .font(.callout)
+                .fontWeight(selectedPlanTab == tab ? .semibold : .regular)
+                .foregroundColor(selectedPlanTab == tab ? themeManager.currentTheme.light : themeManager.currentTheme.secondaryText)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background {
+                    if selectedPlanTab == tab {
+                        Capsule()
+                            .fill(themeManager.currentTheme.secondary)
+                            .matchedGeometryEffect(id: "PLAN_TAB", in: animation)
+                    }
                 }
-
-                Text(tab.displayName)
-                    .font(.caption)
-                    .fontWeight(selectedPlanTab == tab ? .semibold : .regular)
-                    .foregroundColor(selectedPlanTab == tab ? themeManager.currentTheme.light : themeManager.currentTheme.secondaryText)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-            }
         }
     }
 
@@ -570,31 +566,34 @@ struct EnjoyWorldView: View {
     }
 
     private func planEventsListView(plans: [Plan]) -> some View {
-        VStack(spacing: 20) {
-            PlanEventSectionView(
-                title: "今日の予定",
-                plans: currentFilteredPlans,
-                viewModel: plansViewModel,
-                onDelete: { plan in
-                    planEventToDelete = plan
-                    showPlanDeleteConfirmation = true
-                }
-            )
-            .animation(.spring(response: 0.7, dampingFraction: 0.6), value: currentFilteredPlans.count)
-
-            PlanEventSectionView(
-                title: "今後の予定",
-                plans: futureFilteredPlans,
-                viewModel: plansViewModel,
-                onDelete: { plan in
-                    planEventToDelete = plan
-                    showPlanDeleteConfirmation = true
-                }
-            )
-            .animation(.spring(response: 0.7, dampingFraction: 0.6), value: futureFilteredPlans.count)
-
-            addPlanButton
+        ScrollView(.vertical, showsIndicators: false) {
+            VStack(spacing: 20) {
+                PlanEventSectionView(
+                    title: "今日の予定",
+                    plans: currentFilteredPlans,
+                    viewModel: plansViewModel,
+                    onDelete: { plan in
+                        planEventToDelete = plan
+                        showPlanDeleteConfirmation = true
+                    }
+                )
+                .animation(.spring(response: 0.7, dampingFraction: 0.6), value: currentFilteredPlans.count)
+                
+                PlanEventSectionView(
+                    title: "今後の予定",
+                    plans: futureFilteredPlans,
+                    viewModel: plansViewModel,
+                    onDelete: { plan in
+                        planEventToDelete = plan
+                        showPlanDeleteConfirmation = true
+                    }
+                )
+                .animation(.spring(response: 0.7, dampingFraction: 0.6), value: futureFilteredPlans.count)
+                
+                addPlanButton
+            }
         }
+        .animation(.spring(response: 0.7, dampingFraction: 0.6), value: plans.count)
     }
 
     private var addPlanButton: some View {
