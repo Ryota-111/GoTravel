@@ -50,26 +50,9 @@ struct AddPlanView: View {
 
     // MARK: - Theme-Adaptive Colors
 
-    // テーマに合わせたプランカラー（白黒・パステルピンクテーマ時の色衝突を解消）
+    // おでかけ=青・日常=オレンジ で全テーマ統一
     private func planColorFor(_ type: PlanType) -> Color {
-        switch themeManager.currentTheme.type {
-        case .pastelPink:
-            return type == .outing
-                ? Color(red: 0.76, green: 0.37, blue: 0.51)   // ローズピンク
-                : Color(red: 0.61, green: 0.45, blue: 0.74)   // ラベンダー
-        case .whiteBlack:
-            return type == .outing
-                ? Color(red: 0.25, green: 0.38, blue: 0.68)   // スチールブルー
-                : Color(red: 0.55, green: 0.37, blue: 0.16)   // ウォームブラウン
-        case .blackWhite:
-            return type == .outing
-                ? Color(red: 0.38, green: 0.58, blue: 0.90)   // スカイブルー
-                : Color(red: 0.84, green: 0.60, blue: 0.24)   // ゴールデン
-        case .originalColor:
-            return type == .outing
-                ? themeManager.currentTheme.outingPlanColor
-                : themeManager.currentTheme.dailyPlanColor
-        }
+        type == .outing ? themeManager.currentTheme.outingPlanColor : themeManager.currentTheme.dailyPlanColor
     }
 
     // テーマに合わせたアクセントカラー（白背景時にwhiteが見えなくなる問題を解消）
@@ -86,10 +69,14 @@ struct AddPlanView: View {
 
     // カード内の強調テキスト（色付き背景の上に乗る文字）
     private func cardHighlightTextFor(_ type: PlanType) -> Color {
-        if themeManager.currentTheme.type == .originalColor {
+        switch themeManager.currentTheme.type {
+        case .originalColor:
             return type == .outing ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
+        case .whiteBlack:
+            return .black  // 白背景テーマ：青/橙のカード上でも黒テキストで統一
+        default:
+            return .white
         }
-        return .white
     }
 
     private var effectivePlanColor: Color { planColorFor(selectedPlanType) }
