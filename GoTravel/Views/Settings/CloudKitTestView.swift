@@ -324,7 +324,7 @@ struct CloudKitTestView: View {
                     visitedAt: Date(),
                     address: "東京都千代田区",
                     tags: ["test", "cloudkit", "with-image"],
-                    category: .sightseeing
+                    categoryId: "sightseeing"
                 )
 
                 let savedPlace = try await CloudKitService.shared.saveVisitedPlace(

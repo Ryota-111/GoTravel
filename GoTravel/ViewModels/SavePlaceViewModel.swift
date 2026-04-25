@@ -8,7 +8,7 @@ final class SavePlaceViewModel: ObservableObject {
     @Published var notes: String = ""
     @Published var image: UIImage?
     @Published var visitedAt: Date = Date()
-    @Published var category: PlaceCategory = .other
+    @Published var categoryId: String = "hotel"
     @Published var isSaving: Bool = false
     @Published var error: String?
 
@@ -34,7 +34,7 @@ final class SavePlaceViewModel: ObservableObject {
             longitude: coord.longitude,
             createdAt: Date(),
             visitedAt: visitedAt,
-            category: category
+            categoryId: categoryId
         )
 
         // Core Dataに保存

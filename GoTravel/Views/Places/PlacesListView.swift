@@ -6,14 +6,16 @@ struct PlacesListView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @StateObject private var vm = PlacesViewModel()
     @ObservedObject var themeManager = ThemeManager.shared
-    @State private var selectedCategory: PlaceCategory = .hotel
+    @ObservedObject var categoryManager = PlaceCategoryManager.shared
+    @State private var selectedCategoryId: String = "hotel"
     @State private var hasLoadedData = false
+    @State private var showManageCategories = false
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.scenePhase) var scenePhase
 
     // MARK: - Computed Properties
     private var filteredPlaces: [VisitedPlace] {
-        vm.places.filter { $0.category == selectedCategory }
+        vm.places.filter { $0.categoryId == selectedCategoryId }
     }
 
     private var backgroundGradient: some View {
@@ -203,7 +205,7 @@ struct PlacesListView: View {
 
     private func placeHeader(place: VisitedPlace) -> some View {
         HStack {
-            Image(systemName: place.category.iconName)
+            Image(systemName: categoryManager.category(for: place.categoryId).icon)
                 .foregroundColor(DLtextColor)
 
             Text(place.title)
@@ -238,25 +240,37 @@ struct PlacesListView: View {
                 .foregroundColor(textColor)
 
             Spacer()
+
+            Button(action: { showManageCategories = true }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "slider.horizontal.3")
+                    Text("管理")
+                        .font(.subheadline)
+                }
+                .foregroundColor(textColor)
+            }
         }
         .padding(.horizontal, 20)
         .padding(.top, 10)
+        .sheet(isPresented: $showManageCategories) {
+            ManageCategoriesView()
+        }
     }
     
     private var eventTypeSelectionSection: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 20) {
-                ForEach(PlaceCategory.allCases) { category in
+                ForEach(categoryManager.categories) { category in
                     horizontalEventsCard(
-                        menuName: category.displayName,
-                        menuImage: category.iconName,
-                        rectColor: selectedCategory == category ? themeManager.currentTheme.xsecondary : themeManager.currentTheme.light,
-                        imageColors: selectedCategory == category ? themeManager.currentTheme.light : themeManager.currentTheme.xsecondary,
-                        textColor: selectedCategory == category ? themeManager.currentTheme.xsecondary : themeManager.currentTheme.secondaryText
+                        menuName: category.name,
+                        menuImage: category.icon,
+                        rectColor: selectedCategoryId == category.id ? themeManager.currentTheme.xsecondary : themeManager.currentTheme.light,
+                        imageColors: selectedCategoryId == category.id ? themeManager.currentTheme.light : themeManager.currentTheme.xsecondary,
+                        textColor: selectedCategoryId == category.id ? themeManager.currentTheme.xsecondary : themeManager.currentTheme.secondaryText
                     )
                     .onTapGesture {
                         withAnimation(.spring()) {
-                            selectedCategory = category
+                            selectedCategoryId = category.id
                         }
                     }
                 }

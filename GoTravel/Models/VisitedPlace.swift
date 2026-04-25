@@ -13,7 +13,7 @@ struct VisitedPlace: Identifiable, Codable, Hashable {
     var localPhotoFileName: String?
     var address: String?
     var tags: [String]?
-    var category: PlaceCategory
+    var categoryId: String
     var travelPlanId: String?
     var userId: String?
 
@@ -32,7 +32,7 @@ struct VisitedPlace: Identifiable, Codable, Hashable {
          localPhotoFileName: String? = nil,
          address: String? = nil,
          tags: [String]? = nil,
-         category: PlaceCategory = .other,
+         categoryId: String = "other",
          travelPlanId: String? = nil,
          userId: String? = nil) {
         self.id = id
@@ -46,7 +46,7 @@ struct VisitedPlace: Identifiable, Codable, Hashable {
         self.localPhotoFileName = localPhotoFileName
         self.address = address
         self.tags = tags
-        self.category = category
+        self.categoryId = categoryId
         self.travelPlanId = travelPlanId
         self.userId = userId
     }
@@ -56,7 +56,7 @@ struct VisitedPlace: Identifiable, Codable, Hashable {
          travelPlanId: String?,
          visitedDate: Date = Date(),
          notes: String? = nil,
-         category: PlaceCategory = .other) {
+         categoryId: String = "other") {
         self.id = nil
         self.title = travelPlanTitle
         self.notes = notes
@@ -68,7 +68,7 @@ struct VisitedPlace: Identifiable, Codable, Hashable {
         self.localPhotoFileName = nil
         self.address = plannedPlace.address
         self.tags = nil
-        self.category = category
+        self.categoryId = categoryId
         self.travelPlanId = travelPlanId
         self.userId = nil
     }

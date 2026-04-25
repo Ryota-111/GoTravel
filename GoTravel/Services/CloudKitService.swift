@@ -213,7 +213,7 @@ final class CloudKitService {
             record["travelPlanId"] = travelPlanId
         }
 
-        record["category"] = place.category.rawValue
+        record["category"] = place.categoryId
 
         // 画像ファイル名（ローカルファイル名を保持）
         if let fileName = place.localPhotoFileName {
@@ -299,8 +299,7 @@ final class CloudKitService {
         let tags = record["tags"] as? [String]
         let address = record["address"] as? String
         let travelPlanId = record["travelPlanId"] as? String
-        let categoryRaw = record["category"] as? String ?? "other"
-        let category = PlaceCategory(rawValue: categoryRaw) ?? .other
+        let categoryId = record["category"] as? String ?? "other"
 
         // 画像ファイル名（配列の最初の要素を取得）
         let imageFileNames = record["imageFileNames"] as? [String]
@@ -318,7 +317,7 @@ final class CloudKitService {
             localPhotoFileName: localPhotoFileName,
             address: address,
             tags: tags,
-            category: category,
+            categoryId: categoryId,
             travelPlanId: travelPlanId,
             userId: userId
         )

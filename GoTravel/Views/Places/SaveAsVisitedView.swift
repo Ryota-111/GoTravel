@@ -9,7 +9,7 @@ struct SaveAsVisitedView: View {
     @StateObject private var placesVM = PlacesViewModel()
     @Environment(\.presentationMode) var presentationMode
     @State private var notes: String = ""
-    @State private var selectedCategory: PlaceCategory = .other
+    @State private var selectedCategoryId: String = "other"
     @State private var visitedDate: Date = Date()
     @State private var isSaving = false
 
@@ -48,13 +48,13 @@ struct SaveAsVisitedView: View {
                 }
 
                 Section(header: Text("カテゴリー")) {
-                    Picker("カテゴリー", selection: $selectedCategory) {
-                        ForEach(PlaceCategory.allCases) { category in
+                    Picker("カテゴリー", selection: $selectedCategoryId) {
+                        ForEach(PlaceCategoryManager.shared.categories) { category in
                             HStack {
-                                Image(systemName: category.iconName)
-                                Text(category.displayName)
+                                Image(systemName: category.icon)
+                                Text(category.name)
                             }
-                            .tag(category)
+                            .tag(category.id)
                         }
                     }
                     .pickerStyle(.menu)
@@ -94,7 +94,7 @@ struct SaveAsVisitedView: View {
             travelPlanId: travelPlanId,
             visitedDate: visitedDate,
             notes: notes.trimmingCharacters(in: .whitespaces).isEmpty ? nil : notes.trimmingCharacters(in: .whitespaces),
-            category: selectedCategory
+            categoryId: selectedCategoryId
         )
 
         Task { @MainActor in

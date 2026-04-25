@@ -8,7 +8,7 @@ struct EditVisitedPlaceView: View {
 
     @State private var title: String
     @State private var notes: String
-    @State private var selectedCategory: PlaceCategory
+    @State private var selectedCategoryId: String
     @State private var visitedDate: Date
     @State private var isSaving = false
 
@@ -16,7 +16,7 @@ struct EditVisitedPlaceView: View {
         self.place = place
         _title = State(initialValue: place.title)
         _notes = State(initialValue: place.notes ?? "")
-        _selectedCategory = State(initialValue: place.category)
+        _selectedCategoryId = State(initialValue: place.categoryId)
         _visitedDate = State(initialValue: place.visitedAt ?? place.createdAt)
     }
 
@@ -30,13 +30,13 @@ struct EditVisitedPlaceView: View {
                 }
 
                 Section(header: Text("カテゴリー")) {
-                    Picker("カテゴリー", selection: $selectedCategory) {
-                        ForEach(PlaceCategory.allCases) { category in
+                    Picker("カテゴリー", selection: $selectedCategoryId) {
+                        ForEach(PlaceCategoryManager.shared.categories) { category in
                             HStack {
-                                Image(systemName: category.iconName)
-                                Text(category.displayName)
+                                Image(systemName: category.icon)
+                                Text(category.name)
                             }
-                            .tag(category)
+                            .tag(category.id)
                         }
                     }
                     .pickerStyle(.menu)
@@ -85,7 +85,7 @@ struct EditVisitedPlaceView: View {
         var updatedPlace = place
         updatedPlace.title = title.trimmingCharacters(in: .whitespaces)
         updatedPlace.notes = notes.trimmingCharacters(in: .whitespaces).isEmpty ? nil : notes.trimmingCharacters(in: .whitespaces)
-        updatedPlace.category = selectedCategory
+        updatedPlace.categoryId = selectedCategoryId
         updatedPlace.visitedAt = visitedDate
 
         Task { @MainActor in

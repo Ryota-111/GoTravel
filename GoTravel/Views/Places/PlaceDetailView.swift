@@ -22,7 +22,7 @@ struct PlaceDetailView: View {
     // 編集用の一時変数
     @State private var editedTitle: String = ""
     @State private var editedNotes: String = ""
-    @State private var editedCategory: PlaceCategory = .other
+    @State private var editedCategoryId: String = "other"
     @State private var editedVisitedAt: Date = Date()
 
     @Environment(\.colorScheme) var colorScheme
@@ -195,14 +195,14 @@ struct PlaceDetailView: View {
                         .foregroundColor(textColor)
 
                     Menu {
-                        ForEach(PlaceCategory.allCases) { category in
+                        ForEach(PlaceCategoryManager.shared.categories) { category in
                             Button(action: {
-                                editedCategory = category
+                                editedCategoryId = category.id
                             }) {
                                 HStack {
-                                    Image(systemName: category.iconName)
-                                    Text(category.displayName)
-                                    if editedCategory == category {
+                                    Image(systemName: category.icon)
+                                    Text(category.name)
+                                    if editedCategoryId == category.id {
                                         Spacer()
                                         Image(systemName: "checkmark")
                                     }
@@ -211,9 +211,9 @@ struct PlaceDetailView: View {
                         }
                     } label: {
                         HStack {
-                            Image(systemName: editedCategory.iconName)
+                            Image(systemName: PlaceCategoryManager.shared.category(for: editedCategoryId).icon)
                                 .foregroundColor(textColor)
-                            Text(editedCategory.displayName)
+                            Text(PlaceCategoryManager.shared.category(for: editedCategoryId).name)
                                 .foregroundColor(textColor)
                             Spacer()
                             Image(systemName: "chevron.down")
@@ -366,7 +366,7 @@ struct PlaceDetailView: View {
                     )
                     .frame(height: 250)
                     .overlay(
-                        Image(systemName: place.category.iconName)
+                        Image(systemName: PlaceCategoryManager.shared.category(for: place.categoryId).icon)
                             .font(.system(size: 80))
                             .foregroundColor(themeManager.currentTheme.accent2.opacity(0.5))
                     )
@@ -443,7 +443,7 @@ struct PlaceDetailView: View {
                     )
                     .frame(height: 200)
                     .overlay(
-                        Image(systemName: editedCategory.iconName)
+                        Image(systemName: PlaceCategoryManager.shared.category(for: editedCategoryId).icon)
                             .font(.system(size: 80))
                             .foregroundColor(.white.opacity(0.3))
                     )
@@ -500,9 +500,9 @@ struct PlaceDetailView: View {
     // MARK: - Category Tag
     private var categoryTag: some View {
         HStack(spacing: 8) {
-            Image(systemName: place.category.iconName)
+            Image(systemName: PlaceCategoryManager.shared.category(for: place.categoryId).icon)
                 .font(.caption)
-            Text(place.category.displayName)
+            Text(PlaceCategoryManager.shared.category(for: place.categoryId).name)
                 .font(.subheadline.weight(.semibold))
         }
         .foregroundColor(xtextColor)
@@ -667,7 +667,7 @@ struct PlaceDetailView: View {
     private func enterEditMode() {
         editedTitle = place.title
         editedNotes = place.notes ?? ""
-        editedCategory = place.category
+        editedCategoryId = place.categoryId
         editedVisitedAt = place.visitedAt ?? Date()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             isEditMode = true
@@ -709,7 +709,7 @@ struct PlaceDetailView: View {
         var updatedPlace = place
         updatedPlace.title = editedTitle
         updatedPlace.notes = editedNotes.isEmpty ? nil : editedNotes
-        updatedPlace.category = editedCategory
+        updatedPlace.categoryId = editedCategoryId
         updatedPlace.visitedAt = editedVisitedAt
         updatedPlace.localPhotoFileName = localFileName
 
@@ -809,7 +809,7 @@ struct PlaceDetailView: View {
         PlaceDetailView(
             place: VisitedPlace(
                 title: "Munich",
-                notes: "Beautiful city center with amazing architecture and history.", latitude: 48.1351, longitude: 11.5820, visitedAt: Date(), address: "Marienplatz 1, 80331 München", category: .hotel
+                notes: "Beautiful city center with amazing architecture and history.", latitude: 48.1351, longitude: 11.5820, visitedAt: Date(), address: "Marienplatz 1, 80331 München", categoryId: "hotel"
             )
         )
     }

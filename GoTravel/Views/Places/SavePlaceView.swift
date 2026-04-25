@@ -45,13 +45,13 @@ struct SavePlaceView: View {
 
             DatePicker("訪問日", selection: $vm.visitedAt, displayedComponents: .date)
 
-            Picker("カテゴリー", selection: $vm.category) {
-                ForEach(PlaceCategory.allCases) { category in
+            Picker("カテゴリー", selection: $vm.categoryId) {
+                ForEach(PlaceCategoryManager.shared.categories) { category in
                     HStack {
-                        Image(systemName: category.iconName)
-                        Text(category.displayName)
+                        Image(systemName: category.icon)
+                        Text(category.name)
                     }
-                    .tag(category)
+                    .tag(category.id)
                 }
             }
             .pickerStyle(.menu)

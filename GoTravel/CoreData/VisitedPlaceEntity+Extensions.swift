@@ -91,7 +91,7 @@ extension VisitedPlaceEntity {
             localPhotoFileName: localPhotoFileName,
             address: address,
             tags: tags,
-            category: PlaceCategory(rawValue: category ?? "") ?? .other,
+            categoryId: category ?? "hotel",
             travelPlanId: travelPlanId,
             userId: userId ?? ""
         )
@@ -112,7 +112,7 @@ extension VisitedPlaceEntity {
         self.visitedAt = place.visitedAt
         self.localPhotoFileName = place.localPhotoFileName
         self.address = place.address
-        self.category = place.category.rawValue
+        self.category = place.categoryId
         self.travelPlanId = place.travelPlanId
         self.userId = place.userId ?? ""
 
