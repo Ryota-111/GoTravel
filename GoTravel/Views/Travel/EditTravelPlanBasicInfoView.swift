@@ -1,7 +1,6 @@
 import SwiftUI
 import MapKit
 
-// TravelPlanの編集画面
 struct EditTravelPlanBasicInfoView: View {
     // MARK: - Properties
     @Environment(\.presentationMode) var presentationMode
@@ -49,252 +48,309 @@ struct EditTravelPlanBasicInfoView: View {
         endDate < startDate ? startDate : endDate
     }
 
-    private var backgroundGradient: some View {
+    private var travelColor: Color { themeManager.currentTheme.travelColor }
+
+    private var textColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
+    }
+
+    private var fieldBg: Color {
+        colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight
+    }
+
+    private var cardBg: Color {
+        colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight
+    }
+
+    private var bgGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: [themeManager.currentTheme.gradientDark, themeManager.currentTheme.dark]),
+            gradient: Gradient(colors: colorScheme == .dark
+                ? [themeManager.currentTheme.backgroundDark, themeManager.currentTheme.secondaryBackgroundDark]
+                : [themeManager.currentTheme.backgroundLight, themeManager.currentTheme.secondaryBackgroundLight]),
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
         .ignoresSafeArea()
     }
 
-    private var saveButtonGradient: some View {
-        LinearGradient(
-            gradient: Gradient(colors: [themeManager.currentTheme.primary, themeManager.currentTheme.secondary]),
-            startPoint: .leading,
-            endPoint: .trailing
-        )
-    }
-
     // MARK: - Body
     var body: some View {
         ZStack {
-            backgroundGradient
+            bgGradient
 
-            VStack {
+            VStack(spacing: 0) {
                 headerView
-                scrollContent
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 14) {
+                        coverImageSection
+                        titleSection
+                        destinationSection
+                        dateSection
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+                    .padding(.bottom, 40)
+                }
+
                 saveButton
             }
         }
         .navigationBarHidden(true)
+        .sheet(isPresented: $showImagePicker) {
+            ImageCropPickerView(image: $selectedImage, aspectRatio: 1.0)
+        }
     }
 
-    // MARK: - View Components
+    // MARK: - Header
     private var headerView: some View {
         HStack {
-            backButton
+            Button(action: { presentationMode.wrappedValue.dismiss() }) {
+                Image(systemName: "xmark")
+                    .foregroundColor(textColor)
+                    .imageScale(.medium)
+                    .padding(8)
+                    .background(textColor.opacity(0.1))
+                    .clipShape(Circle())
+            }
 
             Spacer()
 
             Text("基本情報を編集")
                 .font(.headline)
-                .foregroundColor(themeManager.currentTheme.accent2)
+                .foregroundColor(textColor)
 
             Spacer()
+
+            Color.clear.frame(width: 36, height: 36)
         }
-        .padding()
-        .background(themeManager.currentTheme.accent2.opacity(0.2))
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(travelColor.opacity(0.15))
     }
 
-    private var backButton: some View {
-        Button(action: { presentationMode.wrappedValue.dismiss() }) {
-            HStack {
-                Image(systemName: "chevron.left")
-                    .foregroundColor(themeManager.currentTheme.accent2)
-                    .imageScale(.large)
-                Text("戻る")
-                    .foregroundColor(themeManager.currentTheme.accent2)
-            }
-        }
-    }
-
-    private var scrollContent: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                basicInfoSection
-                imagePickerSection
-            }
-            .padding()
-        }
-    }
-
-    private var basicInfoSection: some View {
-        VStack(alignment: .leading, spacing: 15) {
-            Text("旅行の詳細")
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundColor(themeManager.currentTheme.accent2)
-
-            customTextField(
-                icon: "text.alignleft",
-                placeholder: "タイトル",
-                text: $title
-            )
-
-            customTextField(
-                icon: "mappin.circle",
-                placeholder: "目的地",
-                text: $destination
-            )
-            .onChange(of: destination) { oldValue, newValue in
-                searchLocationCoordinate(for: newValue)
-            }
-
-            HStack(alignment: .center) {
-                datePickerCard(title: "開始日", date: $startDate)
-                datePickerCard(title: "終了日", date: $endDate)
-            }
-        }
-        .padding()
-        .background(themeManager.currentTheme.accent2.opacity(0.1))
-        .cornerRadius(15)
-    }
-
-    private var imagePickerSection: some View {
-        VStack(alignment: .leading, spacing: 15) {
-            Text("カード表紙の写真")
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundColor(themeManager.currentTheme.accent2)
-
+    // MARK: - Cover Image Section
+    private var coverImageSection: some View {
+        ZStack(alignment: .bottom) {
             if let image = selectedImage {
-                selectedImageView(image: image)
-            } else {
-                imagePickerButton
-            }
-        }
-        .padding()
-        .background(themeManager.currentTheme.accent2.opacity(0.1))
-        .cornerRadius(15)
-        .sheet(isPresented: $showImagePicker) {
-            ImageCropPickerView(image: $selectedImage, aspectRatio: 1.0)
-        }
-        .onChange(of: selectedImage) { _, newImage in
-            logImageChange(newImage)
-        }
-    }
-
-    private func selectedImageView(image: UIImage) -> some View {
-        VStack(spacing: 10) {
-            ZStack(alignment: .topTrailing) {
                 Image(uiImage: image)
                     .resizable()
-                    .aspectRatio(contentMode: .fill)
+                    .scaledToFill()
+                    .frame(maxWidth: .infinity)
                     .frame(height: 200)
-                    .cornerRadius(15)
                     .clipped()
-
-                removeImageButton
+            } else {
+                LinearGradient(
+                    gradient: Gradient(colors: [travelColor.opacity(0.7), travelColor.opacity(0.4)]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .frame(height: 200)
+                .overlay(
+                    Image(systemName: "airplane")
+                        .font(.system(size: 60))
+                        .foregroundColor(.white.opacity(0.25))
+                )
             }
 
-            changeImageButton
-        }
-    }
-
-    private var removeImageButton: some View {
-        Button(action: {
-            selectedImage = nil
-        }) {
-            Image(systemName: "xmark.circle.fill")
-                .font(.system(size: 30))
-                .foregroundColor(themeManager.currentTheme.error)
-                .background(Circle().fill(themeManager.currentTheme.accent1.opacity(0.5)))
-        }
-        .padding(8)
-    }
-
-    private var changeImageButton: some View {
-        Button(action: {
-            showImagePicker = true
-        }) {
-            HStack {
-                Image(systemName: "photo")
-                Text("写真を変更")
-            }
-            .foregroundColor(.white)
-            .padding(.vertical, 10)
-            .frame(maxWidth: .infinity)
-            .background(themeManager.currentTheme.accent2.opacity(0.5))
-            .cornerRadius(10)
-        }
-    }
-
-    private var imagePickerButton: some View {
-        Button(action: {
-            showImagePicker = true
-        }) {
-            VStack(spacing: 10) {
-                Image(systemName: "photo.fill")
-                    .font(.system(size: 50))
-                    .foregroundColor(themeManager.currentTheme.accent2.opacity(0.7))
-
-                Text("写真を選択")
-                    .foregroundColor(themeManager.currentTheme.accent2)
-                    .font(.headline)
-            }
-            .frame(maxWidth: .infinity)
+            LinearGradient(
+                gradient: Gradient(colors: [.clear, .black.opacity(0.4)]),
+                startPoint: .center,
+                endPoint: .bottom
+            )
             .frame(height: 200)
-            .background(themeManager.currentTheme.accent2.opacity(0.2))
-            .cornerRadius(15)
-        }
-    }
 
-    private var saveButton: some View {
-        Button(action: saveTravelPlan) {
             HStack {
-                if isUploading {
-                    ProgressView()
-                        .progressViewStyle(CircularProgressViewStyle(tint: themeManager.currentTheme.accent2))
-                    Text("保存中...")
-                        .foregroundColor(themeManager.currentTheme.accent2)
-                } else {
-                    Text("保存")
-                        .foregroundColor(themeManager.currentTheme.accent2)
+                if selectedImage != nil {
+                    Button(action: { selectedImage = nil }) {
+                        Label("削除", systemImage: "trash")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 12)
+                            .padding(.vertical, 7)
+                            .background(.ultraThinMaterial)
+                            .clipShape(Capsule())
+                    }
+                }
+                Spacer()
+                Button(action: { showImagePicker = true }) {
+                    Label(selectedImage == nil ? "写真を追加" : "写真を変更", systemImage: "camera.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(.ultraThinMaterial)
+                        .clipShape(Capsule())
+                        .overlay(Capsule().stroke(Color.white.opacity(0.3), lineWidth: 1))
                 }
             }
-            .padding()
-            .frame(maxWidth: .infinity)
-            .background(saveButtonGradient)
-            .cornerRadius(10)
-            .shadow(radius: 10)
+            .padding(.horizontal, 14)
+            .padding(.bottom, 12)
         }
-        .padding()
+        .cornerRadius(20)
+        .shadow(color: travelColor.opacity(0.2), radius: 10, x: 0, y: 5)
+    }
+
+    // MARK: - Title Section
+    private var titleSection: some View {
+        sectionCard {
+            VStack(alignment: .leading, spacing: 10) {
+                sectionLabel("タイトル", icon: "pencil")
+                TextField("例：夏の北海道旅行", text: $title)
+                    .font(.body)
+                    .foregroundColor(textColor)
+                    .padding(14)
+                    .background(fieldBg)
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(title.isEmpty ? themeManager.currentTheme.error.opacity(0.5) : travelColor.opacity(0.3), lineWidth: 1.5)
+                    )
+            }
+        }
+    }
+
+    // MARK: - Destination Section
+    private var destinationSection: some View {
+        sectionCard {
+            VStack(alignment: .leading, spacing: 10) {
+                sectionLabel("目的地", icon: "mappin.circle.fill")
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 12) {
+                        Image(systemName: "mappin.circle.fill")
+                            .foregroundColor(travelColor)
+                        TextField("北海道、東京、大阪…", text: $destination)
+                            .font(.body)
+                            .foregroundColor(textColor)
+                            .onChange(of: destination) { _, newValue in
+                                searchLocationCoordinate(for: newValue)
+                            }
+                    }
+                    .padding(14)
+                    .background(fieldBg)
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(destination.isEmpty ? themeManager.currentTheme.error.opacity(0.5) : travelColor.opacity(0.3), lineWidth: 1.5)
+                    )
+
+                    if destinationCoordinate != nil && !destination.isEmpty {
+                        HStack(spacing: 6) {
+                            Image(systemName: "checkmark.circle.fill")
+                                .foregroundColor(travelColor)
+                            Text("位置情報を取得しました")
+                                .font(.caption)
+                                .foregroundColor(travelColor)
+                        }
+                        .padding(.horizontal, 4)
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: - Date Section
+    private var dateSection: some View {
+        sectionCard {
+            VStack(alignment: .leading, spacing: 10) {
+                sectionLabel("日程", icon: "calendar")
+                VStack(spacing: 8) {
+                    dateRow("出発日", icon: "airplane.departure", date: $startDate)
+                    dateRow("帰宅日", icon: "airplane.arrival", date: $endDate)
+
+                    if endDate < startDate {
+                        Label("帰宅日は出発日以降にしてください", systemImage: "exclamationmark.triangle.fill")
+                            .font(.caption)
+                            .foregroundColor(themeManager.currentTheme.error)
+                            .padding(.top, 2)
+                    } else {
+                        let nights = Calendar.current.dateComponents([.day], from: startDate, to: endDate).day ?? 0
+                        if nights > 0 {
+                            HStack(spacing: 6) {
+                                Image(systemName: "moon.stars.fill")
+                                    .foregroundColor(travelColor)
+                                Text("\(nights)泊\(nights + 1)日")
+                                    .font(.caption)
+                                    .foregroundColor(travelColor)
+                            }
+                            .padding(.horizontal, 4)
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    private func dateRow(_ label: String, icon: String, date: Binding<Date>) -> some View {
+        HStack {
+            Image(systemName: icon)
+                .foregroundColor(travelColor.opacity(0.8))
+                .frame(width: 24)
+            Text(label)
+                .font(.subheadline)
+                .foregroundColor(textColor)
+            Spacer()
+            DatePicker("", selection: date, displayedComponents: .date)
+                .colorMultiply(travelColor)
+                .datePickerStyle(.compact)
+                .labelsHidden()
+        }
+        .padding(14)
+        .background(fieldBg)
+        .cornerRadius(12)
+    }
+
+    // MARK: - Save Button
+    private var saveButton: some View {
+        Button(action: saveTravelPlan) {
+            HStack(spacing: 6) {
+                if isUploading {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: .white))
+                    Text("保存中...")
+                } else {
+                    Image(systemName: "checkmark.circle.fill")
+                    Text("保存")
+                }
+            }
+            .font(.headline.weight(.bold))
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(isFormValid ? travelColor : themeManager.currentTheme.secondaryText)
+                    .shadow(color: travelColor.opacity(0.4), radius: 8, x: 0, y: 4)
+            )
+            .animation(.easeInOut(duration: 0.2), value: isFormValid)
+        }
         .disabled(!isFormValid || isUploading)
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 32)
+        .background(.ultraThinMaterial)
     }
 
     // MARK: - Helper Views
-    private func customTextField(icon: String, placeholder: String, text: Binding<String>) -> some View {
-        HStack {
+    @ViewBuilder
+    private func sectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(cardBg)
+                    .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
+            )
+    }
+
+    private func sectionLabel(_ text: String, icon: String) -> some View {
+        HStack(spacing: 6) {
             Image(systemName: icon)
-                .foregroundColor(.white.opacity(0.7))
-            TextField(placeholder, text: text)
-                .foregroundColor(.white)
-        }
-        .padding()
-        .background(themeManager.currentTheme.accent2.opacity(0.2))
-        .cornerRadius(10)
-    }
-
-    private func datePickerCard(title: String, date: Binding<Date>) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text(title)
-                .foregroundColor(themeManager.currentTheme.accent2)
-                .font(.headline)
-            DatePicker("", selection: date, displayedComponents: .date)
-                .datePickerStyle(CompactDatePickerStyle())
-                .labelsHidden()
-                .frame(maxWidth: .infinity, alignment: .leading)
-        }
-        .padding()
-        .background(themeManager.currentTheme.accent2.opacity(0.2))
-        .cornerRadius(10)
-    }
-
-    // MARK: - Helper Methods
-    private func logImageChange(_ newImage: UIImage?) {
-        if newImage != nil {
-        } else {
+                .font(.caption.weight(.semibold))
+                .foregroundColor(travelColor)
+            Text(text)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(textColor)
         }
     }
 
@@ -347,12 +403,6 @@ struct EditTravelPlanBasicInfoView: View {
     }
 
     private func saveUpdatedPlan(with fileName: String?) {
-        #if DEBUG
-        if destinationCoordinate != nil {
-        } else {
-        }
-        #endif
-
         var updatedPlan = plan
         updatedPlan.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         updatedPlan.destination = destination.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -361,12 +411,6 @@ struct EditTravelPlanBasicInfoView: View {
         updatedPlan.startDate = startDate
         updatedPlan.endDate = normalizedEndDate
         updatedPlan.localImageFileName = fileName
-
-        #if DEBUG
-        if let lat = updatedPlan.latitude, let lon = updatedPlan.longitude {
-        } else {
-        }
-        #endif
 
         if let userId = authVM.userId {
             viewModel.update(updatedPlan, userId: userId, image: selectedImage)
@@ -380,44 +424,18 @@ struct EditTravelPlanBasicInfoView: View {
 
     // MARK: - Location Search
     private func searchLocationCoordinate(for query: String) {
-        let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
-
-        #if DEBUG
-        #endif
-
-        guard !trimmedQuery.isEmpty else {
-            #if DEBUG
-            #endif
+        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else {
             destinationCoordinate = nil
             return
         }
-
-        let searchRequest = MKLocalSearch.Request()
-        searchRequest.naturalLanguageQuery = trimmedQuery
-
-        let search = MKLocalSearch(request: searchRequest)
-        search.start { response, error in
-            if error != nil {
-                #if DEBUG
-                #endif
-                return
-            }
-
-            guard let response = response,
-                  let firstItem = response.mapItems.first else {
-                #if DEBUG
-                #endif
-                return
-            }
-
-            let coordinate = firstItem.placemark.coordinate
-            let foundLocation = (coordinate.latitude, coordinate.longitude)
-
-            #if DEBUG
-            #endif
-
+        let request = MKLocalSearch.Request()
+        request.naturalLanguageQuery = trimmed
+        MKLocalSearch(request: request).start { response, _ in
+            guard let item = response?.mapItems.first else { return }
+            let coord = item.placemark.coordinate
             DispatchQueue.main.async {
-                destinationCoordinate = foundLocation
+                destinationCoordinate = (coord.latitude, coord.longitude)
             }
         }
     }
