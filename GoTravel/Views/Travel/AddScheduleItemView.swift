@@ -393,6 +393,11 @@ struct AddScheduleItemView: View {
 
     // MARK: - Add Action（即時保存）
     private func addScheduleItem() {
+        guard let userId = authVM.userId else { return }
+
+        // viewModelから常に最新のplanを取得（古いスナップショットを使わない）
+        let basePlan = viewModel.travelPlans.first(where: { $0.id == plan.id }) ?? plan
+
         let newItem = ScheduleItem(
             time: time,
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -404,7 +409,7 @@ struct AddScheduleItemView: View {
             linkURL: linkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : linkURL.trimmingCharacters(in: .whitespacesAndNewlines)
         )
 
-        var updatedPlan = plan
+        var updatedPlan = basePlan
         if let dayIndex = updatedPlan.daySchedules.firstIndex(where: { $0.dayNumber == dayNumber }) {
             updatedPlan.daySchedules[dayIndex].scheduleItems.append(newItem)
         } else {
@@ -413,10 +418,7 @@ struct AddScheduleItemView: View {
             updatedPlan.daySchedules.sort { $0.dayNumber < $1.dayNumber }
         }
 
-        if let userId = authVM.userId {
-            viewModel.update(updatedPlan, userId: userId)
-        }
-
+        viewModel.update(updatedPlan, userId: userId)
         presentationMode.wrappedValue.dismiss()
     }
 

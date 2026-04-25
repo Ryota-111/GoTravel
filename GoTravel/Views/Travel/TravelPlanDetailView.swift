@@ -57,12 +57,28 @@ struct TravelPlanDetailView: View {
     }
 
     private var backgroundGradient: some View {
-        LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.gradientDark, themeManager.currentTheme.dark] : [themeManager.currentTheme.gradientLight, themeManager.currentTheme.light]),
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .ignoresSafeArea()
+        let colors: [Color]
+        switch themeManager.currentTheme.type {
+        case .whiteBlack:
+            colors = [Color(white: 0.96), Color(white: 0.91)]
+        default:
+            colors = colorScheme == .dark
+                ? [themeManager.currentTheme.backgroundDark, themeManager.currentTheme.secondaryBackgroundDark]
+                : [themeManager.currentTheme.backgroundLight, themeManager.currentTheme.secondaryBackgroundLight]
+        }
+        return LinearGradient(gradient: Gradient(colors: colors), startPoint: .top, endPoint: .bottom)
+            .ignoresSafeArea()
+    }
+
+    private var accentColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
+    }
+
+    private var scheduleAccentColor: Color {
+        switch themeManager.currentTheme.type {
+        case .whiteBlack: return Color.black
+        default: return themeManager.currentTheme.primary
+        }
     }
 
     // MARK: - Body
@@ -84,22 +100,19 @@ struct TravelPlanDetailView: View {
             backgroundGradient
 
             VStack(spacing: 0) {
-                ScrollView {
+                ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
                         planHeaderSection(plan: plan)
 
                         VStack(spacing: 0) {
                             planWeatherSection
-                            Divider()
+                                .padding(.top, 16)
                             budgetCard(plan: plan)
-                            Divider()
-                            daySelectionTabs(plan: plan)
-                            scheduleTimelineSection(plan: plan)
-                            Divider()
+                            dayScheduleSection(plan: plan)
                             packingListSection(plan: plan)
                         }
-                        .padding(.horizontal)
-                        .padding(.bottom, 20)
+                        .padding(.horizontal, 16)
+                        .padding(.bottom, 30)
                     }
                 }
             }
@@ -107,7 +120,7 @@ struct TravelPlanDetailView: View {
         .offset(x: dragOffset * 0.3)
         .opacity(1 - Double(dragOffset) / 500)
         .gesture(swipeBackGesture)
-        .sheet(isPresented: $showAddScheduleItem) {
+        .fullScreenCover(isPresented: $showAddScheduleItem) {
             AddScheduleItemView(plan: plan, dayNumber: selectedDay)
                 .environmentObject(viewModel)
                 .environmentObject(authVM)
@@ -124,7 +137,6 @@ struct TravelPlanDetailView: View {
         .sheet(isPresented: $showShareView) {
             if let currentPlan = currentPlan {
                 ShareTravelPlanView(plan: currentPlan) { shareCode in
-                    // Update plan with share code
                     if let userId = authVM.userId {
                         viewModel.updateShareCode(planId: currentPlan.id ?? "", shareCode: shareCode, userId: userId)
                     }
@@ -160,63 +172,29 @@ struct TravelPlanDetailView: View {
             }
     }
 
-    // 新しいタイムラインセクション
-    private func scheduleTimelineSection(plan: TravelPlan) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            // ヘッダー：タイトル + 直接「+」ボタン
-            HStack {
-                Text("タイムスケジュール")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-                Spacer()
-                Button(action: { showAddScheduleItem = true }) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 26))
-                        .foregroundColor(themeManager.currentTheme.primary)
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
-
-            if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }) {
-                if daySchedule.scheduleItems.isEmpty {
-                    emptyScheduleMessage(plan: plan)
-                } else {
-                    let sortedItems = sortedScheduleItems(daySchedule.scheduleItems)
-                    VStack(spacing: 0) {
-                        ForEach(Array(sortedItems.enumerated()), id: \.element.id) { index, item in
-                            timelineItemView(item: item, isLast: index == sortedItems.count - 1, plan: plan)
-                        }
-                    }
-                }
-            } else {
-                emptyScheduleMessage(plan: plan)
-            }
-        }
-        .padding(.top, 8)
-        .padding(.bottom, 20)
-        .opacity(animateContent ? 1 : 0)
-        .offset(y: animateContent ? 0 : 10)
-        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.3), value: animateContent)
-    }
-
     private func emptyScheduleMessage(plan: TravelPlan) -> some View {
         Button(action: { showAddScheduleItem = true }) {
-            VStack(spacing: 10) {
-                Image(systemName: "calendar.badge.plus")
-                    .font(.system(size: 36))
-                    .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
-                Text("タップして予定を追加")
-                    .font(.subheadline)
+            VStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(scheduleAccentColor.opacity(0.08))
+                        .frame(width: 64, height: 64)
+                    Image(systemName: "plus.circle")
+                        .font(.system(size: 28))
+                        .foregroundColor(scheduleAccentColor.opacity(0.5))
+                }
+                Text("予定を追加する")
+                    .font(.subheadline.weight(.medium))
                     .foregroundColor(themeManager.currentTheme.secondaryText)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 32)
+            .padding(.vertical, 36)
             .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(themeManager.currentTheme.primary.opacity(0.05))
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(scheduleAccentColor.opacity(0.04))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(themeManager.currentTheme.primary.opacity(0.15), style: StrokeStyle(lineWidth: 1.5, dash: [6]))
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(scheduleAccentColor.opacity(0.2), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
                     )
             )
         }
@@ -234,70 +212,66 @@ struct TravelPlanDetailView: View {
     }
 
     private func timelineItemView(item: ScheduleItem, isLast: Bool, plan: TravelPlan) -> some View {
-        HStack(alignment: .top, spacing: 15) {
-            // 時刻とタイムラインドット
+        HStack(alignment: .top, spacing: 12) {
+            // タイムラインライン
             VStack(spacing: 0) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.accent2.opacity(0.4), themeManager.currentTheme.accent2.opacity(0.2)] : [themeManager.currentTheme.accent1.opacity(0.4), themeManager.currentTheme.accent1.opacity(0.2)]),
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .frame(width: 50, height: 50)
-
-                    Image(systemName: "clock.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-                }
+                // 時刻バッジ
+                Text(formatTime(item.time))
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 5)
+                    .background(scheduleAccentColor)
+                    .clipShape(Capsule())
+                    .frame(width: 54)
 
                 if !isLast {
                     Rectangle()
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.accent2.opacity(0.4), themeManager.currentTheme.accent2.opacity(0.2)] : [themeManager.currentTheme.accent1.opacity(0.4), themeManager.currentTheme.accent1.opacity(0.2)]),
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
-                        .frame(width: 3)
-                        .frame(height: 50)
+                        .fill(scheduleAccentColor.opacity(0.25))
+                        .frame(width: 2)
+                        .frame(maxHeight: .infinity)
+                        .padding(.vertical, 6)
                 }
             }
+            .frame(width: 54)
 
-            // スケジュール内容
-            VStack(alignment: .leading, spacing: 8) {
-                Text(formatTime(item.time))
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-
+            // カードコンテンツ
+            VStack(alignment: .leading, spacing: 6) {
                 Text(item.title)
-                    .font(.system(size: 16, weight: .medium))
-                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(accentColor)
 
                 if let location = item.location, !location.isEmpty {
                     HStack(spacing: 4) {
                         Image(systemName: "mappin.circle.fill")
+                            .font(.system(size: 11))
+                            .foregroundColor(scheduleAccentColor.opacity(0.7))
+                        Text(location)
                             .font(.system(size: 12))
                             .foregroundColor(themeManager.currentTheme.secondaryText)
-                        Text(location)
-                            .font(.system(size: 14))
+                    }
+                }
+
+                if let cost = item.cost, cost > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "yensign.circle")
+                            .font(.system(size: 11))
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
+                        Text("¥\(Int(cost))")
+                            .font(.system(size: 12))
                             .foregroundColor(themeManager.currentTheme.secondaryText)
                     }
                 }
 
                 if let notes = item.notes, !notes.isEmpty {
                     Text(notes)
-                        .font(.system(size: 13))
-                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2.opacity(0.7) : themeManager.currentTheme.accent1.opacity(0.7))
+                        .font(.system(size: 12))
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
                         .lineLimit(2)
                 }
             }
-            .padding(.bottom, isLast ? 0 : 25)
-
-            Spacer()
+            .padding(.vertical, 12)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
             // 削除メニュー
             Menu {
@@ -309,12 +283,13 @@ struct TravelPlanDetailView: View {
             } label: {
                 Image(systemName: "ellipsis.circle")
                     .font(.system(size: 18))
-                    .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.6))
+                    .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
+                    .padding(.top, 14)
             }
         }
+        .padding(.horizontal, 4)
     }
 
-    // ヘッダーセクション：画像背景にタイトル、日付、時刻を表示
     private func planHeaderSection(plan: TravelPlan) -> some View {
         ZStack {
             // 背景画像
@@ -329,344 +304,245 @@ struct TravelPlanDetailView: View {
                         .resizable()
                         .aspectRatio(contentMode: .fill)
                 } else {
-                    // デフォルトの背景色
                     Rectangle()
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    themeManager.currentTheme.accent1.opacity(0.7),
-                                    themeManager.currentTheme.accent2.opacity(0.6),
-                                    themeManager.currentTheme.secondary.opacity(0.7)
-                                ]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
+                        .fill(LinearGradient(
+                            gradient: Gradient(colors: [
+                                themeManager.currentTheme.primary.opacity(0.8),
+                                themeManager.currentTheme.secondary.opacity(0.6)
+                            ]),
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ))
+                        .overlay(
+                            Image(systemName: "airplane")
+                                .font(.system(size: 80))
+                                .foregroundColor(.white.opacity(0.15))
                         )
                 }
             }
-            .frame(height: 280)
+            .frame(height: 300)
             .clipped()
 
-            // グラデーションオーバーレイ
+            // グラデーションオーバーレイ（下部を暗く）
             LinearGradient(
-                gradient: Gradient(colors: [Color.clear, Color.black.opacity(0.8)]),
+                gradient: Gradient(stops: [
+                    .init(color: .clear, location: 0),
+                    .init(color: Color.black.opacity(0.3), location: 0.4),
+                    .init(color: Color.black.opacity(0.85), location: 1)
+                ]),
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: 280)
+            .frame(height: 300)
 
             // テキスト情報（下部）
-            VStack(alignment: .leading, spacing: 10) {
-                Text(plan.title)
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundColor(.white)
-                    .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
-
-                HStack(spacing: 20) {
-                    Label {
-                        Text(formatDateWithWeekday(plan.startDate))
-                            .foregroundColor(.white)
-                    } icon: {
-                        Image(systemName: "calendar")
-                            .foregroundColor(.white)
-                    }
-
-                    Label {
-                        Text(formatTripDuration())
-                            .foregroundColor(.white)
-                    } icon: {
-                        Image(systemName: "clock")
-                            .foregroundColor(.white)
-                    }
+            VStack(alignment: .leading, spacing: 8) {
+                // 目的地バッジ
+                HStack(spacing: 4) {
+                    Image(systemName: "mappin.circle.fill")
+                        .font(.caption.weight(.semibold))
+                    Text(plan.destination)
+                        .font(.caption.weight(.semibold))
                 }
-                .font(.subheadline)
+                .foregroundColor(.white.opacity(0.85))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(.ultraThinMaterial)
+                .clipShape(Capsule())
+
+                Text(plan.title)
+                    .font(.system(size: 26, weight: .bold))
+                    .foregroundColor(.white)
+                    .shadow(color: .black.opacity(0.4), radius: 3, x: 0, y: 1)
+                    .lineLimit(2)
+
+                HStack(spacing: 16) {
+                    Label(formatDateWithWeekday(plan.startDate), systemImage: "calendar")
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.9))
+                    Label(formatTripDuration(), systemImage: "moon.stars.fill")
+                        .font(.subheadline)
+                        .foregroundColor(.white.opacity(0.9))
+                }
                 .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
-            .padding(20)
+            .padding(.horizontal, 20)
+            .padding(.bottom, 20)
 
             // ナビゲーションボタン（上部）
             HStack {
-                // 戻るボタン
                 Button(action: { presentationMode.wrappedValue.dismiss() }) {
                     ZStack {
-                        Circle()
-                            .fill(Color.black.opacity(0.3))
-                            .frame(width: 40, height: 40)
+                        Circle().fill(.ultraThinMaterial).frame(width: 40, height: 40)
                         Image(systemName: "chevron.left")
                             .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(Color.white)
+                            .foregroundColor(.white)
                     }
                 }
-                .padding(.leading, 20)
+                .padding(.leading, 16)
 
                 Spacer()
 
-                // 共有ボタン
-                Button(action: { showShareView = true }) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.black.opacity(0.3))
-                            .frame(width: 40, height: 40)
-                        Image(systemName: plan.isShared ? "person.2.fill" : "person.2")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(plan.isShared ? themeManager.currentTheme.success : Color.white)
+                HStack(spacing: 10) {
+                    Button(action: { showShareView = true }) {
+                        ZStack {
+                            Circle().fill(.ultraThinMaterial).frame(width: 40, height: 40)
+                            Image(systemName: plan.isShared ? "person.2.fill" : "person.2")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(plan.isShared ? themeManager.currentTheme.success : .white)
+                        }
+                    }
+                    Button(action: { showBasicInfoEditor = true }) {
+                        ZStack {
+                            Circle().fill(.ultraThinMaterial).frame(width: 40, height: 40)
+                            Image(systemName: "pencil")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
                     }
                 }
-
-                // 編集ボタン
-                Button(action: { showBasicInfoEditor = true }) {
-                    ZStack {
-                        Circle()
-                            .fill(Color.black.opacity(0.3))
-                            .frame(width: 40, height: 40)
-                        Image(systemName: "pencil")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(Color.white)
-                    }
-                }
-                .padding(.trailing, 20)
+                .padding(.trailing, 16)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .padding(.top, 10)
+            .padding(.top, 12)
         }
-        .frame(height: 280)
+        .frame(height: 300)
         .opacity(animateContent ? 1 : 0)
         .offset(y: animateContent ? 0 : -20)
         .animation(.spring(response: 0.6, dampingFraction: 0.8), value: animateContent)
     }
 
-//    private func planInfoCard(plan: TravelPlan) -> some View {
-//        VStack(spacing: 15) {
-//            HStack {
-//                Text(plan.title)
-//                    .font(.title)
-//                    .fontWeight(.bold)
-//                    .foregroundColor(colorScheme == .dark ? .white : .black)
-//
-//                Spacer()
-//
-//                // Share Button
-//                Button(action: { showShareView = true }) {
-//                    HStack(spacing: 4) {
-//                        Image(systemName: plan.isShared ? "person.2.fill" : "person.2")
-//                            .foregroundColor(plan.isShared ? themeManager.currentTheme.success : themeManager.currentTheme.accent1)
-//                            .font(.title3)
-//                        if plan.isShared {
-//                            Text("\(plan.sharedWith.count)")
-//                                .font(.caption)
-//                                .fontWeight(.semibold)
-//                                .foregroundColor(themeManager.currentTheme.success)
-//                        }
-//                    }
-//                    .padding(.horizontal, 12)
-//                    .padding(.vertical, 8)
-//                    .background(Color.white.opacity(0.3))
-//                    .cornerRadius(10)
-//                }
-//            }
-//
-//            HStack(spacing: 20) {
-//                destinationInfo(plan: plan)
-//                dateInfo(plan: plan)
-//            }
-//            .font(.subheadline)
-//
-//            if plan.isShared {
-//                lastUpdatedInfo(plan: plan)
-//            }
-//
-//            // 画像を表示: planImagesキャッシュを優先、なければローカルファイルから読み込む
-//            if let planId = plan.id, let image = viewModel.planImages[planId] {
-//                planImage(image: image)
-//            } else if let localImageFileName = plan.localImageFileName,
-//                      let image = FileManager.documentsImage(named: localImageFileName) {
-//                planImage(image: image)
-//            }
-//        }
-//        .padding()
-//        .background(Color.white.opacity(0.2))
-//        .cornerRadius(15)
-//    }
-//
-//    private func lastUpdatedInfo(plan: TravelPlan) -> some View {
-//        HStack(spacing: 5) {
-//            Image(systemName: "clock.arrow.circlepath")
-//                .font(.caption)
-//                .foregroundColor(themeManager.currentTheme.success)
-//            Text("最終更新: \(formatDateTime(plan.updatedAt))")
-//                .font(.caption)
-//                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
-//        }
-//    }
-//
-//    private func destinationInfo(plan: TravelPlan) -> some View {
-//        HStack(spacing: 5) {
-//            Image(systemName: "mappin.circle.fill")
-//                .foregroundColor(themeManager.currentTheme.accent1)
-//            Text(plan.destination)
-//                .foregroundColor(colorScheme == .dark ? .white : .black)
-//        }
-//    }
-//
-//    private func dateInfo(plan: TravelPlan) -> some View {
-//        HStack(spacing: 5) {
-//            Image(systemName: "calendar")
-//                .foregroundColor(themeManager.currentTheme.accent1)
-//            Text(dateRangeString(plan: plan))
-//                .foregroundColor(colorScheme == .dark ? .white : .black)
-//        }
-//    }
-//
-//    private func planImage(image: UIImage) -> some View {
-//        Image(uiImage: image)
-//            .resizable()
-//            .aspectRatio(contentMode: .fill)
-//            .frame(height: 200)
-//            .cornerRadius(15)
-//            .clipped()
-//    }
-
-    // 新しい予算カード
     private func budgetCard(plan: TravelPlan) -> some View {
         Button(action: { showBudgetSummary = true }) {
-            VStack(alignment: .leading, spacing: 15) {
-                Text("予算")
-                    .font(.system(size: 18, weight: .semibold))
-                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-
-                HStack(spacing: 12) {
-                    ZStack {
-                        Circle()
-                            .fill(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [Color.green.opacity(0.3), Color.green.opacity(0.15)]),
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 40, height: 40)
-                        Image(systemName: "yensign.circle.fill")
-                            .font(.system(size: 20))
-                            .foregroundColor(Color.green.opacity(0.8))
-                    }
-
-                    Text(formatBudgetAmount(plan: plan))
-                        .font(.system(size: 30, weight: .bold))
-                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-
-                    Spacer()
+            HStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(scheduleAccentColor.opacity(0.12))
+                        .frame(width: 48, height: 48)
+                    Image(systemName: "yensign.circle.fill")
+                        .font(.system(size: 24))
+                        .foregroundColor(scheduleAccentColor.opacity(0.8))
                 }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("合計予算")
+                        .font(.caption)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                    Text(formatBudgetAmount(plan: plan))
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(accentColor)
+                }
+
+                Spacer()
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
             }
-            .padding(.vertical, 20)
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
+                    .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
+            )
         }
         .buttonStyle(PlainButtonStyle())
+        .padding(.top, 12)
         .opacity(animateContent ? 1 : 0)
         .offset(y: animateContent ? 0 : 10)
-        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: animateContent)
+        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.15), value: animateContent)
     }
 
-//    private func budgetButton(plan: TravelPlan) -> some View {
-//        Button(action: { showBudgetSummary = true }) {
-//            HStack {
-//                Image(systemName: "yensign.circle.fill")
-//                    .font(.title2)
-//                    .foregroundColor(themeManager.currentTheme.success)
-//
-//                VStack(alignment: .leading, spacing: 5) {
-//                    Text("金額管理")
-//                        .font(.headline)
-//                        .foregroundColor(colorScheme == .dark ? .white : .black)
-//
-//                    Text(formatTotalCost(plan: plan))
-//                        .font(.headline)
-//                        .foregroundColor(colorScheme == .dark ? .white : .black)
-//                }
-//
-//                Spacer()
-//
-//                Image(systemName: "chevron.right")
-//                    .foregroundColor(colorScheme == .dark ? .white.opacity(0.6) : .gray)
-//            }
-//            .padding()
-//            .background(Color.white.opacity(0.2))
-//            .cornerRadius(15)
-//        }
-//    }
-
-    private func daySelectionTabs(plan: TravelPlan) -> some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
-                ForEach(1...tripDuration, id: \.self) { day in
-                    dayTab(day: day, plan: plan)
+    private func dayScheduleSection(plan: TravelPlan) -> some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // セクションヘッダー
+            HStack {
+                Text("タイムスケジュール")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(accentColor)
+                Spacer()
+                Button(action: { showAddScheduleItem = true }) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 13, weight: .bold))
+                        Text("追加")
+                            .font(.system(size: 13, weight: .semibold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .background(scheduleAccentColor)
+                    .clipShape(Capsule())
                 }
+                .buttonStyle(PlainButtonStyle())
+            }
+
+            // Day タブ（横スクロール）
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(1...tripDuration, id: \.self) { day in
+                        let isSelected = selectedDay == day
+                        let itemCount = plan.daySchedules.first(where: { $0.dayNumber == day })?.scheduleItems.count ?? 0
+                        let dayDate: Date? = {
+                            let d = plan.daySchedules.first(where: { $0.dayNumber == day })?.date
+                            return d ?? Calendar.current.date(byAdding: .day, value: day - 1, to: plan.startDate)
+                        }()
+
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                selectedDay = day
+                            }
+                        }) {
+                            VStack(spacing: 4) {
+                                Text("Day \(day)")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(isSelected ? .white : accentColor)
+
+                                if let d = dayDate {
+                                    Text(formatDate(d))
+                                        .font(.system(size: 10))
+                                        .foregroundColor(isSelected ? .white.opacity(0.8) : themeManager.currentTheme.secondaryText)
+                                }
+
+                                if itemCount > 0 {
+                                    Text("\(itemCount)件")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(isSelected ? .white.opacity(0.8) : scheduleAccentColor)
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(isSelected ? scheduleAccentColor : (colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight))
+                                    .shadow(color: isSelected ? scheduleAccentColor.opacity(0.3) : themeManager.currentTheme.shadow, radius: isSelected ? 6 : 3, x: 0, y: 2)
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+
+            // スケジュールアイテムリスト
+            if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }),
+               !daySchedule.scheduleItems.isEmpty {
+                let sortedItems = sortedScheduleItems(daySchedule.scheduleItems)
+                VStack(spacing: 0) {
+                    ForEach(Array(sortedItems.enumerated()), id: \.element.id) { index, item in
+                        timelineItemView(item: item, isLast: index == sortedItems.count - 1, plan: plan)
+                    }
+                }
+            } else {
+                emptyScheduleMessage(plan: plan)
             }
         }
         .padding(.top, 20)
-        .padding(.bottom, 8)
+        .opacity(animateContent ? 1 : 0)
+        .offset(y: animateContent ? 0 : 10)
+        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.25), value: animateContent)
     }
-
-    private func dayTab(day: Int, plan: TravelPlan) -> some View {
-        Button(action: {
-            withAnimation(.spring()) {
-                selectedDay = day
-            }
-        }) {
-            VStack(spacing: 5) {
-                Text("Day \(day)")
-                    .font(.headline)
-                    .foregroundColor(dayTabTextColor(isSelected: selectedDay == day))
-
-                if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == day }) {
-                    Text(formatDate(daySchedule.date))
-                        .font(.caption)
-                        .foregroundColor(dayTabSubtextColor(isSelected: selectedDay == day))
-                }
-            }
-            .padding(.horizontal, 20)
-            .padding(.vertical, 12)
-            .background(dayTabBackground(isSelected: selectedDay == day))
-        }
-    }
-
-    private func dayTabTextColor(isSelected: Bool) -> Color {
-        isSelected ? themeManager.currentTheme.light : (colorScheme == .dark ? themeManager.currentTheme.light.opacity(0.6) : .gray)
-    }
-
-    private func dayTabSubtextColor(isSelected: Bool) -> Color {
-        isSelected ? themeManager.currentTheme.light.opacity(0.8) : (colorScheme == .dark ? themeManager.currentTheme.light.opacity(0.5) : .gray.opacity(0.7))
-    }
-
-    private func dayTabBackground(isSelected: Bool) -> some View {
-        RoundedRectangle(cornerRadius: 15)
-            .fill(isSelected ? themeManager.currentTheme.accent1 : themeManager.currentTheme.accent2.opacity(0.3))
-    }
-
-//    private var emptyScheduleView: some View {
-//        VStack(spacing: 15) {
-//            Image(systemName: "calendar.badge.plus")
-//                .font(.system(size: 50))
-//                .foregroundColor(colorScheme == .dark ? .white.opacity(0.5) : .gray.opacity(0.5))
-//
-//            Text("この日のスケジュールはまだありません")
-//                .font(.body)
-//                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
-//
-//            Button(action: { showScheduleEditor = true }) {
-//                Text("スケジュールを追加")
-//                    .font(.headline)
-//                    .foregroundColor(.white)
-//                    .padding(.horizontal, 30)
-//                    .padding(.vertical, 12)
-//                    .background(themeManager.currentTheme.accent1)
-//                    .cornerRadius(25)
-//            }
-//        }
-//        .frame(maxWidth: .infinity)
-//        .padding(.vertical, 40)
-//        .background(Color.white.opacity(0.2))
-//        .cornerRadius(15)
-//    }
 
     // MARK: - Weather Section
     @ViewBuilder
@@ -717,11 +593,11 @@ struct TravelPlanDetailView: View {
                         HStack(spacing: 15) {
                             ZStack {
                                 Circle()
-                                    .fill(Color.blue.opacity(0.15))
+                                    .fill(scheduleAccentColor.opacity(0.15))
                                     .frame(width: 60, height: 60)
                                 Image(systemName: weather.symbolName)
                                     .font(.system(size: 28))
-                                    .foregroundColor(Color.blue.opacity(0.7))
+                                    .foregroundColor(scheduleAccentColor.opacity(0.7))
                             }
 
                             VStack(alignment: .leading, spacing: 4) {
@@ -746,20 +622,23 @@ struct TravelPlanDetailView: View {
 
     // MARK: - Packing List Section
     private func packingListSection(plan: TravelPlan) -> some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("持ち物リスト")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack {
+                Text("持ち物リスト")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(accentColor)
+                Spacer()
+            }
 
             if let currentPlan = currentPlan {
                 PackingListView(plan: currentPlan)
                     .environmentObject(viewModel)
             }
         }
-        .padding(.vertical, 20)
+        .padding(.top, 20)
         .opacity(animateContent ? 1 : 0)
         .offset(y: animateContent ? 0 : 10)
-        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.4), value: animateContent)
+        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.35), value: animateContent)
     }
 
     // MARK: - Helper Methods
