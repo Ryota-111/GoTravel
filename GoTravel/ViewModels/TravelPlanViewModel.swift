@@ -118,6 +118,12 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
             return
         }
 
+        // Core Data保存は非同期なので、ローカル配列を即時更新（楽観的更新）
+        // これにより連続追加時に stale な plan を参照するのを防ぐ
+        if let index = travelPlans.firstIndex(where: { $0.id == planId }) {
+            travelPlans[index] = plan
+        }
+
         var planToSave = plan
         planToSave.updatedAt = Date()
 
