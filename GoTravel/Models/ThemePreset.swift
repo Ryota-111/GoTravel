@@ -5,7 +5,6 @@ struct ThemePreset {
     enum ThemeType: String, Codable, CaseIterable {
         case originalColor = "デフォルトカラー"
         case whiteBlack = "白黒(白色メイン)"
-        case blackWhite = "白黒(黒色メイン)"
         case pastelPink = "パステルピンク"
 
         var displayName: String { rawValue }
@@ -193,61 +192,6 @@ struct ThemePreset {
             landscape = Color.black
             food = Color.black
             custom = Color.black
-            
-        case .blackWhite:
-            primary = Color.black
-            secondary = Color.white
-            tertiary = Color.gray
-            
-            xprimary = Color.white
-            xsecondary = Color.white
-            
-            yprimary = Color.black
-            ysecondary = Color.black
-            
-            backgroundLight = Color(red:0.0, green: 0.0, blue: 0.0)
-            secondaryBackgroundLight = Color(red: 0.11, green: 0.11, blue: 0.12)
-            backgroundDark = Color(red:0.0, green: 0.0, blue: 0.0)
-            secondaryBackgroundDark = Color(red: 0.11, green: 0.11, blue: 0.12)
-            tertiaryBackground = Color(white: 0.9)
-            separatorLight = Color(red: 0.33, green: 0.33, blue: 0.35).opacity(0.6)
-            separatorDark = Color(red: 0.33, green: 0.33, blue: 0.35).opacity(0.6)
-            
-            text = Color.white
-            secondaryText = Color.gray
-            tertiaryText = Color(white: 0.5)
-            budgetLightText = Color(white: 0.4)
-            budgetDarkText = Color(white: 0.4)
-            
-            accent1 = Color.white
-            accent2 = Color.white
-            accent3 = Color.gray
-            
-            success = Color.green
-            warning = Color.orange
-            error = Color.red
-            info = Color.blue
-            
-            cardBackground1 = Color.white.opacity(0.08)
-            cardBackground2 = Color.white.opacity(0.08)
-            cardBorder = Color.white.opacity(0.3)
-            shadow = Color.white.opacity(0.15)
-            
-            gradientLight = Color.black
-            gradientDark = Color.black
-            light = Color.black
-            dark = Color.black
-            
-            dailyPlanColor = Color.orange
-            outingPlanColor = Color.blue
-            travelColor = Color.green
-            
-            japan = Color.white
-            travel = Color.white
-            family = Color.white
-            landscape = Color.white
-            food = Color.white
-            custom = Color.white
             
         case .pastelPink:
             primary = Color(red: 255/255, green: 182/255, blue: 193/255)

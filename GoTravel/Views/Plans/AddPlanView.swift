@@ -88,8 +88,6 @@ struct AddPlanView: View {
         switch themeManager.currentTheme.type {
         case .whiteBlack:
             colors = [Color(white: 0.97), Color(white: 0.84)]
-        case .blackWhite:
-            colors = [Color(white: 0.07), Color(white: 0.17)]
         default:
             colors = selectedPlanType == .outing
                 ? [themeManager.currentTheme.yprimary, themeManager.currentTheme.dark]
