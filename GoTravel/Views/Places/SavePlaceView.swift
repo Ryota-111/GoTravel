@@ -99,7 +99,7 @@ struct SavePlaceView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
-        .background(themeManager.currentTheme.primary.opacity(0.12))
+        .background(themeManager.currentTheme.xprimary.opacity(0.12))
     }
 
     // MARK: - Mini Map
@@ -116,7 +116,7 @@ struct SavePlaceView: View {
         .allowsHitTesting(false)
         .overlay(
             RoundedRectangle(cornerRadius: 16)
-                .stroke(themeManager.currentTheme.primary.opacity(0.2), lineWidth: 1)
+                .stroke(themeManager.currentTheme.xprimary.opacity(0.2), lineWidth: 1)
         )
         .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
     }
@@ -137,7 +137,7 @@ struct SavePlaceView: View {
                             .stroke(
                                 vm.title.isEmpty
                                     ? themeManager.currentTheme.error.opacity(0.4)
-                                    : themeManager.currentTheme.primary.opacity(0.3),
+                                    : themeManager.currentTheme.xprimary.opacity(0.3),
                                 lineWidth: 1.5
                             )
                     )
@@ -158,7 +158,7 @@ struct SavePlaceView: View {
                             VStack(spacing: 6) {
                                 ZStack {
                                     Circle()
-                                        .fill(isSelected ? themeManager.currentTheme.primary : themeManager.currentTheme.primary.opacity(0.08))
+                                        .fill(isSelected ? themeManager.currentTheme.xprimary : themeManager.currentTheme.xprimary.opacity(0.08))
                                         .frame(width: 44, height: 44)
                                     Image(systemName: cat.icon)
                                         .font(.system(size: 18))
@@ -166,7 +166,7 @@ struct SavePlaceView: View {
                                 }
                                 Text(cat.name)
                                     .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(isSelected ? themeManager.currentTheme.primary : themeManager.currentTheme.secondaryText)
+                                    .foregroundColor(isSelected ? themeManager.currentTheme.xprimary : themeManager.currentTheme.secondaryText)
                                     .lineLimit(1)
                             }
                         }
@@ -181,24 +181,53 @@ struct SavePlaceView: View {
     private var dateSection: some View {
         sectionCard {
             VStack(alignment: .leading, spacing: 10) {
-                sectionLabel("訪問日", icon: "calendar")
+                sectionLabel("訪問日（任意）", icon: "calendar")
+
+                // 訪問日を設定するかどうかのトグル
                 HStack {
                     Image(systemName: "calendar.circle")
-                        .foregroundColor(themeManager.currentTheme.primary.opacity(0.8))
+                        .foregroundColor(themeManager.currentTheme.xprimary.opacity(0.8))
                         .frame(width: 24)
-                    Text("訪問日")
+                    Text("訪問日を設定")
                         .font(.subheadline)
                         .foregroundColor(accentColor)
                     Spacer()
-                    DatePicker("", selection: $vm.visitedAt, displayedComponents: .date)
-                        .colorMultiply(themeManager.currentTheme.primary)
-                        .datePickerStyle(.compact)
-                        .labelsHidden()
+                    Toggle("", isOn: Binding(
+                        get: { vm.visitedAt != nil },
+                        set: { vm.visitedAt = $0 ? Date() : nil }
+                    ))
+                    .labelsHidden()
+                    .tint(themeManager.currentTheme.xprimary)
                 }
                 .padding(14)
                 .background(fieldBg)
                 .cornerRadius(12)
+
+                // トグルON時のみDatePickerを表示
+                if let date = vm.visitedAt {
+                    HStack {
+                        Image(systemName: "calendar.badge.checkmark")
+                            .foregroundColor(themeManager.currentTheme.xprimary.opacity(0.8))
+                            .frame(width: 24)
+                        Text("日付")
+                            .font(.subheadline)
+                            .foregroundColor(accentColor)
+                        Spacer()
+                        DatePicker("", selection: Binding(
+                            get: { date },
+                            set: { vm.visitedAt = $0 }
+                        ), displayedComponents: .date)
+                        .colorMultiply(themeManager.currentTheme.xprimary)
+                        .datePickerStyle(.compact)
+                        .labelsHidden()
+                    }
+                    .padding(14)
+                    .background(fieldBg)
+                    .cornerRadius(12)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
             }
+            .animation(.spring(response: 0.3, dampingFraction: 0.8), value: vm.visitedAt != nil)
         }
     }
 
@@ -224,7 +253,7 @@ struct SavePlaceView: View {
                 .padding(14)
                 .background(fieldBg)
                 .cornerRadius(12)
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(themeManager.currentTheme.primary.opacity(0.15), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: 12).stroke(themeManager.currentTheme.xprimary.opacity(0.15), lineWidth: 1))
             }
         }
     }
@@ -263,8 +292,8 @@ struct SavePlaceView: View {
             .padding(.vertical, 16)
             .background(
                 RoundedRectangle(cornerRadius: 14)
-                    .fill(isSaveDisabled ? themeManager.currentTheme.secondaryText : themeManager.currentTheme.primary)
-                    .shadow(color: themeManager.currentTheme.primary.opacity(isSaveDisabled ? 0 : 0.4), radius: 8, x: 0, y: 4)
+                    .fill(isSaveDisabled ? themeManager.currentTheme.secondaryText : themeManager.currentTheme.xprimary)
+                    .shadow(color: themeManager.currentTheme.xprimary.opacity(isSaveDisabled ? 0 : 0.4), radius: 8, x: 0, y: 4)
             )
             .animation(.easeInOut(duration: 0.2), value: isSaveDisabled)
         }
@@ -291,7 +320,7 @@ struct SavePlaceView: View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.caption.weight(.semibold))
-                .foregroundColor(themeManager.currentTheme.primary)
+                .foregroundColor(themeManager.currentTheme.xprimary)
             Text(text)
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(accentColor)

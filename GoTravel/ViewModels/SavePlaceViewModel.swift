@@ -7,7 +7,7 @@ final class SavePlaceViewModel: ObservableObject {
     @Published var title: String = ""
     @Published var notes: String = ""
     @Published var image: UIImage?
-    @Published var visitedAt: Date = Date()
+    @Published var visitedAt: Date? = nil
     @Published var categoryId: String = "hotel"
     @Published var isSaving: Bool = false
     @Published var error: String?
