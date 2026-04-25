@@ -22,7 +22,6 @@ struct TravelPlanDetailView: View {
     @State private var showBudgetSummary = false
     @State private var showShareView = false
     @State private var animateContent = false
-    @State private var dragOffset: CGFloat = 0
 
     // Weather Properties
     @State private var planWeather: WeatherService.DayWeather?
@@ -92,6 +91,7 @@ struct TravelPlanDetailView: View {
             }
         }
         .navigationBarHidden(true)
+        .background(SwipeBackEnabler())
     }
 
     // MARK: - View Components
@@ -117,9 +117,6 @@ struct TravelPlanDetailView: View {
                 }
             }
         }
-        .offset(x: dragOffset * 0.3)
-        .opacity(1 - Double(dragOffset) / 500)
-        .gesture(swipeBackGesture)
         .fullScreenCover(isPresented: $showAddScheduleItem) {
             AddScheduleItemView(plan: plan, dayNumber: selectedDay)
                 .environmentObject(viewModel)
@@ -150,26 +147,6 @@ struct TravelPlanDetailView: View {
             }
             fetchPlanWeather()
         }
-    }
-
-    private var swipeBackGesture: some Gesture {
-        DragGesture(minimumDistance: 20, coordinateSpace: .local)
-            .onChanged { value in
-                // 右方向のドラッグのみを許可
-                if value.translation.width > 0 {
-                    dragOffset = value.translation.width
-                }
-            }
-            .onEnded { value in
-                if value.translation.width > 100 && value.translation.height < 50 && value.translation.height > -50 {
-                    // 十分な距離をドラッグし、かつ横方向のスワイプの場合のみdismiss
-                    presentationMode.wrappedValue.dismiss()
-                }
-                // アニメーションでオフセットをリセット
-                withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                    dragOffset = 0
-                }
-            }
     }
 
     private func emptyScheduleMessage(plan: TravelPlan) -> some View {
@@ -882,6 +859,21 @@ struct TravelPlanDetailView: View {
         TravelPlanDetailView(plan: samplePlan)
             .environmentObject(viewModel)
             .environmentObject(authVM)
+    }
+}
+
+// MARK: - Native Swipe Back Enabler
+// navigationBarHidden(true) で無効化された interactivePopGestureRecognizer を再有効化する
+private struct SwipeBackEnabler: UIViewControllerRepresentable {
+    func makeUIViewController(context: Context) -> UIViewController {
+        UIViewController()
+    }
+
+    func updateUIViewController(_ vc: UIViewController, context: Context) {
+        DispatchQueue.main.async {
+            vc.navigationController?.interactivePopGestureRecognizer?.isEnabled = true
+            vc.navigationController?.interactivePopGestureRecognizer?.delegate = nil
+        }
     }
 }
 
