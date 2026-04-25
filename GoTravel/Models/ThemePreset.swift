@@ -241,12 +241,12 @@ struct ThemePreset {
             outingPlanColor = Color.blue
             travelColor = Color.green
             
-            japan = Color(red: 255/255, green: 209/255, blue: 220/255).opacity(0.08)
-            travel = Color(red: 255/255, green: 209/255, blue: 220/255).opacity(0.08)
-            family = Color(red: 255/255, green: 209/255, blue: 220/255).opacity(0.08)
-            landscape = Color(red: 255/255, green: 209/255, blue: 220/255).opacity(0.08)
-            food = Color(red: 255/255, green: 209/255, blue: 220/255).opacity(0.08)
-            custom = Color(red: 255/255, green: 209/255, blue: 220/255).opacity(0.08)
+            japan    = Color(red: 0.87, green: 0.37, blue: 0.50)   // ローズ
+            travel   = Color(red: 0.55, green: 0.52, blue: 0.85)   // ラベンダーブルー
+            family   = Color(red: 0.95, green: 0.60, blue: 0.42)   // コーラルピーチ
+            landscape = Color(red: 0.40, green: 0.72, blue: 0.55)  // セージグリーン
+            food     = Color(red: 0.90, green: 0.38, blue: 0.38)   // ウォームレッド
+            custom   = Color(red: 0.70, green: 0.50, blue: 0.88)   // ライラック
         }
     }
 }
