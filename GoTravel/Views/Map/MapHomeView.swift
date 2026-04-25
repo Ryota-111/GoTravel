@@ -60,15 +60,15 @@ struct MapHomeView: View {
                     .tint(themeManager.currentTheme.error)
             }
 
-            // 保存済み場所マーカー（テーマカラー）
+            // 保存済み場所マーカー（赤で統一）
             ForEach(vm.places) { place in
                 Annotation(place.title, coordinate: place.coordinate) {
                     ZStack {
                         Circle()
-                            .fill(themeManager.currentTheme.primary.opacity(0.9))
+                            .fill(themeManager.currentTheme.error.opacity(0.9))
                             .frame(width: 34, height: 34)
-                            .shadow(color: themeManager.currentTheme.primary.opacity(0.4), radius: 4, x: 0, y: 2)
-                        Image(systemName: PlaceCategoryManager.shared.category(for: place.categoryId).icon)
+                            .shadow(color: themeManager.currentTheme.error.opacity(0.4), radius: 4, x: 0, y: 2)
+                        Image(systemName: "mappin.circle.fill")
                             .font(.system(size: 15, weight: .semibold))
                             .foregroundStyle(.white)
                     }
