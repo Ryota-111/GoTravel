@@ -69,6 +69,10 @@ struct PlacesListView: View {
             .navigationBarHidden(true)
         }
         .navigationViewStyle(.stack)
+        // sheetはNavigationView外に置いてview再構築による不安定化を防ぐ
+        .sheet(isPresented: $showManageCategories) {
+            ManageCategoriesView()
+        }
         .task {
             // 初回のみCore DataのFetchedResultsControllerをセットアップ
             if !hasLoadedData, let userId = authVM.userId {
@@ -252,9 +256,6 @@ struct PlacesListView: View {
         }
         .padding(.horizontal, 20)
         .padding(.top, 10)
-        .sheet(isPresented: $showManageCategories) {
-            ManageCategoriesView()
-        }
     }
     
     private var eventTypeSelectionSection: some View {

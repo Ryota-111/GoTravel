@@ -15,26 +15,50 @@ struct ManageCategoriesView: View {
     var body: some View {
         NavigationView {
             List {
-                ForEach(categoryManager.categories) { cat in
-                    HStack(spacing: 12) {
-                        Image(systemName: cat.icon)
-                            .frame(width: 28)
-                            .foregroundColor(themeManager.currentTheme.primary)
-                        Text(cat.name)
-                            .foregroundColor(accentColor)
-                        Spacer()
-                        if cat.isDefault {
+                // デフォルトカテゴリー（削除不可）
+                Section("デフォルト") {
+                    ForEach(categoryManager.categories.filter { $0.isDefault }) { cat in
+                        HStack(spacing: 12) {
+                            Image(systemName: cat.icon)
+                                .frame(width: 28)
+                                .foregroundColor(themeManager.currentTheme.primary)
+                            Text(cat.name)
+                                .foregroundColor(accentColor)
+                            Spacer()
                             Image(systemName: "lock.fill")
                                 .font(.caption)
                                 .foregroundColor(themeManager.currentTheme.secondaryText)
                         }
+                        .padding(.vertical, 4)
                     }
-                    .padding(.vertical, 4)
                 }
-                .onDelete { indexSet in
-                    for i in indexSet {
-                        let cat = categoryManager.categories[i]
-                        categoryManager.delete(cat)
+
+                // カスタムカテゴリー（スワイプ削除可）
+                Section("カスタム") {
+                    let custom = categoryManager.categories.filter { !$0.isDefault }
+                    if custom.isEmpty {
+                        Text("カスタムカテゴリーがありません")
+                            .font(.subheadline)
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
+                    } else {
+                        ForEach(custom) { cat in
+                            HStack(spacing: 12) {
+                                Image(systemName: cat.icon)
+                                    .frame(width: 28)
+                                    .foregroundColor(themeManager.currentTheme.primary)
+                                Text(cat.name)
+                                    .foregroundColor(accentColor)
+                                Spacer()
+                            }
+                            .padding(.vertical, 4)
+                        }
+                        .onDelete { indexSet in
+                            // カスタムのみの配列から削除
+                            let customCategories = categoryManager.categories.filter { !$0.isDefault }
+                            for i in indexSet {
+                                categoryManager.delete(customCategories[i])
+                            }
+                        }
                     }
                 }
             }
@@ -50,7 +74,7 @@ struct ManageCategoriesView: View {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button(action: { showAddSheet = true }) {
                         Image(systemName: "plus")
-                            .foregroundColor(themeManager.currentTheme.primary)
+                            .foregroundColor(themeManager.currentTheme.xprimary)
                     }
                 }
             }
