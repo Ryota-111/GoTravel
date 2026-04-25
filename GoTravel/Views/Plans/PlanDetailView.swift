@@ -1170,15 +1170,15 @@ struct PlanDetailView: View {
                 ZStack {
                     Circle()
                         .fill(schedulePlan.planType == .daily ?
-                              LinearGradient(gradient: Gradient(colors: [themeManager.currentTheme.accent1, themeManager.currentTheme.accent1.opacity(0.7)]), startPoint: .topLeading, endPoint: .bottomTrailing) :
-                              LinearGradient(gradient: Gradient(colors: [themeManager.currentTheme.primary, themeManager.currentTheme.primary.opacity(0.7)]), startPoint: .topLeading, endPoint: .bottomTrailing))
+                              LinearGradient(gradient: Gradient(colors: [themeManager.currentTheme.dailyPlanColor, themeManager.currentTheme.dailyPlanColor.opacity(0.7)]), startPoint: .topLeading, endPoint: .bottomTrailing) :
+                              LinearGradient(gradient: Gradient(colors: [themeManager.currentTheme.outingPlanColor, themeManager.currentTheme.outingPlanColor.opacity(0.7)]), startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 50, height: 50)
 
                     Image(systemName: schedulePlan.planType == .outing ? "figure.walk" : "house.fill")
                         .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(themeManager.currentTheme.accent1)
+                        .foregroundColor(.white)
                 }
-                .shadow(color: (schedulePlan.planType == .daily ? themeManager.currentTheme.dailyPlanColor : themeManager.currentTheme.outingPlanColor).opacity(0.3), radius: 4, x: 0, y: 2)
+                .shadow(color: (schedulePlan.planType == .daily ? themeManager.currentTheme.dailyPlanColor : themeManager.currentTheme.outingPlanColor).opacity(0.4), radius: 6, x: 0, y: 3)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(schedulePlan.title)
