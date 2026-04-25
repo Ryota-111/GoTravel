@@ -35,7 +35,12 @@ struct AddTravelPlanView: View {
     }
 
     // MARK: - Theme-Adaptive Colors
-    private var travelColor: Color { themeManager.currentTheme.travelColor }
+    private var travelColor: Color {
+        switch themeManager.currentTheme.type {
+        case .whiteBlack: return Color.black
+        default: return themeManager.currentTheme.primary
+        }
+    }
 
     private var uiAccentColor: Color {
         switch themeManager.currentTheme.type {

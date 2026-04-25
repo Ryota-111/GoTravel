@@ -48,7 +48,12 @@ struct EditTravelPlanBasicInfoView: View {
         endDate < startDate ? startDate : endDate
     }
 
-    private var travelColor: Color { themeManager.currentTheme.travelColor }
+    private var travelColor: Color {
+        switch themeManager.currentTheme.type {
+        case .whiteBlack: return Color.black
+        default: return themeManager.currentTheme.primary
+        }
+    }
 
     private var textColor: Color {
         colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
