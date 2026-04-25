@@ -170,12 +170,14 @@ struct EnjoyWorldView: View {
         NavigationView {
             VStack(alignment: .leading, spacing: 15) {
                 titleSection
-                travelEventsTitleSection
-                tabSelectionSection
-                travelPlansSection
-                planEventsTitleSection
-                planTabSelectionSection
-                planEventsListSection
+                ScrollView(.vertical, showsIndicators: false) {
+                    travelEventsTitleSection
+                    tabSelectionSection
+                    travelPlansSection
+                    planEventsTitleSection
+                    planTabSelectionSection
+                    planEventsListSection
+                }
             }
             .background(backgroundGradient)
             .navigationBarHidden(true)
@@ -341,6 +343,7 @@ struct EnjoyWorldView: View {
             Text("旅行計画")
                 .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                 .font(.title.weight(.semibold))
+            Spacer()
         }
         .padding(.horizontal, 20)
         .padding(.top, 10)
@@ -385,6 +388,7 @@ struct EnjoyWorldView: View {
             Text("予定計画")
                 .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                 .font(.title.weight(.semibold))
+            Spacer()
         }
         .padding(.horizontal, 20)
         .padding(.top, 10)
@@ -567,7 +571,7 @@ struct EnjoyWorldView: View {
 
     private func planEventsListView(plans: [Plan]) -> some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 20) {
+            VStack(spacing: 10) {
                 PlanEventSectionView(
                     title: "今日の予定",
                     plans: currentFilteredPlans,
@@ -578,7 +582,7 @@ struct EnjoyWorldView: View {
                     }
                 )
                 .animation(.spring(response: 0.7, dampingFraction: 0.6), value: currentFilteredPlans.count)
-                
+
                 PlanEventSectionView(
                     title: "今後の予定",
                     plans: futureFilteredPlans,
@@ -589,9 +593,11 @@ struct EnjoyWorldView: View {
                     }
                 )
                 .animation(.spring(response: 0.7, dampingFraction: 0.6), value: futureFilteredPlans.count)
-                
+
                 addPlanButton
             }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
         }
         .animation(.spring(response: 0.7, dampingFraction: 0.6), value: plans.count)
     }
