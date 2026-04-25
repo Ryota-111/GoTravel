@@ -254,298 +254,309 @@ struct PlanDetailView: View {
         }
     }
 
+    // MARK: - Edit Mode Helpers
+
+    private var editTextColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
+    }
+
+    private var editFieldBg: Color {
+        colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight
+    }
+
+    private var editCardBg: Color {
+        colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight
+    }
+
+    @ViewBuilder
+    private func editSectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(editCardBg)
+                    .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
+            )
+    }
+
+    private func editSectionLabel(_ text: String, icon: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.caption.weight(.semibold))
+                .foregroundColor(planColor)
+            Text(text)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(editTextColor)
+        }
+    }
+
+    private func editTypeButton(type: PlanType, icon: String, label: String) -> some View {
+        let isSelected = editedPlanType == type
+        let btnColor: Color = type == .outing
+            ? themeManager.currentTheme.outingPlanColor
+            : themeManager.currentTheme.dailyPlanColor
+        return Button(action: {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                editedPlanType = type
+            }
+        }) {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.subheadline.weight(.semibold))
+                Text(label)
+                    .font(.subheadline.weight(isSelected ? .semibold : .regular))
+            }
+            .foregroundColor(isSelected ? .white : btnColor)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 11)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(isSelected ? btnColor : btnColor.opacity(0.1))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 10)
+                    .stroke(isSelected ? Color.clear : btnColor.opacity(0.35), lineWidth: 1.5)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    private func editDateRow(_ label: String, icon: String, date: Binding<Date>) -> some View {
+        HStack {
+            Image(systemName: icon)
+                .foregroundColor(planColor.opacity(0.8))
+                .frame(width: 22)
+            Text(label)
+                .font(.subheadline)
+                .foregroundColor(editTextColor)
+            Spacer()
+            DatePicker("", selection: date, displayedComponents: .date)
+                .colorMultiply(planColor)
+                .datePickerStyle(.compact)
+                .labelsHidden()
+        }
+        .padding(14)
+        .background(editFieldBg)
+        .cornerRadius(12)
+    }
+
+    private func editTimeRow() -> some View {
+        HStack {
+            Image(systemName: "clock")
+                .foregroundColor(planColor.opacity(0.8))
+                .frame(width: 22)
+            Text("時刻")
+                .font(.subheadline)
+                .foregroundColor(editTextColor)
+            Spacer()
+            DatePicker("", selection: Binding(
+                get: { editedTime ?? Date() },
+                set: { editedTime = $0 }
+            ), displayedComponents: .hourAndMinute)
+            .colorMultiply(planColor)
+            .datePickerStyle(.compact)
+            .labelsHidden()
+            Button(action: { editedTime = nil }) {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .padding(.leading, 6)
+            }
+        }
+        .padding(14)
+        .background(editFieldBg)
+        .cornerRadius(12)
+    }
+
     // MARK: - Edit Mode View
     private var editModeView: some View {
         VStack(spacing: 0) {
-            // Header Image with Edit Button
             editHeaderImageView
 
-            // Edit Form
-            VStack(spacing: 20) {
-                // Title Card
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("プラン名")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+            VStack(spacing: 14) {
 
-                    TextField("例：東京観光", text: $editedTitle)
-                        .font(.body)
-                        .padding(12)
-                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-                        .background(colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight)
-                        .cornerRadius(10)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(colorScheme == .dark ? themeManager.currentTheme.backgroundDark.opacity(0.5) : themeManager.currentTheme.backgroundLight.opacity(0.5), lineWidth: 1)
-                        )
-                }
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
-                        .shadow(color: themeManager.currentTheme.dark.opacity(0.05), radius: 8, x: 0, y: 2)
-                )
-
-                // Plan Type Card
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("プランタイプ")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-
-                    Menu {
-                        Button(action: {
-                            editedPlanType = .daily
-                        }) {
-                            HStack {
-                                Image(systemName: "house.fill")
-                                Text("日常")
-                                if editedPlanType == .daily {
-                                    Spacer()
-                                    Image(systemName: "checkmark")
-                                }
-                            }
+                // プランタイプ
+                editSectionCard {
+                    VStack(alignment: .leading, spacing: 12) {
+                        editSectionLabel("プランタイプ", icon: "tag.fill")
+                        HStack(spacing: 10) {
+                            editTypeButton(type: .outing, icon: "figure.walk", label: "おでかけ")
+                            editTypeButton(type: .daily,  icon: "house.fill",  label: "日常")
                         }
-
-                        Button(action: {
-                            editedPlanType = .outing
-                        }) {
-                            HStack {
-                                Image(systemName: "figure.walk")
-                                Text("おでかけ")
-                                if editedPlanType == .outing {
-                                    Spacer()
-                                    Image(systemName: "checkmark")
-                                }
-                            }
-                        }
-                    } label: {
-                        HStack {
-                            Image(systemName: editedPlanType == .daily ? "house.fill" : "figure.walk")
-                                .foregroundColor(editedPlanType == .daily ? themeManager.currentTheme.dailyPlanColor : themeManager.currentTheme.outingPlanColor)
-                            Text(editedPlanType == .daily ? "日常" : "おでかけ")
-                                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-                            Spacer()
-                            Image(systemName: "chevron.down")
-                                .font(.caption)
-                                .foregroundColor(themeManager.currentTheme.secondaryText)
-                        }
-                        .font(.body)
-                        .padding(12)
-                        .background(colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight)
-                        .cornerRadius(10)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 10)
-                                .stroke(colorScheme == .dark ? themeManager.currentTheme.separatorDark.opacity(0.5) : themeManager.currentTheme.separatorLight.opacity(0.5), lineWidth: 1)
-                        )
                     }
                 }
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
-                        .shadow(color: themeManager.currentTheme.accent1.opacity(0.05), radius: 8, x: 0, y: 2)
-                )
 
-                // Date Card
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("日程")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+                // タイトル
+                editSectionCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        editSectionLabel("プラン名", icon: "pencil")
+                        TextField("例：東京観光", text: $editedTitle)
+                            .font(.body)
+                            .foregroundColor(editTextColor)
+                            .padding(14)
+                            .background(editFieldBg)
+                            .cornerRadius(12)
+                            .overlay(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .stroke(
+                                        editedTitle.isEmpty
+                                            ? themeManager.currentTheme.error.opacity(0.5)
+                                            : planColor.opacity(0.3),
+                                        lineWidth: 1.5
+                                    )
+                            )
+                    }
+                }
 
-                    VStack(spacing: 12) {
-                        if editedPlanType == .outing {
-                            DatePicker("開始日", selection: $editedStartDate, displayedComponents: .date)
-                                .datePickerStyle(.compact)
-                                .colorInvert()
-                                .colorMultiply(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-
-                            DatePicker("終了日", selection: $editedEndDate, displayedComponents: .date)
-                                .datePickerStyle(.compact)
-                                .colorInvert()
-                                .colorMultiply(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-                        } else {
-                            DatePicker("日付", selection: $editedStartDate, displayedComponents: .date)
-                                .datePickerStyle(.compact)
-                                .colorInvert()
-                                .colorMultiply(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-
-                            if let time = editedTime {
-                                DatePicker("時刻", selection: Binding(
-                                    get: { time },
-                                    set: { editedTime = $0 }
-                                ), displayedComponents: .hourAndMinute)
-                                    .datePickerStyle(.compact)
-                                    .colorInvert()
-                                    .colorMultiply(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+                // 日程
+                editSectionCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        editSectionLabel(editedPlanType == .outing ? "日程" : "日付・時刻", icon: "calendar")
+                        VStack(spacing: 8) {
+                            if editedPlanType == .outing {
+                                editDateRow("開始日", icon: "airplane.departure", date: $editedStartDate)
+                                editDateRow("終了日", icon: "calendar.badge.checkmark", date: $editedEndDate)
+                                if editedEndDate < editedStartDate {
+                                    Label("終了日は開始日以降にしてください", systemImage: "exclamationmark.triangle.fill")
+                                        .font(.caption)
+                                        .foregroundColor(themeManager.currentTheme.error)
+                                        .padding(.top, 2)
+                                }
                             } else {
-                                Button(action: {
-                                    editedTime = Date()
-                                }) {
-                                    HStack {
-                                        Image(systemName: "clock")
-                                        Text("時刻を設定")
+                                editDateRow("日付", icon: "calendar", date: $editedStartDate)
+                                if editedTime != nil {
+                                    editTimeRow()
+                                } else {
+                                    Button(action: { editedTime = Date() }) {
+                                        HStack {
+                                            Image(systemName: "clock")
+                                                .foregroundColor(planColor)
+                                                .frame(width: 22)
+                                            Text("時刻を設定")
+                                                .font(.subheadline)
+                                                .foregroundColor(editTextColor)
+                                            Spacer()
+                                            Image(systemName: "plus.circle.fill")
+                                                .foregroundColor(planColor)
+                                        }
+                                        .padding(14)
+                                        .background(editFieldBg)
+                                        .cornerRadius(12)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 予定内容
+                editSectionCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        editSectionLabel("予定内容", icon: "text.alignleft")
+                        ZStack(alignment: .topLeading) {
+                            if editedDescription.isEmpty {
+                                Text("この予定について...")
+                                    .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.45))
+                                    .font(.body)
+                                    .padding(.top, 10)
+                                    .padding(.leading, 5)
+                            }
+                            TextEditor(text: $editedDescription)
+                                .font(.body)
+                                .frame(minHeight: 100)
+                                .foregroundColor(editTextColor)
+                                .scrollContentBackground(.hidden)
+                        }
+                        .padding(14)
+                        .background(editFieldBg)
+                        .cornerRadius(12)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(planColor.opacity(0.2), lineWidth: 1))
+                    }
+                }
+
+                // 関連リンク（日常のみ）
+                if editedPlanType == .daily {
+                    editSectionCard {
+                        VStack(alignment: .leading, spacing: 10) {
+                            editSectionLabel("関連リンク（任意）", icon: "link")
+                            HStack(spacing: 12) {
+                                Image(systemName: "link")
+                                    .foregroundColor(planColor.opacity(0.7))
+                                TextField("https://example.com", text: $editedLinkURL)
+                                    .foregroundColor(editTextColor)
+                                    .keyboardType(.URL)
+                                    .autocapitalization(.none)
+                            }
+                            .padding(14)
+                            .background(editFieldBg)
+                            .cornerRadius(12)
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(planColor.opacity(0.2), lineWidth: 1))
+                        }
+                    }
+                }
+
+                // 訪問場所
+                editSectionCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        editSectionLabel("訪問場所", icon: "mappin.circle.fill")
+
+                        if editedPlaces.isEmpty {
+                            HStack {
+                                Image(systemName: "mappin.slash")
+                                    .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
+                                Text("まだ場所が追加されていません")
+                                    .font(.subheadline)
+                                    .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(18)
+                            .background(editFieldBg)
+                            .cornerRadius(12)
+                        } else {
+                            VStack(spacing: 8) {
+                                ForEach(editedPlaces) { place in
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "mappin.circle.fill")
+                                            .foregroundColor(planColor)
+                                        VStack(alignment: .leading, spacing: 2) {
+                                            Text(place.name)
+                                                .font(.subheadline.weight(.medium))
+                                                .foregroundColor(editTextColor)
+                                            if let address = place.address {
+                                                Text(address)
+                                                    .font(.caption)
+                                                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                                                    .lineLimit(1)
+                                            }
+                                        }
                                         Spacer()
-                                        Image(systemName: "plus.circle.fill")
-                                            .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+                                        Button(action: {
+                                            editedPlaces.removeAll { $0.id == place.id }
+                                        }) {
+                                            Image(systemName: "trash")
+                                                .foregroundColor(themeManager.currentTheme.error)
+                                                .padding(8)
+                                        }
                                     }
                                     .padding(12)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .fill(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
-                                    )
+                                    .background(editFieldBg)
+                                    .cornerRadius(12)
                                 }
                             }
                         }
-                    }
-                    .padding(12)
-                    .background(colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight)
-                    .cornerRadius(10)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 10)
-                            .stroke(colorScheme == .dark ? themeManager.currentTheme.separatorDark.opacity(0.5) : themeManager.currentTheme.separatorLight.opacity(0.5), lineWidth: 1)
-                    )
-                }
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
-                        .shadow(color: themeManager.currentTheme.accent1.opacity(0.05), radius: 8, x: 0, y: 2)
-                )
 
-                // Description Card
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("予定内容")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-
-                    ZStack(alignment: .topLeading) {
-                        if editedDescription.isEmpty {
-                            Text("この予定についての説明を記入...")
-                                .foregroundColor(.secondary.opacity(0.5))
-                                .padding(.horizontal, 16)
-                                .padding(.vertical, 20)
-                        }
-
-                        TextEditor(text: $editedDescription)
-                            .font(.body)
-                            .frame(minHeight: 120)
-                            .padding(8)
-                            .scrollContentBackground(.hidden)
-                            .background(colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight)
-                            .cornerRadius(10)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(colorScheme == .dark ? themeManager.currentTheme.separatorDark.opacity(0.5) : themeManager.currentTheme.separatorLight.opacity(0.5), lineWidth: 1)
-                            )
-                    }
-                }
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
-                        .shadow(color: themeManager.currentTheme.accent1.opacity(0.05), radius: 8, x: 0, y: 2)
-                )
-
-                // Link Card
-                if editedPlanType == .daily {
-                    VStack(alignment: .leading, spacing: 8) {
-                        Text("関連リンク")
-                            .font(.subheadline)
-                            .fontWeight(.semibold)
-                            .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-
-                        TextField("https://example.com", text: $editedLinkURL)
-                            .font(.body)
-                            .padding(12)
-                            .background(colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight)
-                            .cornerRadius(10)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(colorScheme == .dark ? themeManager.currentTheme.separatorDark.opacity(0.5) : themeManager.currentTheme.separatorLight.opacity(0.5), lineWidth: 1)
-                            )
-                            .keyboardType(.URL)
-                            .autocapitalization(.none)
-                    }
-                    .padding(16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 16)
-                            .fill(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
-                            .shadow(color: themeManager.currentTheme.accent1.opacity(0.05), radius: 8, x: 0, y: 2)
-                    )
-                }
-
-                // Places Card
-                VStack(alignment: .leading, spacing: 8) {
-                    Text("訪問場所")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-
-                    if editedPlaces.isEmpty {
-                        Text("まだ場所が追加されていません")
-                            .foregroundColor(themeManager.currentTheme.secondaryText)
-                            .padding()
-                            .frame(maxWidth: .infinity)
-                            .background(colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight)
-                            .cornerRadius(10)
-                    } else {
-                        ForEach(editedPlaces) { place in
-                            HStack {
-                                VStack(alignment: .leading) {
-                                    Text(place.name)
-                                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-                                    if let address = place.address {
-                                        Text(address)
-                                            .font(.caption)
-                                            .foregroundColor(themeManager.currentTheme.secondaryText)
-                                    }
-                                }
-                                Spacer()
-                                Button(action: {
-                                    if let index = editedPlaces.firstIndex(where: { $0.id == place.id }) {
-                                        editedPlaces.remove(at: index)
-                                    }
-                                }) {
-                                    Image(systemName: "trash")
-                                        .foregroundColor(themeManager.currentTheme.error)
-                                }
-                            }
-                            .padding(12)
-                            .background(colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight)
-                            .cornerRadius(10)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 10)
-                                    .stroke(colorScheme == .dark ? themeManager.currentTheme.separatorDark.opacity(0.5) : themeManager.currentTheme.separatorLight.opacity(0.5), lineWidth: 1)
-                            )
+                        Button(action: { showAddPlaceInEdit = true }) {
+                            Label("場所を追加", systemImage: "plus.circle.fill")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(.white)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                                .background(planColor)
+                                .cornerRadius(12)
                         }
                     }
-
-                    Button(action: {
-                        showAddPlaceInEdit = true
-                    }) {
-                        HStack {
-                            Image(systemName: "plus.circle.fill")
-                            Text("場所を追加")
-                        }
-                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.dark : themeManager.currentTheme.light)
-                        .padding(12)
-                        .frame(maxWidth: .infinity)
-                        .background(themeManager.currentTheme.xprimary)
-                        .cornerRadius(10)
-                    }
                 }
-                .padding(16)
-                .background(
-                    RoundedRectangle(cornerRadius: 16)
-                        .fill(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
-                        .shadow(color: themeManager.currentTheme.accent1.opacity(0.05), radius: 8, x: 0, y: 2)
-                )
 
-                // Action Buttons
+                // 保存 / キャンセル
                 HStack(spacing: 12) {
                     Button(action: cancelEdit) {
                         Text("キャンセル")
@@ -554,58 +565,52 @@ struct PlanDetailView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                             .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
+                                RoundedRectangle(cornerRadius: 14)
+                                    .fill(editCardBg)
                             )
                     }
 
                     Button(action: saveChanges) {
-                        HStack(spacing: 8) {
+                        Group {
                             if isSaving {
                                 ProgressView()
                                     .progressViewStyle(CircularProgressViewStyle(tint: .white))
                             } else {
                                 Text("保存")
-                                    .font(.headline)
-                                    .fontWeight(.semibold)
+                                    .font(.headline.weight(.semibold))
                             }
                         }
-                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.dark : themeManager.currentTheme.light)
+                        .foregroundColor(.white)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(
-                            RoundedRectangle(cornerRadius: 12)
-                                .fill(editedTitle.isEmpty ? themeManager.currentTheme.secondaryText : themeManager.currentTheme.xprimary)
-                                .shadow(color: themeManager.currentTheme.accent1.opacity(0.3), radius: 8, x: 0, y: 4)
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(editedTitle.isEmpty ? themeManager.currentTheme.secondaryText : planColor)
+                                .shadow(color: planColor.opacity(0.35), radius: 8, x: 0, y: 4)
                         )
                     }
                     .disabled(isSaving || editedTitle.isEmpty)
                 }
-                .padding(.top, 10)
+                .padding(.top, 8)
 
-                // Delete Button
-                Button(action: {
-                    showDeleteConfirmation = true
-                }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: "trash.fill")
-                            .font(.body)
-                        Text("プランを削除")
-                            .font(.headline)
-                            .fontWeight(.semibold)
-                    }
-                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.dark : themeManager.currentTheme.light)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(themeManager.currentTheme.error)
-                            .shadow(color: themeManager.currentTheme.error.opacity(0.3), radius: 8, x: 0, y: 4)
-                    )
+                // 削除ボタン
+                Button(action: { showDeleteConfirmation = true }) {
+                    Label("プランを削除", systemImage: "trash.fill")
+                        .font(.headline.weight(.semibold))
+                        .foregroundColor(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 16)
+                        .background(
+                            RoundedRectangle(cornerRadius: 14)
+                                .fill(themeManager.currentTheme.error)
+                                .shadow(color: themeManager.currentTheme.error.opacity(0.3), radius: 8, x: 0, y: 4)
+                        )
                 }
-                .padding(.top, 20)
+                .padding(.top, 4)
             }
-            .padding(24)
+            .padding(.horizontal, 20)
+            .padding(.top, 20)
+            .padding(.bottom, 40)
         }
     }
 
@@ -690,62 +695,58 @@ struct PlanDetailView: View {
 
     // MARK: - Header Image (Edit Mode)
     private var editHeaderImageView: some View {
-        ZStack {
+        ZStack(alignment: .bottom) {
+            // 背景：写真 or プランカラーグラデーション
             if let image = displayImage {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .frame(height: 300)
+                    .frame(height: 260)
                     .clipped()
             } else {
-                Rectangle()
-                    .fill(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                planColor.opacity(0.6),
-                                planColor.opacity(0.3)
-                            ]),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(height: 300)
-                    .overlay(
-                        Image(systemName: editedPlanType == .daily ? "house.fill" : "figure.walk")
-                            .font(.system(size: 80))
-                            .foregroundColor(themeManager.currentTheme.light.opacity(0.3))
-                    )
+                LinearGradient(
+                    gradient: Gradient(colors: [planColor.opacity(0.75), planColor.opacity(0.4)]),
+                    startPoint: .topLeading,
+                    endPoint: .bottomTrailing
+                )
+                .frame(height: 260)
+                .overlay(
+                    Image(systemName: editedPlanType == .daily ? "house.fill" : "figure.walk")
+                        .font(.system(size: 80))
+                        .foregroundColor(.white.opacity(0.2))
+                )
             }
 
-            // Change Photo Button
-            Button(action: {
-                showImagePicker = true
-            }) {
-                HStack(spacing: 8) {
-                    Image(systemName: "camera.fill")
-                        .font(.body)
-                    Text("写真を変更")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
+            // 下部グラデーションオーバーレイ（ボタン視認性確保）
+            LinearGradient(
+                gradient: Gradient(colors: [.clear, .black.opacity(0.45)]),
+                startPoint: .center,
+                endPoint: .bottom
+            )
+            .frame(height: 260)
+
+            // 写真変更ボタン（右下）
+            HStack {
+                Spacer()
+                Button(action: { showImagePicker = true }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "camera.fill")
+                            .font(.subheadline)
+                        Text("写真を変更")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 9)
+                    .background(.ultraThinMaterial)
+                    .clipShape(Capsule())
+                    .overlay(Capsule().stroke(Color.white.opacity(0.3), lineWidth: 1))
                 }
-                .foregroundColor(.white)
-                .padding(.horizontal, 20)
-                .padding(.vertical, 12)
-                .background(
-                    Capsule()
-                        .fill(Color.black.opacity(0.6))
-                        .overlay(
-                            Capsule()
-                                .stroke(Color.white.opacity(0.3), lineWidth: 1)
-                        )
-                )
-                .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
+                .padding(.trailing, 16)
+                .padding(.bottom, 14)
             }
         }
-        .cornerRadius(15)
-
-        .padding(.horizontal, 24)
-        .padding(.vertical, 24)
+        .frame(height: 260)
     }
 
     // MARK: - Category Tag
