@@ -57,6 +57,19 @@ struct CreateAlbumView: View {
             : selectedTravelPlan != nil
     }
 
+    // cardColorが未設定のプランに対して、IDから決定論的に色を割り当てる
+    private func resolvedPlanColor(_ plan: TravelPlan) -> Color {
+        if let color = plan.cardColor { return color }
+        let palette: [Color] = [
+            .blue, .purple, .pink, .orange, .teal,
+            .indigo, Color(red: 0.2, green: 0.65, blue: 0.4),
+            Color(red: 0.85, green: 0.35, blue: 0.25)
+        ]
+        let key = plan.id ?? plan.title
+        let hash = abs(key.hashValue)
+        return palette[hash % palette.count]
+    }
+
     // MARK: - Body
     var body: some View {
         ZStack {
@@ -111,7 +124,7 @@ struct CreateAlbumView: View {
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
-        .background(themeManager.currentTheme.primary.opacity(0.12))
+        .background(themeManager.currentTheme.xprimary.opacity(0.12))
     }
 
     // MARK: - Mode Section
@@ -148,8 +161,8 @@ struct CreateAlbumView: View {
                 ZStack {
                     Circle()
                         .fill(isSelected
-                              ? themeManager.currentTheme.primary
-                              : themeManager.currentTheme.primary.opacity(0.1))
+                              ? themeManager.currentTheme.xprimary
+                              : themeManager.currentTheme.xprimary.opacity(0.1))
                         .frame(width: 52, height: 52)
                     Image(systemName: icon)
                         .font(.system(size: 22))
@@ -170,12 +183,12 @@ struct CreateAlbumView: View {
             .background(
                 RoundedRectangle(cornerRadius: 14)
                     .fill(isSelected
-                          ? themeManager.currentTheme.primary.opacity(0.1)
+                          ? themeManager.currentTheme.xprimary.opacity(0.1)
                           : accentColor.opacity(0.04))
                     .overlay(
                         RoundedRectangle(cornerRadius: 14)
                             .stroke(isSelected
-                                    ? themeManager.currentTheme.primary
+                                    ? themeManager.currentTheme.xprimary
                                     : accentColor.opacity(0.15),
                                     lineWidth: 1.5)
                     )
@@ -200,7 +213,7 @@ struct CreateAlbumView: View {
                             .stroke(
                                 albumTitle.isEmpty
                                     ? themeManager.currentTheme.error.opacity(0.35)
-                                    : themeManager.currentTheme.primary.opacity(0.3),
+                                    : themeManager.currentTheme.xprimary.opacity(0.3),
                                 lineWidth: 1.5
                             )
                     )
@@ -272,11 +285,11 @@ struct CreateAlbumView: View {
                     VStack(spacing: 12) {
                         ZStack {
                             Circle()
-                                .fill(themeManager.currentTheme.primary.opacity(0.1))
+                                .fill(themeManager.currentTheme.xprimary.opacity(0.1))
                                 .frame(width: 64, height: 64)
                             Image(systemName: "airplane.departure")
                                 .font(.system(size: 28))
-                                .foregroundColor(themeManager.currentTheme.primary.opacity(0.4))
+                                .foregroundColor(themeManager.currentTheme.xprimary.opacity(0.4))
                         }
                         Text("旅行計画がありません")
                             .font(.subheadline)
@@ -300,7 +313,7 @@ struct CreateAlbumView: View {
 
     private func planCard(_ plan: TravelPlan) -> some View {
         let isSelected = selectedTravelPlan?.id == plan.id
-        let planColor = plan.cardColor ?? themeManager.currentTheme.primary
+        let planColor = resolvedPlanColor(plan)
         return Button(action: {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 selectedTravelPlan = plan
@@ -363,9 +376,9 @@ struct CreateAlbumView: View {
             .background(
                 RoundedRectangle(cornerRadius: 14)
                     .fill(canCreate
-                          ? themeManager.currentTheme.primary
+                          ? themeManager.currentTheme.xprimary
                           : themeManager.currentTheme.secondaryText)
-                    .shadow(color: themeManager.currentTheme.primary.opacity(canCreate ? 0.4 : 0),
+                    .shadow(color: themeManager.currentTheme.xprimary.opacity(canCreate ? 0.4 : 0),
                             radius: 8, x: 0, y: 4)
             )
             .animation(.easeInOut(duration: 0.2), value: canCreate)
@@ -393,7 +406,7 @@ struct CreateAlbumView: View {
         HStack(spacing: 6) {
             Image(systemName: icon)
                 .font(.caption.weight(.semibold))
-                .foregroundColor(themeManager.currentTheme.primary)
+                .foregroundColor(themeManager.currentTheme.xprimary)
             Text(text)
                 .font(.subheadline.weight(.semibold))
                 .foregroundColor(accentColor)
