@@ -1,41 +1,67 @@
 import SwiftUI
 import MapKit
 
-// TravelPlanのスケジュール追加画面
 struct AddScheduleItemView: View {
-    // MARK: - Properties
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject var viewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
+    @Environment(\.colorScheme) var colorScheme
 
     let plan: TravelPlan
-    let daySchedule: DaySchedule
+    let dayNumber: Int
 
-    @State private var title: String = ""
-    @State private var location: String = ""
-    @State private var notes: String = ""
-    @State private var time: Date = Date()
-    @State private var cost: String = ""
-    @State private var linkURL: String = ""
-    @State private var isSaving = false
+    @State private var title = ""
+    @State private var time = Date()
+    @State private var cost = ""
+    @State private var notes = ""
+    @State private var linkURL = ""
 
-    // Location search properties
+    // Location
     @State private var showLocationPicker = false
-    @State private var searchText: String = ""
-    @State private var searchResults: [MKMapItem] = []
     @State private var selectedLocation: MKMapItem?
     @State private var selectedCoordinate: CLLocationCoordinate2D?
     @State private var selectedAddress: String?
+    @State private var searchText = ""
+    @State private var searchResults: [MKMapItem] = []
+    @State private var mapPosition: MapCameraPosition = .region(MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
+        span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
+    ))
+    @State private var selectedMapResult: MKMapItem?
+    @State private var mapVisibleRegion: MKCoordinateRegion?
 
-    // MARK: - Computed Properties
-    private var isFormValid: Bool {
-        !title.trimmingCharacters(in: .whitespaces).isEmpty
+    // MARK: - Computed
+    var dayDate: Date {
+        Calendar.current.date(byAdding: .day, value: dayNumber - 1, to: plan.startDate) ?? plan.startDate
     }
 
-    private var backgroundGradient: some View {
+    private var canAdd: Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    private var travelColor: Color {
+        switch themeManager.currentTheme.type {
+        case .whiteBlack: return .black
+        default: return themeManager.currentTheme.primary
+        }
+    }
+
+    private var textColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
+    }
+
+    private var fieldBg: Color {
+        colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight
+    }
+
+    private var cardBg: Color {
+        colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight
+    }
+
+    private var bgGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: [themeManager.currentTheme.primary.opacity(0.9), Color.black]),
+            gradient: Gradient(colors: colorScheme == .dark
+                ? [themeManager.currentTheme.backgroundDark, themeManager.currentTheme.secondaryBackgroundDark]
+                : [themeManager.currentTheme.backgroundLight, themeManager.currentTheme.secondaryBackgroundLight]),
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
@@ -44,87 +70,26 @@ struct AddScheduleItemView: View {
 
     // MARK: - Body
     var body: some View {
-        NavigationView {
-            ZStack {
-                backgroundGradient
-                scrollContent
-            }
-            .navigationTitle("予定を追加")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    cancelButton
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    saveButton
-                }
-            }
-        }
-    }
+        ZStack {
+            bgGradient
 
-    // MARK: - View Components
-    private var scrollContent: some View {
-        ScrollView {
-            VStack(spacing: 20) {
-                dayInfoCard
-                formSection
-            }
-            .padding()
-        }
-        .background(Color.clear)
-        .onTapGesture {
-            hideKeyboard()
-        }
-    }
+            VStack(spacing: 0) {
+                headerView
 
-    private var dayInfoCard: some View {
-        VStack(spacing: 10) {
-            Text("Day \(daySchedule.dayNumber)")
-                .font(.title2)
-                .fontWeight(.bold)
-                .foregroundColor(.white)
-
-            Text(formatDate(daySchedule.date))
-                .font(.subheadline)
-                .foregroundColor(.white.opacity(0.7))
-        }
-        .padding()
-        .frame(maxWidth: .infinity)
-        .background(Color.white.opacity(0.2))
-        .cornerRadius(15)
-    }
-
-    private var formSection: some View {
-        VStack(spacing: 15) {
-            customTextField(icon: "text.alignleft", placeholder: "タイトル（例：浅草寺観光）", text: $title)
-            locationSection
-            costField
-            customTextField(icon: "link", placeholder: "リンク（任意）", text: $linkURL)
-            notesField
-            timePickerField
-        }
-        .padding()
-    }
-
-    private var locationSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            if let selected = selectedLocation {
-                selectedLocationCard(selected)
-            } else {
-                Button(action: { showLocationPicker = true }) {
-                    HStack {
-                        Image(systemName: "mappin.circle")
-                            .foregroundColor(.white.opacity(0.7))
-                        Text("場所を検索")
-                            .foregroundColor(.white.opacity(0.7))
-                        Spacer()
-                        Image(systemName: "magnifyingglass")
-                            .foregroundColor(.white.opacity(0.5))
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 14) {
+                        dayInfoCard
+                        titleSection
+                        timeSection
+                        locationSection
+                        optionalSection
                     }
-                    .padding()
-                    .background(Color.white.opacity(0.2))
-                    .cornerRadius(10)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+                    .padding(.bottom, 40)
                 }
+
+                addButton
             }
         }
         .fullScreenCover(isPresented: $showLocationPicker) {
@@ -132,223 +97,356 @@ struct AddScheduleItemView: View {
         }
     }
 
-    private func selectedLocationCard(_ mapItem: MKMapItem) -> some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(mapItem.name ?? "場所")
-                        .font(.headline)
-                        .foregroundColor(.white)
+    // MARK: - Header
+    private var headerView: some View {
+        HStack {
+            Button(action: { presentationMode.wrappedValue.dismiss() }) {
+                Image(systemName: "xmark")
+                    .foregroundColor(textColor)
+                    .imageScale(.medium)
+                    .padding(8)
+                    .background(textColor.opacity(0.1))
+                    .clipShape(Circle())
+            }
 
-                    if let address = selectedAddress ?? mapItem.placemark.title {
-                        Text(address)
-                            .font(.caption)
-                            .foregroundColor(.white.opacity(0.7))
+            Spacer()
+
+            VStack(spacing: 2) {
+                Text("予定を追加")
+                    .font(.headline)
+                    .foregroundColor(textColor)
+                Text("Day \(dayNumber) · \(formattedDayDate)")
+                    .font(.caption)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+
+            Spacer()
+
+            Color.clear.frame(width: 36, height: 36)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(travelColor.opacity(0.15))
+    }
+
+    // MARK: - Day Info Card
+    private var dayInfoCard: some View {
+        HStack(spacing: 14) {
+            ZStack {
+                Circle()
+                    .fill(travelColor.opacity(0.15))
+                    .frame(width: 50, height: 50)
+                Text("\(dayNumber)")
+                    .font(.title2.weight(.bold))
+                    .foregroundColor(travelColor)
+            }
+
+            VStack(alignment: .leading, spacing: 3) {
+                Text("Day \(dayNumber)")
+                    .font(.headline.weight(.bold))
+                    .foregroundColor(textColor)
+                Text(formattedDayDate)
+                    .font(.subheadline)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+
+            Spacer()
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(cardBg)
+                .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
+        )
+    }
+
+    // MARK: - Title Section
+    private var titleSection: some View {
+        sectionCard {
+            VStack(alignment: .leading, spacing: 10) {
+                sectionLabel("タイトル", icon: "text.alignleft")
+                TextField("例：浅草寺観光、ランチ", text: $title)
+                    .font(.body)
+                    .foregroundColor(textColor)
+                    .padding(14)
+                    .background(fieldBg)
+                    .cornerRadius(12)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(
+                                title.isEmpty
+                                    ? themeManager.currentTheme.error.opacity(0.4)
+                                    : travelColor.opacity(0.3),
+                                lineWidth: 1.5
+                            )
+                    )
+            }
+        }
+    }
+
+    // MARK: - Time Section
+    private var timeSection: some View {
+        sectionCard {
+            VStack(alignment: .leading, spacing: 10) {
+                sectionLabel("時間", icon: "clock.fill")
+                HStack {
+                    Image(systemName: "clock")
+                        .foregroundColor(travelColor.opacity(0.8))
+                        .frame(width: 24)
+                    Text("時刻")
+                        .font(.subheadline)
+                        .foregroundColor(textColor)
+                    Spacer()
+                    DatePicker("", selection: $time, displayedComponents: .hourAndMinute)
+                        .colorMultiply(travelColor)
+                        .datePickerStyle(.compact)
+                        .labelsHidden()
+                }
+                .padding(14)
+                .background(fieldBg)
+                .cornerRadius(12)
+            }
+        }
+    }
+
+    // MARK: - Location Section
+    private var locationSection: some View {
+        sectionCard {
+            VStack(alignment: .leading, spacing: 10) {
+                sectionLabel("場所（任意）", icon: "mappin.circle.fill")
+
+                if let selected = selectedLocation {
+                    HStack(spacing: 12) {
+                        Image(systemName: "mappin.circle.fill")
+                            .foregroundColor(travelColor)
+                            .font(.title3)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(selected.name ?? "場所")
+                                .font(.subheadline.weight(.medium))
+                                .foregroundColor(textColor)
+                            if let address = selectedAddress ?? selected.placemark.title {
+                                Text(address)
+                                    .font(.caption)
+                                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                                    .lineLimit(1)
+                            }
+                        }
+                        Spacer()
+                        Button(action: {
+                            selectedLocation = nil
+                            selectedCoordinate = nil
+                            selectedAddress = nil
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
+                        }
+                    }
+                    .padding(14)
+                    .background(fieldBg)
+                    .cornerRadius(12)
+                } else {
+                    Button(action: { showLocationPicker = true }) {
+                        HStack {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundColor(travelColor.opacity(0.7))
+                                .frame(width: 24)
+                            Text("場所を検索")
+                                .font(.subheadline)
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption)
+                                .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
+                        }
+                        .padding(14)
+                        .background(fieldBg)
+                        .cornerRadius(12)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(travelColor.opacity(0.2), lineWidth: 1))
                     }
                 }
+            }
+        }
+    }
 
-                Spacer()
+    // MARK: - Optional Section
+    private var optionalSection: some View {
+        sectionCard {
+            VStack(alignment: .leading, spacing: 12) {
+                sectionLabel("その他（任意）", icon: "ellipsis.circle")
 
-                Button(action: {
-                    selectedLocation = nil
-                    selectedCoordinate = nil
-                    selectedAddress = nil
-                    location = ""
-                }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(.white.opacity(0.5))
+                HStack(spacing: 12) {
+                    Image(systemName: "yensign.circle")
+                        .foregroundColor(travelColor.opacity(0.7))
+                        .frame(width: 24)
+                    TextField("金額", text: $cost)
+                        .keyboardType(.decimalPad)
+                        .foregroundColor(textColor)
+                    Text("円")
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
+                .padding(14)
+                .background(fieldBg)
+                .cornerRadius(12)
+
+                Divider()
+
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "note.text")
+                            .foregroundColor(travelColor.opacity(0.7))
+                            .frame(width: 24)
+                        Text("メモ")
+                            .font(.subheadline)
+                            .foregroundColor(textColor)
+                    }
+                    ZStack(alignment: .topLeading) {
+                        if notes.isEmpty {
+                            Text("メモを入力…")
+                                .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
+                                .font(.body)
+                                .padding(.top, 8)
+                                .padding(.leading, 5)
+                        }
+                        TextEditor(text: $notes)
+                            .font(.body)
+                            .frame(minHeight: 80)
+                            .foregroundColor(textColor)
+                            .scrollContentBackground(.hidden)
+                    }
+                    .padding(12)
+                    .background(fieldBg)
+                    .cornerRadius(12)
+                }
+
+                Divider()
+
+                HStack(spacing: 12) {
+                    Image(systemName: "link")
+                        .foregroundColor(travelColor.opacity(0.7))
+                        .frame(width: 24)
+                    TextField("https://example.com", text: $linkURL)
+                        .keyboardType(.URL)
+                        .autocapitalization(.none)
+                        .foregroundColor(textColor)
+                }
+                .padding(14)
+                .background(fieldBg)
+                .cornerRadius(12)
             }
         }
-        .padding()
-        .background(Color.white.opacity(0.2))
-        .cornerRadius(10)
     }
 
-    private var costField: some View {
-        HStack {
-            Image(systemName: "yensign.circle")
-                .foregroundColor(.white.opacity(0.7))
-            TextField("金額（任意）", text: $cost)
-                .foregroundColor(.white)
-                .keyboardType(.decimalPad)
-            Text("円")
-                .foregroundColor(.white.opacity(0.7))
-        }
-        .padding()
-        .background(Color.white.opacity(0.2))
-        .cornerRadius(10)
-    }
-
-    private var notesField: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Image(systemName: "note.text")
-                    .foregroundColor(.white.opacity(0.7))
-                Text("メモ")
-                    .foregroundColor(.white.opacity(0.7))
+    // MARK: - Add Button
+    private var addButton: some View {
+        Button(action: addScheduleItem) {
+            HStack(spacing: 6) {
+                Image(systemName: "plus.circle.fill")
+                Text("追加")
             }
-            TextEditor(text: $notes)
-                .frame(height: 100)
-                .foregroundColor(.white)
-                .scrollContentBackground(.hidden)
-                .background(Color.white.opacity(0.1))
-                .cornerRadius(8)
+            .font(.headline.weight(.bold))
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(canAdd ? travelColor : themeManager.currentTheme.secondaryText)
+                    .shadow(color: travelColor.opacity(canAdd ? 0.4 : 0), radius: 8, x: 0, y: 4)
+            )
+            .animation(.easeInOut(duration: 0.2), value: canAdd)
         }
-        .padding()
-        .background(Color.white.opacity(0.2))
-        .cornerRadius(10)
-    }
-
-    private var timePickerField: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("時間")
-                .foregroundColor(.white)
-                .font(.headline)
-            DatePicker("", selection: $time, displayedComponents: .hourAndMinute)
-                .datePickerStyle(WheelDatePickerStyle())
-                .labelsHidden()
-        }
-        .padding()
-        .background(Color.white.opacity(0.2))
-        .cornerRadius(10)
-    }
-
-    private var cancelButton: some View {
-        Button("キャンセル") {
-            presentationMode.wrappedValue.dismiss()
-        }
-        .foregroundColor(themeManager.currentTheme.error)
-    }
-
-    private var saveButton: some View {
-        Button(action: saveScheduleItem) {
-            if isSaving {
-                ProgressView()
-                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-            } else {
-                Text("保存")
-                    .foregroundColor(themeManager.currentTheme.primary)
-            }
-        }
-        .disabled(!isFormValid || isSaving)
+        .disabled(!canAdd)
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 32)
+        .background(.ultraThinMaterial)
     }
 
     // MARK: - Helper Views
-    private func customTextField(icon: String, placeholder: String, text: Binding<String>) -> some View {
-        HStack {
+    @ViewBuilder
+    private func sectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(cardBg)
+                    .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
+            )
+    }
+
+    private func sectionLabel(_ text: String, icon: String) -> some View {
+        HStack(spacing: 6) {
             Image(systemName: icon)
-                .foregroundColor(.white.opacity(0.7))
-            TextField(placeholder, text: text)
-                .foregroundColor(.white)
+                .font(.caption.weight(.semibold))
+                .foregroundColor(travelColor)
+            Text(text)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(textColor)
         }
-        .padding()
-        .background(Color.white.opacity(0.2))
-        .cornerRadius(10)
     }
 
-    // MARK: - Helper Methods
-    private func formatDate(_ date: Date) -> String {
-        let formatter = DateFormatter.japanese
+    private var formattedDayDate: String {
+        let formatter = DateFormatter()
         formatter.dateFormat = "M月d日(E)"
-        return formatter.string(from: date)
+        formatter.locale = Locale(identifier: "ja_JP")
+        return formatter.string(from: dayDate)
     }
 
-    // MARK: - Actions
-    private func saveScheduleItem() {
-        isSaving = true
+    // MARK: - Add Action（即時保存）
+    private func addScheduleItem() {
+        let newItem = ScheduleItem(
+            time: time,
+            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+            location: selectedLocation?.name,
+            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes.trimmingCharacters(in: .whitespacesAndNewlines),
+            latitude: selectedCoordinate?.latitude,
+            longitude: selectedCoordinate?.longitude,
+            cost: cost.isEmpty ? nil : Double(cost),
+            linkURL: linkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : linkURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        )
 
-        let newItem = createScheduleItem()
-        let updatedPlan = addScheduleItemToPlan(newItem)
-
-        logSaveDetails(newItem: newItem, updatedPlan: updatedPlan)
+        var updatedPlan = plan
+        if let dayIndex = updatedPlan.daySchedules.firstIndex(where: { $0.dayNumber == dayNumber }) {
+            updatedPlan.daySchedules[dayIndex].scheduleItems.append(newItem)
+        } else {
+            let newDay = DaySchedule(dayNumber: dayNumber, date: dayDate, scheduleItems: [newItem])
+            updatedPlan.daySchedules.append(newDay)
+            updatedPlan.daySchedules.sort { $0.dayNumber < $1.dayNumber }
+        }
 
         if let userId = authVM.userId {
             viewModel.update(updatedPlan, userId: userId)
         }
 
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            isSaving = false
-            presentationMode.wrappedValue.dismiss()
-        }
+        presentationMode.wrappedValue.dismiss()
     }
 
-    private func createScheduleItem() -> ScheduleItem {
-        let costValue = cost.isEmpty ? nil : Double(cost)
-
-
-        return ScheduleItem(
-            time: time,
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            location: selectedLocation?.name ?? (location.isEmpty ? nil : location.trimmingCharacters(in: .whitespacesAndNewlines)),
-            notes: notes.isEmpty ? nil : notes.trimmingCharacters(in: .whitespacesAndNewlines),
-            latitude: selectedCoordinate?.latitude,
-            longitude: selectedCoordinate?.longitude,
-            cost: costValue,
-            linkURL: linkURL.isEmpty ? nil : linkURL.trimmingCharacters(in: .whitespacesAndNewlines)
-        )
-    }
-
-    private func addScheduleItemToPlan(_ newItem: ScheduleItem) -> TravelPlan {
-        var updatedPlan = plan
-
-        if let dayIndex = updatedPlan.daySchedules.firstIndex(where: { $0.id == daySchedule.id }) {
-            updatedPlan.daySchedules[dayIndex].scheduleItems.append(newItem)
-        } else {
-            var newDaySchedule = daySchedule
-            newDaySchedule.scheduleItems.append(newItem)
-            updatedPlan.daySchedules.append(newDaySchedule)
-        }
-
-        return updatedPlan
-    }
-
-    private func logSaveDetails(newItem: ScheduleItem, updatedPlan: TravelPlan) {
-
-        _ = updatedPlan.daySchedules.flatMap { $0.scheduleItems }.compactMap { $0.cost }.reduce(0, +)
-    }
-
-    // MARK: - Location Picker View
-    @State private var mapPosition: MapCameraPosition = .region(MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
-        span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
-    ))
-    @State private var selectedMapResult: MKMapItem?
-    @State private var mapVisibleRegion: MKCoordinateRegion?
-
+    // MARK: - Location Picker
     private var locationPickerView: some View {
         NavigationView {
             ZStack {
                 Map(position: $mapPosition, selection: $selectedMapResult) {
                     ForEach(searchResults, id: \.self) { result in
-                        Marker(item: result)
-                            .tint(themeManager.currentTheme.error)
+                        Marker(item: result).tint(themeManager.currentTheme.error)
                     }
                 }
-                .safeAreaInset(edge: .top) {
-                    locationSearchBarView
-                }
+                .safeAreaInset(edge: .top) { locationSearchBar }
                 .safeAreaInset(edge: .bottom) {
-                    if let selectedResult = selectedMapResult {
-                        locationSelectedResultDetailView(selectedResult)
+                    if let result = selectedMapResult {
+                        locationResultDetail(result)
                     }
                 }
-                .onMapCameraChange { context in
-                    mapVisibleRegion = context.region
-                }
+                .onMapCameraChange { context in mapVisibleRegion = context.region }
             }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("閉じる") {
-                        showLocationPicker = false
-                    }
+                    Button("閉じる") { showLocationPicker = false }
                 }
             }
         }
     }
 
-    private var locationSearchBarView: some View {
+    private var locationSearchBar: some View {
         TextField("場所を検索", text: $searchText)
             .textFieldStyle(.plain)
             .padding(.horizontal, 12)
@@ -358,14 +456,10 @@ struct AddScheduleItemView: View {
             .padding(.horizontal)
             .padding(.vertical, 8)
             .background(.ultraThinMaterial)
-            .onSubmit {
-                Task {
-                    await performLocationSearch()
-                }
-            }
+            .onSubmit { Task { await performSearch() } }
     }
 
-    private func performLocationSearch() async {
+    private func performSearch() async {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = searchText
         request.resultTypes = .pointOfInterest
@@ -373,106 +467,39 @@ struct AddScheduleItemView: View {
             center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
             span: MKCoordinateSpan(latitudeDelta: 0.0125, longitudeDelta: 0.0125)
         )
-
-        let search = MKLocalSearch(request: request)
         do {
-            let response = try await search.start()
+            let response = try await MKLocalSearch(request: request).start()
             searchResults = response.mapItems
-            if let firstResult = searchResults.first {
+            if let first = searchResults.first {
                 withAnimation {
                     mapPosition = .region(MKCoordinateRegion(
-                        center: firstResult.placemark.coordinate,
+                        center: first.placemark.coordinate,
                         span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
                     ))
                 }
             }
             searchText = ""
-        } catch {
-        }
+        } catch {}
     }
 
-    private func locationSelectedResultDetailView(_ result: MKMapItem) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
+    private func locationResultDetail(_ result: MKMapItem) -> some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack {
+                VStack(alignment: .leading, spacing: 4) {
                     Text(result.name ?? "名称なし")
-                        .font(.title2)
-                        .fontWeight(.bold)
-
-                    if let category = result.pointOfInterestCategory?.rawValue {
-                        Text(category)
-                            .font(.subheadline)
+                        .font(.title3.weight(.bold))
+                    if let address = result.placemark.title {
+                        Text(address)
+                            .font(.caption)
                             .foregroundStyle(.secondary)
+                            .lineLimit(2)
                     }
                 }
-
                 Spacer()
             }
 
-            if let address = result.placemark.title {
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "mappin.circle.fill")
-                        .foregroundStyle(themeManager.currentTheme.error)
-                        .font(.title3)
-                    Text(address)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            if let phoneNumber = result.phoneNumber {
-                HStack(spacing: 8) {
-                    Image(systemName: "phone.circle.fill")
-                        .foregroundStyle(themeManager.currentTheme.success)
-                        .font(.title3)
-                    Text(phoneNumber)
-                        .font(.subheadline)
-                    Spacer()
-                    Button {
-                        if let url = URL(string: "tel:\(phoneNumber.replacingOccurrences(of: " ", with: ""))") {
-                            UIApplication.shared.open(url)
-                        }
-                    } label: {
-                        Text("電話")
-                            .font(.caption)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(themeManager.currentTheme.success)
-                            .foregroundStyle(.white)
-                            .cornerRadius(8)
-                    }
-                }
-            }
-
-            if let url = result.url {
-                HStack(spacing: 8) {
-                    Image(systemName: "safari.fill")
-                        .foregroundStyle(themeManager.currentTheme.primary)
-                        .font(.title3)
-                    Text(url.host ?? "Website")
-                        .font(.subheadline)
-                        .lineLimit(1)
-                    Spacer()
-                    Button {
-                        UIApplication.shared.open(url)
-                    } label: {
-                        Text("開く")
-                            .font(.caption)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(themeManager.currentTheme.primary)
-                            .foregroundStyle(.white)
-                            .cornerRadius(8)
-                    }
-                }
-            }
-
-            Divider()
-
             HStack(spacing: 12) {
-                Button {
-                    result.openInMaps()
-                } label: {
+                Button { result.openInMaps() } label: {
                     Label("経路", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
@@ -480,15 +507,18 @@ struct AddScheduleItemView: View {
                         .foregroundStyle(themeManager.currentTheme.primary)
                         .cornerRadius(10)
                 }
-
                 Button {
-                    selectLocationFromMapResult(result)
+                    selectedLocation = result
+                    selectedCoordinate = result.placemark.coordinate
+                    selectedAddress = result.placemark.title
+                    selectedMapResult = nil
+                    showLocationPicker = false
                 } label: {
-                    Label("選択", systemImage: "checkmark.circle.fill")
+                    Label("この場所を選択", systemImage: "checkmark.circle.fill")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(themeManager.currentTheme.accent1.opacity(0.1))
-                        .foregroundStyle(themeManager.currentTheme.accent1)
+                        .background(travelColor.opacity(0.15))
+                        .foregroundStyle(travelColor)
                         .cornerRadius(10)
                 }
             }
@@ -496,17 +526,8 @@ struct AddScheduleItemView: View {
         .padding(20)
         .background(.ultraThinMaterial)
         .cornerRadius(20)
-        .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: -4)
+        .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: -4)
         .padding(.horizontal)
         .padding(.bottom, 12)
-    }
-
-    private func selectLocationFromMapResult(_ result: MKMapItem) {
-        selectedLocation = result
-        selectedCoordinate = result.placemark.coordinate
-        selectedAddress = result.placemark.title
-        location = result.name ?? ""
-        selectedMapResult = nil
-        showLocationPicker = false
     }
 }

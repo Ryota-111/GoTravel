@@ -17,7 +17,7 @@ struct TravelPlanDetailView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
     @State private var selectedDay: Int = 1
-    @State private var showScheduleEditor = false
+    @State private var showAddScheduleItem = false
     @State private var showBasicInfoEditor = false
     @State private var showBudgetSummary = false
     @State private var showShareView = false
@@ -107,9 +107,10 @@ struct TravelPlanDetailView: View {
         .offset(x: dragOffset * 0.3)
         .opacity(1 - Double(dragOffset) / 500)
         .gesture(swipeBackGesture)
-        .sheet(isPresented: $showScheduleEditor) {
-            ScheduleEditorView(plan: plan)
+        .sheet(isPresented: $showAddScheduleItem) {
+            AddScheduleItemView(plan: plan, dayNumber: selectedDay)
                 .environmentObject(viewModel)
+                .environmentObject(authVM)
         }
         .sheet(isPresented: $showBasicInfoEditor) {
             EditTravelPlanBasicInfoView(plan: plan)
@@ -161,41 +162,35 @@ struct TravelPlanDetailView: View {
 
     // 新しいタイムラインセクション
     private func scheduleTimelineSection(plan: TravelPlan) -> some View {
-        VStack(alignment: .leading, spacing: 20) {
-            Text("タイムスケジュール")
-                .font(.system(size: 18, weight: .semibold))
-                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+        VStack(alignment: .leading, spacing: 16) {
+            // ヘッダー：タイトル + 直接「+」ボタン
+            HStack {
+                Text("タイムスケジュール")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+                Spacer()
+                Button(action: { showAddScheduleItem = true }) {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.system(size: 26))
+                        .foregroundColor(themeManager.currentTheme.primary)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
 
             if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }) {
                 if daySchedule.scheduleItems.isEmpty {
-                    emptyScheduleMessage
+                    emptyScheduleMessage(plan: plan)
                 } else {
                     let sortedItems = sortedScheduleItems(daySchedule.scheduleItems)
                     VStack(spacing: 0) {
                         ForEach(Array(sortedItems.enumerated()), id: \.element.id) { index, item in
-                            timelineItemView(item: item, isLast: index == sortedItems.count - 1)
+                            timelineItemView(item: item, isLast: index == sortedItems.count - 1, plan: plan)
                         }
                     }
                 }
             } else {
-                emptyScheduleMessage
+                emptyScheduleMessage(plan: plan)
             }
-
-            Button(action: { showScheduleEditor = true }) {
-                HStack(spacing: 8) {
-                    Image(systemName: "plus.circle.fill")
-                        .font(.system(size: 20))
-                    Text("スケジュールを追加/編集")
-                        .font(.system(size: 16, weight: .medium))
-                }
-                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .padding(.horizontal, 20)
-                .background(colorScheme == .dark ? themeManager.currentTheme.accent2.opacity(0.15) : themeManager.currentTheme.accent1.opacity(0.15))
-                .cornerRadius(12)
-            }
-            .buttonStyle(PlainButtonStyle())
         }
         .padding(.top, 8)
         .padding(.bottom, 20)
@@ -204,15 +199,41 @@ struct TravelPlanDetailView: View {
         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.3), value: animateContent)
     }
 
-    private var emptyScheduleMessage: some View {
-        Text("スケジュールがありません")
-            .font(.subheadline)
-            .foregroundColor(themeManager.currentTheme.secondaryText)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding()
+    private func emptyScheduleMessage(plan: TravelPlan) -> some View {
+        Button(action: { showAddScheduleItem = true }) {
+            VStack(spacing: 10) {
+                Image(systemName: "calendar.badge.plus")
+                    .font(.system(size: 36))
+                    .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
+                Text("タップして予定を追加")
+                    .font(.subheadline)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 32)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(themeManager.currentTheme.primary.opacity(0.05))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(themeManager.currentTheme.primary.opacity(0.15), style: StrokeStyle(lineWidth: 1.5, dash: [6]))
+                    )
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 
-    private func timelineItemView(item: ScheduleItem, isLast: Bool) -> some View {
+    private func deleteScheduleItem(_ item: ScheduleItem, from plan: TravelPlan) {
+        var updatedPlan = plan
+        if let dayIndex = updatedPlan.daySchedules.firstIndex(where: { $0.dayNumber == selectedDay }) {
+            updatedPlan.daySchedules[dayIndex].scheduleItems.removeAll { $0.id == item.id }
+        }
+        if let userId = authVM.userId {
+            viewModel.update(updatedPlan, userId: userId)
+        }
+    }
+
+    private func timelineItemView(item: ScheduleItem, isLast: Bool, plan: TravelPlan) -> some View {
         HStack(alignment: .top, spacing: 15) {
             // 時刻とタイムラインドット
             VStack(spacing: 0) {
@@ -277,19 +298,21 @@ struct TravelPlanDetailView: View {
             .padding(.bottom, isLast ? 0 : 25)
 
             Spacer()
+
+            // 削除メニュー
+            Menu {
+                Button(role: .destructive) {
+                    deleteScheduleItem(item, from: plan)
+                } label: {
+                    Label("削除", systemImage: "trash")
+                }
+            } label: {
+                Image(systemName: "ellipsis.circle")
+                    .font(.system(size: 18))
+                    .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.6))
+            }
         }
     }
-
-//    private func scheduleSection(plan: TravelPlan) -> some View {
-//        Group {
-//            if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }) {
-//                DayScheduleView(daySchedule: daySchedule, plan: plan)
-//                    .environmentObject(viewModel)
-//            } else {
-//                emptyScheduleView
-//            }
-//        }
-//    }
 
     // ヘッダーセクション：画像背景にタイトル、日付、時刻を表示
     private func planHeaderSection(plan: TravelPlan) -> some View {
