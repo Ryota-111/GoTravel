@@ -1,4 +1,5 @@
 import SwiftUI
+import MapKit
 
 struct PlacesListView: View {
 
@@ -10,6 +11,12 @@ struct PlacesListView: View {
     @State private var selectedCategoryId: String = "hotel"
     @State private var hasLoadedData = false
     @State private var showManageCategories = false
+    @State private var showMap = false
+    @State private var selectedPlace: VisitedPlace?
+    @State private var mapPosition: MapCameraPosition = .region(MKCoordinateRegion(
+        center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
+        span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
+    ))
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.scenePhase) var scenePhase
 
@@ -60,10 +67,14 @@ struct PlacesListView: View {
         NavigationView {
             ZStack {
                 backgroundGradient
-                VStack {
+                VStack(spacing: 0) {
                     planEventsTitleSection
-                    eventTypeSelectionSection
-                    contentView
+                    if showMap {
+                        mapView
+                    } else {
+                        eventTypeSelectionSection
+                        contentView
+                    }
                 }
             }
             .navigationBarHidden(true)
@@ -245,6 +256,20 @@ struct PlacesListView: View {
 
             Spacer()
 
+            // マップ/リスト切り替え
+            Button(action: {
+                withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                    showMap.toggle()
+                    selectedPlace = nil
+                }
+            }) {
+                Image(systemName: showMap ? "list.bullet" : "map.fill")
+                    .foregroundColor(textColor)
+                    .padding(8)
+                    .background(textColor.opacity(0.1))
+                    .clipShape(Circle())
+            }
+
             Button(action: { showManageCategories = true }) {
                 HStack(spacing: 4) {
                     Image(systemName: "slider.horizontal.3")
@@ -256,6 +281,118 @@ struct PlacesListView: View {
         }
         .padding(.horizontal, 20)
         .padding(.top, 10)
+        .padding(.bottom, 6)
+    }
+
+    // MARK: - Map View
+    private var mapView: some View {
+        ZStack(alignment: .bottom) {
+            Map(position: $mapPosition) {
+                ForEach(vm.places) { place in
+                    Annotation(place.title, coordinate: place.coordinate) {
+                        Button(action: {
+                            withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+                                selectedPlace = place
+                            }
+                        }) {
+                            ZStack {
+                                Circle()
+                                    .fill(selectedPlace?.id == place.id
+                                          ? themeManager.currentTheme.primary
+                                          : themeManager.currentTheme.error.opacity(0.9))
+                                    .frame(width: 38, height: 38)
+                                    .shadow(color: themeManager.currentTheme.error.opacity(0.4), radius: 4, x: 0, y: 2)
+                                    .scaleEffect(selectedPlace?.id == place.id ? 1.15 : 1.0)
+                                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedPlace?.id == place.id)
+                                Image(systemName: categoryManager.category(for: place.categoryId).icon)
+                                    .font(.system(size: 16, weight: .semibold))
+                                    .foregroundStyle(.white)
+                            }
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+            }
+            .ignoresSafeArea(edges: .bottom)
+            .onTapGesture {
+                withAnimation { selectedPlace = nil }
+            }
+
+            // 選択済み場所のボトムパネル
+            if let place = selectedPlace {
+                placeBottomPanel(place)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
+    }
+
+    private func placeBottomPanel(_ place: VisitedPlace) -> some View {
+        VStack(spacing: 0) {
+            Capsule()
+                .fill(Color.secondary.opacity(0.3))
+                .frame(width: 36, height: 4)
+                .padding(.top, 10)
+                .padding(.bottom, 14)
+
+            HStack(alignment: .top, spacing: 12) {
+                // カテゴリーアイコン
+                ZStack {
+                    Circle()
+                        .fill(themeManager.currentTheme.error.opacity(0.12))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: categoryManager.category(for: place.categoryId).icon)
+                        .font(.system(size: 18))
+                        .foregroundColor(themeManager.currentTheme.error)
+                }
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(place.title)
+                        .font(.headline)
+                        .foregroundColor(textColor)
+                        .lineLimit(1)
+                    Text(categoryManager.category(for: place.categoryId).name)
+                        .font(.caption)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                    if let visitedAt = place.visitedAt {
+                        Text(DateFormatter.japaneseDate.string(from: visitedAt))
+                            .font(.caption)
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
+                    }
+                }
+
+                Spacer()
+
+                Button(action: { withAnimation { selectedPlace = nil } }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .font(.title2)
+                        .foregroundColor(Color(.systemGray3))
+                }
+            }
+            .padding(.horizontal, 20)
+
+            NavigationLink(destination: PlaceDetailView(place: place)) {
+                Label("詳細を見る", systemImage: "chevron.right")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 13)
+                    .background(themeManager.currentTheme.primary)
+                    .foregroundStyle(.white)
+                    .cornerRadius(14)
+            }
+            .buttonStyle(PlainButtonStyle())
+            .padding(.horizontal, 20)
+            .padding(.top, 12)
+            .padding(.bottom, 20)
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 24)
+                .fill(colorScheme == .dark
+                      ? themeManager.currentTheme.secondaryBackgroundDark
+                      : Color(.systemBackground))
+                .shadow(color: .black.opacity(0.12), radius: 20, x: 0, y: -4)
+        )
+        .padding(.horizontal, 12)
+        .padding(.bottom, 8)
     }
     
     private var eventTypeSelectionSection: some View {
