@@ -57,17 +57,24 @@ struct CreateAlbumView: View {
             : selectedTravelPlan != nil
     }
 
-    // cardColorが未設定のプランに対して、IDから決定論的に色を割り当てる
+    // cardColorが未設定、または白すぎる色のプランにIDから決定論的な色を割り当てる
     private func resolvedPlanColor(_ plan: TravelPlan) -> Color {
-        if let color = plan.cardColor { return color }
         let palette: [Color] = [
             .blue, .purple, .pink, .orange, .teal,
             .indigo, Color(red: 0.2, green: 0.65, blue: 0.4),
             Color(red: 0.85, green: 0.35, blue: 0.25)
         ]
         let key = plan.id ?? plan.title
-        let hash = abs(key.hashValue)
-        return palette[hash % palette.count]
+        let fallback = palette[abs(key.hashValue) % palette.count]
+
+        guard let color = plan.cardColor else { return fallback }
+
+        // 知覚輝度 > 0.85 は白に近すぎるためパレットを使用
+        let uiColor = UIColor(color)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard uiColor.getRed(&r, green: &g, blue: &b, alpha: &a) else { return fallback }
+        let brightness = 0.299 * r + 0.587 * g + 0.114 * b
+        return brightness < 0.85 ? color : fallback
     }
 
     // MARK: - Body
