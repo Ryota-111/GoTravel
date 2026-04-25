@@ -44,6 +44,7 @@ struct MapHomeView: View {
     @State private var selectedResult: MKMapItem?
     @State private var showingSaveSheet: Bool = false
     @State private var isSearching = false
+    @State private var hasLoadedPlaces = false
 
     var body: some View {
         Map(position: $position, selection: $selectedResult) {
@@ -103,8 +104,9 @@ struct MapHomeView: View {
         .navigationTitle("マップ")
         .onAppear {
             locationManager.requestPermission()
-            if let userId = auth.userId {
+            if !hasLoadedPlaces, let userId = auth.userId {
                 vm.setupFetchedResultsController(userId: userId)
+                hasLoadedPlaces = true
             }
         }
     }
@@ -141,9 +143,9 @@ struct MapHomeView: View {
                         .foregroundColor(.white)
                         .padding(.horizontal, 14)
                         .padding(.vertical, 11)
-                        .background(themeManager.currentTheme.primary)
+                        .background(themeManager.currentTheme.xprimary)
                         .cornerRadius(14)
-                        .shadow(color: themeManager.currentTheme.primary.opacity(0.3), radius: 6, x: 0, y: 2)
+                        .shadow(color: themeManager.currentTheme.xprimary.opacity(0.3), radius: 6, x: 0, y: 2)
                 }
                 .transition(.move(edge: .trailing).combined(with: .opacity))
             }
@@ -224,10 +226,10 @@ struct MapHomeView: View {
                         Button { UIApplication.shared.open(url) } label: {
                             Label("Web", systemImage: "safari.fill")
                                 .font(.caption.weight(.medium))
-                                .foregroundColor(themeManager.currentTheme.primary)
+                                .foregroundColor(themeManager.currentTheme.xprimary)
                                 .padding(.horizontal, 12)
                                 .padding(.vertical, 7)
-                                .background(themeManager.currentTheme.primary.opacity(0.1))
+                                .background(themeManager.currentTheme.xprimary.opacity(0.1))
                                 .cornerRadius(20)
                         }
                     }
@@ -244,8 +246,8 @@ struct MapHomeView: View {
                             .font(.subheadline.weight(.medium))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 13)
-                            .background(themeManager.currentTheme.primary.opacity(0.1))
-                            .foregroundStyle(themeManager.currentTheme.primary)
+                            .background(themeManager.currentTheme.xprimary.opacity(0.1))
+                            .foregroundStyle(themeManager.currentTheme.xprimary)
                             .cornerRadius(14)
                     }
 
@@ -256,10 +258,10 @@ struct MapHomeView: View {
                             .font(.subheadline.weight(.semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 13)
-                            .background(themeManager.currentTheme.primary)
+                            .background(themeManager.currentTheme.xprimary)
                             .foregroundStyle(.white)
                             .cornerRadius(14)
-                            .shadow(color: themeManager.currentTheme.primary.opacity(0.3), radius: 6, x: 0, y: 3)
+                            .shadow(color: themeManager.currentTheme.xprimary.opacity(0.3), radius: 6, x: 0, y: 3)
                     }
                 }
             }

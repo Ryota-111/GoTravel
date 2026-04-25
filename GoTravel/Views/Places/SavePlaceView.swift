@@ -11,7 +11,6 @@ struct SavePlaceView: View {
     @ObservedObject var categoryManager = PlaceCategoryManager.shared
     @Environment(\.colorScheme) var colorScheme
 
-    @State private var showImagePicker = false
     @State private var selectedImage: UIImage?
 
     // MARK: - Theme
@@ -72,12 +71,6 @@ struct SavePlaceView: View {
                 }
 
                 saveButton
-            }
-        }
-        .sheet(isPresented: $showImagePicker) {
-            PhotoPicker { image in
-                selectedImage = image
-                showImagePicker = false
             }
         }
     }
