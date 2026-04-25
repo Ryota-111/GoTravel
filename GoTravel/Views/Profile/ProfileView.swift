@@ -267,6 +267,11 @@ struct ProfileView: View {
                 gradientColors: [themeManager.currentTheme.secondary, themeManager.currentTheme.secondary.opacity(0.7)]
             )
         }
+        .buttonStyle(CardButtonStyle())
+        .opacity(animateCards ? 1 : 0)
+        .scaleEffect(animateCards ? 1 : 0.8)
+        .offset(y: animateCards ? 0 : 30)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.45), value: animateCards)
     }
 
     // MARK: - CloudKit Test Card
@@ -317,29 +322,15 @@ struct GlassMenuCard: View {
                                 endPoint: .bottomTrailing
                             )
                         )
-                        .frame(width: 65, height: 65)
-                        .blur(radius: 15)
-                        .opacity(0.6)
-
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: gradientColors),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 60, height: 60)
-                        .overlay(
-                            Circle()
-                                .stroke(themeManager.currentTheme.cardBorder, lineWidth: 2)
-                        )
-                        .shadow(color: gradientColors[0].opacity(0.4), radius: 8, x: 0, y: 4)
+                        .frame(width: 56, height: 56)
+                        .overlay(Circle().stroke(themeManager.currentTheme.cardBorder, lineWidth: 2))
+                        .shadow(color: gradientColors[0].opacity(0.5), radius: 12, x: 0, y: 5)
 
                     Image(systemName: icon)
-                        .font(.system(size: 26, weight: .semibold))
+                        .font(.system(size: 24, weight: .semibold))
                         .foregroundColor(.white)
                 }
+                .frame(width: 56, height: 56)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title)
@@ -375,7 +366,7 @@ struct CardButtonStyle: ButtonStyle {
 }
 
 struct ProfileEditView: View {
-    @StateObject var vm: ProfileViewModel
+    @ObservedObject var vm: ProfileViewModel
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.presentationMode) var presentationMode
@@ -545,7 +536,7 @@ struct ProfileEditView: View {
                         Image(uiImage: ui)
                             .resizable()
                             .scaledToFill()
-                            .frame(width: 140, height: 140)
+                            .frame(width: 120, height: 120)
                     } else {
                         Circle()
                             .fill(
@@ -625,7 +616,7 @@ struct ProfileEditView: View {
 
 // MARK: - Account Action View
 struct AccountActionView: View {
-    @StateObject var vm: ProfileViewModel
+    @ObservedObject var vm: ProfileViewModel
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
@@ -680,11 +671,7 @@ struct AccountActionView: View {
                             .padding()
                             .background(
                                 RoundedRectangle(cornerRadius: 16)
-                                    .fill(
-                                        colorScheme == .dark ?
-                                            Color.white.opacity(0.1) :
-                                            Color.white.opacity(0.2)
-                                    )
+                                    .fill(themeManager.currentTheme.cardBackground2)
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 16)
@@ -713,11 +700,7 @@ struct AccountActionView: View {
                             .padding()
                             .background(
                                 RoundedRectangle(cornerRadius: 16)
-                                    .fill(
-                                        colorScheme == .dark ?
-                                            Color.white.opacity(0.1) :
-                                            Color.white.opacity(0.2)
-                                    )
+                                    .fill(themeManager.currentTheme.cardBackground2)
                             )
                             .overlay(
                                 RoundedRectangle(cornerRadius: 16)
@@ -786,10 +769,10 @@ struct AccountActionView: View {
     private var backgroundGradient: some View {
         LinearGradient(
             gradient: Gradient(colors: colorScheme == .dark ?
-                [themeManager.currentTheme.warning.opacity(0.7), themeManager.currentTheme.dark] :
-                [themeManager.currentTheme.warning.opacity(0.6), themeManager.currentTheme.light.opacity(0.3)]),
-            startPoint: .top,
-            endPoint: .bottom
+                [themeManager.currentTheme.backgroundDark, themeManager.currentTheme.secondaryBackgroundDark] :
+                [themeManager.currentTheme.backgroundLight, themeManager.currentTheme.secondaryBackgroundLight]),
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
         )
         .ignoresSafeArea()
     }
@@ -913,7 +896,7 @@ struct HelpSupportView: View {
     }
 
     private func openEmail() {
-        let email = "support@gotravel.app"
+        let email = "taismryotasis@gmail.com"
         let subject = "GoTravelアプリについてのお問い合わせ"
         let urlString = "mailto:\(email)?subject=\(subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
 
@@ -925,10 +908,10 @@ struct HelpSupportView: View {
     private var backgroundGradient: some View {
         LinearGradient(
             gradient: Gradient(colors: colorScheme == .dark ?
-                [themeManager.currentTheme.success.opacity(0.7), themeManager.currentTheme.dark] :
-                [themeManager.currentTheme.success.opacity(0.6), themeManager.currentTheme.light.opacity(0.3)]),
-            startPoint: .top,
-            endPoint: .bottom
+                [themeManager.currentTheme.backgroundDark, themeManager.currentTheme.secondaryBackgroundDark] :
+                [themeManager.currentTheme.backgroundLight, themeManager.currentTheme.secondaryBackgroundLight]),
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
         )
         .ignoresSafeArea()
     }
@@ -1124,6 +1107,7 @@ struct HelpCard: View {
     let description: String
     let color: Color
     @Environment(\.colorScheme) var colorScheme
+    @ObservedObject var themeManager = ThemeManager.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1163,11 +1147,7 @@ struct HelpCard: View {
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(
-                    colorScheme == .dark ?
-                        Color.white.opacity(0.1) :
-                        Color.white.opacity(0.2)
-                )
+                .fill(themeManager.currentTheme.cardBackground2)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16)
@@ -1323,7 +1303,7 @@ struct UserGuideView: View {
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.white.opacity(0.2))
+                .fill(themeManager.currentTheme.cardBackground2)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16)
@@ -1355,6 +1335,7 @@ struct GuideSection {
 struct GuideSectionCard: View {
     let section: GuideSection
     @Environment(\.colorScheme) var colorScheme
+    @ObservedObject var themeManager = ThemeManager.shared
 
     var body: some View {
         VStack(alignment: .leading, spacing: 15) {
@@ -1405,7 +1386,7 @@ struct GuideSectionCard: View {
         .padding()
         .background(
             RoundedRectangle(cornerRadius: 16)
-                .fill(colorScheme == .dark ? Color.white.opacity(0.1) : Color.white.opacity(0.2))
+                .fill(themeManager.currentTheme.cardBackground2)
         )
         .overlay(
             RoundedRectangle(cornerRadius: 16)
