@@ -596,8 +596,7 @@ struct EnjoyWorldView: View {
 
                 addPlanButton
             }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 4)
+            .padding(.horizontal, 1)
         }
         .animation(.spring(response: 0.7, dampingFraction: 0.6), value: plans.count)
     }

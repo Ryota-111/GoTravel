@@ -84,10 +84,10 @@ struct PlanEventCardView: View {
                     lineWidth: 2
                 )
         )
-        .shadow(
-            color: plan.planType == .daily ? themeManager.currentTheme.xsecondary.opacity(0.5) : themeManager.currentTheme.xprimary.opacity(0.5),
-            radius: 10
-        )
+//        .shadow(
+//            color: plan.planType == .daily ? themeManager.currentTheme.xsecondary.opacity(0.5) : themeManager.currentTheme.xprimary.opacity(0.5),
+//            radius: 10
+//        )
     }
 
     private func dateString(_ d: Date) -> String {

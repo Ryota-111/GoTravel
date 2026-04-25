@@ -556,43 +556,6 @@ struct PlanDetailView: View {
                     }
                 }
 
-                // 保存 / キャンセル
-                HStack(spacing: 12) {
-                    Button(action: cancelEdit) {
-                        Text("キャンセル")
-                            .font(.headline)
-                            .foregroundColor(themeManager.currentTheme.secondaryText)
-                            .frame(maxWidth: .infinity)
-                            .padding(.vertical, 16)
-                            .background(
-                                RoundedRectangle(cornerRadius: 14)
-                                    .fill(editCardBg)
-                            )
-                    }
-
-                    Button(action: saveChanges) {
-                        Group {
-                            if isSaving {
-                                ProgressView()
-                                    .progressViewStyle(CircularProgressViewStyle(tint: .white))
-                            } else {
-                                Text("保存")
-                                    .font(.headline.weight(.semibold))
-                            }
-                        }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 16)
-                        .background(
-                            RoundedRectangle(cornerRadius: 14)
-                                .fill(editedTitle.isEmpty ? themeManager.currentTheme.secondaryText : planColor)
-                                .shadow(color: planColor.opacity(0.35), radius: 8, x: 0, y: 4)
-                        )
-                    }
-                    .disabled(isSaving || editedTitle.isEmpty)
-                }
-                .padding(.top, 8)
-
                 // 削除ボタン
                 Button(action: { showDeleteConfirmation = true }) {
                     Label("プランを削除", systemImage: "trash.fill")
