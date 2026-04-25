@@ -30,7 +30,7 @@ struct BottomTimelineCard: View {
 
                     if timelineItems.isEmpty {
                         emptyStateView
-                            .frame(height: minHeight(for: geometry) - 80)
+                            .frame(maxHeight: .infinity)
                     } else {
                         timelineScrollView
                     }
