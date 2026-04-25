@@ -8,6 +8,13 @@ struct MainTabView: View {
     @StateObject private var plansViewModel = PlansViewModel()
     @StateObject private var travelPlanViewModel = TravelPlanViewModel()
     @ObservedObject var themeManager = ThemeManager.shared
+    @Environment(\.colorScheme) var colorScheme
+
+    private var tabBarBackground: Color {
+        colorScheme == .dark
+            ? themeManager.currentTheme.backgroundDark
+            : themeManager.currentTheme.backgroundLight
+    }
 
     var body: some View {
         TabView(selection: $selectedTab) {
@@ -27,6 +34,8 @@ struct MainTabView: View {
         .environmentObject(plansViewModel)
         .environmentObject(travelPlanViewModel)
         .accentColor(themeManager.currentTheme.secondary)
+        .toolbarBackground(tabBarBackground, for: .tabBar)
+        .toolbarBackground(.visible, for: .tabBar)
         .onChange(of: selectedTab) { oldValue, newValue in
             if oldValue != newValue {
                 let impact = UIImpactFeedbackGenerator(style: .light)
