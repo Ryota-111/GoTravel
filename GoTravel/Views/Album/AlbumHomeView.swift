@@ -10,6 +10,7 @@ struct AlbumHomeView: View {
     @State private var showCreateAlbum = false
     @State private var selectedAlbum: Album?
     @State private var animateCards = false
+    @State private var isEditMode = false
     @State private var albumToDelete: Album?
     @State private var showDeleteConfirm = false
 
@@ -32,12 +33,13 @@ struct AlbumHomeView: View {
                                 ForEach(Array(albumManager.albums.enumerated()), id: \.element.id) { index, album in
                                     AlbumCardWrapper(
                                         album: album,
-                                        onTap: { selectedAlbum = album },
-                                        onLongPress: {
-                                            if !album.isDefaultAlbum {
-                                                albumToDelete = album
-                                                showDeleteConfirm = true
-                                            }
+                                        isEditMode: isEditMode,
+                                        onTap: {
+                                            if !isEditMode { selectedAlbum = album }
+                                        },
+                                        onDelete: {
+                                            albumToDelete = album
+                                            showDeleteConfirm = true
                                         }
                                     )
                                     .opacity(animateCards ? 1 : 0)
@@ -97,17 +99,14 @@ struct AlbumHomeView: View {
 
     // MARK: - Background
     private var backgroundGradient: some View {
-        let colors: [Color]
-        switch themeManager.currentTheme.type {
-        case .whiteBlack:
-            colors = [Color(white: 0.97), Color(white: 0.91)]
-        default:
-            colors = colorScheme == .dark
+        LinearGradient(
+            gradient: Gradient(colors: colorScheme == .dark
                 ? [themeManager.currentTheme.backgroundDark, themeManager.currentTheme.secondaryBackgroundDark]
-                : [themeManager.currentTheme.backgroundLight, themeManager.currentTheme.secondaryBackgroundLight]
-        }
-        return LinearGradient(gradient: Gradient(colors: colors), startPoint: .topLeading, endPoint: .bottomTrailing)
-            .ignoresSafeArea()
+                : [themeManager.currentTheme.backgroundLight, themeManager.currentTheme.secondaryBackgroundLight]),
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
+        )
+        .ignoresSafeArea()
     }
 
     // MARK: - Colors
@@ -130,18 +129,49 @@ struct AlbumHomeView: View {
             Spacer()
 
             if !albumManager.albums.isEmpty {
-                let totalPhotos = albumManager.albums.reduce(0) { $0 + $1.photoFileNames.count }
-                HStack(spacing: 4) {
-                    Image(systemName: "photo.on.rectangle.angled")
-                        .font(.caption.weight(.semibold))
-                    Text("\(totalPhotos)枚")
-                        .font(.caption.weight(.semibold))
+                if isEditMode {
+                    Button(action: {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            isEditMode = false
+                        }
+                    }) {
+                        Text("完了")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 14)
+                            .padding(.vertical, 7)
+                            .background(themeManager.currentTheme.xprimary)
+                            .clipShape(Capsule())
+                    }
+                } else {
+                    HStack(spacing: 10) {
+                        let totalPhotos = albumManager.albums.reduce(0) { $0 + $1.photoFileNames.count }
+                        HStack(spacing: 4) {
+                            Image(systemName: "photo.on.rectangle.angled")
+                                .font(.caption.weight(.semibold))
+                            Text("\(totalPhotos)枚")
+                                .font(.caption.weight(.semibold))
+                        }
+                        .foregroundColor(themeManager.currentTheme.xprimary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(themeManager.currentTheme.xprimary.opacity(0.1))
+                        .clipShape(Capsule())
+
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                isEditMode = true
+                            }
+                        }) {
+                            Image(systemName: "pencil")
+                                .font(.caption.weight(.semibold))
+                                .foregroundColor(accentColor)
+                                .padding(8)
+                                .background(accentColor.opacity(0.1))
+                                .clipShape(Circle())
+                        }
+                    }
                 }
-                .foregroundColor(themeManager.currentTheme.xprimary)
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(themeManager.currentTheme.xprimary.opacity(0.1))
-                .clipShape(Capsule())
             }
         }
         .padding(.horizontal, 20)
@@ -216,27 +246,21 @@ struct AlbumHomeView: View {
 // MARK: - Album Card Wrapper
 struct AlbumCardWrapper: View {
     let album: Album
+    let isEditMode: Bool
     let onTap: () -> Void
-    let onLongPress: () -> Void
-    @State private var isPressed = false
+    let onDelete: () -> Void
 
     var body: some View {
-        AlbumCard(album: album, isPressed: $isPressed)
+        AlbumCard(album: album, isEditMode: isEditMode, onDelete: onDelete)
             .onTapGesture { onTap() }
-            .onLongPressGesture(minimumDuration: 0.5, pressing: { pressing in
-                if !album.isDefaultAlbum {
-                    withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                        isPressed = pressing
-                    }
-                }
-            }, perform: { onLongPress() })
     }
 }
 
 // MARK: - Album Card
 struct AlbumCard: View {
     let album: Album
-    @Binding var isPressed: Bool
+    let isEditMode: Bool
+    let onDelete: () -> Void
     @StateObject private var albumManager = AlbumManager.shared
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
@@ -276,12 +300,17 @@ struct AlbumCard: View {
         )
         .overlay(
             RoundedRectangle(cornerRadius: 18)
-                .stroke(resolvedCoverColor.opacity(0.35), lineWidth: 1.5)
+                .stroke(
+                    isEditMode && !album.isDefaultAlbum
+                        ? themeManager.currentTheme.error.opacity(0.5)
+                        : resolvedCoverColor.opacity(0.35),
+                    lineWidth: 1.5
+                )
         )
         .shadow(color: resolvedCoverColor.opacity(0.2), radius: 8, x: 0, y: 4)
-        .scaleEffect(isPressed ? 0.95 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
-        .overlay(deleteOverlay)
+        .scaleEffect(isEditMode && !album.isDefaultAlbum ? 0.97 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isEditMode)
+        .overlay(deleteButtonOverlay)
         .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 
@@ -389,23 +418,29 @@ struct AlbumCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: - Delete Overlay
+    // MARK: - Delete Button Overlay
     @ViewBuilder
-    private var deleteOverlay: some View {
-        if isPressed && !album.isDefaultAlbum {
-            ZStack {
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(themeManager.currentTheme.error.opacity(0.75))
-                VStack(spacing: 8) {
-                    Image(systemName: "trash.fill")
-                        .font(.title2)
-                        .foregroundColor(.white)
-                    Text("長押しで削除")
-                        .font(.caption.bold())
-                        .foregroundColor(.white)
+    private var deleteButtonOverlay: some View {
+        if isEditMode && !album.isDefaultAlbum {
+            VStack {
+                HStack {
+                    Button(action: onDelete) {
+                        ZStack {
+                            Circle()
+                                .fill(themeManager.currentTheme.error)
+                                .frame(width: 28, height: 28)
+                                .shadow(color: themeManager.currentTheme.error.opacity(0.5), radius: 4, x: 0, y: 2)
+                            Image(systemName: "minus")
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .padding(6)
+                    Spacer()
                 }
+                Spacer()
             }
-            .transition(.opacity.combined(with: .scale(scale: 0.95)))
+            .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .topLeading)))
         }
     }
 }
