@@ -55,20 +55,37 @@ class AlbumManager: ObservableObject {
     }
 
     func createTravelPlanAlbum(from travelPlan: TravelPlan) {
-        // Check if album already exists for this travel plan
         if let planId = travelPlan.id, albums.contains(where: { $0.travelPlanId == planId }) {
             return
         }
 
         let album = Album(
             title: travelPlan.title,
-            coverColor: travelPlan.cardColor ?? .blue,
+            coverColor: resolvedPlanColor(for: travelPlan),
             icon: "airplane.departure",
             travelPlanId: travelPlan.id,
             isDefaultAlbum: false
         )
         albums.append(album)
         saveAlbums()
+    }
+
+    private func resolvedPlanColor(for plan: TravelPlan) -> Color {
+        let palette: [Color] = [
+            .blue, .purple, .pink, .orange, .teal,
+            .indigo, Color(red: 0.2, green: 0.65, blue: 0.4),
+            Color(red: 0.85, green: 0.35, blue: 0.25)
+        ]
+        let key = plan.id ?? plan.title
+        let fallback = palette[abs(key.hashValue) % palette.count]
+
+        guard let color = plan.cardColor else { return fallback }
+
+        let uiColor = UIColor(color)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard uiColor.getRed(&r, green: &g, blue: &b, alpha: &a) else { return fallback }
+        let brightness = 0.299 * r + 0.587 * g + 0.114 * b
+        return brightness < 0.85 ? color : fallback
     }
 
     func updateAlbum(_ album: Album) {
