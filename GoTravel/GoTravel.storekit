@@ -1,0 +1,77 @@
+{
+  "identifier" : "GoTravel_Tips",
+  "nonRenewingSubscriptions" : [],
+  "products" : [
+    {
+      "displayPrice" : "120",
+      "familySharable" : false,
+      "internalID" : "tip_small",
+      "localizations" : [
+        {
+          "description" : "コーヒー1杯分の応援",
+          "displayName" : "コーヒー1杯",
+          "locale" : "ja_JP"
+        }
+      ],
+      "productID" : "com.gmail.taismryotasis.Travory.tip.small",
+      "referenceName" : "Tip Small",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "250",
+      "familySharable" : false,
+      "internalID" : "tip_medium",
+      "localizations" : [
+        {
+          "description" : "ジュース1本分の応援",
+          "displayName" : "ジュース1本",
+          "locale" : "ja_JP"
+        }
+      ],
+      "productID" : "com.gmail.taismryotasis.Travory.tip.medium",
+      "referenceName" : "Tip Medium",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "610",
+      "familySharable" : false,
+      "internalID" : "tip_large",
+      "localizations" : [
+        {
+          "description" : "ランチ半分の応援",
+          "displayName" : "ランチ半分",
+          "locale" : "ja_JP"
+        }
+      ],
+      "productID" : "com.gmail.taismryotasis.Travory.tip.large",
+      "referenceName" : "Tip Large",
+      "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "1220",
+      "familySharable" : false,
+      "internalID" : "tip_xlarge",
+      "localizations" : [
+        {
+          "description" : "ランチ1食分の応援",
+          "displayName" : "ランチ1食",
+          "locale" : "ja_JP"
+        }
+      ],
+      "productID" : "com.gmail.taismryotasis.Travory.tip.xlarge",
+      "referenceName" : "Tip XLarge",
+      "type" : "Consumable"
+    }
+  ],
+  "settings" : {
+    "_askToBuyEnabled" : false,
+    "_locale" : "ja_JP",
+    "_storefront" : "JPN",
+    "_storeKitErrors" : []
+  },
+  "subscriptionGroups" : [],
+  "version" : {
+    "major" : 3,
+    "minor" : 0
+  }
+}

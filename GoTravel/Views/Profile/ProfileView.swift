@@ -23,7 +23,9 @@ struct ProfileView: View {
                         accountCard
 
                         helpSupportCard
-                        
+
+                        tipJarCard
+
                         appsettingCard
 
                         // cloudKitTestCard // 開発用：必要時にコメント解除
@@ -272,6 +274,23 @@ struct ProfileView: View {
         .scaleEffect(animateCards ? 1 : 0.8)
         .offset(y: animateCards ? 0 : 30)
         .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.45), value: animateCards)
+    }
+
+    // MARK: - Tip Jar Card
+    private var tipJarCard: some View {
+        NavigationLink(destination: TipJarView()) {
+            GlassMenuCard(
+                icon: "heart.fill",
+                title: "開発者を応援する",
+                subtitle: "投げ銭で開発を支援",
+                gradientColors: [Color.pink, Color.red.opacity(0.7)]
+            )
+        }
+        .buttonStyle(CardButtonStyle())
+        .opacity(animateCards ? 1 : 0)
+        .scaleEffect(animateCards ? 1 : 0.8)
+        .offset(y: animateCards ? 0 : 30)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.40), value: animateCards)
     }
 
     // MARK: - CloudKit Test Card
