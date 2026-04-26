@@ -7,6 +7,8 @@ struct ProfileView: View {
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
     @State private var animateCards = false
+    @State private var showJoinPlan = false
+    @EnvironmentObject var travelPlanViewModel: TravelPlanViewModel
 
     var body: some View {
         ZStack {
@@ -21,6 +23,8 @@ struct ProfileView: View {
                         profileEditCard
 
                         accountCard
+
+                        joinTravelPlanCard
 
                         helpSupportCard
 
@@ -42,6 +46,10 @@ struct ProfileView: View {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
                 animateCards = true
             }
+        }
+        .sheet(isPresented: $showJoinPlan) {
+            JoinTravelPlanView()
+                .environmentObject(travelPlanViewModel)
         }
     }
 
@@ -274,6 +282,23 @@ struct ProfileView: View {
         .scaleEffect(animateCards ? 1 : 0.8)
         .offset(y: animateCards ? 0 : 30)
         .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.45), value: animateCards)
+    }
+
+    // MARK: - Join Travel Plan Card
+    private var joinTravelPlanCard: some View {
+        Button(action: { showJoinPlan = true }) {
+            GlassMenuCard(
+                icon: "person.badge.plus",
+                title: "旅行計画に参加",
+                subtitle: "共有コードで仲間の計画に参加",
+                gradientColors: [themeManager.currentTheme.success, themeManager.currentTheme.info]
+            )
+        }
+        .buttonStyle(CardButtonStyle())
+        .opacity(animateCards ? 1 : 0)
+        .scaleEffect(animateCards ? 1 : 0.8)
+        .offset(y: animateCards ? 0 : 30)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.30), value: animateCards)
     }
 
     // MARK: - Tip Jar Card

@@ -22,6 +22,7 @@ struct EnjoyWorldView: View {
     @ObservedObject var themeManager = ThemeManager.shared
     @State private var selectedTab: TabType = .all
     @State private var selectedPlanTab: PlanTabType = .all
+    @StateObject private var taskManager = TaskManager.shared
     @State private var showAddTravelPlan = false
     @State private var showAddPlan = false
     @State private var showJoinPlan = false
@@ -325,18 +326,29 @@ struct EnjoyWorldView: View {
 
                 Spacer()
 
-                Button(action: {
-                    showJoinPlan = true
-                }) {
+                NavigationLink(destination: TaskListView()) {
                     ZStack {
                         Circle()
                             .fill(Color(.systemGray6))
                             .frame(width: 44, height: 44)
                             .shadow(color: Color.black.opacity(0.1), radius: 3, x: 0, y: 2)
 
-                        Image(systemName: "person.badge.plus")
-                            .font(.system(size: 20))
-                            .foregroundColor(themeManager.currentTheme.success)
+                        ZStack(alignment: .topTrailing) {
+                            Image(systemName: "checkmark.circle")
+                                .font(.system(size: 20))
+                                .foregroundColor(themeManager.currentTheme.xprimary)
+
+                            if taskManager.pendingCount > 0 {
+                                Text("\(min(taskManager.pendingCount, 99))")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 4)
+                                    .padding(.vertical, 2)
+                                    .background(themeManager.currentTheme.error)
+                                    .clipShape(Capsule())
+                                    .offset(x: 10, y: -8)
+                            }
+                        }
                     }
                 }
 
