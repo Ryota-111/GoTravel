@@ -145,18 +145,41 @@ struct EnjoyWorldView: View {
                 let planDayStart = calendar.startOfDay(for: plan.startDate)
                 if planDayStart > todayStart { return true }
                 if planDayStart == todayStart {
-                    if let t = plan.time { return t > now }
+                    if let t = plan.time {
+                        // 時刻部分だけ今日の日付に当てはめて比較
+                        let todayAtPlanTime = calendar.date(
+                            bySettingHour: calendar.component(.hour, from: t),
+                            minute: calendar.component(.minute, from: t),
+                            second: 0,
+                            of: now
+                        ) ?? t
+                        return todayAtPlanTime > now
+                    }
                     return true
                 }
                 return false
             }
-            .sorted { $0.startDate < $1.startDate }
+            .sorted { lhs, rhs in
+                let lDay = calendar.startOfDay(for: lhs.startDate)
+                let rDay = calendar.startOfDay(for: rhs.startDate)
+                if lDay != rDay { return lDay < rDay }
+                // 同日の場合は時刻で比較
+                let lTime = lhs.time.map { calendar.component(.hour, from: $0) * 60 + calendar.component(.minute, from: $0) } ?? 0
+                let rTime = rhs.time.map { calendar.component(.hour, from: $0) * 60 + calendar.component(.minute, from: $0) } ?? 0
+                return lTime < rTime
+            }
         if let next = upcoming.first {
             let formatter = DateFormatter()
             formatter.locale = Locale(identifier: "ja_JP")
             if let t = next.time {
+                let todayAtPlanTime = calendar.date(
+                    bySettingHour: calendar.component(.hour, from: t),
+                    minute: calendar.component(.minute, from: t),
+                    second: 0,
+                    of: next.startDate
+                ) ?? t
                 formatter.dateFormat = "M月d日 HH:mm"
-                return "\(next.title) \(formatter.string(from: t))"
+                return "\(next.title) \(formatter.string(from: todayAtPlanTime))"
             } else {
                 formatter.dateFormat = "M月d日"
                 return "\(next.title) \(formatter.string(from: next.startDate))"
