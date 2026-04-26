@@ -298,7 +298,7 @@ struct PlacesListView: View {
                             ZStack {
                                 Circle()
                                     .fill(selectedPlace?.id == place.id
-                                          ? themeManager.currentTheme.primary
+                                          ? themeManager.currentTheme.xprimary
                                           : themeManager.currentTheme.error.opacity(0.9))
                                     .frame(width: 38, height: 38)
                                     .shadow(color: themeManager.currentTheme.error.opacity(0.4), radius: 4, x: 0, y: 2)
@@ -375,7 +375,7 @@ struct PlacesListView: View {
                     .font(.subheadline.weight(.semibold))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 13)
-                    .background(themeManager.currentTheme.primary)
+                    .background(themeManager.currentTheme.xprimary)
                     .foregroundStyle(.white)
                     .cornerRadius(14)
             }

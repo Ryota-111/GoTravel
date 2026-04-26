@@ -21,7 +21,7 @@ struct ManageCategoriesView: View {
                         HStack(spacing: 12) {
                             Image(systemName: cat.icon)
                                 .frame(width: 28)
-                                .foregroundColor(themeManager.currentTheme.primary)
+                                .foregroundColor(themeManager.currentTheme.xprimary)
                             Text(cat.name)
                                 .foregroundColor(accentColor)
                             Spacer()
@@ -45,7 +45,7 @@ struct ManageCategoriesView: View {
                             HStack(spacing: 12) {
                                 Image(systemName: cat.icon)
                                     .frame(width: 28)
-                                    .foregroundColor(themeManager.currentTheme.primary)
+                                    .foregroundColor(themeManager.currentTheme.xprimary)
                                 Text(cat.name)
                                     .foregroundColor(accentColor)
                                 Spacer()
@@ -119,7 +119,7 @@ struct AddCategoryView: View {
                             .padding(14)
                             .background(colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight)
                             .cornerRadius(12)
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(themeManager.currentTheme.primary.opacity(0.3), lineWidth: 1.5))
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(themeManager.currentTheme.xprimary.opacity(0.3), lineWidth: 1.5))
                     }
                     .padding(.horizontal, 20)
 
@@ -135,14 +135,14 @@ struct AddCategoryView: View {
                                 Button(action: { selectedIcon = icon }) {
                                     ZStack {
                                         RoundedRectangle(cornerRadius: 10)
-                                            .fill(selectedIcon == icon ? themeManager.currentTheme.primary.opacity(0.2) : Color.clear)
+                                            .fill(selectedIcon == icon ? themeManager.currentTheme.xprimary.opacity(0.2) : Color.clear)
                                             .overlay(
                                                 RoundedRectangle(cornerRadius: 10)
-                                                    .stroke(selectedIcon == icon ? themeManager.currentTheme.primary : themeManager.currentTheme.secondaryText.opacity(0.3), lineWidth: 1.5)
+                                                    .stroke(selectedIcon == icon ? themeManager.currentTheme.xprimary : themeManager.currentTheme.secondaryText.opacity(0.3), lineWidth: 1.5)
                                             )
                                         Image(systemName: icon)
                                             .font(.title3)
-                                            .foregroundColor(selectedIcon == icon ? themeManager.currentTheme.primary : accentColor.opacity(0.7))
+                                            .foregroundColor(selectedIcon == icon ? themeManager.currentTheme.xprimary : accentColor.opacity(0.7))
                                     }
                                     .frame(height: 52)
                                 }
@@ -168,7 +168,7 @@ struct AddCategoryView: View {
                         categoryManager.add(newCat)
                         presentationMode.wrappedValue.dismiss()
                     }
-                    .foregroundColor(name.trimmingCharacters(in: .whitespaces).isEmpty ? themeManager.currentTheme.secondaryText : themeManager.currentTheme.primary)
+                    .foregroundColor(name.trimmingCharacters(in: .whitespaces).isEmpty ? themeManager.currentTheme.secondaryText : themeManager.currentTheme.xprimary)
                     .disabled(name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
