@@ -14,37 +14,28 @@ struct JapanPhotoView: View {
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
-        NavigationView {
-            ZStack {
-                backgroundGradient
+        ZStack {
+            backgroundGradient
+
+            VStack(spacing: 0) {
+                headerBar
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 24) {
-                        headerSection
-                        
-                        gradientSeparator
+                    VStack(spacing: 20) {
+                        statsSection
+                            .padding(.top, 16)
 
                         mapCardSection
 
-                        statsSection
-
                         prefectureGridSection
                     }
-                    .padding()
-                    .padding(.bottom, 20)
+                    .padding(.horizontal, 16)
+                    .padding(.bottom, 32)
                 }
             }
-            .navigationTitle("")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("閉じる") {
-                        dismiss()
-                    }
-                    .foregroundColor(textColor)
-                }
-            }
-            .onAppear {
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
                 animateCards = true
             }
         }
@@ -61,260 +52,59 @@ struct JapanPhotoView: View {
 
     // MARK: - Background
     private var backgroundGradient: some View {
-        LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.gradientDark, themeManager.currentTheme.dark] : [themeManager.currentTheme.gradientLight, themeManager.currentTheme.light]),
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .ignoresSafeArea()
+        let colors: [Color]
+        switch themeManager.currentTheme.type {
+        case .whiteBlack:
+            colors = [Color(white: 0.97), Color(white: 0.91)]
+        default:
+            colors = colorScheme == .dark
+                ? [themeManager.currentTheme.backgroundDark, themeManager.currentTheme.secondaryBackgroundDark]
+                : [themeManager.currentTheme.backgroundLight, themeManager.currentTheme.secondaryBackgroundLight]
+        }
+        return LinearGradient(gradient: Gradient(colors: colors), startPoint: .topLeading, endPoint: .bottomTrailing)
+            .ignoresSafeArea()
     }
-    
-    // MARK: - Color
-    private var textColor: Color {
+
+    private var accentColor: Color {
         colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
     }
-    
-    private var xtextColor: Color {
-        colorScheme == .dark ? themeManager.currentTheme.accent1 : themeManager.currentTheme.accent2
-    }
-    
-    private var DLtextColor: Color {
-        colorScheme == .dark ? themeManager.currentTheme.light : themeManager.currentTheme.dark
-    }
-    
-    private var secondaryTextColor: Color {
-        colorScheme == .dark ? themeManager.currentTheme.accent2.opacity(0.7) : themeManager.currentTheme.accent1.opacity(0.6)
-    }
-    
-    // MARK: - Gradient Separator
-    private var gradientSeparator: some View {
-        Rectangle()
-            .fill(
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        Color.clear,
-                        textColor.opacity(0.6),
-                        Color.clear
-                    ]),
-                    startPoint: .leading,
-                    endPoint: .trailing
-                )
-            )
-            .frame(height: 1)
+
+    private var cardBg: Color {
+        colorScheme == .dark
+            ? themeManager.currentTheme.secondaryBackgroundDark
+            : themeManager.currentTheme.backgroundLight
     }
 
-    // MARK: - Header Section
-    private var headerSection: some View {
-        VStack(spacing: 12) {
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    themeManager.currentTheme.xprimary.opacity(0.8),
-                                    themeManager.currentTheme.xprimary.opacity(0.5)
-                                ]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 56, height: 56)
-
-                    Image(systemName: "map.fill")
-                        .font(.title2)
-                        .foregroundColor(textColor)
-                }
-                .shadow(color: themeManager.currentTheme.xprimary.opacity(0.4), radius: 8, x: 0, y: 4)
-
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("日本全国フォトマップ")
-                        .font(.title2.bold())
-                        .foregroundColor(textColor)
-
-                    Text("訪れた都道府県の思い出を記録")
-                        .font(.subheadline)
-                        .foregroundColor(textColor)
-                }
-
-                Spacer()
+    // MARK: - Header Bar
+    private var headerBar: some View {
+        HStack {
+            Button(action: { dismiss() }) {
+                Image(systemName: "xmark")
+                    .foregroundColor(accentColor)
+                    .imageScale(.medium)
+                    .padding(8)
+                    .background(accentColor.opacity(0.1))
+                    .clipShape(Circle())
             }
-        }
-        .opacity(animateCards ? 1 : 0)
-        .offset(y: animateCards ? 0 : -20)
-    }
 
-    // MARK: - Map Card Section
-    private var mapCardSection: some View {
-        VStack(spacing: 16) {
-            HStack {
-                Text("日本地図")
+            Spacer()
+
+            VStack(spacing: 2) {
+                Text("日本全国フォトマップ")
                     .font(.headline)
-                    .foregroundColor(textColor)
-                    .padding(.horizontal)
-
-                Spacer()
-
-                HStack(spacing: 6) {
-                    Image(systemName: "hand.pinch")
-                        .font(.caption)
-                    Text("ピンチ・ドラッグで操作")
-                        .font(.caption)
-                }
-                .foregroundColor(textColor.opacity(0.7))
-                .padding(.horizontal, 12)
-                .padding(.vertical, 6)
-                .background(
-                    Capsule()
-                        .fill(themeManager.currentTheme.secondaryText.opacity(0.15))
-                )
+                    .foregroundColor(accentColor)
+                Text("訪れた都道府県の思い出を記録")
+                    .font(.caption)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
             }
 
-            mapView
+            Spacer()
+
+            Color.clear.frame(width: 36, height: 36)
         }
-        .opacity(animateCards ? 1 : 0)
-        .offset(y: animateCards ? 0 : 20)
-    }
-
-    private var mapView: some View {
-        GeometryReader { geometry in
-            ZStack {
-                // Background
-                RoundedRectangle(cornerRadius: 24)
-                    .fill(
-                        colorScheme == .dark ?
-                            Color.white.opacity(0.05) :
-                            Color.white.opacity(0.3)
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 24)
-                            .stroke(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        themeManager.currentTheme.primary.opacity(0.3),
-                                        themeManager.currentTheme.primary.opacity(0.1)
-                                    ]),
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 1
-                            )
-                    )
-
-                // Map content
-                ZStack {
-                    themeManager.currentTheme.primary.opacity(0.15)
-                        .frame(width: 370 * 2, height: 600 * 2)
-
-                    ForEach(Prefecture.allCases) { prefecture in
-                        prefectureMapCell(prefecture, in: CGSize(width: 370, height: 600))
-                    }
-                }
-                .frame(width: 370, height: 500)
-                .scaleEffect(scale)
-                .offset(offset)
-            }
-            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .center)
-            .clipShape(RoundedRectangle(cornerRadius: 24))
-            .contentShape(Rectangle())
-            .gesture(
-                MagnificationGesture()
-                    .onChanged { value in
-                        scale = lastScale * value
-                    }
-                    .onEnded { value in
-                        lastScale = scale
-                        if scale < 1.0 {
-                            scale = 1.0
-                            lastScale = 1.0
-                        } else if scale > 3.0 {
-                            scale = 3.0
-                            lastScale = 3.0
-                        }
-                    }
-            )
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 10)
-                    .onChanged { value in
-                        let newOffset = CGSize(
-                            width: lastOffset.width + value.translation.width,
-                            height: lastOffset.height + value.translation.height
-                        )
-                        let maxOffsetX = (370 * 2 * scale - geometry.size.width) / 2
-                        let maxOffsetY = (600 * 2 * scale - geometry.size.height) / 2
-
-                        offset = CGSize(
-                            width: min(max(newOffset.width, -maxOffsetX), maxOffsetX),
-                            height: min(max(newOffset.height, -maxOffsetY), maxOffsetY)
-                        )
-                    }
-                    .onEnded { value in
-                        lastOffset = offset
-                    }
-            )
-        }
-        .frame(height: 500)
-        .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: 6)
-    }
-
-    private func prefectureMapCell(_ prefecture: Prefecture, in size: CGSize) -> some View {
-        let position = prefecture.mapPosition
-        let prefSize = prefecture.mapSize
-
-        return ZStack {
-            if let photo = viewModel.photos[prefecture] {
-                MaskedPrefectureImage(
-                    prefecture: prefecture,
-                    photo: photo,
-                    size: prefSize
-                )
-                .contentShape(
-                    Rectangle()
-                        .size(prefSize)
-                )
-                .onTapGesture {
-                    selectedPrefecture = prefecture
-                }
-            } else {
-                if let maskImage = prefecture.maskImage {
-                    Image(uiImage: maskImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: prefSize.width, height: prefSize.height)
-                        .foregroundColor(themeManager.currentTheme.success.opacity(0.6))
-                        .contentShape(
-                            Rectangle()
-                                .size(prefSize)
-                        )
-                        .onTapGesture {
-                            selectedPrefecture = prefecture
-                        }
-                } else {
-                    prefecture.shape
-                        .fill(themeManager.currentTheme.success.opacity(0.6))
-                        .frame(width: prefSize.width, height: prefSize.height)
-                        .overlay(
-                            prefecture.shape
-                                .stroke(Color.white.opacity(0.5), lineWidth: 1)
-                        )
-                        .contentShape(prefecture.shape)
-                        .onTapGesture {
-                            selectedPrefecture = prefecture
-                        }
-                }
-            }
-
-            Text(prefecture.shortName)
-                .font(.system(size: 4))
-                .fontWeight(.bold)
-                .foregroundColor(.white)
-                .shadow(color: .black.opacity(0.8), radius: 1)
-                .allowsHitTesting(false)
-        }
-        .position(
-            x: size.width * position.x,
-            y: size.height * position.y
-        )
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(themeManager.currentTheme.xprimary.opacity(0.08))
     }
 
     // MARK: - Stats Section
@@ -326,51 +116,194 @@ struct JapanPhotoView: View {
                 value: "\(viewModel.photos.count)",
                 color: themeManager.currentTheme.xprimary
             )
-
             JapanStatCard(
                 icon: "location.fill",
                 title: "残り",
                 value: "\(47 - viewModel.photos.count)",
-                color: themeManager.currentTheme.success
+                color: themeManager.currentTheme.warning
             )
-
             JapanStatCard(
-                icon: "percent",
+                icon: "checkmark.seal.fill",
                 title: "達成率",
                 value: String(format: "%.0f%%", Double(viewModel.photos.count) / 47.0 * 100),
-                color: themeManager.currentTheme.error
+                color: themeManager.currentTheme.info
             )
         }
         .opacity(animateCards ? 1 : 0)
         .offset(y: animateCards ? 0 : 20)
+        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.05), value: animateCards)
+    }
+
+    // MARK: - Map Card Section
+    private var mapCardSection: some View {
+        VStack(spacing: 12) {
+            HStack {
+                HStack(spacing: 6) {
+                    Image(systemName: "map.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(themeManager.currentTheme.xprimary)
+                    Text("日本地図")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(accentColor)
+                }
+                Spacer()
+                HStack(spacing: 4) {
+                    Image(systemName: "hand.pinch")
+                        .font(.caption2)
+                    Text("ピンチ・ドラッグで操作")
+                        .font(.caption2)
+                }
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(themeManager.currentTheme.secondaryText.opacity(0.1))
+                .clipShape(Capsule())
+            }
+
+            mapView
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(cardBg)
+                .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
+        )
+        .opacity(animateCards ? 1 : 0)
+        .offset(y: animateCards ? 0 : 20)
+        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: animateCards)
+    }
+
+    private var mapView: some View {
+        GeometryReader { geometry in
+            ZStack {
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(themeManager.currentTheme.xprimary.opacity(0.06))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(themeManager.currentTheme.xprimary.opacity(0.15), lineWidth: 1)
+                    )
+
+                ZStack {
+                    Color.clear
+                        .frame(width: 370 * 2, height: 600 * 2)
+
+                    ForEach(Prefecture.allCases) { prefecture in
+                        prefectureMapCell(prefecture, in: CGSize(width: 370, height: 600))
+                    }
+                }
+                .frame(width: 370, height: 500)
+                .scaleEffect(scale)
+                .offset(offset)
+            }
+            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .center)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .contentShape(Rectangle())
+            .gesture(
+                MagnificationGesture()
+                    .onChanged { value in scale = lastScale * value }
+                    .onEnded { _ in
+                        lastScale = scale
+                        if scale < 1.0 { scale = 1.0; lastScale = 1.0 }
+                        else if scale > 3.0 { scale = 3.0; lastScale = 3.0 }
+                    }
+            )
+            .simultaneousGesture(
+                DragGesture(minimumDistance: 10)
+                    .onChanged { value in
+                        let newOffset = CGSize(
+                            width: lastOffset.width + value.translation.width,
+                            height: lastOffset.height + value.translation.height
+                        )
+                        let maxOffsetX = (370 * 2 * scale - geometry.size.width) / 2
+                        let maxOffsetY = (600 * 2 * scale - geometry.size.height) / 2
+                        offset = CGSize(
+                            width: min(max(newOffset.width, -maxOffsetX), maxOffsetX),
+                            height: min(max(newOffset.height, -maxOffsetY), maxOffsetY)
+                        )
+                    }
+                    .onEnded { _ in lastOffset = offset }
+            )
+        }
+        .frame(height: 460)
+    }
+
+    private func prefectureMapCell(_ prefecture: Prefecture, in size: CGSize) -> some View {
+        let position = prefecture.mapPosition
+        let prefSize = prefecture.mapSize
+
+        return ZStack {
+            if let photo = viewModel.photos[prefecture] {
+                MaskedPrefectureImage(prefecture: prefecture, photo: photo, size: prefSize)
+                    .contentShape(Rectangle().size(prefSize))
+                    .onTapGesture { selectedPrefecture = prefecture }
+            } else {
+                if let maskImage = prefecture.maskImage {
+                    Image(uiImage: maskImage)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: prefSize.width, height: prefSize.height)
+                        .foregroundColor(themeManager.currentTheme.xprimary.opacity(0.65))
+                        .contentShape(Rectangle().size(prefSize))
+                        .onTapGesture { selectedPrefecture = prefecture }
+                } else {
+                    prefecture.shape
+                        .fill(themeManager.currentTheme.xprimary.opacity(0.55))
+                        .frame(width: prefSize.width, height: prefSize.height)
+                        .overlay(prefecture.shape.stroke(Color.white.opacity(0.4), lineWidth: 1))
+                        .contentShape(prefecture.shape)
+                        .onTapGesture { selectedPrefecture = prefecture }
+                }
+            }
+
+            Text(prefecture.shortName)
+                .font(.system(size: 4))
+                .fontWeight(.bold)
+                .foregroundColor(.white)
+                .shadow(color: .black.opacity(0.8), radius: 1)
+                .allowsHitTesting(false)
+        }
+        .position(x: size.width * position.x, y: size.height * position.y)
     }
 
     // MARK: - Prefecture Grid Section
     private var prefectureGridSection: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            Text("都道府県一覧")
-                .font(.headline)
-                .foregroundColor(themeManager.currentTheme.accent2)
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                Image(systemName: "list.bullet.rectangle")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(themeManager.currentTheme.xprimary)
+                Text("都道府県一覧")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(accentColor)
+            }
 
             LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: 12),
-                GridItem(.flexible(), spacing: 12),
-                GridItem(.flexible(), spacing: 12)
-            ], spacing: 12) {
+                GridItem(.flexible(), spacing: 10),
+                GridItem(.flexible(), spacing: 10),
+                GridItem(.flexible(), spacing: 10)
+            ], spacing: 10) {
                 ForEach(Array(Prefecture.allCases.enumerated()), id: \.element.id) { index, prefecture in
                     PrefectureGridCard(
                         prefecture: prefecture,
                         hasPhoto: viewModel.photos[prefecture] != nil,
                         photo: viewModel.photos[prefecture]
                     )
-                    .onTapGesture {
-                        selectedPrefecture = prefecture
-                    }
+                    .onTapGesture { selectedPrefecture = prefecture }
                     .opacity(animateCards ? 1 : 0)
-                    .scaleEffect(animateCards ? 1 : 0.8)
+                    .scaleEffect(animateCards ? 1 : 0.85)
+                    .animation(
+                        .spring(response: 0.5, dampingFraction: 0.8).delay(Double(index) * 0.01),
+                        value: animateCards
+                    )
                 }
             }
         }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(cardBg)
+                .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
+        )
     }
 }
 
@@ -383,45 +316,46 @@ struct JapanStatCard: View {
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
 
+    private var cardBg: Color {
+        colorScheme == .dark
+            ? themeManager.currentTheme.secondaryBackgroundDark
+            : themeManager.currentTheme.backgroundLight
+    }
+
+    private var accentColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
+    }
+
     var body: some View {
-        VStack(spacing: 10) {
-            Image(systemName: icon)
-                .font(.title3)
-                .foregroundColor(color)
-
-            VStack(spacing: 4) {
-                Text(value)
-                    .font(.title2.bold())
-
-                Text(title)
-                    .font(.caption)
+        VStack(spacing: 8) {
+            ZStack {
+                Circle()
+                    .fill(color.opacity(0.12))
+                    .frame(width: 44, height: 44)
+                Image(systemName: icon)
+                    .font(.system(size: 18))
+                    .foregroundColor(color)
             }
+
+            Text(value)
+                .font(.title3.bold())
+                .foregroundColor(accentColor)
+
+            Text(title)
+                .font(.caption)
+                .foregroundColor(themeManager.currentTheme.secondaryText)
         }
         .frame(maxWidth: .infinity)
-        .padding(.vertical, 20)
+        .padding(.vertical, 16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(
-                    colorScheme == .dark ?
-                    themeManager.currentTheme.accent2.opacity(0.1) :
-                        themeManager.currentTheme.accent1.opacity(0.1)
-                )
+            RoundedRectangle(cornerRadius: 14)
+                .fill(cardBg)
+                .shadow(color: color.opacity(0.15), radius: 6, x: 0, y: 3)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(
-                    LinearGradient(
-                        gradient: Gradient(colors: [
-                            color.opacity(0.5),
-                            color.opacity(0.2)
-                        ]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(color.opacity(0.25), lineWidth: 1)
         )
-        .shadow(color: color.opacity(0.2), radius: 8, x: 0, y: 4)
     }
 }
 
@@ -433,37 +367,31 @@ struct PrefectureGridCard: View {
     @Environment(\.colorScheme) var colorScheme
     @ObservedObject var themeManager = ThemeManager.shared
 
+    private var accentColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
+    }
+
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 6) {
             ZStack {
                 if let image = photo {
                     Image(uiImage: image)
                         .resizable()
                         .aspectRatio(contentMode: .fill)
-                        .frame(height: 100)
-                        .clipShape(RoundedRectangle(cornerRadius: 12))
+                        .frame(height: 80)
+                        .clipShape(RoundedRectangle(cornerRadius: 10))
                 } else {
-                    RoundedRectangle(cornerRadius: 12)
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    themeManager.currentTheme.secondaryText.opacity(0.3),
-                                    themeManager.currentTheme.secondaryText.opacity(0.2)
-                                ]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(height: 100)
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(themeManager.currentTheme.xprimary.opacity(0.08))
+                        .frame(height: 80)
                         .overlay(
-                            VStack(spacing: 6) {
+                            VStack(spacing: 4) {
                                 Image(systemName: "photo.badge.plus")
                                     .font(.title3)
-                                    .foregroundColor(.white.opacity(0.6))
-
+                                    .foregroundColor(themeManager.currentTheme.xprimary.opacity(0.4))
                                 Text("追加")
-                                    .font(.caption2)
-                                    .foregroundColor(.white.opacity(0.5))
+                                    .font(.system(size: 9))
+                                    .foregroundColor(themeManager.currentTheme.secondaryText)
                             }
                         )
                 }
@@ -473,35 +401,28 @@ struct PrefectureGridCard: View {
                         HStack {
                             Spacer()
                             Image(systemName: "checkmark.circle.fill")
-                                .font(.body)
-                                .foregroundColor(themeManager.currentTheme.success)
-                                .background(
-                                    Circle()
-                                        .fill(Color.white)
-                                        .frame(width: 20, height: 20)
-                                )
-                                .padding(8)
+                                .font(.caption)
+                                .foregroundColor(themeManager.currentTheme.xprimary)
+                                .background(Circle().fill(Color.white).frame(width: 16, height: 16))
+                                .padding(5)
                         }
                         Spacer()
                     }
                 }
             }
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: 10)
                     .stroke(
-                        hasPhoto ?
-                            themeManager.currentTheme.primary.opacity(0.4) :
-                            Color.white.opacity(0.2),
-                        lineWidth: hasPhoto ? 2 : 1
+                        hasPhoto ? themeManager.currentTheme.xprimary.opacity(0.4) : themeManager.currentTheme.xprimary.opacity(0.1),
+                        lineWidth: hasPhoto ? 1.5 : 1
                     )
             )
 
             Text(prefecture.name)
-                .font(.caption)
-                .foregroundColor(.white)
+                .font(.system(size: 10, weight: .medium))
+                .foregroundColor(accentColor)
                 .lineLimit(1)
         }
-        .shadow(color: .black.opacity(0.1), radius: 6, x: 0, y: 3)
     }
 }
 
@@ -515,32 +436,33 @@ struct PrefecturePhotoEditorView: View {
     @Environment(\.colorScheme) var colorScheme
     @ObservedObject var themeManager = ThemeManager.shared
 
+    private var accentColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
+    }
+
+    private var cardBg: Color {
+        colorScheme == .dark
+            ? themeManager.currentTheme.secondaryBackgroundDark
+            : themeManager.currentTheme.backgroundLight
+    }
+
     var body: some View {
-        NavigationView {
-            ZStack {
-                backgroundGradient
+        ZStack {
+            backgroundGradient
 
-                ScrollView {
-                    VStack(spacing: 24) {
+            VStack(spacing: 0) {
+                headerBar
+
+                ScrollView(showsIndicators: false) {
+                    VStack(spacing: 20) {
                         prefectureHeaderSection
-
                         imagePreviewSection
-
                         actionButtonsSection
-
                         Spacer(minLength: 40)
                     }
-                    .padding()
-                }
-            }
-            .navigationTitle("")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("閉じる") {
-                        presentationMode.wrappedValue.dismiss()
-                    }
-                    .foregroundColor(themeManager.currentTheme.primary)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 20)
+                    .padding(.bottom, 40)
                 }
             }
         }
@@ -552,128 +474,128 @@ struct PrefecturePhotoEditorView: View {
     }
 
     private var backgroundGradient: some View {
-        LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.gradientDark, themeManager.currentTheme.dark] : [themeManager.currentTheme.gradientLight, themeManager.currentTheme.light]),
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .ignoresSafeArea()
+        let colors: [Color]
+        switch themeManager.currentTheme.type {
+        case .whiteBlack:
+            colors = [Color(white: 0.97), Color(white: 0.91)]
+        default:
+            colors = colorScheme == .dark
+                ? [themeManager.currentTheme.backgroundDark, themeManager.currentTheme.secondaryBackgroundDark]
+                : [themeManager.currentTheme.backgroundLight, themeManager.currentTheme.secondaryBackgroundLight]
+        }
+        return LinearGradient(gradient: Gradient(colors: colors), startPoint: .topLeading, endPoint: .bottomTrailing)
+            .ignoresSafeArea()
     }
-    
-    private var DLtextColor: Color {
-        colorScheme == .dark ? themeManager.currentTheme.light : themeManager.currentTheme.dark
+
+    private var headerBar: some View {
+        HStack {
+            Button(action: { presentationMode.wrappedValue.dismiss() }) {
+                Image(systemName: "xmark")
+                    .foregroundColor(accentColor)
+                    .imageScale(.medium)
+                    .padding(8)
+                    .background(accentColor.opacity(0.1))
+                    .clipShape(Circle())
+            }
+            Spacer()
+            Text("写真を登録")
+                .font(.headline)
+                .foregroundColor(accentColor)
+            Spacer()
+            Color.clear.frame(width: 36, height: 36)
+        }
+        .padding(.horizontal, 20)
+        .padding(.vertical, 14)
+        .background(themeManager.currentTheme.xprimary.opacity(0.08))
     }
 
     private var prefectureHeaderSection: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 10) {
             ZStack {
                 Circle()
-                    .fill(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                themeManager.currentTheme.xprimary.opacity(0.8),
-                                themeManager.currentTheme.xprimary.opacity(0.5)
-                            ]),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        )
-                    )
-                    .frame(width: 70, height: 70)
-
+                    .fill(themeManager.currentTheme.xprimary.opacity(0.12))
+                    .frame(width: 68, height: 68)
                 Image(systemName: "location.fill")
-                    .font(.system(size: 30))
-                    .foregroundColor(DLtextColor)
+                    .font(.system(size: 28))
+                    .foregroundColor(themeManager.currentTheme.xprimary)
             }
-            .shadow(color: themeManager.currentTheme.xprimary.opacity(0.4), radius: 10, x: 0, y: 5)
+            .shadow(color: themeManager.currentTheme.xprimary.opacity(0.3), radius: 8, x: 0, y: 4)
 
             Text(prefecture.name)
-                .font(.title.bold())
+                .font(.title2.bold())
+                .foregroundColor(accentColor)
 
             Text("思い出の写真を追加")
                 .font(.subheadline)
-                .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.8))
+                .foregroundColor(themeManager.currentTheme.secondaryText)
         }
         .frame(maxWidth: .infinity)
-        .padding(.top, 20)
+        .padding(.vertical, 8)
     }
 
     private var imagePreviewSection: some View {
-        VStack(spacing: 16) {
+        Group {
             if let image = selectedImage {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
                     .frame(maxWidth: .infinity)
-                    .frame(height: 300)
-                    .clipShape(RoundedRectangle(cornerRadius: 20))
+                    .frame(height: 260)
+                    .clipShape(RoundedRectangle(cornerRadius: 16))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 20)
-                            .stroke(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        themeManager.currentTheme.primary.opacity(0.5),
-                                        themeManager.currentTheme.primary.opacity(0.2)
-                                    ]),
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                ),
-                                lineWidth: 2
-                            )
+                        RoundedRectangle(cornerRadius: 16)
+                            .stroke(themeManager.currentTheme.xprimary.opacity(0.4), lineWidth: 1.5)
                     )
-                    .shadow(color: .black.opacity(0.2), radius: 12, x: 0, y: 6)
+                    .shadow(color: themeManager.currentTheme.shadow, radius: 8, x: 0, y: 4)
             } else {
-                RoundedRectangle(cornerRadius: 20)
-                    .fill(
-                        colorScheme == .dark ?
-                            Color.white.opacity(0.05) :
-                            Color.white.opacity(0.3)
-                    )
-                    .frame(height: 300)
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(cardBg)
+                    .frame(height: 260)
                     .overlay(
-                        VStack(spacing: 16) {
-                            Image(systemName: "photo.on.rectangle.angled")
-                                .font(.system(size: 60))
-                                .foregroundColor(.white.opacity(0.8))
-
+                        VStack(spacing: 14) {
+                            ZStack {
+                                Circle()
+                                    .fill(themeManager.currentTheme.xprimary.opacity(0.1))
+                                    .frame(width: 64, height: 64)
+                                Image(systemName: "photo.on.rectangle.angled")
+                                    .font(.system(size: 28))
+                                    .foregroundColor(themeManager.currentTheme.xprimary.opacity(0.5))
+                            }
                             Text("写真を選択してください")
-                                .font(.headline)
-                                .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.6))
+                                .font(.subheadline)
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
                         }
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 20)
+                        RoundedRectangle(cornerRadius: 16)
                             .stroke(
-                                Color.white.opacity(0.2),
-                                style: StrokeStyle(lineWidth: 2, dash: [10, 5])
+                                themeManager.currentTheme.xprimary.opacity(0.2),
+                                style: StrokeStyle(lineWidth: 1.5, dash: [8, 5])
                             )
                     )
+                    .shadow(color: themeManager.currentTheme.shadow, radius: 4, x: 0, y: 2)
             }
         }
     }
 
     private var actionButtonsSection: some View {
         VStack(spacing: 12) {
-            Button(action: {
-                showImagePicker = true
-            }) {
-                Label("写真を選択", systemImage: "photo.on.rectangle")
-                    .font(.headline)
-                    .foregroundColor(DLtextColor)
-                    .frame(maxWidth: .infinity)
-                    .padding()
-                    .background(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                themeManager.currentTheme.xprimary,
-                                themeManager.currentTheme.xprimary.opacity(0.8)
-                            ]),
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .cornerRadius(16)
-                    .shadow(color: themeManager.currentTheme.xprimary.opacity(0.4), radius: 10, x: 0, y: 5)
+            Button(action: { showImagePicker = true }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "photo.on.rectangle")
+                    Text("写真を選択")
+                }
+                .font(.headline.weight(.bold))
+                .foregroundColor(.white)
+                .frame(maxWidth: .infinity)
+                .padding(.vertical, 16)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(themeManager.currentTheme.xprimary)
+                        .shadow(color: themeManager.currentTheme.xprimary.opacity(0.4), radius: 8, x: 0, y: 4)
+                )
             }
+            .buttonStyle(PlainButtonStyle())
 
             if selectedImage != nil {
                 Button(action: {
@@ -681,26 +603,25 @@ struct PrefecturePhotoEditorView: View {
                         onSave(image)
                     }
                 }) {
-                    Label("保存", systemImage: "checkmark.circle.fill")
-                        .font(.headline)
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity)
-                        .padding()
-                        .background(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    themeManager.currentTheme.success,
-                                    themeManager.currentTheme.success.opacity(0.8)
-                                ]),
-                                startPoint: .leading,
-                                endPoint: .trailing
-                            )
-                        )
-                        .cornerRadius(16)
-                        .shadow(color: themeManager.currentTheme.success.opacity(0.4), radius: 10, x: 0, y: 5)
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                        Text("保存する")
+                    }
+                    .font(.headline.weight(.bold))
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 16)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(themeManager.currentTheme.info)
+                            .shadow(color: themeManager.currentTheme.info.opacity(0.4), radius: 8, x: 0, y: 4)
+                    )
                 }
+                .buttonStyle(PlainButtonStyle())
+                .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selectedImage != nil)
     }
 }
 
