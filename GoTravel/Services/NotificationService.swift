@@ -175,6 +175,46 @@ class NotificationService {
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
     }
 
+    // MARK: - Task Notifications
+    func scheduleTaskNotifications(for task: TaskItem) {
+        guard let dueDate = task.dueDate else { return }
+        cancelTaskNotifications(for: task.id)
+
+        let now = Date()
+
+        // 期限当日の23:59を基準に通知を設定
+        var endComponents = calendar.dateComponents([.year, .month, .day], from: dueDate)
+        endComponents.hour = 23
+        endComponents.minute = 59
+        endComponents.second = 0
+        guard let endOfDueDay = calendar.date(from: endComponents) else { return }
+
+        let intervals: [(label: String, offset: DateComponents, title: String)] = [
+            ("1day",  DateComponents(day: -1),  "【1日前】タスクの期限が明日です"),
+            ("3hour", DateComponents(hour: -3),  "【3時間前】タスクの期限が近づいています"),
+            ("1hour", DateComponents(hour: -1),  "【1時間前】タスクの期限が間もなくです"),
+        ]
+
+        for item in intervals {
+            guard let fireDate = calendar.date(byAdding: item.offset, to: endOfDueDay),
+                  fireDate > now else { continue }
+
+            var components = calendar.dateComponents(in: TimeZone.current, from: fireDate)
+            components.second = 0
+            scheduleNotification(
+                id: "\(task.id)_\(item.label)",
+                title: item.title,
+                body: "「\(task.title)」の期限が近づいています。確認してください。",
+                dateComponents: components
+            )
+        }
+    }
+
+    func cancelTaskNotifications(for taskId: String) {
+        let ids = ["\(taskId)_1day", "\(taskId)_3hour", "\(taskId)_1hour"]
+        UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: ids)
+    }
+
     // MARK: - Helper Methods
     private func scheduleNotification(id: String, title: String, body: String, dateComponents: DateComponents) {
         let content = UNMutableNotificationContent()

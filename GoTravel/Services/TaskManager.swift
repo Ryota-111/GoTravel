@@ -15,18 +15,25 @@ class TaskManager: ObservableObject {
     func add(_ task: TaskItem) {
         tasks.append(task)
         save()
+        NotificationService.shared.scheduleTaskNotifications(for: task)
     }
 
     func update(_ task: TaskItem) {
         if let i = tasks.firstIndex(where: { $0.id == task.id }) {
             tasks[i] = task
             save()
+            if task.isCompleted {
+                NotificationService.shared.cancelTaskNotifications(for: task.id)
+            } else {
+                NotificationService.shared.scheduleTaskNotifications(for: task)
+            }
         }
     }
 
     func delete(_ task: TaskItem) {
         tasks.removeAll { $0.id == task.id }
         save()
+        NotificationService.shared.cancelTaskNotifications(for: task.id)
     }
 
     func toggleComplete(_ task: TaskItem) {
