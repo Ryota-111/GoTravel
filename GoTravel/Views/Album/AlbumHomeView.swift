@@ -17,65 +17,60 @@ struct AlbumHomeView: View {
         NavigationView {
             ZStack {
                 backgroundGradient
-                
-                VStack {
-                    planEventsTitleSection
-                    
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: 20) {
-                            headerSection
-                            
-                            albumGridSection
-                        }
-                        .padding()
-                    }
-                    
-                    // Floating Action Button
-                    ZStack {
-                        Spacer()
-                        HStack {
-                            Spacer()
-                            Button(action: {
-                                showCreateAlbum = true
-                            }) {
-                                ZStack {
-                                    Circle()
-                                        .fill(
-                                            LinearGradient(
-                                                gradient: Gradient(colors: [
-                                                    themeManager.currentTheme.xprimary,
-                                                    themeManager.currentTheme.xprimary.opacity(0.8)
-                                                ]),
-                                                startPoint: .topLeading,
-                                                endPoint: .bottomTrailing
-                                            )
-                                        )
-                                        .frame(width: 60, height: 60)
-                                        .shadow(
-                                            color: themeManager.currentTheme.xprimary.opacity(0.5),
-                                            radius: 15,
-                                            x: 0,
-                                            y: 5
-                                        )
-                                    
-                                    Image(systemName: "plus")
-                                        .font(.title2.bold())
-                                        .foregroundColor(DLtextColor)
+
+                VStack(spacing: 0) {
+                    headerBar
+
+                    if albumManager.albums.isEmpty {
+                        emptyState
+                    } else {
+                        ScrollView(showsIndicators: false) {
+                            LazyVGrid(columns: [
+                                GridItem(.flexible(), spacing: 14),
+                                GridItem(.flexible(), spacing: 14)
+                            ], spacing: 14) {
+                                ForEach(Array(albumManager.albums.enumerated()), id: \.element.id) { index, album in
+                                    AlbumCardWrapper(
+                                        album: album,
+                                        onTap: { selectedAlbum = album },
+                                        onLongPress: {
+                                            if !album.isDefaultAlbum {
+                                                albumToDelete = album
+                                                showDeleteConfirm = true
+                                            }
+                                        }
+                                    )
+                                    .opacity(animateCards ? 1 : 0)
+                                    .offset(y: animateCards ? 0 : 20)
+                                    .animation(
+                                        .spring(response: 0.6, dampingFraction: 0.8).delay(Double(index) * 0.06),
+                                        value: animateCards
+                                    )
                                 }
                             }
-                            .padding(.trailing, 20)
-                            .padding(.bottom, 20)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 16)
+                            .padding(.bottom, 100)
                         }
                     }
                 }
-                .onAppear {
-                    withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
-                        animateCards = true
+
+                VStack {
+                    Spacer()
+                    HStack {
+                        Spacer()
+                        fabButton
                     }
-                    // Setup Core Data FetchedResultsController
-                    if let userId = authVM.userId {
-                        travelPlanViewModel.setupFetchedResultsController(userId: userId)
-                    }
+                    .padding(.trailing, 20)
+                    .padding(.bottom, 24)
+                }
+            }
+            .onAppear {
+                withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
+                    animateCards = true
+                }
+                if let userId = authVM.userId {
+                    travelPlanViewModel.setupFetchedResultsController(userId: userId)
                 }
             }
             .navigationBarHidden(true)
@@ -102,85 +97,117 @@ struct AlbumHomeView: View {
 
     // MARK: - Background
     private var backgroundGradient: some View {
-        LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.gradientDark, themeManager.currentTheme.dark] : [themeManager.currentTheme.gradientLight, themeManager.currentTheme.light]),
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .ignoresSafeArea()
+        let colors: [Color]
+        switch themeManager.currentTheme.type {
+        case .whiteBlack:
+            colors = [Color(white: 0.97), Color(white: 0.91)]
+        default:
+            colors = colorScheme == .dark
+                ? [themeManager.currentTheme.backgroundDark, themeManager.currentTheme.secondaryBackgroundDark]
+                : [themeManager.currentTheme.backgroundLight, themeManager.currentTheme.secondaryBackgroundLight]
+        }
+        return LinearGradient(gradient: Gradient(colors: colors), startPoint: .topLeading, endPoint: .bottomTrailing)
+            .ignoresSafeArea()
     }
-    
-    // MARK: - Color
-    private var textColor: Color {
+
+    // MARK: - Colors
+    private var accentColor: Color {
         colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
     }
-    
-    private var xtextColor: Color {
-        colorScheme == .dark ? themeManager.currentTheme.accent1 : themeManager.currentTheme.accent2
-    }
-    
-    private var DLtextColor: Color {
-        colorScheme == .dark ? themeManager.currentTheme.light : themeManager.currentTheme.dark
-    }
-    
-    private var secondaryTextColor: Color {
-        colorScheme == .dark ? themeManager.currentTheme.accent2.opacity(0.7) : themeManager.currentTheme.accent1.opacity(0.6)
-    }
-    
-    // MARK: - Title Section
-    private var planEventsTitleSection: some View {
-        HStack {
-            Text("アルバム")
-                .font(.title.weight(.semibold))
-                .foregroundColor(textColor)
+
+    // MARK: - Header Bar
+    private var headerBar: some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("アルバム")
+                    .font(.title.weight(.bold))
+                    .foregroundColor(accentColor)
+                Text("\(albumManager.albums.count)個")
+                    .font(.caption)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
 
             Spacer()
+
+            if !albumManager.albums.isEmpty {
+                let totalPhotos = albumManager.albums.reduce(0) { $0 + $1.photoFileNames.count }
+                HStack(spacing: 4) {
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(.caption.weight(.semibold))
+                    Text("\(totalPhotos)枚")
+                        .font(.caption.weight(.semibold))
+                }
+                .foregroundColor(themeManager.currentTheme.xprimary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(themeManager.currentTheme.xprimary.opacity(0.1))
+                .clipShape(Capsule())
+            }
         }
         .padding(.horizontal, 20)
-        .padding(.top, 10)
+        .padding(.top, 16)
+        .padding(.bottom, 14)
+        .background(themeManager.currentTheme.xprimary.opacity(0.08))
     }
 
-    // MARK: - Header Section
-    private var headerSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("思い出をアルバムに")
-                .font(.title2.bold())
-                .foregroundColor(textColor)
+    // MARK: - Empty State
+    private var emptyState: some View {
+        VStack(spacing: 20) {
+            Spacer()
 
-            Text("\(albumManager.albums.count)個のアルバム")
-                .font(.subheadline)
-                .foregroundColor(secondaryTextColor)
+            ZStack {
+                Circle()
+                    .fill(themeManager.currentTheme.xprimary.opacity(0.1))
+                    .frame(width: 100, height: 100)
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(.system(size: 44))
+                    .foregroundColor(themeManager.currentTheme.xprimary.opacity(0.5))
+            }
+
+            VStack(spacing: 8) {
+                Text("アルバムがありません")
+                    .font(.title3.weight(.semibold))
+                    .foregroundColor(accentColor)
+                Text("「+」ボタンからアルバムを作成しましょう")
+                    .font(.subheadline)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .multilineTextAlignment(.center)
+            }
+
+            Button(action: { showCreateAlbum = true }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus.circle.fill")
+                    Text("アルバムを作成")
+                }
+                .font(.headline.weight(.bold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 28)
+                .padding(.vertical, 14)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(themeManager.currentTheme.xprimary)
+                        .shadow(color: themeManager.currentTheme.xprimary.opacity(0.4), radius: 8, x: 0, y: 4)
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            Spacer()
+            Spacer()
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.top, 10)
+        .padding(.horizontal, 40)
     }
 
-    // MARK: - Album Grid Section
-    private var albumGridSection: some View {
-        LazyVGrid(columns: [
-            GridItem(.flexible(), spacing: 16),
-            GridItem(.flexible(), spacing: 16)
-        ], spacing: 16) {
-            ForEach(Array(albumManager.albums.enumerated()), id: \.element.id) { index, album in
-                AlbumCardWrapper(
-                    album: album,
-                    onTap: {
-                        selectedAlbum = album
-                    },
-                    onLongPress: {
-                        if !album.isDefaultAlbum {
-                            albumToDelete = album
-                            showDeleteConfirm = true
-                        }
-                    }
-                )
-                .opacity(animateCards ? 1 : 0)
-                .offset(y: animateCards ? 0 : 20)
-                .animation(
-                    .spring(response: 0.6, dampingFraction: 0.8)
-                        .delay(Double(index) * 0.05),
-                    value: animateCards
-                )
+    // MARK: - FAB
+    private var fabButton: some View {
+        Button(action: { showCreateAlbum = true }) {
+            ZStack {
+                Circle()
+                    .fill(themeManager.currentTheme.xprimary)
+                    .frame(width: 58, height: 58)
+                    .shadow(color: themeManager.currentTheme.xprimary.opacity(0.45), radius: 12, x: 0, y: 5)
+                Image(systemName: "plus")
+                    .font(.title2.bold())
+                    .foregroundColor(.white)
             }
         }
     }
@@ -195,18 +222,14 @@ struct AlbumCardWrapper: View {
 
     var body: some View {
         AlbumCard(album: album, isPressed: $isPressed)
-            .onTapGesture {
-                onTap()
-            }
+            .onTapGesture { onTap() }
             .onLongPressGesture(minimumDuration: 0.5, pressing: { pressing in
                 if !album.isDefaultAlbum {
                     withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                         isPressed = pressing
                     }
                 }
-            }, perform: {
-                onLongPress()
-            })
+            }, perform: { onLongPress() })
     }
 }
 
@@ -222,7 +245,6 @@ struct AlbumCard: View {
         albumManager.getRecentPhotos(from: album, limit: 4)
     }
 
-    // coverColorが白に近い場合はアイコン色にフォールバック
     private var resolvedCoverColor: Color {
         let fallback = themeManager.currentTheme.xprimary
         guard let color = album.coverColor else { return fallback }
@@ -232,78 +254,38 @@ struct AlbumCard: View {
         let brightness = 0.299 * r + 0.587 * g + 0.114 * b
         return brightness < 0.85 ? color : fallback
     }
-    
-    private var textColor: Color {
-        colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
+
+    private var cardBg: Color {
+        colorScheme == .dark
+            ? themeManager.currentTheme.secondaryBackgroundDark
+            : themeManager.currentTheme.backgroundLight
     }
-    
-    private var secondaryTextColor: Color {
-        colorScheme == .dark ? themeManager.currentTheme.accent2.opacity(0.7) : themeManager.currentTheme.accent1.opacity(0.6)
+
+    private var accentColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
-            // Photo Preview Grid
             photoPreviewSection
-
-            // Album Info Section
             albumInfoSection
         }
         .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(
-                    colorScheme == .dark ?
-                    themeManager.currentTheme.light.opacity(0.15) :
-                        themeManager.currentTheme.light.opacity(0.9)
-                )
+            RoundedRectangle(cornerRadius: 18)
+                .fill(cardBg)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 20)
-                .stroke(
-                    LinearGradient(
-                        gradient: Gradient(colors: [
-                            resolvedCoverColor.opacity(0.5),
-                            resolvedCoverColor.opacity(0.2)
-                        ]),
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 2
-                )
+            RoundedRectangle(cornerRadius: 18)
+                .stroke(resolvedCoverColor.opacity(0.35), lineWidth: 1.5)
         )
-        .shadow(
-            color: resolvedCoverColor.opacity(0.5),
-            radius: 10,
-            x: 0,
-            y: 5
-        )
+        .shadow(color: resolvedCoverColor.opacity(0.2), radius: 8, x: 0, y: 4)
         .scaleEffect(isPressed ? 0.95 : 1.0)
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isPressed)
-        .overlay(
-            // Delete indicator overlay
-            Group {
-                if isPressed && !album.isDefaultAlbum {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 20)
-                            .fill(themeManager.currentTheme.error.opacity(0.3))
-
-                        VStack(spacing: 8) {
-                            Image(systemName: "trash.fill")
-                                .font(.title)
-                                .foregroundColor(.white)
-
-                            Text("長押しで削除")
-                                .font(.caption.bold())
-                                .foregroundColor(.white)
-                        }
-                    }
-                    .transition(.opacity)
-                }
-            }
-        )
+        .overlay(deleteOverlay)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
     }
 
-    // MARK: - Photo Preview Section
+    // MARK: - Photo Preview
     private var photoPreviewSection: some View {
         Group {
             if recentPhotos.isEmpty {
@@ -314,8 +296,7 @@ struct AlbumCard: View {
                 multiPhotoPreview
             }
         }
-        .cornerRadius(radius: 20, corners: .allCorners)
-        .frame(height: 140)
+        .frame(height: 130)
         .clipped()
     }
 
@@ -323,16 +304,15 @@ struct AlbumCard: View {
         ZStack {
             LinearGradient(
                 gradient: Gradient(colors: [
-                    resolvedCoverColor.opacity(0.6),
-                    resolvedCoverColor.opacity(0.3)
+                    resolvedCoverColor.opacity(0.7),
+                    resolvedCoverColor.opacity(0.4)
                 ]),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
-
             Image(systemName: album.icon)
-                .font(.system(size: 50))
-                .foregroundColor(.white.opacity(0.6))
+                .font(.system(size: 46))
+                .foregroundColor(.white.opacity(0.7))
         }
     }
 
@@ -340,252 +320,93 @@ struct AlbumCard: View {
         Image(uiImage: recentPhotos[0])
             .resizable()
             .aspectRatio(contentMode: .fill)
-            .frame(height: 140)
+            .frame(height: 130)
     }
 
     private var multiPhotoPreview: some View {
         GeometryReader { geometry in
-            let gridSize = geometry.size.width / 2
-
+            let half = geometry.size.width / 2
             LazyVGrid(columns: [
-                GridItem(.fixed(gridSize), spacing: 2),
-                GridItem(.fixed(gridSize), spacing: 2)
+                GridItem(.fixed(half), spacing: 2),
+                GridItem(.fixed(half), spacing: 2)
             ], spacing: 2) {
                 ForEach(0..<4, id: \.self) { index in
                     if index < recentPhotos.count {
                         Image(uiImage: recentPhotos[index])
                             .resizable()
                             .aspectRatio(contentMode: .fill)
-                            .frame(width: gridSize - 1, height: gridSize - 1)
+                            .frame(width: half - 1, height: half - 1)
                             .clipped()
                     } else {
                         Rectangle()
-                            .fill(
-                                LinearGradient(
-                                    gradient: Gradient(colors: [
-                                        resolvedCoverColor.opacity(0.4),
-                                        resolvedCoverColor.opacity(0.2)
-                                    ]),
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: gridSize - 1, height: gridSize - 1)
+                            .fill(resolvedCoverColor.opacity(0.2))
+                            .frame(width: half - 1, height: half - 1)
                     }
                 }
             }
         }
     }
 
-    // MARK: - Album Info Section
+    // MARK: - Info Section
     private var albumInfoSection: some View {
-        VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
+        VStack(alignment: .leading, spacing: 5) {
+            HStack(spacing: 6) {
                 Image(systemName: album.icon)
-                    .font(.subheadline)
+                    .font(.caption.weight(.semibold))
                     .foregroundColor(resolvedCoverColor)
-
                 Text(album.title)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(textColor)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(accentColor)
                     .lineLimit(1)
             }
 
-            HStack(spacing: 4) {
-                Image(systemName: "photo.on.rectangle.angled")
-                    .font(.caption2)
-                    .foregroundColor(secondaryTextColor)
+            HStack(spacing: 6) {
+                HStack(spacing: 3) {
+                    Image(systemName: "photo.on.rectangle.angled")
+                        .font(.system(size: 10))
+                    Text("\(album.photoFileNames.count)枚")
+                        .font(.system(size: 11))
+                }
+                .foregroundColor(themeManager.currentTheme.secondaryText)
 
-                Text("\(album.photoFileNames.count)枚")
-                    .font(.caption)
-                    .foregroundColor(secondaryTextColor)
+                if album.travelPlanId != nil {
+                    HStack(spacing: 3) {
+                        Image(systemName: "airplane.departure")
+                            .font(.system(size: 10))
+                        Text("旅行")
+                            .font(.system(size: 10, weight: .medium))
+                    }
+                    .foregroundColor(resolvedCoverColor)
+                    .padding(.horizontal, 6)
+                    .padding(.vertical, 2)
+                    .background(resolvedCoverColor.opacity(0.12))
+                    .clipShape(Capsule())
+                }
             }
         }
-        .padding(12)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 10)
         .frame(maxWidth: .infinity, alignment: .leading)
     }
-}
 
-
-
-// MARK: - Mode Button
-struct ModeButton: View {
-    let title: String
-    let icon: String
-    let isSelected: Bool
-    let action: () -> Void
-    @ObservedObject var themeManager = ThemeManager.shared
-    @Environment(\.colorScheme) var colorScheme
-
-    private var textColor: Color {
-        themeManager.currentTheme.accent2
-    }
-
-    private var buttonTextColor: Color {
-        isSelected ? textColor : themeManager.currentTheme.secondaryText
-    }
-
-    private var backgroundColor: Color {
-        if isSelected {
-            return themeManager.currentTheme.primary.opacity(0.3)
-        } else {
-            return themeManager.currentTheme.dark.opacity(0.1)
-        }
-    }
-
-    private var borderColor: Color {
-        isSelected ? textColor : themeManager.currentTheme.secondaryText.opacity(0.5)
-    }
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                Image(systemName: icon)
-                    .font(.title2)
-                    .foregroundColor(buttonTextColor)
-
-                Text(title)
-                    .font(.caption)
-                    .foregroundColor(buttonTextColor)
-            }
-            .frame(maxWidth: .infinity)
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(backgroundColor)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(borderColor, lineWidth: 2)
-            )
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
-    }
-}
-
-// MARK: - Travel Plan Selection Card
-struct TravelPlanSelectionCard: View {
-    let plan: TravelPlan
-    let isSelected: Bool
-    let action: () -> Void
-    @ObservedObject var themeManager = ThemeManager.shared
-    @Environment(\.colorScheme) var colorScheme
-
-    var body: some View {
-        Button(action: action) {
-            HStack(spacing: 12) {
-                // Icon
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    (plan.cardColor ?? themeManager.currentTheme.primary).opacity(0.8),
-                                    (plan.cardColor ?? themeManager.currentTheme.primary).opacity(0.5)
-                                ]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 50, height: 50)
-
-                    Image(systemName: "airplane.departure")
-                        .font(.title3)
-                        .foregroundColor(themeManager.currentTheme.accent2)
-                }
-
-                // Info
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(plan.title)
-                        .font(.headline)
-                        .foregroundColor(themeManager.currentTheme.accent2)
-
-                    Text(plan.destination)
-                        .font(.caption)
-                        .foregroundColor(themeManager.currentTheme.accent2)
-                }
-
-                Spacer()
-
-                // Selection Indicator
-                if isSelected {
-                    Image(systemName: "checkmark.circle.fill")
+    // MARK: - Delete Overlay
+    @ViewBuilder
+    private var deleteOverlay: some View {
+        if isPressed && !album.isDefaultAlbum {
+            ZStack {
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(themeManager.currentTheme.error.opacity(0.75))
+                VStack(spacing: 8) {
+                    Image(systemName: "trash.fill")
                         .font(.title2)
-                        .foregroundColor(themeManager.currentTheme.success)
+                        .foregroundColor(.white)
+                    Text("長押しで削除")
+                        .font(.caption.bold())
+                        .foregroundColor(.white)
                 }
             }
-            .padding()
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(themeManager.currentTheme.light)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(
-                        isSelected ? themeManager.currentTheme.success : themeManager.currentTheme.accent2.opacity(0.5),
-                        lineWidth: 2
-                    )
-            )
+            .transition(.opacity.combined(with: .scale(scale: 0.95)))
         }
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
-    }
-}
-
-// MARK: - Album Type Button
-struct AlbumTypeButton: View {
-    let type: AlbumType
-    let isSelected: Bool
-    let action: () -> Void
-    @ObservedObject var themeManager = ThemeManager.shared
-    @Environment(\.colorScheme) var colorScheme
-
-    private var textColor: Color {
-        colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
-    }
-
-    var body: some View {
-        Button(action: action) {
-            VStack(spacing: 8) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    type.coverColor,
-                                    type.coverColor
-                                ]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 60, height: 60)
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 100)
-                                .stroke(type.defaultCoverColor, lineWidth: 2
-                                )
-                        )
-
-                    Image(systemName: type.icon)
-                        .font(.title2)
-                        .foregroundColor(themeManager.currentTheme.light)
-                }
-                .scaleEffect(isSelected ? 1.1 : 1.0)
-                .shadow(
-                    color: isSelected ? type.defaultCoverColor.opacity(0.6) : .clear,
-                    radius: 10,
-                    x: 0,
-                    y: 5
-                )
-
-                Text(type.title)
-                    .font(.caption)
-                    .foregroundColor(type.defaultCoverColor)
-                    .lineLimit(1)
-            }
-            .frame(width: 45)
-            .padding()
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
     }
 }
 
