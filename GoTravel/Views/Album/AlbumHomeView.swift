@@ -221,6 +221,17 @@ struct AlbumCard: View {
     private var recentPhotos: [UIImage] {
         albumManager.getRecentPhotos(from: album, limit: 4)
     }
+
+    // coverColorが白に近い場合はアイコン色にフォールバック
+    private var resolvedCoverColor: Color {
+        let fallback = themeManager.currentTheme.xprimary
+        guard let color = album.coverColor else { return fallback }
+        let uiColor = UIColor(color)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard uiColor.getRed(&r, green: &g, blue: &b, alpha: &a) else { return fallback }
+        let brightness = 0.299 * r + 0.587 * g + 0.114 * b
+        return brightness < 0.85 ? color : fallback
+    }
     
     private var textColor: Color {
         colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
@@ -251,8 +262,8 @@ struct AlbumCard: View {
                 .stroke(
                     LinearGradient(
                         gradient: Gradient(colors: [
-                            (album.coverColor ?? themeManager.currentTheme.xprimary).opacity(0.5),
-                            (album.coverColor ?? themeManager.currentTheme.xprimary).opacity(0.2)
+                            resolvedCoverColor.opacity(0.5),
+                            resolvedCoverColor.opacity(0.2)
                         ]),
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
@@ -261,7 +272,7 @@ struct AlbumCard: View {
                 )
         )
         .shadow(
-            color: (album.coverColor ?? themeManager.currentTheme.xprimary).opacity(0.5),
+            color: resolvedCoverColor.opacity(0.5),
             radius: 10,
             x: 0,
             y: 5
@@ -312,8 +323,8 @@ struct AlbumCard: View {
         ZStack {
             LinearGradient(
                 gradient: Gradient(colors: [
-                    (album.coverColor ?? themeManager.currentTheme.xprimary).opacity(0.6),
-                    (album.coverColor ?? themeManager.currentTheme.xprimary).opacity(0.3)
+                    resolvedCoverColor.opacity(0.6),
+                    resolvedCoverColor.opacity(0.3)
                 ]),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
@@ -352,8 +363,8 @@ struct AlbumCard: View {
                             .fill(
                                 LinearGradient(
                                     gradient: Gradient(colors: [
-                                        (album.coverColor ?? themeManager.currentTheme.xprimary).opacity(0.4),
-                                        (album.coverColor ?? themeManager.currentTheme.xprimary).opacity(0.2)
+                                        resolvedCoverColor.opacity(0.4),
+                                        resolvedCoverColor.opacity(0.2)
                                     ]),
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
@@ -372,7 +383,7 @@ struct AlbumCard: View {
             HStack(spacing: 8) {
                 Image(systemName: album.icon)
                     .font(.subheadline)
-                    .foregroundColor(album.coverColor ?? themeManager.currentTheme.xprimary)
+                    .foregroundColor(resolvedCoverColor)
 
                 Text(album.title)
                     .font(.system(size: 15, weight: .semibold))
