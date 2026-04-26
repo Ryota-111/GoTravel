@@ -28,9 +28,12 @@ struct TipJarView: View {
 
                     messageCard
 
-                    if store.products.isEmpty {
+                    switch store.loadingState {
+                    case .loading:
                         loadingSection
-                    } else {
+                    case .failed:
+                        failedSection
+                    case .loaded:
                         tipProductsSection
                     }
 
@@ -153,6 +156,47 @@ struct TipJarView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 40)
+    }
+
+    // MARK: - Failed
+    private var failedSection: some View {
+        VStack(spacing: 16) {
+            ZStack {
+                Circle()
+                    .fill(themeManager.currentTheme.secondaryText.opacity(0.1))
+                    .frame(width: 64, height: 64)
+                Image(systemName: "wifi.slash")
+                    .font(.system(size: 28))
+                    .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
+            }
+
+            VStack(spacing: 6) {
+                Text("商品を読み込めませんでした")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(accentColor)
+                Text("App Store に接続できないか、\n商品がまだ登録されていない可能性があります")
+                    .font(.caption)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .multilineTextAlignment(.center)
+            }
+
+            Button(action: { Task { await store.loadProducts() } }) {
+                HStack(spacing: 6) {
+                    Image(systemName: "arrow.clockwise")
+                    Text("再試行")
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(Color.pink)
+                .padding(.horizontal, 24)
+                .padding(.vertical, 10)
+                .background(Color.pink.opacity(0.1))
+                .clipShape(Capsule())
+                .overlay(Capsule().stroke(Color.pink.opacity(0.3), lineWidth: 1))
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 32)
     }
 
     // MARK: - Tip Products

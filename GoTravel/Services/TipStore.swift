@@ -7,6 +7,7 @@ class TipStore: ObservableObject {
     static let shared = TipStore()
 
     @Published private(set) var products: [Product] = []
+    @Published private(set) var loadingState: LoadingState = .loading
     @Published private(set) var purchaseState: PurchaseState = .idle
 
     private let productIds = [
@@ -15,6 +16,12 @@ class TipStore: ObservableObject {
         "com.gmail.taismryotasis.Travory.tip.large",
         "com.gmail.taismryotasis.Travory.tip.xlarge"
     ]
+
+    enum LoadingState {
+        case loading
+        case loaded
+        case failed
+    }
 
     enum PurchaseState: Equatable {
         case idle
@@ -28,11 +35,13 @@ class TipStore: ObservableObject {
     }
 
     func loadProducts() async {
+        loadingState = .loading
         do {
             let fetched = try await Product.products(for: productIds)
             products = fetched.sorted { $0.price < $1.price }
+            loadingState = fetched.isEmpty ? .failed : .loaded
         } catch {
-            // products は空のまま
+            loadingState = .failed
         }
     }
 
