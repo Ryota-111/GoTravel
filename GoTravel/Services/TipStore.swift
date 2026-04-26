@@ -10,6 +10,8 @@ class TipStore: ObservableObject {
     @Published private(set) var loadingState: LoadingState = .loading
     @Published private(set) var purchaseState: PurchaseState = .idle
 
+    private var updatesTask: Task<Void, Never>?
+
     private let productIds = [
         "com.gmail.taismryotasis.Travory.tip.small",
         "com.gmail.taismryotasis.Travory.tip.medium",
@@ -20,7 +22,7 @@ class TipStore: ObservableObject {
     enum LoadingState {
         case loading
         case loaded
-        case failed
+        case failed(String)
     }
 
     enum PurchaseState: Equatable {
@@ -32,19 +34,41 @@ class TipStore: ObservableObject {
 
     private init() {
         Task { await loadProducts() }
+        updatesTask = Task { await listenForTransactionUpdates() }
     }
 
+    deinit {
+        updatesTask?.cancel()
+    }
+
+    // MARK: - Transaction Updates Listener
+    private func listenForTransactionUpdates() async {
+        for await result in Transaction.updates {
+            switch result {
+            case .verified(let transaction):
+                await transaction.finish()
+                purchaseState = .success
+            case .unverified:
+                break
+            }
+        }
+    }
+
+    // MARK: - Load Products
     func loadProducts() async {
         loadingState = .loading
         do {
             let fetched = try await Product.products(for: productIds)
             products = fetched.sorted { $0.price < $1.price }
-            loadingState = fetched.isEmpty ? .failed : .loaded
+            loadingState = fetched.isEmpty
+                ? .failed("商品が見つかりません。スキームのStoreKit設定を確認してください。")
+                : .loaded
         } catch {
-            loadingState = .failed
+            loadingState = .failed(error.localizedDescription)
         }
     }
 
+    // MARK: - Purchase
     func purchase(_ product: Product) async {
         purchaseState = .purchasing
         do {
