@@ -1,5 +1,6 @@
 import SwiftUI
 import WeatherKit
+import MapKit
 
 // EnjoyWorldView -> TravelPlanの詳細画面
 struct TravelPlanDetailView: View {
@@ -22,6 +23,7 @@ struct TravelPlanDetailView: View {
     @State private var showBudgetSummary = false
     @State private var showShareView = false
     @State private var animateContent = false
+    @State private var navigatingItem: ScheduleItem?
 
     // Weather Properties
     @State private var planWeather: WeatherService.DayWeather?
@@ -131,6 +133,30 @@ struct TravelPlanDetailView: View {
                 BudgetSummaryView(plan: currentPlan)
             }
         }
+        .confirmationDialog(
+            navigatingItem?.location ?? navigatingItem?.title ?? "",
+            isPresented: Binding(
+                get: { navigatingItem != nil },
+                set: { if !$0 { navigatingItem = nil } }
+            ),
+            titleVisibility: .visible
+        ) {
+            Button("Apple マップで案内") {
+                if let item = navigatingItem, let lat = item.latitude, let lng = item.longitude {
+                    openInAppleMaps(name: item.location ?? item.title, latitude: lat, longitude: lng)
+                }
+            }
+            if UIApplication.shared.canOpenURL(URL(string: "comgooglemaps://")!) {
+                Button("Google マップで案内") {
+                    if let item = navigatingItem, let lat = item.latitude, let lng = item.longitude {
+                        openInGoogleMaps(latitude: lat, longitude: lng)
+                    }
+                }
+            }
+            Button("キャンセル", role: .cancel) { navigatingItem = nil }
+        } message: {
+            Text("案内するアプリを選択してください")
+        }
         .sheet(isPresented: $showShareView) {
             if let currentPlan = currentPlan {
                 ShareTravelPlanView(plan: currentPlan) { shareCode in
@@ -226,6 +252,24 @@ struct TravelPlanDetailView: View {
                         Text(location)
                             .font(.system(size: 12))
                             .foregroundColor(themeManager.currentTheme.secondaryText)
+                            .lineLimit(1)
+                        if item.latitude != nil && item.longitude != nil {
+                            Spacer()
+                            Button(action: { navigatingItem = item }) {
+                                HStack(spacing: 3) {
+                                    Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
+                                        .font(.system(size: 10))
+                                    Text("案内")
+                                        .font(.system(size: 11, weight: .semibold))
+                                }
+                                .foregroundColor(themeManager.currentTheme.info)
+                                .padding(.horizontal, 8)
+                                .padding(.vertical, 4)
+                                .background(themeManager.currentTheme.info.opacity(0.12))
+                                .clipShape(Capsule())
+                            }
+                            .buttonStyle(.borderless)
+                        }
                     }
                 }
 
@@ -675,6 +719,23 @@ struct TravelPlanDetailView: View {
         let formatter = DateFormatter.japanese
         formatter.dateFormat = "yyyy年MM月dd日(E)"
         return formatter.string(from: date)
+    }
+
+    private func openInAppleMaps(name: String, latitude: Double, longitude: Double) {
+        let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+        let placemark = MKPlacemark(coordinate: coordinate)
+        let mapItem = MKMapItem(placemark: placemark)
+        mapItem.name = name
+        mapItem.openInMaps(launchOptions: [
+            MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
+        ])
+    }
+
+    private func openInGoogleMaps(latitude: Double, longitude: Double) {
+        let urlString = "comgooglemaps://?daddr=\(latitude),\(longitude)&directionsmode=driving"
+        if let url = URL(string: urlString) {
+            UIApplication.shared.open(url)
+        }
     }
 
     private func formatTime(_ date: Date) -> String {
