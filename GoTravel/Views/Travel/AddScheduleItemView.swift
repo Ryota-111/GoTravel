@@ -731,7 +731,7 @@ struct AddScheduleItemView: View {
                         }
                     }
                     .background(Color(.systemBackground))
-                    .frame(maxHeight: 300)
+                    .frame(height: min(CGFloat(searchResults.count) * 65, 300))
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
