@@ -100,11 +100,9 @@ struct AlbumHomeView: View {
     // MARK: - Background
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark
-                ? [themeManager.currentTheme.backgroundDark, themeManager.currentTheme.secondaryBackgroundDark]
-                : [themeManager.currentTheme.backgroundLight, themeManager.currentTheme.secondaryBackgroundLight]),
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
+            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.gradientDark, themeManager.currentTheme.dark] : [themeManager.currentTheme.gradientLight, themeManager.currentTheme.light]),
+            startPoint: .top,
+            endPoint: .bottom
         )
         .ignoresSafeArea()
     }

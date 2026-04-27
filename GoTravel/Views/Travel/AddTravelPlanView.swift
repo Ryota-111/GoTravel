@@ -269,7 +269,7 @@ struct AddTravelPlanView: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 12) {
                     Image(systemName: "mappin.circle.fill")
-                        .foregroundColor(travelColor)
+                        .foregroundColor(themeManager.currentTheme.xprimary)
                     ZStack(alignment: .leading) {
                         if destination.isEmpty {
                             Text("北海道、東京、大阪…")
@@ -291,10 +291,10 @@ struct AddTravelPlanView: View {
                 if destinationCoordinate != nil && !destination.isEmpty {
                     HStack(spacing: 6) {
                         Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(travelColor)
+                            .foregroundColor(themeManager.currentTheme.xprimary)
                         Text("位置情報を取得しました")
                             .font(.caption)
-                            .foregroundColor(travelColor)
+                            .foregroundColor(themeManager.currentTheme.xprimary)
                     }
                     .padding(.horizontal, 4)
                 }
