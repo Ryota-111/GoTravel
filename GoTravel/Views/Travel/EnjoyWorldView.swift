@@ -32,6 +32,8 @@ struct EnjoyWorldView: View {
     @State private var showPlanDeleteConfirmation = false
     @State private var showAuthError = false
     @State private var hasLoadedData = false
+    @State private var navigateToTaskList = false
+    @State private var navigateToProfile = false
     @Environment(\.colorScheme) var colorScheme
     @Namespace private var animation
     @State private var showTodayDate = true
@@ -193,6 +195,10 @@ struct EnjoyWorldView: View {
     var body: some View {
         NavigationView {
             VStack(alignment: .leading, spacing: 15) {
+                // NavigationLink を NavigationView 直下に置き、再レンダリングの影響を受けない状態で管理
+                NavigationLink(destination: TaskListView(), isActive: $navigateToTaskList) { EmptyView() }
+                NavigationLink(destination: ProfileView().environmentObject(travelPlanViewModel), isActive: $navigateToProfile) { EmptyView() }
+
                 titleSection
                 ScrollView(.vertical, showsIndicators: false) {
                     travelEventsTitleSection
@@ -326,7 +332,7 @@ struct EnjoyWorldView: View {
 
                 Spacer()
 
-                NavigationLink(destination: TaskListView()) {
+                Button(action: { navigateToTaskList = true }) {
                     ZStack {
                         Circle()
                             .fill(Color(.systemGray6))
@@ -352,7 +358,7 @@ struct EnjoyWorldView: View {
                     }
                 }
 
-                NavigationLink(destination: ProfileView()) {
+                Button(action: { navigateToProfile = true }) {
                     ZStack {
                         Circle()
                             .fill(Color(.systemGray6))
