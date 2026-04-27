@@ -18,12 +18,16 @@ struct AddScheduleItemView: View {
     @State private var linkURL = ""
 
     // Location
+    @StateObject private var locationHistory = LocationHistoryManager.shared
+    @State private var showLocationMethodSheet = false
     @State private var showLocationPicker = false
+    @State private var showHistoryPicker = false
     @State private var selectedLocation: MKMapItem?
     @State private var selectedCoordinate: CLLocationCoordinate2D?
     @State private var selectedAddress: String?
     @State private var searchText = ""
     @State private var searchResults: [MKMapItem] = []
+    @State private var isSearching = false
     @State private var mapPosition: MapCameraPosition = .region(MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
         span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
@@ -91,6 +95,14 @@ struct AddScheduleItemView: View {
 
                 addButton
             }
+        }
+        .sheet(isPresented: $showLocationMethodSheet) {
+            locationMethodSheet
+                .presentationDetents([.height(220)])
+                .presentationDragIndicator(.visible)
+        }
+        .sheet(isPresented: $showHistoryPicker) {
+            locationHistoryPickerView
         }
         .fullScreenCover(isPresented: $showLocationPicker) {
             locationPickerView
@@ -245,8 +257,8 @@ struct AddScheduleItemView: View {
                     .background(fieldBg)
                     .cornerRadius(12)
                 } else {
-                    Button(action: { showLocationPicker = true }) {
-                        HStack {
+                    Button(action: { showLocationMethodSheet = true }) {
+                        HStack(spacing: 12) {
                             Image(systemName: "magnifyingglass")
                                 .foregroundColor(travelColor.opacity(0.7))
                                 .frame(width: 24)
@@ -254,6 +266,15 @@ struct AddScheduleItemView: View {
                                 .font(.subheadline)
                                 .foregroundColor(themeManager.currentTheme.secondaryText)
                             Spacer()
+                            if !locationHistory.history.isEmpty {
+                                Text("\(locationHistory.history.count)件の履歴")
+                                    .font(.caption2)
+                                    .foregroundColor(travelColor.opacity(0.7))
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(travelColor.opacity(0.08))
+                                    .clipShape(Capsule())
+                            }
                             Image(systemName: "chevron.right")
                                 .font(.caption)
                                 .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
@@ -422,114 +443,406 @@ struct AddScheduleItemView: View {
         presentationMode.wrappedValue.dismiss()
     }
 
-    // MARK: - Location Picker
-    private var locationPickerView: some View {
+    // MARK: - Location Method Sheet（選択方法）
+    private var locationMethodSheet: some View {
+        VStack(spacing: 0) {
+            Text("場所の選択方法")
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+                .padding(.top, 8)
+                .padding(.bottom, 16)
+
+            VStack(spacing: 10) {
+                methodOptionButton(
+                    icon: "clock.arrow.circlepath",
+                    title: "検索履歴から",
+                    subtitle: locationHistory.history.isEmpty ? "履歴はまだありません" : "最近選んだ\(locationHistory.history.count)件の場所",
+                    color: travelColor,
+                    disabled: locationHistory.history.isEmpty
+                ) {
+                    showLocationMethodSheet = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        showHistoryPicker = true
+                    }
+                }
+
+                methodOptionButton(
+                    icon: "map.fill",
+                    title: "地図から検索",
+                    subtitle: "キーワードで場所を検索して選択",
+                    color: travelColor,
+                    disabled: false
+                ) {
+                    showLocationMethodSheet = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        showLocationPicker = true
+                    }
+                }
+            }
+            .padding(.horizontal, 20)
+        }
+        .padding(.bottom, 20)
+        .background(
+            colorScheme == .dark
+                ? themeManager.currentTheme.secondaryBackgroundDark
+                : themeManager.currentTheme.backgroundLight
+        )
+    }
+
+    private func methodOptionButton(icon: String, title: String, subtitle: String, color: Color, disabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 16) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 10)
+                        .fill(color.opacity(disabled ? 0.06 : 0.12))
+                        .frame(width: 46, height: 46)
+                    Image(systemName: icon)
+                        .font(.system(size: 20))
+                        .foregroundColor(disabled ? themeManager.currentTheme.secondaryText : color)
+                }
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(title)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(disabled ? themeManager.currentTheme.secondaryText : (colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1))
+                    Text(subtitle)
+                        .font(.caption)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.4))
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(colorScheme == .dark
+                          ? themeManager.currentTheme.secondaryBackgroundDark
+                          : themeManager.currentTheme.secondaryBackgroundLight)
+                    .shadow(color: themeManager.currentTheme.shadow, radius: 4, x: 0, y: 2)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .disabled(disabled)
+        .opacity(disabled ? 0.5 : 1)
+    }
+
+    // MARK: - History Picker
+    private var locationHistoryPickerView: some View {
         NavigationView {
             ZStack {
-                Map(position: $mapPosition, selection: $selectedMapResult) {
-                    ForEach(searchResults, id: \.self) { result in
-                        Marker(item: result).tint(themeManager.currentTheme.error)
+                (colorScheme == .dark
+                    ? themeManager.currentTheme.backgroundDark
+                    : themeManager.currentTheme.backgroundLight)
+                .ignoresSafeArea()
+
+                if locationHistory.history.isEmpty {
+                    VStack(spacing: 14) {
+                        Image(systemName: "clock.arrow.circlepath")
+                            .font(.system(size: 44))
+                            .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.4))
+                        Text("検索履歴がありません")
+                            .font(.subheadline)
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
                     }
-                }
-                .safeAreaInset(edge: .top) { locationSearchBar }
-                .safeAreaInset(edge: .bottom) {
-                    if let result = selectedMapResult {
-                        locationResultDetail(result)
+                } else {
+                    List {
+                        ForEach(locationHistory.history) { item in
+                            Button(action: {
+                                applyHistoryItem(item)
+                                showHistoryPicker = false
+                            }) {
+                                HStack(spacing: 14) {
+                                    ZStack {
+                                        Circle()
+                                            .fill(travelColor.opacity(0.12))
+                                            .frame(width: 38, height: 38)
+                                        Image(systemName: "mappin.circle.fill")
+                                            .foregroundColor(travelColor)
+                                            .font(.system(size: 18))
+                                    }
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(item.name)
+                                            .font(.subheadline.weight(.semibold))
+                                            .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+                                        if let address = item.address {
+                                            Text(address)
+                                                .font(.caption)
+                                                .foregroundColor(themeManager.currentTheme.secondaryText)
+                                                .lineLimit(1)
+                                        }
+                                    }
+                                    Spacer()
+                                    Image(systemName: "checkmark")
+                                        .font(.caption.weight(.bold))
+                                        .foregroundColor(travelColor)
+                                        .opacity(0)
+                                }
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
+                        .onDelete { indexSet in
+                            indexSet.forEach { locationHistory.delete(locationHistory.history[$0]) }
+                        }
                     }
+                    .listStyle(.plain)
                 }
-                .onMapCameraChange { context in mapVisibleRegion = context.region }
             }
+            .navigationTitle("検索履歴")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("閉じる") { showLocationPicker = false }
+                    Button("閉じる") { showHistoryPicker = false }
+                        .foregroundColor(travelColor)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    if !locationHistory.history.isEmpty {
+                        Button("履歴を削除") { locationHistory.clear() }
+                            .foregroundColor(themeManager.currentTheme.error)
+                    }
                 }
             }
         }
     }
 
-    private var locationSearchBar: some View {
-        TextField("場所を検索", text: $searchText)
-            .textFieldStyle(.plain)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(Color(.systemBackground))
-            .cornerRadius(10)
-            .padding(.horizontal)
-            .padding(.vertical, 8)
-            .background(.ultraThinMaterial)
-            .onSubmit { Task { await performSearch() } }
+    private func applyHistoryItem(_ item: LocationHistoryManager.LocationHistoryItem) {
+        let coord = CLLocationCoordinate2D(latitude: item.latitude, longitude: item.longitude)
+        let placemark = MKPlacemark(coordinate: coord)
+        let mapItem = MKMapItem(placemark: placemark)
+        mapItem.name = item.name
+        selectedLocation = mapItem
+        selectedCoordinate = coord
+        selectedAddress = item.address
+    }
+
+    // MARK: - Map Location Picker（地図から検索）
+    private var locationPickerView: some View {
+        ZStack(alignment: .top) {
+            // 地図
+            Map(position: $mapPosition, selection: $selectedMapResult) {
+                ForEach(searchResults, id: \.self) { result in
+                    Marker(item: result).tint(themeManager.currentTheme.error)
+                }
+            }
+            .ignoresSafeArea()
+            .safeAreaInset(edge: .bottom) {
+                if let result = selectedMapResult {
+                    locationResultDetail(result)
+                }
+            }
+            .onMapCameraChange { context in mapVisibleRegion = context.region }
+
+            VStack(spacing: 0) {
+                // ヘッダー
+                HStack {
+                    Button(action: {
+                        showLocationPicker = false
+                        searchText = ""
+                        searchResults = []
+                        selectedMapResult = nil
+                    }) {
+                        Image(systemName: "xmark")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+                            .padding(10)
+                            .background(Color(.systemBackground).opacity(0.9))
+                            .clipShape(Circle())
+                    }
+                    Spacer()
+                    Text("地図から検索")
+                        .font(.headline)
+                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+                    Spacer()
+                    Color.clear.frame(width: 36, height: 36)
+                }
+                .padding(.horizontal, 16)
+                .padding(.vertical, 12)
+                .background(.ultraThinMaterial)
+
+                // 検索バー
+                HStack(spacing: 10) {
+                    Image(systemName: isSearching ? "clock" : "magnifyingglass")
+                        .foregroundColor(travelColor)
+                        .font(.system(size: 15))
+                    TextField("場所・スポット名を入力", text: $searchText)
+                        .font(.subheadline)
+                        .onSubmit { Task { await performSearch() } }
+                    if !searchText.isEmpty {
+                        Button(action: {
+                            searchText = ""
+                            searchResults = []
+                            selectedMapResult = nil
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
+                        }
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 11)
+                .background(Color(.systemBackground))
+                .cornerRadius(12)
+                .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
+                .background(.ultraThinMaterial)
+
+                // 検索結果リスト
+                if !searchResults.isEmpty && selectedMapResult == nil {
+                    ScrollView(showsIndicators: false) {
+                        VStack(spacing: 0) {
+                            ForEach(searchResults, id: \.self) { result in
+                                Button(action: {
+                                    withAnimation {
+                                        selectedMapResult = result
+                                        mapPosition = .region(MKCoordinateRegion(
+                                            center: result.placemark.coordinate,
+                                            span: MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005)
+                                        ))
+                                        searchResults = [result]
+                                    }
+                                }) {
+                                    HStack(spacing: 12) {
+                                        Image(systemName: "mappin.circle.fill")
+                                            .foregroundColor(themeManager.currentTheme.error)
+                                            .font(.system(size: 22))
+                                        VStack(alignment: .leading, spacing: 3) {
+                                            Text(result.name ?? "名称なし")
+                                                .font(.subheadline.weight(.semibold))
+                                                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+                                            if let address = result.placemark.title {
+                                                Text(address)
+                                                    .font(.caption)
+                                                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                                                    .lineLimit(1)
+                                            }
+                                        }
+                                        Spacer()
+                                        Image(systemName: "chevron.right")
+                                            .font(.caption2)
+                                            .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
+                                    }
+                                    .padding(.horizontal, 16)
+                                    .padding(.vertical, 12)
+                                }
+                                .buttonStyle(PlainButtonStyle())
+                                Divider().padding(.leading, 56)
+                            }
+                        }
+                    }
+                    .background(Color(.systemBackground))
+                    .frame(maxHeight: 300)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
+            }
+        }
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: searchResults.isEmpty)
     }
 
     private func performSearch() async {
+        guard !searchText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
+        isSearching = true
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = searchText
-        request.resultTypes = .pointOfInterest
+        request.resultTypes = [.pointOfInterest, .address]
         request.region = mapVisibleRegion ?? MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
-            span: MKCoordinateSpan(latitudeDelta: 0.0125, longitudeDelta: 0.0125)
+            span: MKCoordinateSpan(latitudeDelta: 5, longitudeDelta: 5)
         )
         do {
             let response = try await MKLocalSearch(request: request).start()
             searchResults = response.mapItems
+            selectedMapResult = nil
             if let first = searchResults.first {
                 withAnimation {
                     mapPosition = .region(MKCoordinateRegion(
                         center: first.placemark.coordinate,
-                        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                        span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
                     ))
                 }
             }
-            searchText = ""
         } catch {}
+        isSearching = false
     }
 
     private func locationResultDetail(_ result: MKMapItem) -> some View {
         VStack(alignment: .leading, spacing: 14) {
-            HStack {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(themeManager.currentTheme.error.opacity(0.12))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "mappin.circle.fill")
+                        .foregroundColor(themeManager.currentTheme.error)
+                        .font(.system(size: 22))
+                }
                 VStack(alignment: .leading, spacing: 4) {
                     Text(result.name ?? "名称なし")
-                        .font(.title3.weight(.bold))
+                        .font(.headline)
+                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                     if let address = result.placemark.title {
                         Text(address)
                             .font(.caption)
-                            .foregroundStyle(.secondary)
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
                             .lineLimit(2)
                     }
                 }
                 Spacer()
+                Button(action: { selectedMapResult = nil; searchResults = [] }) {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .font(.title3)
+                }
             }
 
-            HStack(spacing: 12) {
+            HStack(spacing: 10) {
                 Button { result.openInMaps() } label: {
-                    Label("経路", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(themeManager.currentTheme.primary.opacity(0.1))
-                        .foregroundStyle(themeManager.currentTheme.primary)
-                        .cornerRadius(10)
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.triangle.turn.up.right.diamond")
+                        Text("経路")
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 13)
+                    .background(travelColor.opacity(0.1))
+                    .foregroundColor(travelColor)
+                    .cornerRadius(12)
                 }
                 Button {
                     selectedLocation = result
                     selectedCoordinate = result.placemark.coordinate
                     selectedAddress = result.placemark.title
+                    if let name = result.name, let coord = result.placemark.location?.coordinate {
+                        locationHistory.add(
+                            name: name,
+                            address: result.placemark.title,
+                            latitude: coord.latitude,
+                            longitude: coord.longitude
+                        )
+                    }
                     selectedMapResult = nil
+                    searchResults = []
+                    searchText = ""
                     showLocationPicker = false
                 } label: {
-                    Label("この場所を選択", systemImage: "checkmark.circle.fill")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(travelColor.opacity(0.15))
-                        .foregroundStyle(travelColor)
-                        .cornerRadius(10)
+                    HStack(spacing: 6) {
+                        Image(systemName: "checkmark.circle.fill")
+                        Text("この場所を選択")
+                    }
+                    .font(.subheadline.weight(.bold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 13)
+                    .background(travelColor)
+                    .foregroundColor(.white)
+                    .cornerRadius(12)
                 }
             }
         }
-        .padding(20)
+        .padding(18)
         .background(.ultraThinMaterial)
-        .cornerRadius(20)
-        .shadow(color: .black.opacity(0.12), radius: 12, x: 0, y: -4)
-        .padding(.horizontal)
-        .padding(.bottom, 12)
+        .clipShape(RoundedRectangle(cornerRadius: 20))
+        .shadow(color: .black.opacity(0.15), radius: 14, x: 0, y: -4)
+        .padding(.horizontal, 14)
+        .padding(.bottom, 14)
     }
 }
