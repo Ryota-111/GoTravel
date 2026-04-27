@@ -118,6 +118,29 @@ class NotificationService {
                 }
             }
 
+            // 当日朝9時の通知
+            var morningComponents = calendar.dateComponents(in: TimeZone.current, from: plan.startDate)
+            morningComponents.hour = 9
+            morningComponents.minute = 0
+            morningComponents.second = 0
+
+            if let morningDate = calendar.date(from: morningComponents), morningDate > now {
+                let body: String
+                if let time = plan.time {
+                    let h = calendar.component(.hour, from: time)
+                    let m = calendar.component(.minute, from: time)
+                    body = String(format: "今日%d:%02dに「\(plan.title)」の予定があります。", h, m)
+                } else {
+                    body = "今日「\(plan.title)」の予定があります。"
+                }
+                scheduleNotification(
+                    id: "\(plan.id)_morning",
+                    title: "今日の予定",
+                    body: body,
+                    dateComponents: morningComponents
+                )
+            }
+
             // 時刻指定がある場合の通知
             if let time = plan.time {
                 // plan.timeから時刻情報を取得
@@ -169,6 +192,7 @@ class NotificationService {
     func cancelPlanNotifications(for planId: String) {
         let identifiers = [
             "\(planId)_day",
+            "\(planId)_morning",
             "\(planId)_hour",
             "\(planId)_10min"
         ]
