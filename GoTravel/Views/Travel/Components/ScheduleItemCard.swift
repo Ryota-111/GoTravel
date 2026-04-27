@@ -11,6 +11,7 @@ struct ScheduleItemCard: View {
     @Binding var editingItem: ScheduleItem?
     @State private var showMapView = false
     @State private var showLink = false
+    @State private var showNavigationOptions = false
 
     // MARK: - Computed Properties
     private var hasLocationData: Bool {
@@ -31,6 +32,26 @@ struct ScheduleItemCard: View {
         .sheet(isPresented: $showMapView) {
             mapViewSheet
         }
+        .confirmationDialog(
+            item.location ?? item.title,
+            isPresented: $showNavigationOptions,
+            titleVisibility: .visible
+        ) {
+            Button("Apple マップで案内") {
+                if let lat = item.latitude, let lng = item.longitude {
+                    openInMaps(latitude: lat, longitude: lng)
+                }
+            }
+            if let lat = item.latitude, let lng = item.longitude,
+               UIApplication.shared.canOpenURL(URL(string: "comgooglemaps://")!) {
+                Button("Google マップで案内") {
+                    openInGoogleMaps(latitude: lat, longitude: lng)
+                }
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("案内するアプリを選択してください")
+        }
         .sheet(isPresented: $showLink) {
             if let linkURL = item.linkURL, let url = URL(string: linkURL) {
                 SafariView(url: url)
@@ -41,6 +62,7 @@ struct ScheduleItemCard: View {
     private var actionButtonsSection: some View {
         VStack(spacing: 12) {
             if hasLocationData {
+                navigationButton
                 mapActionButton
             }
             editButton
@@ -54,6 +76,15 @@ struct ScheduleItemCard: View {
             Image(systemName: "pencil.circle.fill")
                 .font(.system(size: 28))
                 .foregroundColor(themeManager.currentTheme.primary)
+        }
+        .buttonStyle(.borderless)
+    }
+
+    private var navigationButton: some View {
+        Button(action: { showNavigationOptions = true }) {
+            Image(systemName: "arrow.triangle.turn.up.right.circle.fill")
+                .font(.system(size: 28))
+                .foregroundColor(themeManager.currentTheme.info)
         }
         .buttonStyle(.borderless)
     }
@@ -207,5 +238,12 @@ struct ScheduleItemCard: View {
         mapItem.openInMaps(launchOptions: [
             MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
         ])
+    }
+
+    private func openInGoogleMaps(latitude: Double, longitude: Double) {
+        let urlString = "comgooglemaps://?daddr=\(latitude),\(longitude)&directionsmode=driving"
+        if let url = URL(string: urlString) {
+            UIApplication.shared.open(url)
+        }
     }
 }
