@@ -195,11 +195,13 @@ struct EnjoyWorldView: View {
     var body: some View {
         NavigationView {
             VStack(alignment: .leading, spacing: 15) {
-                // NavigationLink を NavigationView 直下に置き、再レンダリングの影響を受けない状態で管理
-                NavigationLink(destination: TaskListView(), isActive: $navigateToTaskList) { EmptyView() }
-                NavigationLink(destination: ProfileView().environmentObject(travelPlanViewModel), isActive: $navigateToProfile) { EmptyView() }
-
                 titleSection
+                    .background(
+                        Group {
+                            NavigationLink(destination: TaskListView(), isActive: $navigateToTaskList) { EmptyView() }
+                            NavigationLink(destination: ProfileView().environmentObject(travelPlanViewModel), isActive: $navigateToProfile) { EmptyView() }
+                        }
+                    )
                 ScrollView(.vertical, showsIndicators: false) {
                     travelEventsTitleSection
                     tabSelectionSection
