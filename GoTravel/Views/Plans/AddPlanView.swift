@@ -7,11 +7,17 @@ struct AddPlanView: View {
     @Environment(\.presentationMode) var presentationMode
     @ObservedObject var themeManager = ThemeManager.shared
 
+    /// 履歴の元データ。既存の予定をそのままテンプレートとして再利用する
+    var historyPlans: [Plan] = []
     var onSave: (Plan) -> Void
 
     // Wizard state
     @State private var currentStep: Int = 0
     @State private var isGoingForward: Bool = true
+    @State private var showDiscardConfirm: Bool = false
+    @State private var showHistoryPicker: Bool = false
+    @FocusState private var isTitleFocused: Bool
+    @FocusState private var isDescriptionFocused: Bool
 
     // Form data
     @State private var selectedPlanType: PlanType = .outing
@@ -36,16 +42,65 @@ struct AddPlanView: View {
     @State private var mapVisibleRegion: MKCoordinateRegion?
 
     // MARK: - Computed Properties
-    private var totalSteps: Int { selectedPlanType == .outing ? 4 : 6 }
+    // 0:種別+タイトル / 1:日付 / 2:場所 / 3:内容+リンク（日常のみ）
+    private var totalSteps: Int { selectedPlanType == .outing ? 3 : 4 }
     private var isLastStep: Bool { currentStep == totalSteps - 1 }
 
     private var canProceed: Bool {
         switch currentStep {
-        case 1: return !title.trimmingCharacters(in: .whitespaces).isEmpty
-        case 2: return selectedPlanType == .outing ? startDate <= endDate : true
-        case 4: return !description.trimmingCharacters(in: .whitespaces).isEmpty
+        case 0: return !title.trimmingCharacters(in: .whitespaces).isEmpty
+        case 1: return selectedPlanType == .outing ? startDate <= endDate : true
         default: return true
         }
+    }
+
+    /// タイトルさえ入っていれば残りは任意なので、いつでも保存できる
+    private var canSaveNow: Bool {
+        !title.trimmingCharacters(in: .whitespaces).isEmpty
+            && (selectedPlanType == .daily || startDate <= endDate)
+    }
+
+    // MARK: - History
+
+    /// 同じタイトルの予定をまとめた履歴の1件
+    private struct HistoryEntry: Identifiable {
+        let id: String        // 正規化したタイトル
+        let plan: Plan        // プリフィル元となる最新の予定
+        let count: Int        // 作成回数
+        let lastUsed: Date
+    }
+
+    private static let historyLimit = 20
+
+    /// 過去の予定をタイトルでまとめ、よく使う順に並べる
+    private var historyEntries: [HistoryEntry] {
+        let grouped = Dictionary(grouping: historyPlans) { plan in
+            plan.title.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        }
+
+        let entries = grouped.compactMap { key, plans -> HistoryEntry? in
+            // historyPlans は開始日の降順で渡されるため、先頭が最新の予定
+            guard !key.isEmpty, let latest = plans.first else { return nil }
+            let lastUsed = plans.map(\.startDate).max() ?? latest.startDate
+            return HistoryEntry(id: key, plan: latest, count: plans.count, lastUsed: lastUsed)
+        }
+
+        return entries
+            .sorted { lhs, rhs in
+                if lhs.count != rhs.count { return lhs.count > rhs.count }
+                return lhs.lastUsed > rhs.lastUsed
+            }
+            .prefix(Self.historyLimit)
+            .map { $0 }
+    }
+
+    // 入力途中の内容があるか（誤操作による破棄を防ぐ）
+    private var hasUnsavedInput: Bool {
+        currentStep > 0
+            || !title.trimmingCharacters(in: .whitespaces).isEmpty
+            || !places.isEmpty
+            || !description.trimmingCharacters(in: .whitespaces).isEmpty
+            || !linkURL.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     // MARK: - Theme-Adaptive Colors
@@ -120,13 +175,35 @@ struct AddPlanView: View {
             }
         }
         .fullScreenCover(isPresented: $showMapPicker) { mapPickerView }
+        .sheet(isPresented: $showHistoryPicker) { historyPickerView }
         .navigationBarHidden(true)
+        .interactiveDismissDisabled(hasUnsavedInput)
+        .confirmationDialog("入力内容を破棄しますか？", isPresented: $showDiscardConfirm, titleVisibility: .visible) {
+            Button("破棄する", role: .destructive) {
+                presentationMode.wrappedValue.dismiss()
+            }
+            Button("編集を続ける", role: .cancel) {}
+        } message: {
+            Text("作成途中のプランは保存されません")
+        }
+        .onChange(of: startDate) { _, newValue in
+            // 開始日を終了日より後にした場合は終了日を自動で追従させる
+            if endDate < newValue {
+                endDate = newValue
+            }
+        }
     }
 
     // MARK: - Header
     private var headerView: some View {
         HStack {
-            Button(action: { presentationMode.wrappedValue.dismiss() }) {
+            Button(action: {
+                if hasUnsavedInput {
+                    showDiscardConfirm = true
+                } else {
+                    presentationMode.wrappedValue.dismiss()
+                }
+            }) {
                 Image(systemName: "xmark")
                     .foregroundColor(uiAccentColor)
                     .imageScale(.medium)
@@ -134,13 +211,29 @@ struct AddPlanView: View {
                     .background(uiAccentColor.opacity(0.15))
                     .clipShape(Circle())
             }
+            .accessibilityLabel("閉じる")
             Spacer()
             Text("新しいプラン")
                 .font(.headline)
                 .foregroundColor(uiAccentColor)
             Spacer()
-            Color.clear.frame(width: 36, height: 36)
+
+            // 名前さえ入れば途中のステップを飛ばして保存できる
+            if canSaveNow {
+                Button(action: savePlan) {
+                    Text("保存")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundColor(uiAccentColor)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(effectivePlanColor.opacity(0.55), in: Capsule())
+                }
+                .transition(.scale.combined(with: .opacity))
+            } else {
+                Color.clear.frame(width: 36, height: 36)
+            }
         }
+        .animation(.easeInOut(duration: 0.2), value: canSaveNow)
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
         .background(effectivePlanColor.opacity(0.35))
@@ -171,12 +264,10 @@ struct AddPlanView: View {
     private var stepContentView: some View {
         ZStack {
             switch currentStep {
-            case 0: step0TypeSelection
-            case 1: step1Title
-            case 2: step2Date
-            case 3: step3Places
-            case 4: step4Description
-            case 5: step5Link
+            case 0: step0TypeAndTitle
+            case 1: step1Date
+            case 2: step2Places
+            case 3: step3DescriptionAndLink
             default: EmptyView()
             }
         }
@@ -247,26 +338,85 @@ struct AddPlanView: View {
         }
     }
 
-    // MARK: - Step 0: Type Selection
-    private var step0TypeSelection: some View {
-        VStack(spacing: 28) {
-            VStack(spacing: 8) {
-                Text("何のプランを作りますか？")
-                    .font(.title2.weight(.bold))
-                    .foregroundColor(uiAccentColor)
-                Text("種類を選ぶとフローが最適化されます")
-                    .font(.subheadline)
-                    .foregroundColor(uiAccentColor.opacity(0.6))
-            }
-            .padding(.top, 40)
+    // MARK: - Step 0: Type + Title
+    private var step0TypeAndTitle: some View {
+        ScrollView {
+            VStack(spacing: 22) {
+                VStack(spacing: 8) {
+                    Text("どんなプランですか？")
+                        .font(.title2.weight(.bold))
+                        .foregroundColor(uiAccentColor)
+                    Text("種類と名前だけで作成できます")
+                        .font(.subheadline)
+                        .foregroundColor(uiAccentColor.opacity(0.6))
+                }
+                .padding(.top, 24)
 
-            HStack(spacing: 16) {
-                typeCard(type: .outing, icon: "figure.walk", title: "おでかけ", subtitle: "旅行・お出かけ計画")
-                typeCard(type: .daily, icon: "house.fill", title: "日常", subtitle: "日常のタスク・用事")
+                HStack(spacing: 16) {
+                    typeCard(type: .outing, icon: "figure.walk", title: "おでかけ", subtitle: "旅行・お出かけ計画")
+                    typeCard(type: .daily, icon: "house.fill", title: "日常", subtitle: "日常のタスク・用事")
+                }
+                .padding(.horizontal, 20)
+
+                HStack(spacing: 12) {
+                    Image(systemName: "pencil")
+                        .foregroundColor(uiAccentColor.opacity(0.6))
+                    ZStack(alignment: .leading) {
+                        if title.isEmpty {
+                            Text(selectedPlanType == .outing ? "大阪旅行" : "ジム")
+                                .foregroundColor(uiAccentColor.opacity(0.3))
+                                .font(.title3)
+                        }
+                        TextField("", text: $title)
+                            .font(.title3)
+                            .foregroundColor(uiAccentColor)
+                            .focused($isTitleFocused)
+                            .submitLabel(.next)
+                            .onSubmit {
+                                if canProceed { goForward() }
+                            }
+                    }
+                }
+                .padding(20)
+                .background(uiAccentColor.opacity(0.1))
+                .cornerRadius(16)
+                .padding(.horizontal, 20)
+
+                historyEntryButton
+
+                Spacer(minLength: 20)
             }
+        }
+    }
+
+    /// 履歴が1件もないうちはボタン自体を出さない
+    @ViewBuilder
+    private var historyEntryButton: some View {
+        if !historyEntries.isEmpty {
+            Button(action: { showHistoryPicker = true }) {
+                HStack(spacing: 12) {
+                    Image(systemName: "clock.arrow.circlepath")
+                        .font(.title3)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("履歴から作成")
+                            .font(.headline)
+                        Text("よく使う予定を選んですぐ作成")
+                            .font(.caption)
+                            .opacity(0.7)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(.caption.weight(.bold))
+                        .opacity(0.5)
+                }
+                .foregroundColor(uiAccentColor)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 14)
+                .background(uiAccentColor.opacity(0.1))
+                .cornerRadius(16)
+            }
+            .buttonStyle(PlainButtonStyle())
             .padding(.horizontal, 20)
-
-            Spacer()
         }
     }
 
@@ -314,45 +464,9 @@ struct AddPlanView: View {
         .buttonStyle(PlainButtonStyle())
     }
 
-    // MARK: - Step 1: Title
-    private var step1Title: some View {
-        VStack(spacing: 28) {
-            VStack(spacing: 8) {
-                Text("プランの名前は？")
-                    .font(.title2.weight(.bold))
-                    .foregroundColor(uiAccentColor)
-                Text(selectedPlanType == .outing ? "例：大阪旅行、週末お出かけ" : "例：ジム、英語の課題")
-                    .font(.subheadline)
-                    .foregroundColor(uiAccentColor.opacity(0.6))
-            }
-            .padding(.top, 40)
-
-            HStack(spacing: 12) {
-                Image(systemName: "pencil")
-                    .foregroundColor(uiAccentColor.opacity(0.6))
-                ZStack(alignment: .leading) {
-                    if title.isEmpty {
-                        Text(selectedPlanType == .outing ? "大阪旅行" : "ジム")
-                            .foregroundColor(uiAccentColor.opacity(0.3))
-                            .font(.title3)
-                    }
-                    TextField("", text: $title)
-                        .font(.title3)
-                        .foregroundColor(uiAccentColor)
-                }
-            }
-            .padding(20)
-            .background(uiAccentColor.opacity(0.1))
-            .cornerRadius(16)
-            .padding(.horizontal, 20)
-
-            Spacer()
-        }
-    }
-
-    // MARK: - Step 2: Date / DateTime
+    // MARK: - Step 1: Date / DateTime
     @ViewBuilder
-    private var step2Date: some View {
+    private var step1Date: some View {
         if selectedPlanType == .outing {
             outingDateStep
         } else {
@@ -374,7 +488,7 @@ struct AddPlanView: View {
 
             VStack(spacing: 12) {
                 datePickerRow(label: "開始日", icon: "calendar", date: $startDate)
-                datePickerRow(label: "終了日", icon: "calendar.badge.checkmark", date: $endDate)
+                datePickerRow(label: "終了日", icon: "calendar.badge.checkmark", date: $endDate, range: startDate...)
 
                 if endDate < startDate {
                     Label("終了日は開始日以降にしてください", systemImage: "exclamationmark.triangle.fill")
@@ -411,7 +525,7 @@ struct AddPlanView: View {
         }
     }
 
-    private func datePickerRow(label: String, icon: String, date: Binding<Date>) -> some View {
+    private func datePickerRow(label: String, icon: String, date: Binding<Date>, range: PartialRangeFrom<Date>? = nil) -> some View {
         HStack {
             Image(systemName: icon)
                 .foregroundColor(uiAccentColor.opacity(0.7))
@@ -420,10 +534,16 @@ struct AddPlanView: View {
                 .font(.headline)
                 .foregroundColor(uiAccentColor)
             Spacer()
-            DatePicker("", selection: date, displayedComponents: .date)
-                .colorMultiply(uiAccentColor)
-                .datePickerStyle(CompactDatePickerStyle())
-                .labelsHidden()
+            Group {
+                if let range = range {
+                    DatePicker("", selection: date, in: range, displayedComponents: .date)
+                } else {
+                    DatePicker("", selection: date, displayedComponents: .date)
+                }
+            }
+            .colorMultiply(uiAccentColor)
+            .datePickerStyle(CompactDatePickerStyle())
+            .labelsHidden()
         }
         .padding(20)
         .background(uiAccentColor.opacity(0.1))
@@ -449,8 +569,8 @@ struct AddPlanView: View {
         .cornerRadius(16)
     }
 
-    // MARK: - Step 3: Places
-    private var step3Places: some View {
+    // MARK: - Step 2: Places
+    private var step2Places: some View {
         VStack(spacing: 28) {
             VStack(spacing: 8) {
                 Text(selectedPlanType == .outing ? "行きたい場所は？" : "行く場所はありますか？")
@@ -525,75 +645,166 @@ struct AddPlanView: View {
         .cornerRadius(16)
     }
 
-    // MARK: - Step 4: Description (daily only)
-    private var step4Description: some View {
-        VStack(spacing: 28) {
-            VStack(spacing: 8) {
-                Text("何をしますか？")
-                    .font(.title2.weight(.bold))
-                    .foregroundColor(uiAccentColor)
-                Text("具体的な内容を入力してください（必須）")
-                    .font(.subheadline)
-                    .foregroundColor(uiAccentColor.opacity(0.6))
-            }
-            .padding(.top, 40)
-
-            ZStack(alignment: .topLeading) {
-                if description.isEmpty {
-                    Text("例：英語の課題をやる、ジムで30分走る")
-                        .foregroundColor(uiAccentColor.opacity(0.3))
-                        .font(.body)
-                        .padding(.top, 8)
-                        .padding(.leading, 4)
+    // MARK: - Step 3: Description + Link (daily only, optional)
+    private var step3DescriptionAndLink: some View {
+        ScrollView {
+            VStack(spacing: 22) {
+                VStack(spacing: 8) {
+                    Text("内容やリンクを残しますか？")
+                        .font(.title2.weight(.bold))
+                        .foregroundColor(uiAccentColor)
+                    Text("どちらも任意 — このまま保存できます")
+                        .font(.subheadline)
+                        .foregroundColor(uiAccentColor.opacity(0.6))
                 }
-                TextEditor(text: $description)
-                    .font(.body)
-                    .foregroundColor(uiAccentColor)
-                    .frame(height: 160)
-                    .scrollContentBackground(.hidden)
-            }
-            .padding(16)
-            .background(uiAccentColor.opacity(0.1))
-            .cornerRadius(16)
-            .padding(.horizontal, 20)
+                .padding(.top, 24)
 
-            Spacer()
+                ZStack(alignment: .topLeading) {
+                    if description.isEmpty {
+                        Text("例：英語の課題をやる、ジムで30分走る")
+                            .foregroundColor(uiAccentColor.opacity(0.3))
+                            .font(.body)
+                            .padding(.top, 8)
+                            .padding(.leading, 4)
+                    }
+                    TextEditor(text: $description)
+                        .font(.body)
+                        .foregroundColor(uiAccentColor)
+                        .frame(height: 140)
+                        .scrollContentBackground(.hidden)
+                        .focused($isDescriptionFocused)
+                }
+                .padding(16)
+                .background(uiAccentColor.opacity(0.1))
+                .cornerRadius(16)
+                .padding(.horizontal, 20)
+
+                HStack(spacing: 12) {
+                    Image(systemName: "link")
+                        .foregroundColor(uiAccentColor.opacity(0.6))
+                    ZStack(alignment: .leading) {
+                        if linkURL.isEmpty {
+                            Text("https://example.com")
+                                .foregroundColor(uiAccentColor.opacity(0.3))
+                        }
+                        TextField("", text: $linkURL)
+                            .foregroundColor(uiAccentColor)
+                            .keyboardType(.URL)
+                            .autocapitalization(.none)
+                    }
+                }
+                .padding(20)
+                .background(uiAccentColor.opacity(0.1))
+                .cornerRadius(16)
+                .padding(.horizontal, 20)
+
+                Spacer(minLength: 20)
+            }
         }
     }
 
-    // MARK: - Step 5: Link (daily only, optional)
-    private var step5Link: some View {
-        VStack(spacing: 28) {
-            VStack(spacing: 8) {
-                Text("参考リンクはありますか？")
-                    .font(.title2.weight(.bold))
-                    .foregroundColor(uiAccentColor)
-                Text("任意 — スキップして保存できます")
-                    .font(.subheadline)
-                    .foregroundColor(uiAccentColor.opacity(0.6))
-            }
-            .padding(.top, 40)
+    // MARK: - History Picker View
+    private var historyPickerView: some View {
+        NavigationView {
+            ZStack {
+                backgroundGradient
 
-            HStack(spacing: 12) {
-                Image(systemName: "link")
-                    .foregroundColor(uiAccentColor.opacity(0.6))
-                ZStack(alignment: .leading) {
-                    if linkURL.isEmpty {
-                        Text("https://example.com")
-                            .foregroundColor(uiAccentColor.opacity(0.3))
+                ScrollView {
+                    VStack(spacing: 10) {
+                        ForEach(historyEntries) { entry in
+                            Button(action: { applyHistory(entry) }) {
+                                historyRow(entry)
+                            }
+                            .buttonStyle(PlainButtonStyle())
+                        }
                     }
-                    TextField("", text: $linkURL)
-                        .foregroundColor(uiAccentColor)
-                        .keyboardType(.URL)
-                        .autocapitalization(.none)
+                    .padding(20)
                 }
             }
-            .padding(20)
-            .background(uiAccentColor.opacity(0.1))
-            .cornerRadius(16)
-            .padding(.horizontal, 20)
+            .navigationTitle("履歴から作成")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("閉じる") { showHistoryPicker = false }
+                        .foregroundColor(uiAccentColor)
+                }
+            }
+        }
+    }
 
-            Spacer()
+    private func historyRow(_ entry: HistoryEntry) -> some View {
+        let color = planColorFor(entry.plan.planType)
+
+        return HStack(spacing: 14) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(color.opacity(0.15))
+                    .frame(width: 44, height: 44)
+                Image(systemName: entry.plan.planType == .daily ? "house.fill" : "figure.walk")
+                    .font(.system(size: 18, weight: .semibold))
+                    .foregroundColor(color)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text(entry.plan.title)
+                    .font(.headline)
+                    .foregroundColor(uiAccentColor)
+                    .lineLimit(1)
+
+                HStack(spacing: 10) {
+                    Text("\(entry.count)回")
+                    Text("最終 \(DateFormatter.japaneseMonthDay.string(from: entry.lastUsed))")
+                    if !entry.plan.places.isEmpty {
+                        Text("場所\(entry.plan.places.count)件")
+                    }
+                }
+                .font(.caption)
+                .foregroundColor(uiAccentColor.opacity(0.6))
+            }
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "plus.circle.fill")
+                .font(.title3)
+                .foregroundColor(color)
+        }
+        .padding(14)
+        .background(uiAccentColor.opacity(0.1))
+        .cornerRadius(16)
+    }
+
+    /// 履歴の内容をフォームに流し込み、日付ステップから再開する
+    private func applyHistory(_ entry: HistoryEntry) {
+        let source = entry.plan
+        let calendar = Calendar.current
+        let today = Date()
+
+        selectedPlanType = source.planType
+        title = source.title
+        places = source.places
+        description = source.description ?? ""
+        linkURL = source.linkURL ?? ""
+
+        // 日付は引き継がない（毎回変わるため）
+        startDate = today
+        endDate = today
+        dailyDate = today
+
+        // 時刻は時分だけ引き継ぎ、今日の日付上に組み立て直す
+        if let previousTime = source.time {
+            let components = calendar.dateComponents([.hour, .minute], from: previousTime)
+            dailyTime = calendar.date(
+                bySettingHour: components.hour ?? 0,
+                minute: components.minute ?? 0,
+                second: 0,
+                of: today
+            ) ?? today
+        }
+
+        showHistoryPicker = false
+        isGoingForward = true
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
+            currentStep = 1   // 種別とタイトルは決まっているので日付ステップへ
         }
     }
 
@@ -766,6 +977,22 @@ struct AddPlanView: View {
         places.removeAll { $0.id == place.id }
     }
 
+    /// 未入力の内容は nil として保存する（詳細画面で空欄が表示されないように）
+    private var trimmedDescription: String? {
+        let trimmed = description.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// スキームが省略されたURLに https:// を補完する
+    private func normalizedLinkURL() -> String? {
+        let trimmed = linkURL.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return nil }
+        if trimmed.lowercased().hasPrefix("http://") || trimmed.lowercased().hasPrefix("https://") {
+            return trimmed
+        }
+        return "https://\(trimmed)"
+    }
+
     private func savePlan() {
         let plan: Plan
         if selectedPlanType == .outing {
@@ -784,10 +1011,8 @@ struct AddPlanView: View {
                 places: places,
                 planType: .daily,
                 time: dailyTime,
-                description: description.trimmingCharacters(in: .whitespacesAndNewlines),
-                linkURL: linkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                    ? nil
-                    : linkURL.trimmingCharacters(in: .whitespacesAndNewlines)
+                description: trimmedDescription,
+                linkURL: normalizedLinkURL()
             )
         }
         onSave(plan)

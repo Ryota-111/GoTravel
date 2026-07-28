@@ -7,6 +7,7 @@ struct MainTabView: View {
     @State private var hasCheckedICloud = false
     @StateObject private var plansViewModel = PlansViewModel()
     @StateObject private var travelPlanViewModel = TravelPlanViewModel()
+    @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
 
@@ -43,6 +44,11 @@ struct MainTabView: View {
             }
         }
         .task {
+            // カテゴリーはどのタブからも参照されるためここで用意する
+            if let userId = authVM.userId {
+                PlaceCategoryManager.shared.setup(userId: userId)
+            }
+
             if !hasCheckedICloud {
                 hasCheckedICloud = true
                 await checkICloudStatus()
@@ -50,7 +56,7 @@ struct MainTabView: View {
         }
         .alert("iCloudが必要です", isPresented: $showICloudAlert) {
             Button("設定を開く", role: .none) {
-                if let url = URL(string: "App-prefs:CASTLE") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }
             }

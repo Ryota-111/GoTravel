@@ -151,10 +151,12 @@ extension TravelPlanEntity {
         self.lastEditedBy = plan.lastEditedBy
         self.updatedAt = plan.updatedAt
 
-        // sharedWithをエンコード
+        // sharedWithをエンコード（空になった場合もクリアして反映する）
         if !plan.sharedWith.isEmpty {
             let encoder = JSONEncoder()
             self.sharedWithData = try? encoder.encode(plan.sharedWith)
+        } else {
+            self.sharedWithData = nil
         }
 
         // daySchedulesをエンコード
@@ -162,6 +164,8 @@ extension TravelPlanEntity {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
             self.daySchedulesData = try? encoder.encode(plan.daySchedules)
+        } else {
+            self.daySchedulesData = nil
         }
 
         // packingItemsをエンコード
@@ -169,6 +173,8 @@ extension TravelPlanEntity {
             let encoder = JSONEncoder()
             encoder.dateEncodingStrategy = .iso8601
             self.packingItemsData = try? encoder.encode(plan.packingItems)
+        } else {
+            self.packingItemsData = nil
         }
     }
 

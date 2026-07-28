@@ -112,15 +112,23 @@ struct PlaceDetailView: View {
     // MARK: - View Mode
     private var viewModeView: some View {
         VStack(spacing: 0) {
-            // Header Image with title overlay
-            headerImageView
+            // 写真の有無でヘッダーを出し分ける
+            if displayImage == nil {
+                noPhotoHeaderView
+            } else {
+                headerImageView
+            }
 
             // Content Card
             VStack(alignment: .leading, spacing: 0) {
-                // Category Tag
-                categoryTag
-                    .padding(.horizontal, 24)
-                    .padding(.top, 20)
+                // 写真なしヘッダーにはカテゴリーバッジが入っているので重複させない
+                if displayImage != nil {
+                    categoryTag
+                        .padding(.horizontal, 24)
+                        .padding(.top, 20)
+                } else {
+                    Color.clear.frame(height: 8)
+                }
 
                 // Gradient Separator
                 gradientSeparator
@@ -343,6 +351,99 @@ struct PlaceDetailView: View {
     }
 
     // MARK: - Header Image (View Mode)
+    // MARK: - Header (写真なし)
+    /// 写真がない場合は暗いスクリムをかけた擬似的な写真枠ではなく、
+    /// テーマ色ベースの明るいヘッダーにして写真追加への導線を置く
+    private var noPhotoHeaderView: some View {
+        let category = PlaceCategoryManager.shared.category(for: place.categoryId)
+        let mainColor = themeManager.currentTheme.xprimary
+        let baseColor: Color = colorScheme == .dark
+            ? themeManager.currentTheme.secondaryBackgroundDark
+            : themeManager.currentTheme.backgroundLight
+
+        return ZStack(alignment: .bottomTrailing) {
+            LinearGradient(
+                colors: [mainColor.opacity(colorScheme == .dark ? 0.35 : 0.22), baseColor],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+
+            // 背景の飾りとしてカテゴリーアイコンを大きく薄く置く
+            Image(systemName: category.icon)
+                .font(.system(size: 150))
+                .foregroundColor(mainColor.opacity(0.10))
+                .offset(x: 40, y: 30)
+                .clipped()
+
+            VStack(alignment: .leading, spacing: 12) {
+                HStack(spacing: 8) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(
+                                LinearGradient(
+                                    colors: [mainColor, mainColor.opacity(0.65)],
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                )
+                            )
+                            .frame(width: 40, height: 40)
+                            .shadow(color: mainColor.opacity(0.35), radius: 5, x: 0, y: 3)
+                        Image(systemName: category.icon)
+                            .font(.system(size: 18, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
+
+                    Text(category.name)
+                        .font(.caption.weight(.bold))
+                        .foregroundColor(mainColor)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(mainColor.opacity(0.14), in: Capsule())
+                }
+
+                VStack(alignment: .leading, spacing: 6) {
+                    Text(place.title)
+                        .font(.system(size: 26, weight: .bold, design: .rounded))
+                        .foregroundColor(textColor)
+                        .lineLimit(2)
+
+                    if let address = place.address {
+                        HStack(spacing: 6) {
+                            Image(systemName: "mappin.circle.fill")
+                                .font(.subheadline)
+                            Text(address)
+                                .font(.subheadline)
+                                .lineLimit(2)
+                        }
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                    }
+                }
+
+                Button(action: {
+                    enterEditMode()
+                    showImagePicker = true
+                }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "camera.fill")
+                            .font(.caption)
+                        Text("写真を追加")
+                            .font(.subheadline.weight(.semibold))
+                    }
+                    .foregroundColor(.white)
+                    .padding(.horizontal, 16)
+                    .padding(.vertical, 10)
+                    .background(mainColor, in: Capsule())
+                    .shadow(color: mainColor.opacity(0.35), radius: 6, x: 0, y: 3)
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(24)
+        }
+        .frame(maxWidth: .infinity)
+        .clipped()
+    }
+
     private var headerImageView: some View {
         ZStack(alignment: .bottomLeading) {
             // Background Image

@@ -7,15 +7,20 @@ struct Album: Identifiable, Codable, Equatable {
     var title: String
     var photoFileNames: [String]
     var coverColor: Color?
-    var defaultCoverColor: Color?
     var icon: String
     var createdAt: Date
     var updatedAt: Date
     var travelPlanId: String?
     var isDefaultAlbum: Bool
+    /// アルバムの種別。日本全国フォトマップの判定にタイトル文字列を使わないために保持する
+    var type: AlbumType
+    var userId: String?
+
+    /// 日本全国フォトマップかどうか（専用画面へ遷移する判定に使う）
+    var isJapanPhotoMap: Bool { type == .japan }
 
     enum CodingKeys: String, CodingKey {
-        case id, title, photoFileNames, coverColorHex, icon, createdAt, updatedAt, travelPlanId, isDefaultAlbum
+        case id, title, photoFileNames, coverColorHex, icon, createdAt, updatedAt, travelPlanId, isDefaultAlbum, type, userId
     }
 
     var coverColorHex: String? {
@@ -34,7 +39,9 @@ struct Album: Identifiable, Codable, Equatable {
          createdAt: Date = Date(),
          updatedAt: Date = Date(),
          travelPlanId: String? = nil,
-         isDefaultAlbum: Bool = false) {
+         isDefaultAlbum: Bool = false,
+         type: AlbumType = .custom,
+         userId: String? = nil) {
         self.id = id
         self.title = title
         self.photoFileNames = photoFileNames
@@ -44,6 +51,8 @@ struct Album: Identifiable, Codable, Equatable {
         self.updatedAt = updatedAt
         self.travelPlanId = travelPlanId
         self.isDefaultAlbum = isDefaultAlbum
+        self.type = type
+        self.userId = userId
     }
 
     init(from decoder: Decoder) throws {
@@ -56,6 +65,15 @@ struct Album: Identifiable, Codable, Equatable {
         updatedAt = try container.decode(Date.self, forKey: .updatedAt)
         travelPlanId = try container.decodeIfPresent(String.self, forKey: .travelPlanId)
         isDefaultAlbum = try container.decodeIfPresent(Bool.self, forKey: .isDefaultAlbum) ?? false
+        userId = try container.decodeIfPresent(String.self, forKey: .userId)
+
+        // 種別を持たない旧データはタイトルから復元する（移行時のみの互換処理）
+        if let rawType = try container.decodeIfPresent(String.self, forKey: .type),
+           let decodedType = AlbumType(rawValue: rawType) {
+            type = decodedType
+        } else {
+            type = title == AlbumType.japan.title ? .japan : .custom
+        }
 
         if let hex = try container.decodeIfPresent(String.self, forKey: .coverColorHex) {
             coverColor = Color(hex: hex)
@@ -72,6 +90,8 @@ struct Album: Identifiable, Codable, Equatable {
         try container.encode(updatedAt, forKey: .updatedAt)
         try container.encodeIfPresent(travelPlanId, forKey: .travelPlanId)
         try container.encode(isDefaultAlbum, forKey: .isDefaultAlbum)
+        try container.encode(type.rawValue, forKey: .type)
+        try container.encodeIfPresent(userId, forKey: .userId)
 
         if let hex = coverColorHex {
             try container.encode(hex, forKey: .coverColorHex)
@@ -80,7 +100,7 @@ struct Album: Identifiable, Codable, Equatable {
 }
 
 // MARK: - Predefined Album Types
-enum AlbumType {
+enum AlbumType: String, Codable, CaseIterable {
     case japan
     case travel
     case family
@@ -121,7 +141,9 @@ enum AlbumType {
         case .custom: return themeManager.currentTheme.custom
         }
     }
-    
+
+    /// 種別選択UIで使う固定色。テーマに依存しないため、
+    /// 白黒テーマでも種別ごとの区別がつく
     var defaultCoverColor: Color {
         switch self {
         case .japan: return .blue
@@ -131,5 +153,38 @@ enum AlbumType {
         case .food: return .red
         case .custom: return .purple
         }
+    }
+}
+
+// MARK: - Deterministic Color Palette
+extension Album {
+    /// 旅行計画に色が設定されていない場合の代替色を決める共通処理。
+    /// String.hashValue は実行ごとに変わるため使わず、文字から安定した値を作る
+    static func fallbackColor(forKey key: String) -> Color {
+        let palette: [Color] = [
+            .blue, .purple, .pink, .orange, .teal,
+            .indigo, Color(red: 0.2, green: 0.65, blue: 0.4),
+            Color(red: 0.85, green: 0.35, blue: 0.25)
+        ]
+        var hash: UInt64 = 5381
+        for byte in key.utf8 {
+            hash = hash &* 33 &+ UInt64(byte)
+        }
+        return palette[Int(hash % UInt64(palette.count))]
+    }
+
+    /// 旅行計画のカードカラーを、白に近すぎる場合は安定した代替色に置き換えて返す
+    static func resolvedPlanColor(for plan: TravelPlan) -> Color {
+        let fallback = fallbackColor(forKey: plan.id ?? plan.title)
+
+        guard let color = plan.cardColor else { return fallback }
+
+        let uiColor = UIColor(color)
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        guard uiColor.getRed(&r, green: &g, blue: &b, alpha: &a) else { return fallback }
+
+        // 知覚輝度 > 0.85 は白に近すぎるためパレットを使用
+        let brightness = 0.299 * r + 0.587 * g + 0.114 * b
+        return brightness < 0.85 ? color : fallback
     }
 }

@@ -114,10 +114,11 @@ struct CalendarView: View {
                             .font(.title3)
                             .foregroundColor(themeManager.currentTheme.secondary)
                     }
+                    .accessibilityLabel("予定を追加")
                 }
             }
             .sheet(isPresented: $showAddSheet) {
-                AddPlanView { newPlan in
+                AddPlanView(historyPlans: viewModel.plans) { newPlan in
                     if let userId = authVM.userId {
                         viewModel.add(newPlan, userId: userId)
                     } else {
@@ -327,6 +328,7 @@ struct CalendarView: View {
                     .font(.title3.weight(.semibold))
                     .foregroundColor(themeManager.currentTheme.secondary)
             }
+            .accessibilityLabel("前の月")
 
             Spacer()
 
@@ -339,6 +341,7 @@ struct CalendarView: View {
                     .font(.title3.weight(.semibold))
                     .foregroundColor(themeManager.currentTheme.secondary)
             }
+            .accessibilityLabel("次の月")
         }
         .padding(.horizontal, 20)
         .padding(.vertical, 12)
@@ -463,27 +466,24 @@ struct CalendarView: View {
         return startOfSelectedDate >= startOfPlanStartDate && startOfSelectedDate <= startOfPlanEndDate
     }
 
-    // 指定日のイベントタイプのリストを取得
+    // 指定日のイベントタイプのリストを取得（種別ごとに1つ、色分けが機能するよう重複排除）
     private func getEventTypesForDate(date: Date) -> [CalendarItemType] {
         var eventTypes: [CalendarItemType] = []
 
-        // Daily plans
-        let dailyPlans = viewModel.plans.filter { plan in
-            plan.planType == .daily && isDateInPlanRange(date: date, plan: plan)
+        // Travel plans (期間中のすべての日に表示)
+        if travelViewModel.travelPlans.contains(where: { isDateInTravelPlanRange(date: date, travelPlan: $0) }) {
+            eventTypes.append(.travel)
         }
-        eventTypes.append(contentsOf: dailyPlans.map { _ in CalendarItemType.dailyPlan })
 
         // Outing plans
-        let outingPlans = viewModel.plans.filter { plan in
-            plan.planType == .outing && isDateInPlanRange(date: date, plan: plan)
+        if viewModel.plans.contains(where: { $0.planType == .outing && isDateInPlanRange(date: date, plan: $0) }) {
+            eventTypes.append(.outingPlan)
         }
-        eventTypes.append(contentsOf: outingPlans.map { _ in CalendarItemType.outingPlan })
 
-        // Travel plans (期間中のすべての日に表示)
-        let travelPlans = travelViewModel.travelPlans.filter { travelPlan in
-            isDateInTravelPlanRange(date: date, travelPlan: travelPlan)
+        // Daily plans
+        if viewModel.plans.contains(where: { $0.planType == .daily && isDateInPlanRange(date: date, plan: $0) }) {
+            eventTypes.append(.dailyPlan)
         }
-        eventTypes.append(contentsOf: travelPlans.map { _ in CalendarItemType.travel })
 
         return eventTypes
     }

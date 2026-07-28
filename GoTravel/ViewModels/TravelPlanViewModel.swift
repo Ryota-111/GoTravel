@@ -50,6 +50,11 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
             updateTravelPlans()
         } catch {
         }
+
+        // パブリックDB上の共有プランをローカルに取り込む
+        Task {
+            await refreshSharedPlans(userId: userId)
+        }
     }
 
     /// FetchedResultsControllerの結果をtravelPlans配列に変換
@@ -160,6 +165,11 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
             } catch {
             }
         }
+
+        // 共有中のプランは他メンバーにも見えるようパブリックDBへ反映
+        var sharedPlan = planToSave
+        sharedPlan.lastEditedBy = userId
+        publishSharedPlanIfNeeded(sharedPlan)
     }
 
     /// TravelPlanを削除（Core Dataから削除 → 自動的にCloudKitと同期）
@@ -178,6 +188,9 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
             try? FileManager.removeDocumentFile(named: fileName)
         }
 
+        // この旅行に紐づくアルバムも一緒に片付ける（travelPlanIdが宙に浮くのを防ぐ）
+        AlbumManager.shared.deleteAlbums(forTravelPlanId: planId)
+
         // Core Dataから削除
         context.perform {
             do {
@@ -186,6 +199,25 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
                     CoreDataManager.shared.saveContext()
                 }
             } catch {
+            }
+        }
+
+        // 共有中プランのパブリックDB側の処理
+        if plan.isShared {
+            if let userId = userId, !plan.isOwner(userId: userId) {
+                // メンバーが削除 → 自分をメンバーから外すだけ
+                var updated = plan
+                updated.sharedWith.removeAll { $0 == userId }
+                updated.lastEditedBy = userId
+                updated.updatedAt = Date()
+                Task {
+                    try? await CloudKitService.shared.publishSharedTravelPlan(updated)
+                }
+            } else {
+                // オーナーが削除 → 共有レコード自体を削除
+                Task {
+                    try? await CloudKitService.shared.deleteSharedTravelPlan(planId: planId)
+                }
             }
         }
     }
@@ -217,55 +249,146 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
     }
 
     // MARK: - Sharing Methods
+    //
+    // 共同編集はCloudKitのパブリックDBを介して行う。
+    // Core Data（プライベートDB同期）は他のApple IDから参照できないため、
+    // 共有プランは publishSharedTravelPlan / fetchSharedTravelPlans で
+    // パブリックDBと双方向に同期する。
 
-    /// 共有コードを更新
+    /// 共有コードを設定してプランをパブリックDBに公開
+    @MainActor
     func updateShareCode(planId: String, shareCode: String, userId: String) {
         guard var plan = travelPlans.first(where: { $0.id == planId }) else { return }
 
         plan.isShared = true
         plan.shareCode = shareCode
-        plan.ownerId = plan.userId
+        plan.ownerId = plan.ownerId ?? plan.userId ?? userId
+
+        // オーナー自身もメンバーに含める（共有メンバー一覧に表示される）
+        if let ownerId = plan.ownerId, !plan.sharedWith.contains(ownerId) {
+            plan.sharedWith.append(ownerId)
+        }
+
+        plan.lastEditedBy = userId
         plan.updatedAt = Date()
 
+        // update() 内で isShared を判定してパブリックDBにも公開される
         update(plan, userId: userId)
     }
 
-    /// 共有コードでプランに参加
+    /// 共有を停止（オーナー用）: 共有コードを無効化してパブリックDBのレコードを削除
+    @MainActor
+    func stopSharing(planId: String, userId: String) {
+        guard var plan = travelPlans.first(where: { $0.id == planId }) else { return }
+
+        plan.isShared = false
+        plan.shareCode = nil
+        plan.sharedWith = []
+        plan.lastEditedBy = userId
+        plan.updatedAt = Date()
+
+        // isShared = false なので update() からパブリックDBへは公開されない
+        update(plan, userId: userId)
+
+        Task {
+            try? await CloudKitService.shared.deleteSharedTravelPlan(planId: planId)
+        }
+    }
+
+    /// 共有コードでプランに参加（パブリックDBを検索）
     func joinPlanByShareCode(_ shareCode: String, userId: String, completion: @escaping (Result<TravelPlan, Error>) -> Void) {
-        context.perform {
+        Task {
             do {
-                // Core Dataで共有コードを検索
-                guard let entity = try TravelPlanEntity.fetchByShareCode(shareCode: shareCode, context: self.context) else {
-                    DispatchQueue.main.async {
+                guard var plan = try await CloudKitService.shared.fetchSharedTravelPlan(byShareCode: shareCode) else {
+                    await MainActor.run {
                         completion(.failure(APIClientError.notFound))
                     }
                     return
                 }
 
-                var plan = entity.toTravelPlan()
-
-                // 現在のユーザーをsharedWith配列に追加
+                // 現在のユーザーをsharedWith配列に追加してパブリックDBへ反映
                 if !plan.sharedWith.contains(userId) {
                     plan.sharedWith.append(userId)
+                    plan.lastEditedBy = userId
                     plan.updatedAt = Date()
+                    try await CloudKitService.shared.publishSharedTravelPlan(plan)
+                }
 
-                    // Core Dataを更新
-                    entity.update(from: plan)
-                    CoreDataManager.shared.saveContext()
+                // 自分のローカルストアにコピーを保存（一覧に表示される）
+                try await self.saveSharedPlanLocally(plan, currentUserId: userId)
 
-                    DispatchQueue.main.async {
-                        completion(.success(plan))
-                    }
-                } else {
-                    DispatchQueue.main.async {
-                        completion(.success(plan))
-                    }
+                await MainActor.run {
+                    completion(.success(plan))
                 }
             } catch {
-                DispatchQueue.main.async {
+                await MainActor.run {
                     completion(.failure(error))
                 }
             }
+        }
+    }
+
+    /// パブリックDBから共有プランの最新状態を取得してローカルにマージ
+    func refreshSharedPlans(userId: String) async {
+        do {
+            let remotePlans = try await CloudKitService.shared.fetchSharedTravelPlans(memberId: userId)
+
+            for remote in remotePlans {
+                guard let planId = remote.id else { continue }
+
+                let local = await MainActor.run {
+                    self.travelPlans.first(where: { $0.id == planId })
+                }
+
+                if let local = local {
+                    if remote.updatedAt > local.updatedAt {
+                        // リモートの方が新しい → ローカルへ取り込み
+                        try await saveSharedPlanLocally(remote, currentUserId: userId)
+                    } else if local.updatedAt > remote.updatedAt {
+                        // ローカルの方が新しい（オフライン編集など） → パブリックDBへ反映
+                        try? await CloudKitService.shared.publishSharedTravelPlan(local)
+                    }
+                } else {
+                    // まだローカルにない共有プラン → 取り込み
+                    try await saveSharedPlanLocally(remote, currentUserId: userId)
+                }
+            }
+        } catch {
+            // オフライン時などは次回のrefreshで再同期される
+        }
+    }
+
+    /// 共有プランをローカルのCore Dataに保存（新規 or 上書き）
+    private func saveSharedPlanLocally(_ plan: TravelPlan, currentUserId: String) async throws {
+        // ローカルストアの行は常に端末ユーザーのuserIdで保持する
+        // （FetchedResultsControllerのpredicateにマッチさせるため。
+        //   本来のオーナーはownerIdが保持している）
+        var localPlan = plan
+        localPlan.userId = currentUserId
+
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            context.perform {
+                do {
+                    if let planId = localPlan.id,
+                       let entity = try TravelPlanEntity.fetchById(id: planId, context: self.context) {
+                        entity.update(from: localPlan)
+                    } else {
+                        _ = TravelPlanEntity.create(from: localPlan, context: self.context)
+                    }
+                    CoreDataManager.shared.saveContext()
+                    continuation.resume()
+                } catch {
+                    continuation.resume(throwing: error)
+                }
+            }
+        }
+    }
+
+    /// 共有プランの変更をパブリックDBへ非同期に反映
+    private func publishSharedPlanIfNeeded(_ plan: TravelPlan) {
+        guard plan.isShared else { return }
+        Task {
+            try? await CloudKitService.shared.publishSharedTravelPlan(plan)
         }
     }
 }

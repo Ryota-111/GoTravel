@@ -634,6 +634,142 @@ final class CloudKitService {
         return parseTravelPlan(from: record)
     }
 
+    // MARK: - Shared TravelPlan Operations (Public Database)
+    //
+    // 共同編集はパブリックDBを介して行う。
+    // プライベートDB（NSPersistentCloudKitContainerの同期先）は他のApple IDから
+    // 参照できないため、共有コードでの参加・メンバー間の同期はここを使う。
+
+    /// パブリックDBの共有プランのレコードタイプ
+    private static let sharedPlanRecordType = "SharedTravelPlan"
+
+    /// パブリックDBでクエリ
+    private func queryPublic(recordType: String, predicate: NSPredicate) async throws -> [CKRecord] {
+        let query = CKQuery(recordType: recordType, predicate: predicate)
+        let (results, _) = try await publicDatabase.records(matching: query)
+        return results.compactMap { try? $0.1.get() }
+    }
+
+    /// TravelPlanのフィールドをCKRecordに反映（共有用・画像は含めない）
+    private func applySharedPlanFields(to record: CKRecord, from plan: TravelPlan) {
+        // 公開レコードのuserIdは常にオーナーのIDを保持する
+        // （参加者が更新してもオーナー情報を上書きしない）
+        record["userId"] = plan.ownerId ?? plan.userId
+        record["title"] = plan.title
+        record["startDate"] = plan.startDate
+        record["endDate"] = plan.endDate
+        record["destination"] = plan.destination
+        record["createdAt"] = plan.createdAt
+        record["updatedAt"] = plan.updatedAt
+
+        record["latitude"] = plan.latitude
+        record["longitude"] = plan.longitude
+        record["cardColorHex"] = plan.cardColorHex
+        record["localImageFileName"] = plan.localImageFileName
+
+        record["isShared"] = plan.isShared
+        record["shareCode"] = plan.shareCode
+        record["sharedWith"] = plan.sharedWith.isEmpty ? nil : plan.sharedWith
+        record["ownerId"] = plan.ownerId
+        record["lastEditedBy"] = plan.lastEditedBy
+
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+
+        if let daySchedulesData = try? encoder.encode(plan.daySchedules),
+           let daySchedulesJSON = String(data: daySchedulesData, encoding: .utf8) {
+            record["daySchedulesJSON"] = daySchedulesJSON
+        }
+        if let packingItemsData = try? encoder.encode(plan.packingItems),
+           let packingItemsJSON = String(data: packingItemsData, encoding: .utf8) {
+            record["packingItemsJSON"] = packingItemsJSON
+        }
+    }
+
+    /// 共有プランをパブリックDBに公開・更新する
+    func publishSharedTravelPlan(_ plan: TravelPlan) async throws {
+        guard let planId = plan.id else {
+            throw CloudKitError.recordNotFound
+        }
+
+        let recordID = CKRecord.ID(recordName: "shared_\(planId)")
+
+        let record: CKRecord
+        do {
+            record = try await publicDatabase.record(for: recordID)
+        } catch {
+            record = CKRecord(recordType: Self.sharedPlanRecordType, recordID: recordID)
+        }
+
+        applySharedPlanFields(to: record, from: plan)
+
+        do {
+            _ = try await publicDatabase.save(record)
+        } catch let ckError as CKError where ckError.code == .serverRecordChanged {
+            // 他メンバーと同時保存が競合した場合はサーバー側レコードに再適用して保存
+            guard let serverRecord = ckError.serverRecord else { throw ckError }
+            applySharedPlanFields(to: serverRecord, from: plan)
+            _ = try await publicDatabase.save(serverRecord)
+        }
+    }
+
+    /// 共有コードでパブリックDBから共有プランを検索
+    func fetchSharedTravelPlan(byShareCode shareCode: String) async throws -> TravelPlan? {
+        let predicate = NSPredicate(format: "shareCode == %@", shareCode)
+        let records = try await queryPublic(recordType: Self.sharedPlanRecordType, predicate: predicate)
+
+        guard let record = records.first else {
+            return nil
+        }
+        return parseSharedTravelPlan(from: record)
+    }
+
+    /// 自分がオーナーまたはメンバーの共有プランをパブリックDBから全取得
+    func fetchSharedTravelPlans(memberId: String) async throws -> [TravelPlan] {
+        // CloudKitはOR条件をサポートしないため2クエリしてマージ
+        let ownedPredicate = NSPredicate(format: "ownerId == %@", memberId)
+        let ownedRecords = try await queryPublic(recordType: Self.sharedPlanRecordType, predicate: ownedPredicate)
+
+        var sharedRecords: [CKRecord] = []
+        do {
+            let sharedPredicate = NSPredicate(format: "sharedWith CONTAINS %@", memberId)
+            sharedRecords = try await queryPublic(recordType: Self.sharedPlanRecordType, predicate: sharedPredicate)
+        } catch let ckError as CKError where ckError.code == .invalidArguments {
+            // sharedWithフィールドがまだスキーマに存在しない場合はスキップ
+        }
+
+        var recordsMap: [String: CKRecord] = [:]
+        for record in ownedRecords {
+            recordsMap[record.recordID.recordName] = record
+        }
+        for record in sharedRecords {
+            recordsMap[record.recordID.recordName] = record
+        }
+
+        return recordsMap.values.compactMap { parseSharedTravelPlan(from: $0) }
+    }
+
+    /// 共有プランをパブリックDBから削除（オーナーが共有解除・削除した時）
+    func deleteSharedTravelPlan(planId: String) async throws {
+        let recordID = CKRecord.ID(recordName: "shared_\(planId)")
+        do {
+            _ = try await publicDatabase.deleteRecord(withID: recordID)
+        } catch let ckError as CKError where ckError.code == .unknownItem {
+            // 既に存在しない場合は成功扱い
+        }
+    }
+
+    /// パブリックDBのCKRecordからTravelPlanをパース
+    /// （recordNameは "shared_<planId>" 形式なのでprefixを除去してidに戻す）
+    private func parseSharedTravelPlan(from record: CKRecord) -> TravelPlan? {
+        guard var plan = parseTravelPlan(from: record) else { return nil }
+        let recordName = record.recordID.recordName
+        if recordName.hasPrefix("shared_") {
+            plan.id = String(recordName.dropFirst("shared_".count))
+        }
+        return plan
+    }
+
     /// TravelPlanの画像のみを取得
     func fetchTravelPlanImage(planId: String) async throws -> UIImage? {
         let recordID = CKRecord.ID(recordName: planId)
