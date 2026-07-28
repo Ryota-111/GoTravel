@@ -14,6 +14,9 @@
 		6C713ED02E81A96A0072D26B /* FirebaseFirestore in Frameworks */ = {isa = PBXBuildFile; productRef = 6C713ECF2E81A96A0072D26B /* FirebaseFirestore */; };
 		6C713EDE2E81B4040072D26B /* FirebaseFirestoreCombine-Community in Frameworks */ = {isa = PBXBuildFile; productRef = 6C713EDD2E81B4040072D26B /* FirebaseFirestoreCombine-Community */; };
 		6C713EE02E81B4040072D26B /* FirebaseStorage in Frameworks */ = {isa = PBXBuildFile; productRef = 6C713EDF2E81B4040072D26B /* FirebaseStorage */; };
+		6CE7BFAE3018E05700D30B9F /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6CE7BFAD3018E05700D30B9F /* WidgetKit.framework */; };
+		6CE7BFB03018E05700D30B9F /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6CE7BFAF3018E05700D30B9F /* SwiftUI.framework */; };
+		6CE7BFBD3018E05900D30B9F /* GoTravelWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6CE7BFAB3018E05700D30B9F /* GoTravelWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -31,12 +34,37 @@
 			remoteGlobalIDString = 6C713E3F2E80F8240072D26B;
 			remoteInfo = GoTravel;
 		};
+		6CE7BFBB3018E05900D30B9F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 6C713E382E80F8240072D26B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6CE7BFAA3018E05700D30B9F;
+			remoteInfo = GoTravelWidgetExtension;
+		};
 /* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		6CE7BFC23018E05900D30B9F /* Embed Foundation Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				6CE7BFBD3018E05900D30B9F /* GoTravelWidgetExtension.appex in Embed Foundation Extensions */,
+			);
+			name = "Embed Foundation Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
 		6C713E402E80F8240072D26B /* GoTravel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GoTravel.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6C713E4D2E80F8270072D26B /* GoTravelTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GoTravelTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6C713E572E80F8270072D26B /* GoTravelUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GoTravelUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		6CE7BFAB3018E05700D30B9F /* GoTravelWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GoTravelWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		6CE7BFAD3018E05700D30B9F /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
+		6CE7BFAF3018E05700D30B9F /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
+		6CE7BFC33018E07300D30B9F /* GoTravelWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GoTravelWidgetExtension.entitlements; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -47,6 +75,20 @@
 			);
 			target = 6C713E3F2E80F8240072D26B /* GoTravel */;
 		};
+		6CE7BFC13018E05900D30B9F /* Exceptions for "GoTravelWidget" folder in "GoTravelWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 6CE7BFAA3018E05700D30B9F /* GoTravelWidgetExtension */;
+		};
+		6CE7BFC53018E33500D30B9F /* Exceptions for "GoTravel" folder in "GoTravelWidgetExtension" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Widget/WidgetSnapshot.swift,
+			);
+			target = 6CE7BFAA3018E05700D30B9F /* GoTravelWidgetExtension */;
+		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -54,6 +96,7 @@
 			isa = PBXFileSystemSynchronizedRootGroup;
 			exceptions = (
 				6C5484A72EC1CA3F004B085C /* Exceptions for "GoTravel" folder in "GoTravel" target */,
+				6CE7BFC53018E33500D30B9F /* Exceptions for "GoTravel" folder in "GoTravelWidgetExtension" target */,
 			);
 			path = GoTravel;
 			sourceTree = "<group>";
@@ -66,6 +109,14 @@
 		6C713E5A2E80F8270072D26B /* GoTravelUITests */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = GoTravelUITests;
+			sourceTree = "<group>";
+		};
+		6CE7BFB13018E05700D30B9F /* GoTravelWidget */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				6CE7BFC13018E05900D30B9F /* Exceptions for "GoTravelWidget" folder in "GoTravelWidgetExtension" target */,
+			);
+			path = GoTravelWidget;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -99,15 +150,27 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		6CE7BFA83018E05700D30B9F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				6CE7BFB03018E05700D30B9F /* SwiftUI.framework in Frameworks */,
+				6CE7BFAE3018E05700D30B9F /* WidgetKit.framework in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		6C713E372E80F8240072D26B = {
 			isa = PBXGroup;
 			children = (
+				6CE7BFC33018E07300D30B9F /* GoTravelWidgetExtension.entitlements */,
 				6C713E422E80F8240072D26B /* GoTravel */,
 				6C713E502E80F8270072D26B /* GoTravelTests */,
 				6C713E5A2E80F8270072D26B /* GoTravelUITests */,
+				6CE7BFB13018E05700D30B9F /* GoTravelWidget */,
+				6CE7BFAC3018E05700D30B9F /* Frameworks */,
 				6C713E412E80F8240072D26B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -118,8 +181,18 @@
 				6C713E402E80F8240072D26B /* GoTravel.app */,
 				6C713E4D2E80F8270072D26B /* GoTravelTests.xctest */,
 				6C713E572E80F8270072D26B /* GoTravelUITests.xctest */,
+				6CE7BFAB3018E05700D30B9F /* GoTravelWidgetExtension.appex */,
 			);
 			name = Products;
+			sourceTree = "<group>";
+		};
+		6CE7BFAC3018E05700D30B9F /* Frameworks */ = {
+			isa = PBXGroup;
+			children = (
+				6CE7BFAD3018E05700D30B9F /* WidgetKit.framework */,
+				6CE7BFAF3018E05700D30B9F /* SwiftUI.framework */,
+			);
+			name = Frameworks;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -132,10 +205,12 @@
 				6C713E3C2E80F8240072D26B /* Sources */,
 				6C713E3D2E80F8240072D26B /* Frameworks */,
 				6C713E3E2E80F8240072D26B /* Resources */,
+				6CE7BFC23018E05900D30B9F /* Embed Foundation Extensions */,
 			);
 			buildRules = (
 			);
 			dependencies = (
+				6CE7BFBC3018E05900D30B9F /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				6C713E422E80F8240072D26B /* GoTravel */,
@@ -200,6 +275,28 @@
 			productReference = 6C713E572E80F8270072D26B /* GoTravelUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
+		6CE7BFAA3018E05700D30B9F /* GoTravelWidgetExtension */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6CE7BFBE3018E05900D30B9F /* Build configuration list for PBXNativeTarget "GoTravelWidgetExtension" */;
+			buildPhases = (
+				6CE7BFA73018E05700D30B9F /* Sources */,
+				6CE7BFA83018E05700D30B9F /* Frameworks */,
+				6CE7BFA93018E05700D30B9F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				6CE7BFB13018E05700D30B9F /* GoTravelWidget */,
+			);
+			name = GoTravelWidgetExtension;
+			packageProductDependencies = (
+			);
+			productName = GoTravelWidgetExtension;
+			productReference = 6CE7BFAB3018E05700D30B9F /* GoTravelWidgetExtension.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -207,7 +304,7 @@
 			isa = PBXProject;
 			attributes = {
 				BuildIndependentTargetsInParallel = 1;
-				LastSwiftUpdateCheck = 2600;
+				LastSwiftUpdateCheck = 2660;
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
 					6C713E3F2E80F8240072D26B = {
@@ -220,6 +317,9 @@
 					6C713E562E80F8270072D26B = {
 						CreatedOnToolsVersion = 26.0;
 						TestTargetID = 6C713E3F2E80F8240072D26B;
+					};
+					6CE7BFAA3018E05700D30B9F = {
+						CreatedOnToolsVersion = 26.6;
 					};
 				};
 			};
@@ -243,6 +343,7 @@
 				6C713E3F2E80F8240072D26B /* GoTravel */,
 				6C713E4C2E80F8270072D26B /* GoTravelTests */,
 				6C713E562E80F8270072D26B /* GoTravelUITests */,
+				6CE7BFAA3018E05700D30B9F /* GoTravelWidgetExtension */,
 			);
 		};
 /* End PBXProject section */
@@ -263,6 +364,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		6C713E552E80F8270072D26B /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6CE7BFA93018E05700D30B9F /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -293,6 +401,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		6CE7BFA73018E05700D30B9F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -305,6 +420,11 @@
 			isa = PBXTargetDependency;
 			target = 6C713E3F2E80F8240072D26B /* GoTravel */;
 			targetProxy = 6C713E582E80F8270072D26B /* PBXContainerItemProxy */;
+		};
+		6CE7BFBC3018E05900D30B9F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6CE7BFAA3018E05700D30B9F /* GoTravelWidgetExtension */;
+			targetProxy = 6CE7BFBB3018E05900D30B9F /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -592,6 +712,72 @@
 			};
 			name = Release;
 		};
+		6CE7BFBF3018E05900D30B9F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = GoTravelWidgetExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = S698QDGA49;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = GoTravelWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = GoTravelWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gmail.taismryotasis.Travory.GoTravelWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		6CE7BFC03018E05900D30B9F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				ASSETCATALOG_COMPILER_WIDGET_BACKGROUND_COLOR_NAME = WidgetBackground;
+				CODE_SIGN_ENTITLEMENTS = GoTravelWidgetExtension.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = S698QDGA49;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = GoTravelWidget/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = GoTravelWidget;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gmail.taismryotasis.Travory.GoTravelWidget;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
@@ -627,6 +813,15 @@
 			buildConfigurations = (
 				6C713E682E80F8270072D26B /* Debug */,
 				6C713E692E80F8270072D26B /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		6CE7BFBE3018E05900D30B9F /* Build configuration list for PBXNativeTarget "GoTravelWidgetExtension" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6CE7BFBF3018E05900D30B9F /* Debug */,
+				6CE7BFC03018E05900D30B9F /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
