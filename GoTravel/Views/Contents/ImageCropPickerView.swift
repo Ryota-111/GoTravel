@@ -245,21 +245,31 @@ struct ImageCropperView: View {
         }
     }
 
-    // 画像がクロップ枠を覆う最小スケールを計算
-    private func fillScale(containerSize: CGSize, cropSize: CGSize) -> CGFloat {
+    /// scaledToFit() で画像が実際に表示されるサイズ。
+    /// 画像が相対的に横長なら幅が、縦長なら高さが基準になる。
+    /// ここを fill の式にすると、クロップ範囲が実際より狭く計算されて拡大されすぎる
+    private func fittedImageSize(in containerSize: CGSize) -> CGSize {
+        guard image.size.height > 0, containerSize.height > 0 else { return containerSize }
+
         let imgAspect = image.size.width / image.size.height
         let contAspect = containerSize.width / containerSize.height
-        let fittedW: CGFloat
-        let fittedH: CGFloat
+
         if imgAspect > contAspect {
-            fittedH = containerSize.height
-            fittedW = fittedH * imgAspect
+            let width = containerSize.width
+            return CGSize(width: width, height: width / imgAspect)
         } else {
-            fittedW = containerSize.width
-            fittedH = fittedW / imgAspect
+            let height = containerSize.height
+            return CGSize(width: height * imgAspect, height: height)
         }
-        let scaleW = cropSize.width / fittedW
-        let scaleH = cropSize.height / fittedH
+    }
+
+    // 画像がクロップ枠を覆う最小スケールを計算
+    private func fillScale(containerSize: CGSize, cropSize: CGSize) -> CGFloat {
+        let fitted = fittedImageSize(in: containerSize)
+        guard fitted.width > 0, fitted.height > 0 else { return 1.0 }
+
+        let scaleW = cropSize.width / fitted.width
+        let scaleH = cropSize.height / fitted.height
         return max(max(scaleW, scaleH), 1.0)
     }
 
@@ -273,19 +283,9 @@ struct ImageCropperView: View {
 
     // ドラッグ後に画像がクロップ枠から外れないようにクランプ
     private func clampOffset(geometry: GeometryProxy, cropSize: CGSize) {
-        let imgAspect = image.size.width / image.size.height
-        let contAspect = geometry.size.width / geometry.size.height
-        let fittedW: CGFloat
-        let fittedH: CGFloat
-        if imgAspect > contAspect {
-            fittedH = geometry.size.height
-            fittedW = fittedH * imgAspect
-        } else {
-            fittedW = geometry.size.width
-            fittedH = fittedW / imgAspect
-        }
-        let dispW = fittedW * scale
-        let dispH = fittedH * scale
+        let fitted = fittedImageSize(in: geometry.size)
+        let dispW = fitted.width * scale
+        let dispH = fitted.height * scale
         let maxX = max(0, (dispW - cropSize.width) / 2)
         let maxY = max(0, (dispH - cropSize.height) / 2)
 
@@ -302,16 +302,11 @@ struct ImageCropperView: View {
     private func cropImage(geometry: GeometryProxy, cropSize: CGSize) {
         let containerSize = geometry.size
         let imgSize = image.size
-        let imgAspect = imgSize.width / imgSize.height
-        let contAspect = containerSize.width / containerSize.height
 
-        let fittedSize: CGSize
-        if imgAspect > contAspect {
-            let h = containerSize.height
-            fittedSize = CGSize(width: h * imgAspect, height: h)
-        } else {
-            let w = containerSize.width
-            fittedSize = CGSize(width: w, height: w / imgAspect)
+        let fittedSize = fittedImageSize(in: containerSize)
+        guard fittedSize.width > 0, fittedSize.height > 0 else {
+            onCrop(image)
+            return
         }
 
         let displayedSize = CGSize(width: fittedSize.width * scale, height: fittedSize.height * scale)

@@ -11,7 +11,6 @@ struct AlbumHomeView: View {
     @Environment(\.colorScheme) var colorScheme
     @State private var showCreateAlbum = false
     @State private var selectedAlbum: Album?
-    @State private var animateCards = false
     @State private var editingAlbum: Album?
 
     // 写真一覧と同じ操作感で、まとめて削除できるようにする
@@ -63,11 +62,6 @@ struct AlbumHomeView: View {
                     selectionToolbar
                 }
             }
-            .onAppear {
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
-                    animateCards = true
-                }
-            }
             .task {
                 if let userId = authVM.userId {
                     albumManager.setup(userId: userId)
@@ -105,7 +99,7 @@ struct AlbumHomeView: View {
                 GridItem(.flexible(), spacing: 14),
                 GridItem(.flexible(), spacing: 14)
             ], spacing: 14) {
-                ForEach(Array(albumManager.albums.enumerated()), id: \.element.id) { index, album in
+                ForEach(albumManager.albums) { album in
                     AlbumCard(
                         album: album,
                         isSelectionMode: isSelectionMode,
@@ -114,14 +108,6 @@ struct AlbumHomeView: View {
                         onEdit: { editingAlbum = album },
                         onDelete: { requestDelete(album) },
                         onStartSelection: { startSelection(with: album) }
-                    )
-                    .opacity(animateCards ? 1 : 0)
-                    .offset(y: animateCards ? 0 : 20)
-                    .animation(
-                        // 枚数が多くても最後のカードが待たされ続けないよう上限を設ける
-                        .spring(response: 0.6, dampingFraction: 0.8)
-                            .delay(min(Double(index) * 0.06, 0.5)),
-                        value: animateCards
                     )
                 }
             }
