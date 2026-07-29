@@ -27,6 +27,7 @@ struct EditScheduleItemView: View {
     @State private var showLocationMethodSheet = false
     @State private var showLocationPicker = false
     @State private var showHistoryPicker = false
+    @State private var showSavedPlacePicker = false
     @State private var selectedLocation: MKMapItem?
     @State private var selectedCoordinate: CLLocationCoordinate2D?
     @State private var selectedAddress: String?
@@ -131,11 +132,17 @@ struct EditScheduleItemView: View {
         }
         .sheet(isPresented: $showLocationMethodSheet) {
             locationMethodSheet
-                .presentationDetents([.height(220)])
+                .presentationDetents([.height(300)])
                 .presentationDragIndicator(.visible)
         }
         .sheet(isPresented: $showHistoryPicker) {
             locationHistoryPickerView
+        }
+        .sheet(isPresented: $showSavedPlacePicker) {
+            SavedPlacePickerView(accentColor: travelColor) { place in
+                applySavedPlace(place)
+            }
+            .environmentObject(authVM)
         }
         .fullScreenCover(isPresented: $showLocationPicker) {
             locationPickerView
@@ -510,6 +517,19 @@ struct EditScheduleItemView: View {
                 }
 
                 methodOptionButton(
+                    icon: "mappin.and.ellipse",
+                    title: "保存した場所から",
+                    subtitle: "「場所保存」に貯めた場所を使う",
+                    color: travelColor,
+                    disabled: false
+                ) {
+                    showLocationMethodSheet = false
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.3) {
+                        showSavedPlacePicker = true
+                    }
+                }
+
+                methodOptionButton(
                     icon: "map.fill",
                     title: "地図から検索",
                     subtitle: "キーワードで場所を検索して選択",
@@ -642,6 +662,25 @@ struct EditScheduleItemView: View {
                 }
             }
         }
+    }
+
+    /// 保存済みの場所を行き先として設定する。
+    /// 次回から検索履歴にも出るよう履歴にも記録しておく
+    private func applySavedPlace(_ place: VisitedPlace) {
+        let coordinate = place.coordinate
+        let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
+        mapItem.name = place.title
+
+        selectedLocation = mapItem
+        selectedCoordinate = coordinate
+        selectedAddress = place.address
+
+        locationHistory.add(
+            name: place.title,
+            address: place.address,
+            latitude: coordinate.latitude,
+            longitude: coordinate.longitude
+        )
     }
 
     private func applyHistoryItem(_ historyItem: LocationHistoryManager.LocationHistoryItem) {
