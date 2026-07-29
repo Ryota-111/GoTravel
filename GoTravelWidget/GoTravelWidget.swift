@@ -23,20 +23,26 @@ struct TravoryProvider: AppIntentTimelineProvider {
     }
 
     func timeline(for configuration: TravoryWidgetIntent, in context: Context) async -> Timeline<TravoryEntry> {
-        let entry = TravoryEntry(
-            date: Date(),
-            snapshot: WidgetDataStore.load(),
-            contentType: configuration.contentType
-        )
+        let now = Date()
+        let snapshot = WidgetDataStore.load()
+        let entry = TravoryEntry(date: now, snapshot: snapshot, contentType: configuration.contentType)
 
-        // 残り日数や「今日・明日」の表記は日付が変わると内容が変わるため、次の0時に作り直す
+        // 残り日数や「今日・明日」の表記は日付が変わると変わるため0時に作り直す
         let nextMidnight = Calendar.current.nextDate(
-            after: Date(),
+            after: now,
             matching: DateComponents(hour: 0, minute: 0),
             matchingPolicy: .nextTime
-        ) ?? Date().addingTimeInterval(60 * 60)
+        ) ?? now.addingTimeInterval(60 * 60)
 
-        return Timeline(entries: [entry], policy: .after(nextMidnight))
+        // 予定の時刻を過ぎたら一覧から消したいので、直近の予定時刻でも作り直す
+        let nextPlanTime = snapshot.upcomingPlans
+            .compactMap(\.occursAt)
+            .filter { $0 > now }
+            .min()
+
+        let refreshDate = min(nextMidnight, nextPlanTime ?? nextMidnight)
+
+        return Timeline(entries: [entry], policy: .after(refreshDate))
     }
 }
 
@@ -179,7 +185,8 @@ private struct SmallView: View {
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(.secondary)
 
-            ForEach(snapshot.upcomingPlans.prefix(3)) { item in
+            // 1件が2行になるため、小サイズは2件までにして名前を切らさない
+            ForEach(snapshot.upcomingPlans.prefix(2)) { item in
                 ItemRow(item: item, compact: true, showsDate: true)
             }
         }
@@ -315,19 +322,23 @@ private struct LockScreenView: View {
             Text(title)
                 .font(.headline)
                 .lineLimit(1)
+                .minimumScaleFactor(0.8)
             if let next = snapshot.todayItems.first {
                 // 旅行中の一覧は当日のみなので日付は出さない
                 Text(line(for: next, showsDate: false))
                     .font(.caption)
+                    .foregroundStyle(.secondary)
                     .lineLimit(1)
             }
 
         } else if let days = snapshot.daysUntilTravel, let title = snapshot.travelTitle {
-            Text("\(title) まで")
-                .font(.caption)
-                .lineLimit(1)
             Text("あと\(days)日")
                 .font(.headline)
+            Text(title)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
 
         } else {
             Text("旅行の予定なし")
@@ -340,11 +351,16 @@ private struct LockScreenView: View {
     @ViewBuilder
     private var planContent: some View {
         if let next = snapshot.upcomingPlans.first {
-            Text("次の予定")
+            // 日付と時刻は上段に置き、名前に2行分を使えるようにする
+            Text(metaLine(for: next))
                 .font(.caption)
-            Text(line(for: next))
-                .font(.headline)
+                .foregroundStyle(.secondary)
                 .lineLimit(1)
+
+            Text(next.title)
+                .font(.headline)
+                .lineLimit(2)
+                .minimumScaleFactor(0.8)
 
         } else {
             Text("予定はありません")
@@ -352,6 +368,18 @@ private struct LockScreenView: View {
             Text("予定を追加しましょう")
                 .font(.caption)
         }
+    }
+
+    /// 「次の予定 · 今日 14:00」のような見出し行
+    private func metaLine(for item: WidgetSnapshot.Item) -> String {
+        var parts = ["次の予定"]
+        if let label = TravoryWidgetFormatter.dayLabel(for: item.date) {
+            parts.append(label)
+        }
+        if let time = item.time {
+            parts.append(TravoryWidgetFormatter.time.string(from: time))
+        }
+        return parts.joined(separator: " · ")
     }
 
     /// 「今日 14:00 ジム」のように、日付と時刻を前に置く
@@ -376,27 +404,32 @@ private struct ItemRow: View {
     /// 「今日」「明日」などの日付を先頭に出すか
     var showsDate: Bool = false
 
+    private var dayLabel: String? {
+        showsDate ? TravoryWidgetFormatter.dayLabel(for: item.date) : nil
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 1) {
-            HStack(spacing: 5) {
-                if showsDate, let label = TravoryWidgetFormatter.dayLabel(for: item.date) {
-                    Text(label)
-                        .font(.caption2.weight(.bold))
-                        .foregroundStyle(TravoryWidgetPalette.accent)
-                        .padding(.horizontal, 5)
-                        .padding(.vertical, 1)
-                        .background(TravoryWidgetPalette.accent.opacity(0.15), in: Capsule())
+            // 日付バッジがあるときは上段に分け、タイトルに横幅をすべて渡す
+            if dayLabel != nil {
+                HStack(spacing: 4) {
+                    if let dayLabel {
+                        Text(dayLabel)
+                            .font(.caption2.weight(.bold))
+                            .foregroundStyle(TravoryWidgetPalette.accent)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 1)
+                            .background(TravoryWidgetPalette.accent.opacity(0.15), in: Capsule())
+                    }
+                    timeText
                 }
 
-                if let time = item.time {
-                    Text(TravoryWidgetFormatter.time.string(from: time))
-                        .font(.caption2.weight(.bold).monospacedDigit())
-                        .foregroundStyle(.secondary)
+                titleText
+            } else {
+                HStack(spacing: 5) {
+                    timeText
+                    titleText
                 }
-
-                Text(item.title)
-                    .font(compact ? .caption.weight(.semibold) : .subheadline.weight(.bold))
-                    .lineLimit(1)
             }
 
             if !compact, let subtitle = item.subtitle, !subtitle.isEmpty {
@@ -406,6 +439,24 @@ private struct ItemRow: View {
                     .lineLimit(1)
             }
         }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    @ViewBuilder
+    private var timeText: some View {
+        if let time = item.time {
+            Text(TravoryWidgetFormatter.time.string(from: time))
+                .font(.caption2.weight(.bold).monospacedDigit())
+                .foregroundStyle(.secondary)
+        }
+    }
+
+    private var titleText: some View {
+        Text(item.title)
+            .font(compact ? .caption.weight(.semibold) : .subheadline.weight(.bold))
+            .lineLimit(compact ? 2 : 1)
+            .minimumScaleFactor(0.85)
+            .frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

@@ -83,7 +83,24 @@ enum WidgetSnapshotBuilder {
         let today = calendar.startOfDay(for: now)
 
         return plans
-            .filter { calendar.startOfDay(for: $0.endDate) >= today }
+            .filter { plan in
+                guard calendar.startOfDay(for: plan.endDate) >= today else { return false }
+
+                // 今日の予定で、すでに時刻を過ぎているものは出さない
+                if let time = plan.time,
+                   calendar.startOfDay(for: plan.startDate) == today {
+                    let components = calendar.dateComponents([.hour, .minute], from: time)
+                    let todayAtTime = calendar.date(
+                        bySettingHour: components.hour ?? 0,
+                        minute: components.minute ?? 0,
+                        second: 0,
+                        of: now
+                    ) ?? now
+                    return todayAtTime >= now
+                }
+
+                return true
+            }
             .sorted { lhs, rhs in
                 let lDay = calendar.startOfDay(for: lhs.startDate)
                 let rDay = calendar.startOfDay(for: rhs.startDate)
