@@ -210,6 +210,11 @@ struct EnjoyWorldView: View {
                     planTabSelectionSection
                     planEventsListSection
                 }
+                .refreshable {
+                    if let userId = authVM.userId {
+                        await travelPlanViewModel.refreshSharedPlans(userId: userId)
+                    }
+                }
             }
             .background(backgroundGradient)
             .navigationBarHidden(true)
@@ -221,7 +226,7 @@ struct EnjoyWorldView: View {
                 }
             }
             .sheet(isPresented: $showAddPlan) {
-                AddPlanView { newPlan in
+                AddPlanView(historyPlans: plansViewModel.plans) { newPlan in
                     if let userId = authVM.userId {
                         plansViewModel.add(newPlan, userId: userId)
                     } else {
@@ -291,6 +296,11 @@ struct EnjoyWorldView: View {
                     travelPlanViewModel.setupFetchedResultsController(userId: userId)
                     plansViewModel.setupFetchedResultsController(userId: userId)
                     hasLoadedData = true
+                } else if let userId = authVM.userId {
+                    // 2回目以降の表示では共有プランの最新状態のみ同期
+                    Task {
+                        await travelPlanViewModel.refreshSharedPlans(userId: userId)
+                    }
                 }
             }
         }
@@ -322,6 +332,8 @@ struct EnjoyWorldView: View {
                     .cornerRadius(2)
                 ZStack(alignment: .leading) {
                     Text(todayDateString)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
                         .opacity(showTodayDate ? 1 : 0)
                     Text(nextPlanSummary)
                         .lineLimit(1)
@@ -359,6 +371,7 @@ struct EnjoyWorldView: View {
                         }
                     }
                 }
+                .accessibilityLabel(taskManager.pendingCount > 0 ? "タスクリスト、未完了\(taskManager.pendingCount)件" : "タスクリスト")
 
                 Button(action: { navigateToProfile = true }) {
                     ZStack {
@@ -375,6 +388,7 @@ struct EnjoyWorldView: View {
                     }
                     .padding(.trailing, 2)
                 }
+                .accessibilityLabel("プロフィール")
             }
             .padding(.horizontal, 20)
         }
@@ -387,6 +401,22 @@ struct EnjoyWorldView: View {
                 .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                 .font(.title.weight(.semibold))
             Spacer()
+
+            Button(action: { showJoinPlan = true }) {
+                HStack(spacing: 4) {
+                    Image(systemName: "person.badge.plus")
+                        .font(.caption)
+                    Text("共有に参加")
+                        .font(.subheadline.weight(.medium))
+                }
+                .foregroundColor(themeManager.currentTheme.secondary)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(
+                    Capsule()
+                        .fill(themeManager.currentTheme.secondary.opacity(0.15))
+                )
+            }
         }
         .padding(.horizontal, 20)
         .padding(.top, 10)
@@ -414,10 +444,12 @@ struct EnjoyWorldView: View {
                         .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
                 .frame(width: 200, height: 200)
-                .background(Color.white.opacity(0.2))
+                .background(themeManager.currentTheme.tertiary)
                 .cornerRadius(25)
-                .shadow(color: Color.black.opacity(0.1), radius: 10, x: 0, y: 5)
+                .shadow(color: themeManager.currentTheme.accent1.opacity(0.1), radius: 10, x: 0, y: 5)
                 .padding(.horizontal, 20)
+                // ScrollView直下は中央揃えになるため、実際のカードと同じ左端に寄せる
+                .frame(maxWidth: .infinity, alignment: .leading)
             case .empty:
                 emptyTravelPlansView
             case .content(let plans):
@@ -539,6 +571,8 @@ struct EnjoyWorldView: View {
             .shadow(color: themeManager.currentTheme.accent1.opacity(0.1), radius: 10, x: 0, y: 5)
         }
         .padding(.horizontal, 20)
+        // ScrollView直下は中央揃えになるため、実際のカードと同じ左端に寄せる
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func travelPlansListView(plans: [TravelPlan]) -> some View {
@@ -613,34 +647,34 @@ struct EnjoyWorldView: View {
     }
 
     private func planEventsListView(plans: [Plan]) -> some View {
-        ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 10) {
-                PlanEventSectionView(
-                    title: "今日の予定",
-                    plans: currentFilteredPlans,
-                    viewModel: plansViewModel,
-                    onDelete: { plan in
-                        planEventToDelete = plan
-                        showPlanDeleteConfirmation = true
-                    }
-                )
-                .animation(.spring(response: 0.7, dampingFraction: 0.6), value: currentFilteredPlans.count)
+        // 外側のScrollViewでスクロールするため、ここではVStackのみ
+        // （縦ScrollViewのネストはスクロールが取り合いになり操作が不安定になる）
+        VStack(spacing: 10) {
+            PlanEventSectionView(
+                title: "今日の予定",
+                plans: currentFilteredPlans,
+                viewModel: plansViewModel,
+                onDelete: { plan in
+                    planEventToDelete = plan
+                    showPlanDeleteConfirmation = true
+                }
+            )
+            .animation(.spring(response: 0.7, dampingFraction: 0.6), value: currentFilteredPlans.count)
 
-                PlanEventSectionView(
-                    title: "今後の予定",
-                    plans: futureFilteredPlans,
-                    viewModel: plansViewModel,
-                    onDelete: { plan in
-                        planEventToDelete = plan
-                        showPlanDeleteConfirmation = true
-                    }
-                )
-                .animation(.spring(response: 0.7, dampingFraction: 0.6), value: futureFilteredPlans.count)
+            PlanEventSectionView(
+                title: "今後の予定",
+                plans: futureFilteredPlans,
+                viewModel: plansViewModel,
+                onDelete: { plan in
+                    planEventToDelete = plan
+                    showPlanDeleteConfirmation = true
+                }
+            )
+            .animation(.spring(response: 0.7, dampingFraction: 0.6), value: futureFilteredPlans.count)
 
-                addPlanButton
-            }
-            .padding(.horizontal, 1)
+            addPlanButton
         }
+        .padding(.horizontal, 1)
         .animation(.spring(response: 0.7, dampingFraction: 0.6), value: plans.count)
     }
 

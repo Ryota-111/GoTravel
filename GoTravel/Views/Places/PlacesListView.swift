@@ -8,7 +8,9 @@ struct PlacesListView: View {
     @StateObject private var vm = PlacesViewModel()
     @ObservedObject var themeManager = ThemeManager.shared
     @ObservedObject var categoryManager = PlaceCategoryManager.shared
-    @State private var selectedCategoryId: String = "hotel"
+    @State private var selectedCategoryId: String = Self.allCategoryId
+
+    static let allCategoryId = "all"
     @State private var hasLoadedData = false
     @State private var showManageCategories = false
     @State private var showMap = false
@@ -22,7 +24,10 @@ struct PlacesListView: View {
 
     // MARK: - Computed Properties
     private var filteredPlaces: [VisitedPlace] {
-        vm.places.filter { $0.categoryId == selectedCategoryId }
+        if selectedCategoryId == Self.allCategoryId {
+            return vm.places
+        }
+        return vm.places.filter { $0.categoryId == selectedCategoryId }
     }
 
     private var backgroundGradient: some View {
@@ -34,24 +39,13 @@ struct PlacesListView: View {
         .ignoresSafeArea()
     }
 
-    private var cardGradient: some View {
-        LinearGradient(
-            gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.xsecondary, themeManager.currentTheme.dark.opacity(0.1)] : [themeManager.currentTheme.xsecondary, themeManager.currentTheme.light.opacity(0.1)]),
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
+    /// カード全体の基調となるテーマ色（予定計画カードと揃える）
+    private var mainColor: Color {
+        themeManager.currentTheme.xprimary
     }
 
     private var textColor: Color {
         colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
-    }
-    
-    private var xtextColor: Color {
-        colorScheme == .dark ? themeManager.currentTheme.accent1 : themeManager.currentTheme.accent2
-    }
-    
-    private var DLtextColor: Color {
-        colorScheme == .dark ? themeManager.currentTheme.light : themeManager.currentTheme.dark
     }
     
     private var xDLtextColor: Color {
@@ -131,11 +125,11 @@ struct PlacesListView: View {
                     .frame(width: 100, height: 100)
                     .foregroundColor(secondaryTextColor)
 
-                Text("まだ保存された場所はありません")
+                Text(vm.places.isEmpty ? "まだ保存された場所はありません" : "このカテゴリの場所はありません")
                     .font(.headline)
                     .foregroundColor(textColor)
 
-                Text("マップをタップして場所を追加しましょう")
+                Text(vm.places.isEmpty ? "マップをタップして場所を追加しましょう" : "別のカテゴリを選ぶか、場所を追加しましょう")
                     .font(.subheadline)
                     .foregroundColor(secondaryTextColor)
 
@@ -182,61 +176,99 @@ struct PlacesListView: View {
     }
 
     private func placeCardView(_ place: VisitedPlace) -> some View {
-        NavigationLink(destination: PlaceDetailView(place: place)) {
-            VStack(alignment: .leading, spacing: 10) {
-                placeHeader(place: place)
+        let category = categoryManager.category(for: place.categoryId)
+        let baseColor: Color = colorScheme == .dark
+            ? themeManager.currentTheme.secondaryBackgroundDark
+            : themeManager.currentTheme.backgroundLight
+        let tintOpacity: Double = colorScheme == .dark ? 0.16 : 0.10
 
-                Divider()
-                    .background(secondaryTextColor)
+        return NavigationLink(destination: PlaceDetailView(place: place)) {
+            HStack(alignment: .top, spacing: 14) {
+                // カテゴリーアイコンチップ（テーマ色主体）
+                ZStack {
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(
+                            LinearGradient(
+                                colors: [mainColor, mainColor.opacity(0.65)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 46, height: 46)
+                        .shadow(color: mainColor.opacity(0.35), radius: 5, x: 0, y: 3)
 
-                placeDate(place: place)
+                    Image(systemName: category.icon)
+                        .font(.system(size: 19, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(spacing: 8) {
+                        Text(place.title)
+                            .font(.system(.headline, design: .rounded).weight(.bold))
+                            .foregroundColor(textColor)
+                            .lineLimit(1)
+
+                        Text(category.name)
+                            .font(.caption2.weight(.bold))
+                            .foregroundColor(mainColor)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(mainColor.opacity(0.14), in: Capsule())
+                    }
+
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "calendar")
+                                .font(.caption2)
+                            Text(formattedDate(place))
+                                .font(.caption.weight(.medium))
+                        }
+
+                        if let address = place.address, !address.isEmpty {
+                            HStack(spacing: 4) {
+                                Image(systemName: "mappin.and.ellipse")
+                                    .font(.caption2)
+                                Text(address)
+                                    .font(.caption.weight(.medium))
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
+                    .foregroundColor(secondaryTextColor)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.bold))
+                    .foregroundColor(secondaryTextColor.opacity(0.6))
+                    .padding(.top, 4)
             }
-            .padding()
-            .background(cardGradient)
-            .cornerRadius(15)
+            .padding(14)
+            .background(
+                ZStack {
+                    RoundedRectangle(cornerRadius: 18)
+                        .fill(baseColor)
+                    RoundedRectangle(cornerRadius: 18)
+                        .fill(
+                            LinearGradient(
+                                colors: [mainColor.opacity(tintOpacity), mainColor.opacity(0.02)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                }
+            )
             .overlay(
-                RoundedRectangle(cornerRadius: 15)
-                    .stroke(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                themeManager.currentTheme.secondary.opacity(0.5),
-                                themeManager.currentTheme.secondary.opacity(0.2)
-                            ]),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 2
-                    )
+                RoundedRectangle(cornerRadius: 18)
+                    .stroke(mainColor.opacity(0.28), lineWidth: 1)
             )
-            .shadow(
-                color: themeManager.currentTheme.secondary.opacity(0.5),
-                radius: 10
-            )
+            .shadow(color: Color.black.opacity(0.06), radius: 7, x: 0, y: 3)
         }
+        .buttonStyle(PlainButtonStyle())
         .contextMenu {
             deleteButton(place: place)
-        }
-    }
-
-    private func placeHeader(place: VisitedPlace) -> some View {
-        HStack {
-            Image(systemName: categoryManager.category(for: place.categoryId).icon)
-                .foregroundColor(DLtextColor)
-
-            Text(place.title)
-                .font(.headline)
-                .foregroundColor(DLtextColor)
-        }
-    }
-
-    private func placeDate(place: VisitedPlace) -> some View {
-        HStack {
-            Image(systemName: "calendar")
-                .foregroundColor(DLtextColor)
-
-            Text(formattedDate(place))
-                .font(.subheadline)
-                .foregroundColor(DLtextColor)
         }
     }
 
@@ -269,6 +301,7 @@ struct PlacesListView: View {
                     .background(textColor.opacity(0.1))
                     .clipShape(Circle())
             }
+            .accessibilityLabel(showMap ? "リスト表示に切り替え" : "マップ表示に切り替え")
 
             Button(action: { showManageCategories = true }) {
                 HStack(spacing: 4) {
@@ -398,6 +431,19 @@ struct PlacesListView: View {
     private var eventTypeSelectionSection: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 20) {
+                horizontalEventsCard(
+                    menuName: "すべて",
+                    menuImage: "square.grid.2x2.fill",
+                    rectColor: selectedCategoryId == Self.allCategoryId ? themeManager.currentTheme.xsecondary : themeManager.currentTheme.light,
+                    imageColors: selectedCategoryId == Self.allCategoryId ? themeManager.currentTheme.light : themeManager.currentTheme.xsecondary,
+                    textColor: selectedCategoryId == Self.allCategoryId ? themeManager.currentTheme.xsecondary : themeManager.currentTheme.secondaryText
+                )
+                .onTapGesture {
+                    withAnimation(.spring()) {
+                        selectedCategoryId = Self.allCategoryId
+                    }
+                }
+
                 ForEach(categoryManager.categories) { category in
                     horizontalEventsCard(
                         menuName: category.name,

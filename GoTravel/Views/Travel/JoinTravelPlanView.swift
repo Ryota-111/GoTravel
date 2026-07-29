@@ -11,6 +11,8 @@ struct JoinTravelPlanView: View {
     @State private var isJoining: Bool = false
     @State private var showError: Bool = false
     @State private var errorMessage: String = ""
+    @State private var showSuccess: Bool = false
+    @State private var joinedPlanTitle: String = ""
 
     var body: some View {
         NavigationView {
@@ -43,6 +45,13 @@ struct JoinTravelPlanView: View {
                 Button("OK", role: .cancel) {}
             } message: {
                 Text(errorMessage)
+            }
+            .alert("参加しました", isPresented: $showSuccess) {
+                Button("OK") {
+                    presentationMode.wrappedValue.dismiss()
+                }
+            } message: {
+                Text("「\(joinedPlanTitle)」に参加しました。旅行計画の一覧に表示されます。")
             }
         }
     }
@@ -79,6 +88,9 @@ struct JoinTravelPlanView: View {
                 .font(.system(size: 20, weight: .medium, design: .monospaced))
                 .textInputAutocapitalization(.characters)
                 .autocorrectionDisabled()
+                .keyboardType(.asciiCapable)
+                .submitLabel(.join)
+                .onSubmit(joinPlan)
                 .padding()
                 .background(
                     RoundedRectangle(cornerRadius: 12)
@@ -113,7 +125,7 @@ struct JoinTravelPlanView: View {
                         .font(.headline)
                 }
             }
-            .foregroundColor(themeManager.currentTheme.accent2)
+            .foregroundColor(.white)
             .frame(maxWidth: .infinity)
             .padding()
             .background(
@@ -143,9 +155,9 @@ struct JoinTravelPlanView: View {
             }
 
             VStack(alignment: .leading, spacing: 8) {
-                InfoRow(icon: "checkmark.circle", text: "共有コードは大文字で入力してください", color: themeManager.currentTheme.secondary)
-                InfoRow(icon: "checkmark.circle", text: "参加後、すぐにスケジュールを編集できます", color: themeManager.currentTheme.secondary)
-                InfoRow(icon: "checkmark.circle", text: "他のメンバーと情報がリアルタイムで共有されます", color: themeManager.currentTheme.secondary)
+                ColoredInfoRow(icon: "checkmark.circle", text: "オーナーから受け取った共有コードを入力してください", color: themeManager.currentTheme.secondary)
+                ColoredInfoRow(icon: "checkmark.circle", text: "参加後、すぐにスケジュールを編集できます", color: themeManager.currentTheme.secondary)
+                ColoredInfoRow(icon: "checkmark.circle", text: "他のメンバーと情報が共有されます", color: themeManager.currentTheme.secondary)
             }
         }
         .padding()
@@ -170,8 +182,27 @@ struct JoinTravelPlanView: View {
     }
 
     // MARK: - Actions
+
+    /// 入力の揺れ（空白・全角ハイフン・プレフィックス省略）を吸収して正規化する
+    private func normalizeShareCode(_ input: String) -> String {
+        var code = input
+            .uppercased()
+            .replacingOccurrences(of: "ー", with: "-")
+            .replacingOccurrences(of: "−", with: "-")
+            .filter { !$0.isWhitespace }
+
+        // 「TRAVEL-」を省略して8桁のコードだけ入力された場合は補完する
+        if !code.isEmpty && !code.hasPrefix("TRAVEL-") {
+            let body = code.hasPrefix("TRAVEL") ? String(code.dropFirst("TRAVEL".count)) : code
+            if body.count == 8 && body.allSatisfy({ $0.isLetter || $0.isNumber }) {
+                code = "TRAVEL-\(body)"
+            }
+        }
+        return code
+    }
+
     private func joinPlan() {
-        let trimmedCode = shareCode.trimmingCharacters(in: .whitespaces).uppercased()
+        let trimmedCode = normalizeShareCode(shareCode)
 
         guard !trimmedCode.isEmpty else {
             errorMessage = "共有コードを入力してください"
@@ -185,22 +216,22 @@ struct JoinTravelPlanView: View {
             return
         }
 
-        isJoining = true
-
         guard let userId = authVM.userId else {
             errorMessage = "ログインが必要です。"
             showError = true
-            isJoining = false
             return
         }
+
+        isJoining = true
+        hideKeyboard()
 
         viewModel.joinPlanByShareCode(trimmedCode, userId: userId) { result in
             isJoining = false
 
             switch result {
-            case .success(_):
-                // Close the view on success
-                presentationMode.wrappedValue.dismiss()
+            case .success(let plan):
+                joinedPlanTitle = plan.title
+                showSuccess = true
             case .failure(let error):
                 if let apiError = error as? APIClientError {
                     switch apiError {
@@ -212,7 +243,7 @@ struct JoinTravelPlanView: View {
                         errorMessage = apiError.localizedDescription
                     }
                 } else {
-                    errorMessage = "参加できませんでした。もう一度お試しください。"
+                    errorMessage = "参加できませんでした。通信環境をご確認のうえ、もう一度お試しください。"
                 }
                 showError = true
             }
@@ -241,10 +272,3 @@ struct ColoredInfoRow: View {
     }
 }
 
-// Extension for InfoRow to support color
-extension InfoRow {
-    init(icon: String, text: String, color: Color) {
-        self.icon = icon
-        self.text = text
-    }
-}

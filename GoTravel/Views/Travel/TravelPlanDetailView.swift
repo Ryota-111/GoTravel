@@ -22,8 +22,10 @@ struct TravelPlanDetailView: View {
     @State private var showBasicInfoEditor = false
     @State private var showBudgetSummary = false
     @State private var showShareView = false
+    @State private var showScheduleMap = false
     @State private var animateContent = false
     @State private var navigatingItem: ScheduleItem?
+    @State private var editingItem: ScheduleItem?
 
     // Weather Properties
     @State private var planWeather: WeatherService.DayWeather?
@@ -123,6 +125,16 @@ struct TravelPlanDetailView: View {
             AddScheduleItemView(plan: plan, dayNumber: selectedDay)
                 .environmentObject(viewModel)
                 .environmentObject(authVM)
+        }
+        .fullScreenCover(isPresented: $showScheduleMap) {
+            TravelPlanMapView(plan: plan, initialDay: selectedDay)
+        }
+        .fullScreenCover(item: $editingItem) { item in
+            if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }) {
+                EditScheduleItemView(plan: plan, daySchedule: daySchedule, item: item)
+                    .environmentObject(viewModel)
+                    .environmentObject(authVM)
+            }
         }
         .sheet(isPresented: $showBasicInfoEditor) {
             EditTravelPlanBasicInfoView(plan: plan)
@@ -294,8 +306,13 @@ struct TravelPlanDetailView: View {
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // 削除メニュー
+            // 編集・削除メニュー
             Menu {
+                Button {
+                    editingItem = item
+                } label: {
+                    Label("編集", systemImage: "pencil")
+                }
                 Button(role: .destructive) {
                     deleteScheduleItem(item, from: plan)
                 } label: {
@@ -483,6 +500,24 @@ struct TravelPlanDetailView: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(accentColor)
                 Spacer()
+
+                if hasMappableScheduleItems(plan: plan) {
+                    Button(action: { showScheduleMap = true }) {
+                        HStack(spacing: 4) {
+                            Image(systemName: "map.fill")
+                                .font(.system(size: 12, weight: .bold))
+                            Text("地図で見る")
+                                .font(.system(size: 13, weight: .semibold))
+                        }
+                        .foregroundColor(scheduleAccentColor)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(scheduleAccentColor.opacity(0.12))
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+
                 Button(action: { showAddScheduleItem = true }) {
                     HStack(spacing: 4) {
                         Image(systemName: "plus")
@@ -602,14 +637,14 @@ struct TravelPlanDetailView: View {
                         // 座標が設定されていない場合
                         Text("設定された場所には天気の情報がありませんでした")
                             .font(.caption)
-                            .foregroundColor(.gray)
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
                     } else if isLoadingPlanWeather {
                         ProgressView()
                             .frame(maxWidth: .infinity, alignment: .leading)
                     } else if planWeatherError != nil {
                         Text("10日前になると天気が表示されます")
                             .font(.caption)
-                            .foregroundColor(.gray)
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
                     } else if let weather = planWeather {
                         HStack(spacing: 15) {
                             ZStack {
@@ -634,6 +669,9 @@ struct TravelPlanDetailView: View {
                     }
                 }
             }
+            // 幅いっぱいに左寄せで固定する
+            // （幅指定がないと天気未表示時にセクション全体が親の中央に寄ってしまう）
+            .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 20)
             .opacity(animateContent ? 1 : 0)
             .offset(y: animateContent ? 0 : 10)
@@ -663,6 +701,16 @@ struct TravelPlanDetailView: View {
     }
 
     // MARK: - Helper Methods
+    /// 地図に出せる（座標を持つ）スケジュール項目が1件でもあるか
+    private func hasMappableScheduleItems(plan: TravelPlan) -> Bool {
+        for daySchedule in plan.daySchedules {
+            for item in daySchedule.scheduleItems where item.latitude != nil && item.longitude != nil {
+                return true
+            }
+        }
+        return false
+    }
+
     private func sortedScheduleItems(_ items: [ScheduleItem]) -> [ScheduleItem] {
         let calendar = Calendar.current
 

@@ -258,7 +258,7 @@ struct ProfileView: View {
                 icon: "questionmark.circle",
                 title: "ヘルプサポート",
                 subtitle: "よくある質問とお問い合わせ",
-                gradientColors: [themeManager.currentTheme.success, themeManager.currentTheme.info]
+                gradientColors: [Color.teal, Color.cyan.opacity(0.8)]
             )
         }
         .buttonStyle(CardButtonStyle())
@@ -274,7 +274,7 @@ struct ProfileView: View {
                 icon: "paintpalette.fill",
                 title: "アプリ設定",
                 subtitle: "アプリカラー",
-                gradientColors: [themeManager.currentTheme.secondary, themeManager.currentTheme.secondary.opacity(0.7)]
+                gradientColors: [Color.purple, Color.indigo.opacity(0.8)]
             )
         }
         .buttonStyle(CardButtonStyle())
@@ -291,7 +291,7 @@ struct ProfileView: View {
                 icon: "person.badge.plus",
                 title: "旅行計画に参加",
                 subtitle: "共有コードで仲間の計画に参加",
-                gradientColors: [themeManager.currentTheme.success, themeManager.currentTheme.info]
+                gradientColors: [themeManager.currentTheme.success, themeManager.currentTheme.success.opacity(0.7)]
             )
         }
         .buttonStyle(CardButtonStyle())
@@ -308,7 +308,7 @@ struct ProfileView: View {
                 icon: "heart.fill",
                 title: "開発者を応援する",
                 subtitle: "投げ銭で開発を支援",
-                gradientColors: [Color.pink, Color.red.opacity(0.7)]
+                gradientColors: [Color.pink, Color.pink.opacity(0.6)]
             )
         }
         .buttonStyle(CardButtonStyle())
@@ -901,7 +901,7 @@ struct HelpSupportView: View {
                         HelpCard(
                             icon: "info.circle.fill",
                             title: "バージョン情報",
-                            description: "Version 1.0.0",
+                            description: "Version \(appVersionString)",
                             color: .purple
                         )
                         .opacity(animateCards ? 1 : 0)
@@ -931,6 +931,12 @@ struct HelpSupportView: View {
         } message: {
             Text("ご質問やご要望がございましたら、下記のメールアドレスまでお問い合わせください。\n\ntaismryotasis@gmail.com")
         }
+    }
+
+    private var appVersionString: String {
+        let version = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+        return build.map { "\(version) (\($0))" } ?? version
     }
 
     private func requestReview() {
@@ -982,11 +988,11 @@ struct AppSettingView: View {
                         VStack(spacing: 8) {
                             Text("アプリ設定")
                                 .font(.title2.bold())
-                                .foregroundColor(themeManager.currentTheme.text)
+                                .foregroundColor(colorScheme == .dark ? .white : .black)
 
                             Text("テーマカラーをカスタマイズ")
                                 .font(.subheadline)
-                                .foregroundColor(themeManager.currentTheme.secondaryText)
+                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
                         }
                     }
                     .opacity(animateCards ? 1 : 0)
@@ -996,26 +1002,20 @@ struct AppSettingView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("現在のテーマ")
                             .font(.headline)
-                            .foregroundColor(themeManager.currentTheme.text)
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
 
                         HStack {
                             HStack(spacing: 8) {
-                                Circle()
-                                    .fill(themeManager.currentTheme.primary)
-                                    .frame(width: 30, height: 30)
-                                Circle()
-                                    .fill(themeManager.currentTheme.secondary)
-                                    .frame(width: 30, height: 30)
-                                Circle()
-                                    .fill(themeManager.currentTheme.tertiary)
-                                    .frame(width: 30, height: 30)
+                                ThemeColorDot(color: themeManager.currentTheme.primary, size: 30)
+                                ThemeColorDot(color: themeManager.currentTheme.secondary, size: 30)
+                                ThemeColorDot(color: themeManager.currentTheme.tertiary, size: 30)
                             }
 
                             Spacer()
 
                             Text(themeManager.currentTheme.type.displayName)
                                 .font(.headline)
-                                .foregroundColor(themeManager.currentTheme.text)
+                                .foregroundColor(colorScheme == .dark ? .white : .black)
                         }
                         .padding()
                         .background(
@@ -1037,7 +1037,7 @@ struct AppSettingView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         Text("テーマを選択")
                             .font(.headline)
-                            .foregroundColor(themeManager.currentTheme.text)
+                            .foregroundColor(colorScheme == .dark ? .white : .black)
                             .padding(.horizontal)
 
                         ForEach(Array(ThemePreset.ThemeType.allCases.enumerated()), id: \.offset) { index, themeType in
@@ -1071,14 +1071,30 @@ struct AppSettingView: View {
 
     private var backgroundGradient: some View {
         LinearGradient(
-            gradient: Gradient(colors: [
-                themeManager.currentTheme.gradientLight,
-                themeManager.currentTheme.gradientDark
-            ]),
-            startPoint: .top,
-            endPoint: .bottom
+            gradient: Gradient(colors: colorScheme == .dark ?
+                [themeManager.currentTheme.backgroundDark, themeManager.currentTheme.secondaryBackgroundDark] :
+                [themeManager.currentTheme.backgroundLight, themeManager.currentTheme.secondaryBackgroundLight]),
+            startPoint: .topLeading,
+            endPoint: .bottomTrailing
         )
         .ignoresSafeArea()
+    }
+}
+
+// MARK: - Theme Color Dot
+/// テーマカラーのプレビュー用の円。白い色でも背景に溶けないよう縁取りを付ける
+struct ThemeColorDot: View {
+    let color: Color
+    var size: CGFloat = 40
+
+    var body: some View {
+        Circle()
+            .fill(color)
+            .frame(width: size, height: size)
+            .overlay(
+                Circle()
+                    .stroke(Color.primary.opacity(0.2), lineWidth: 1)
+            )
     }
 }
 
@@ -1089,6 +1105,7 @@ struct ThemeCard: View {
     let onSelect: () -> Void
 
     @ObservedObject var themeManager = ThemeManager.shared
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         Button(action: onSelect) {
@@ -1098,7 +1115,7 @@ struct ThemeCard: View {
                 HStack {
                     Text(themeType.displayName)
                         .font(.headline)
-                        .foregroundColor(themeManager.currentTheme.text)
+                        .foregroundColor(colorScheme == .dark ? .white : .black)
 
                     Spacer()
 
@@ -1111,21 +1128,11 @@ struct ThemeCard: View {
 
                 // Color Preview
                 HStack(spacing: 8) {
-                    Circle()
-                        .fill(previewTheme.primary)
-                        .frame(width: 40, height: 40)
-                    Circle()
-                        .fill(previewTheme.secondary)
-                        .frame(width: 40, height: 40)
-                    Circle()
-                        .fill(previewTheme.tertiary)
-                        .frame(width: 40, height: 40)
-                    Circle()
-                        .fill(previewTheme.accent1)
-                        .frame(width: 40, height: 40)
-                    Circle()
-                        .fill(previewTheme.accent2)
-                        .frame(width: 40, height: 40)
+                    ThemeColorDot(color: previewTheme.primary)
+                    ThemeColorDot(color: previewTheme.secondary)
+                    ThemeColorDot(color: previewTheme.tertiary)
+                    ThemeColorDot(color: previewTheme.accent1)
+                    ThemeColorDot(color: previewTheme.accent2)
                 }
             }
             .padding()
@@ -1214,7 +1221,7 @@ struct UserGuideView: View {
             icon: "airplane.departure",
             color: .blue,
             steps: [
-                "「予定」タブから「+」ボタンをタップ",
+                "「計画」タブから「+」ボタンをタップ",
                 "旅行のタイトル、目的地、日程を入力",
                 "写真を追加（オプション）",
                 "「保存」をタップして完了"
@@ -1236,8 +1243,8 @@ struct UserGuideView: View {
             icon: "mappin.circle",
             color: .green,
             steps: [
-                "「保存済み」タブを開く",
-                "「+」ボタンをタップ",
+                "「場所保存」タブを開く",
+                "「場所を追加」からマップを開く",
                 "場所を検索または選択",
                 "写真やメモを追加",
                 "タグを設定して保存"
@@ -1322,8 +1329,9 @@ struct UserGuideView: View {
         Button(action: { presentationMode.wrappedValue.dismiss() }) {
             Image(systemName: "xmark.circle.fill")
                 .font(.title2)
-                .foregroundColor(.white.opacity(0.7))
+                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .black.opacity(0.5))
         }
+        .accessibilityLabel("閉じる")
     }
 
     private var tipsSection: some View {

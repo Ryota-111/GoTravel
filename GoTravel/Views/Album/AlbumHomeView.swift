@@ -2,17 +2,33 @@ import SwiftUI
 
 // MARK: - Album Home View
 struct AlbumHomeView: View {
-    @StateObject private var albumManager = AlbumManager.shared
-    @StateObject private var travelPlanViewModel = TravelPlanViewModel()
+    @ObservedObject private var albumManager = AlbumManager.shared
+    @ObservedObject private var japanPhotoManager = JapanPhotoManager.shared
+    // MainTabView から注入済みのインスタンスを使う（自前生成すると二重管理になる）
+    @EnvironmentObject var travelPlanViewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
     @State private var showCreateAlbum = false
     @State private var selectedAlbum: Album?
-    @State private var animateCards = false
-    @State private var isEditMode = false
-    @State private var albumToDelete: Album?
+    @State private var editingAlbum: Album?
+
+    // 写真一覧と同じ操作感で、まとめて削除できるようにする
+    @State private var isSelectionMode = false
+    @State private var selectedAlbumIds: Set<String> = []
     @State private var showDeleteConfirm = false
+
+    /// 既定アルバム（日本全国フォトマップ）は削除できないので選択対象から外す
+    private var deletableAlbums: [Album] {
+        albumManager.albums.filter { !$0.isDefaultAlbum }
+    }
+
+    /// 日本全国フォトマップの写真は別管理なので、合計にはそちらの枚数を足す
+    private var totalPhotoCount: Int {
+        albumManager.albums.reduce(0) { total, album in
+            total + (album.isJapanPhotoMap ? japanPhotoManager.photoCount : album.photoFileNames.count)
+        }
+    }
 
     var body: some View {
         NavigationView {
@@ -25,54 +41,30 @@ struct AlbumHomeView: View {
                     if albumManager.albums.isEmpty {
                         emptyState
                     } else {
-                        ScrollView(showsIndicators: false) {
-                            LazyVGrid(columns: [
-                                GridItem(.flexible(), spacing: 14),
-                                GridItem(.flexible(), spacing: 14)
-                            ], spacing: 14) {
-                                ForEach(Array(albumManager.albums.enumerated()), id: \.element.id) { index, album in
-                                    AlbumCardWrapper(
-                                        album: album,
-                                        isEditMode: isEditMode,
-                                        onTap: {
-                                            if !isEditMode { selectedAlbum = album }
-                                        },
-                                        onDelete: {
-                                            albumToDelete = album
-                                            showDeleteConfirm = true
-                                        }
-                                    )
-                                    .opacity(animateCards ? 1 : 0)
-                                    .offset(y: animateCards ? 0 : 20)
-                                    .animation(
-                                        .spring(response: 0.6, dampingFraction: 0.8).delay(Double(index) * 0.06),
-                                        value: animateCards
-                                    )
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.top, 16)
-                            .padding(.bottom, 100)
-                        }
+                        albumGrid
                     }
                 }
 
-                VStack {
-                    Spacer()
-                    HStack {
+                if !isSelectionMode {
+                    VStack {
                         Spacer()
-                        fabButton
+                        HStack {
+                            Spacer()
+                            fabButton
+                        }
+                        .padding(.trailing, 20)
+                        .padding(.bottom, 24)
                     }
-                    .padding(.trailing, 20)
-                    .padding(.bottom, 24)
                 }
             }
-            .onAppear {
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
-                    animateCards = true
+            .safeAreaInset(edge: .bottom) {
+                if isSelectionMode {
+                    selectionToolbar
                 }
+            }
+            .task {
                 if let userId = authVM.userId {
-                    travelPlanViewModel.setupFetchedResultsController(userId: userId)
+                    albumManager.setup(userId: userId)
                 }
             }
             .navigationBarHidden(true)
@@ -81,19 +73,47 @@ struct AlbumHomeView: View {
         .sheet(isPresented: $showCreateAlbum) {
             CreateAlbumView(travelPlans: travelPlanViewModel.travelPlans)
         }
+        .sheet(item: $editingAlbum) { album in
+            AlbumEditorView(album: album)
+        }
         .fullScreenCover(item: $selectedAlbum) { album in
-            if album.title == "日本全国フォトマップ" {
+            // タイトル文字列ではなく種別で判定する
+            if album.isJapanPhotoMap {
                 JapanPhotoView()
             } else {
                 AlbumDetailView(album: album)
             }
         }
-        .confirmationDialog("このアルバムを削除しますか？", isPresented: $showDeleteConfirm, presenting: albumToDelete) { album in
-            Button("削除", role: .destructive) {
-                albumManager.deleteAlbum(album)
+        .confirmationDialog(deleteConfirmTitle, isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+            Button("削除", role: .destructive) { deleteSelectedAlbums() }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("アルバム内の写真もすべて削除されます。この操作は取り消せません。")
+        }
+    }
+
+    // MARK: - Album Grid
+    private var albumGrid: some View {
+        ScrollView(showsIndicators: false) {
+            LazyVGrid(columns: [
+                GridItem(.flexible(), spacing: 14),
+                GridItem(.flexible(), spacing: 14)
+            ], spacing: 14) {
+                ForEach(albumManager.albums) { album in
+                    AlbumCard(
+                        album: album,
+                        isSelectionMode: isSelectionMode,
+                        isSelected: selectedAlbumIds.contains(album.id),
+                        onTap: { handleTap(on: album) },
+                        onEdit: { editingAlbum = album },
+                        onDelete: { requestDelete(album) },
+                        onStartSelection: { startSelection(with: album) }
+                    )
+                }
             }
-        } message: { album in
-            Text("「\(album.title)」を削除すると、アルバム内の写真もすべて削除されます。")
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .padding(.bottom, isSelectionMode ? 20 : 100)
         }
     }
 
@@ -112,70 +132,158 @@ struct AlbumHomeView: View {
         colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
     }
 
+    private var mainColor: Color {
+        themeManager.currentTheme.xprimary
+    }
+
     // MARK: - Header Bar
     private var headerBar: some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("アルバム")
-                    .font(.title.weight(.bold))
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline, spacing: 10) {
+                Text(isSelectionMode ? selectionTitle : "アルバム")
+                    .font(.system(.largeTitle, design: .rounded).weight(.bold))
                     .foregroundColor(accentColor)
-                Text("\(albumManager.albums.count)個")
-                    .font(.caption)
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+
+                Spacer(minLength: 0)
+
+                if isSelectionMode {
+                    Button("キャンセル") { exitSelectionMode() }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(mainColor)
+                } else if !deletableAlbums.isEmpty {
+                    Button("選択") { enterSelectionMode() }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(mainColor)
+                }
             }
 
-            Spacer()
-
-            if !albumManager.albums.isEmpty {
-                if isEditMode {
-                    Button(action: {
-                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                            isEditMode = false
-                        }
-                    }) {
-                        Text("完了")
-                            .font(.subheadline.weight(.bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 14)
-                            .padding(.vertical, 7)
-                            .background(themeManager.currentTheme.xprimary)
-                            .clipShape(Capsule())
-                    }
-                } else {
-                    HStack(spacing: 10) {
-                        let totalPhotos = albumManager.albums.reduce(0) { $0 + $1.photoFileNames.count }
-                        HStack(spacing: 4) {
-                            Image(systemName: "photo.on.rectangle.angled")
-                                .font(.caption.weight(.semibold))
-                            Text("\(totalPhotos)枚")
-                                .font(.caption.weight(.semibold))
-                        }
-                        .foregroundColor(themeManager.currentTheme.xprimary)
+            if isSelectionMode {
+                Button(action: toggleSelectAll) {
+                    Text(selectedAlbumIds.count == deletableAlbums.count ? "すべて解除" : "すべて選択")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(mainColor)
                         .padding(.horizontal, 12)
                         .padding(.vertical, 6)
-                        .background(themeManager.currentTheme.xprimary.opacity(0.1))
-                        .clipShape(Capsule())
-
-                        Button(action: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                isEditMode = true
-                            }
-                        }) {
-                            Image(systemName: "pencil")
-                                .font(.caption.weight(.semibold))
-                                .foregroundColor(accentColor)
-                                .padding(8)
-                                .background(accentColor.opacity(0.1))
-                                .clipShape(Circle())
-                        }
-                    }
+                        .background(mainColor.opacity(0.12), in: Capsule())
+                }
+                .buttonStyle(PlainButtonStyle())
+            } else if !albumManager.albums.isEmpty {
+                HStack(spacing: 8) {
+                    statChip(icon: "rectangle.stack.fill", text: "\(albumManager.albums.count)個のアルバム")
+                    statChip(icon: "photo.on.rectangle.angled", text: "\(totalPhotoCount)枚")
                 }
             }
         }
         .padding(.horizontal, 20)
-        .padding(.top, 16)
+        .padding(.top, 12)
         .padding(.bottom, 14)
-        .background(themeManager.currentTheme.xprimary.opacity(0.08))
+    }
+
+    private func statChip(icon: String, text: String) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.caption2.weight(.semibold))
+            Text(text)
+                .font(.caption.weight(.semibold))
+        }
+        .foregroundColor(mainColor)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(mainColor.opacity(0.12), in: Capsule())
+    }
+
+    // MARK: - Selection
+    private var selectionTitle: String {
+        selectedAlbumIds.isEmpty ? "アルバムを選択" : "\(selectedAlbumIds.count)個を選択中"
+    }
+
+    private var deleteConfirmTitle: String {
+        selectedAlbumIds.count == 1
+            ? "このアルバムを削除しますか？"
+            : "\(selectedAlbumIds.count)個のアルバムを削除しますか？"
+    }
+
+    private var selectionToolbar: some View {
+        Button(action: { showDeleteConfirm = true }) {
+            HStack(spacing: 6) {
+                Image(systemName: "trash.fill")
+                Text("削除")
+            }
+            .font(.headline)
+            .foregroundColor(selectedAlbumIds.isEmpty ? themeManager.currentTheme.secondaryText : .white)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
+            .background(
+                Capsule()
+                    .fill(selectedAlbumIds.isEmpty
+                          ? themeManager.currentTheme.secondaryText.opacity(0.15)
+                          : themeManager.currentTheme.error)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .disabled(selectedAlbumIds.isEmpty)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .background(.ultraThinMaterial)
+    }
+
+    private func handleTap(on album: Album) {
+        if isSelectionMode {
+            // 既定アルバムは削除できないため選択させない
+            guard !album.isDefaultAlbum else { return }
+            if selectedAlbumIds.contains(album.id) {
+                selectedAlbumIds.remove(album.id)
+            } else {
+                selectedAlbumIds.insert(album.id)
+            }
+        } else {
+            selectedAlbum = album
+        }
+    }
+
+    private func enterSelectionMode() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            isSelectionMode = true
+        }
+    }
+
+    private func startSelection(with album: Album) {
+        guard !album.isDefaultAlbum else { return }
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            isSelectionMode = true
+            selectedAlbumIds = [album.id]
+        }
+    }
+
+    private func exitSelectionMode() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            isSelectionMode = false
+            selectedAlbumIds.removeAll()
+        }
+    }
+
+    private func toggleSelectAll() {
+        if selectedAlbumIds.count == deletableAlbums.count {
+            selectedAlbumIds.removeAll()
+        } else {
+            selectedAlbumIds = Set(deletableAlbums.map(\.id))
+        }
+    }
+
+    private func requestDelete(_ album: Album) {
+        guard !album.isDefaultAlbum else { return }
+        selectedAlbumIds = [album.id]
+        showDeleteConfirm = true
+    }
+
+    private func deleteSelectedAlbums() {
+        let targets = albumManager.albums.filter { selectedAlbumIds.contains($0.id) }
+        for album in targets {
+            albumManager.deleteAlbum(album)
+        }
+        exitSelectionMode()
     }
 
     // MARK: - Empty State
@@ -238,33 +346,37 @@ struct AlbumHomeView: View {
                     .foregroundColor(.white)
             }
         }
-    }
-}
-
-// MARK: - Album Card Wrapper
-struct AlbumCardWrapper: View {
-    let album: Album
-    let isEditMode: Bool
-    let onTap: () -> Void
-    let onDelete: () -> Void
-
-    var body: some View {
-        AlbumCard(album: album, isEditMode: isEditMode, onDelete: onDelete)
-            .onTapGesture { onTap() }
+        .accessibilityLabel("アルバムを作成")
     }
 }
 
 // MARK: - Album Card
 struct AlbumCard: View {
     let album: Album
-    let isEditMode: Bool
+    let isSelectionMode: Bool
+    let isSelected: Bool
+    let onTap: () -> Void
+    let onEdit: () -> Void
     let onDelete: () -> Void
-    @StateObject private var albumManager = AlbumManager.shared
+    let onStartSelection: () -> Void
+
+    @ObservedObject private var albumManager = AlbumManager.shared
+    @ObservedObject private var japanPhotoManager = JapanPhotoManager.shared
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
 
-    private var recentPhotos: [UIImage] {
-        albumManager.getRecentPhotos(from: album, limit: 4)
+    /// 計算プロパティのままだと参照のたびにディスクから読み直すため、一度だけ読んで保持する
+    @State private var recentPhotos: [UIImage] = []
+
+    /// 日本全国フォトマップの写真は JapanPhotoManager が別に持っているため、枚数もそちらを見る
+    private var photoCount: Int {
+        album.isJapanPhotoMap ? japanPhotoManager.photoCount : album.photoFileNames.count
+    }
+
+    private func loadRecentPhotos() {
+        recentPhotos = album.isJapanPhotoMap
+            ? japanPhotoManager.recentThumbnails(limit: 4)
+            : albumManager.recentThumbnails(from: album, limit: 4)
     }
 
     private var resolvedCoverColor: Color {
@@ -287,127 +399,193 @@ struct AlbumCard: View {
         colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
     }
 
+    /// 選択モード中、既定アルバムは削除できないので選べないことを見た目でも示す
+    private var isDimmed: Bool {
+        isSelectionMode && album.isDefaultAlbum
+    }
+
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             photoPreviewSection
             albumInfoSection
         }
-        .background(
-            RoundedRectangle(cornerRadius: 18)
-                .fill(cardBg)
-        )
+        .background(cardBg)
+        .clipShape(RoundedRectangle(cornerRadius: 18))
         .overlay(
             RoundedRectangle(cornerRadius: 18)
                 .stroke(
-                    isEditMode && !album.isDefaultAlbum
-                        ? themeManager.currentTheme.error.opacity(0.5)
-                        : resolvedCoverColor.opacity(0.35),
-                    lineWidth: 1.5
+                    isSelected ? resolvedCoverColor : resolvedCoverColor.opacity(0.3),
+                    lineWidth: isSelected ? 3 : 1
                 )
         )
-        .shadow(color: resolvedCoverColor.opacity(0.2), radius: 8, x: 0, y: 4)
-        .scaleEffect(isEditMode && !album.isDefaultAlbum ? 0.97 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isEditMode)
-        .overlay(deleteButtonOverlay)
-        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .overlay(alignment: .topTrailing) { selectionBadge }
+        .shadow(color: resolvedCoverColor.opacity(0.18), radius: 8, x: 0, y: 4)
+        .opacity(isDimmed ? 0.45 : 1)
+        .scaleEffect(isSelected ? 0.95 : 1.0)
+        .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
+        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: isSelectionMode)
+        .contentShape(Rectangle())
+        .onTapGesture { onTap() }
+        .contextMenu {
+            // 長押しは標準のメニューにする（独自の編集モードより見つけやすい）
+            if !isSelectionMode {
+                Button {
+                    onEdit()
+                } label: {
+                    Label("アルバムを編集", systemImage: "slider.horizontal.3")
+                }
+
+                if !album.isDefaultAlbum {
+                    Button {
+                        onStartSelection()
+                    } label: {
+                        Label("選択", systemImage: "checkmark.circle")
+                    }
+
+                    Button(role: .destructive) {
+                        onDelete()
+                    } label: {
+                        Label("削除", systemImage: "trash")
+                    }
+                }
+            }
+        }
+        .task(id: album.photoFileNames) {
+            loadRecentPhotos()
+        }
+        // 日本全国フォトマップは別管理なので、そちらの更新にも追従させる
+        .task(id: japanPhotoManager.savedPrefectures) {
+            if album.isJapanPhotoMap {
+                loadRecentPhotos()
+            }
+        }
+    }
+
+    // MARK: - Selection Badge
+    @ViewBuilder
+    private var selectionBadge: some View {
+        if isSelectionMode && !album.isDefaultAlbum {
+            ZStack {
+                Circle()
+                    .fill(isSelected ? resolvedCoverColor : Color.black.opacity(0.35))
+                    .frame(width: 26, height: 26)
+                Circle()
+                    .stroke(Color.white, lineWidth: 1.5)
+                    .frame(width: 26, height: 26)
+
+                if isSelected {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundColor(.white)
+                }
+            }
+            .padding(8)
+            .allowsHitTesting(false)
+            .transition(.scale.combined(with: .opacity))
+        }
     }
 
     // MARK: - Photo Preview
     private var photoPreviewSection: some View {
-        Group {
-            if recentPhotos.isEmpty {
-                emptyPhotoPreview
-            } else if recentPhotos.count == 1 {
-                singlePhotoPreview
-            } else {
-                multiPhotoPreview
+        // 4:3 の可変サイズにして、端末幅が変わっても崩れないようにする
+        Color.clear
+            .aspectRatio(4.0 / 3.0, contentMode: .fit)
+            .overlay {
+                if recentPhotos.isEmpty {
+                    emptyPhotoPreview
+                } else if recentPhotos.count == 1 {
+                    photoFill(recentPhotos[0])
+                } else {
+                    mosaicPreview
+                }
             }
-        }
-        .frame(height: 130)
-        .clipped()
+            .overlay(alignment: .bottomLeading) { photoCountBadge }
+            .clipped()
+    }
+
+    private func photoFill(_ image: UIImage) -> some View {
+        Image(uiImage: image)
+            .resizable()
+            .scaledToFill()
     }
 
     private var emptyPhotoPreview: some View {
         ZStack {
             LinearGradient(
-                gradient: Gradient(colors: [
-                    resolvedCoverColor.opacity(0.7),
-                    resolvedCoverColor.opacity(0.4)
-                ]),
+                colors: [resolvedCoverColor.opacity(0.75), resolvedCoverColor.opacity(0.4)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
             Image(systemName: album.icon)
-                .font(.system(size: 46))
-                .foregroundColor(.white.opacity(0.7))
+                .font(.system(size: 44))
+                .foregroundColor(.white.opacity(0.85))
         }
     }
 
-    private var singlePhotoPreview: some View {
-        Image(uiImage: recentPhotos[0])
-            .resizable()
-            .aspectRatio(contentMode: .fill)
-            .frame(height: 130)
-    }
-
-    private var multiPhotoPreview: some View {
-        GeometryReader { geometry in
-            let half = geometry.size.width / 2
-            LazyVGrid(columns: [
-                GridItem(.fixed(half), spacing: 2),
-                GridItem(.fixed(half), spacing: 2)
-            ], spacing: 2) {
-                ForEach(0..<4, id: \.self) { index in
-                    if index < recentPhotos.count {
-                        Image(uiImage: recentPhotos[index])
-                            .resizable()
-                            .aspectRatio(contentMode: .fill)
-                            .frame(width: half - 1, height: half - 1)
-                            .clipped()
-                    } else {
-                        Rectangle()
-                            .fill(resolvedCoverColor.opacity(0.2))
-                            .frame(width: half - 1, height: half - 1)
+    /// 2x2 のモザイク。GeometryReader で幅を測らず、比率だけで組む
+    private var mosaicPreview: some View {
+        VStack(spacing: 2) {
+            ForEach(0..<2, id: \.self) { row in
+                HStack(spacing: 2) {
+                    ForEach(0..<2, id: \.self) { column in
+                        let index = row * 2 + column
+                        Group {
+                            if index < recentPhotos.count {
+                                photoFill(recentPhotos[index])
+                            } else {
+                                resolvedCoverColor.opacity(0.25)
+                            }
+                        }
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .clipped()
                     }
                 }
             }
+        }
+    }
+
+    @ViewBuilder
+    private var photoCountBadge: some View {
+        if !recentPhotos.isEmpty {
+            HStack(spacing: 4) {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(.system(size: 10, weight: .semibold))
+                Text("\(photoCount)")
+                    .font(.system(size: 11, weight: .bold))
+            }
+            .foregroundColor(.white)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(.ultraThinMaterial, in: Capsule())
+            .environment(\.colorScheme, .dark)
+            .padding(8)
         }
     }
 
     // MARK: - Info Section
     private var albumInfoSection: some View {
-        VStack(alignment: .leading, spacing: 5) {
+        VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: album.icon)
                     .font(.caption.weight(.semibold))
                     .foregroundColor(resolvedCoverColor)
                 Text(album.title)
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(.subheadline, design: .rounded).weight(.bold))
                     .foregroundColor(accentColor)
                     .lineLimit(1)
             }
 
             HStack(spacing: 6) {
-                HStack(spacing: 3) {
-                    Image(systemName: "photo.on.rectangle.angled")
-                        .font(.system(size: 10))
-                    Text("\(album.photoFileNames.count)枚")
-                        .font(.system(size: 11))
-                }
-                .foregroundColor(themeManager.currentTheme.secondaryText)
+                Text(photoCount == 0 ? "写真なし" : "\(photoCount)枚")
+                    .font(.caption2)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
 
                 if album.travelPlanId != nil {
-                    HStack(spacing: 3) {
-                        Image(systemName: "airplane.departure")
-                            .font(.system(size: 10))
-                        Text("旅行")
-                            .font(.system(size: 10, weight: .medium))
-                    }
-                    .foregroundColor(resolvedCoverColor)
-                    .padding(.horizontal, 6)
-                    .padding(.vertical, 2)
-                    .background(resolvedCoverColor.opacity(0.12))
-                    .clipShape(Capsule())
+                    badge(icon: "airplane.departure", text: "旅行")
+                }
+
+                if album.isDefaultAlbum {
+                    badge(icon: "lock.fill", text: "既定")
                 }
             }
         }
@@ -416,36 +594,22 @@ struct AlbumCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
     }
 
-    // MARK: - Delete Button Overlay
-    @ViewBuilder
-    private var deleteButtonOverlay: some View {
-        if isEditMode && !album.isDefaultAlbum {
-            VStack {
-                HStack {
-                    Button(action: onDelete) {
-                        ZStack {
-                            Circle()
-                                .fill(themeManager.currentTheme.error)
-                                .frame(width: 28, height: 28)
-                                .shadow(color: themeManager.currentTheme.error.opacity(0.5), radius: 4, x: 0, y: 2)
-                            Image(systemName: "minus")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(.white)
-                        }
-                    }
-                    .padding(6)
-                    Spacer()
-                }
-                Spacer()
-            }
-            .transition(.opacity.combined(with: .scale(scale: 0.8, anchor: .topLeading)))
+    private func badge(icon: String, text: String) -> some View {
+        HStack(spacing: 3) {
+            Image(systemName: icon)
+                .font(.system(size: 9))
+            Text(text)
+                .font(.system(size: 10, weight: .semibold))
         }
+        .foregroundColor(resolvedCoverColor)
+        .padding(.horizontal, 6)
+        .padding(.vertical, 2)
+        .background(resolvedCoverColor.opacity(0.14), in: Capsule())
     }
 }
-
-extension AlbumType: Hashable {}
 
 #Preview {
     AlbumHomeView()
         .environmentObject(AuthViewModel())
+        .environmentObject(TravelPlanViewModel())
 }

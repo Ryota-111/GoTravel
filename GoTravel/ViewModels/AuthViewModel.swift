@@ -58,6 +58,14 @@ final class AuthViewModel: ObservableObject {
 
     // アカウント削除
     func deleteAccount() {
+        // Core Data上のユーザーデータを削除（CloudKitへも削除が同期される）
+        if let userId = userId {
+            // アルバムは写真ファイルも消す必要があるため専用の処理を通す
+            AlbumManager.shared.deleteAllData(userId: userId)
+            PlaceCategoryManager.shared.deleteAllData(userId: userId)
+            CoreDataManager.shared.deleteAllUserData(userId: userId)
+        }
+
         DispatchQueue.main.async {
             // ローカルデータを削除
             self.isSignedIn = false
@@ -70,9 +78,6 @@ final class AuthViewModel: ObservableObject {
 
             // プロフィールデータを削除
             self.userDefaults.removeObject(forKey: "profile_v1")
-
-            // CloudKitのデータは残るが、ローカルの認証情報を削除することで
-            // 再ログインしない限りアクセスできなくなる
         }
     }
 }

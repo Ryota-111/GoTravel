@@ -6,6 +6,16 @@ import CloudKit
 class CoreDataManager {
     static let shared = CoreDataManager()
 
+    #if DEBUG
+    /// CloudKit の Development 環境にレコードタイプを作るためのスイッチ。
+    ///
+    /// エンティティを新しく追加した直後に一度だけ true にしてデバッグ実行し、
+    /// CloudKit Console の Development に CD_〜 が並んだら false に戻す。
+    /// ダミーレコードの作成と削除を行うため起動に数十秒かかる。
+    /// リリースビルドには含まれないので本番の動作には影響しない。
+    private static let initializesCloudKitSchemaOnLaunch = false
+    #endif
+
     // MARK: - Properties
 
     /// NSPersistentCloudKitContainer - Core DataとCloudKitを自動同期
@@ -25,6 +35,10 @@ class CoreDataManager {
         // リモート変更通知を有効化
         description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
 
+        // エンティティ追加などのモデル変更を自動で移行する（失敗すると起動時に落ちるため明示する）
+        description.shouldMigrateStoreAutomatically = true
+        description.shouldInferMappingModelAutomatically = true
+
         // 永続ストアをロード
         container.loadPersistentStores { storeDescription, error in
             if let error = error as NSError? {
@@ -33,6 +47,19 @@ class CoreDataManager {
             }
 
         }
+
+        #if DEBUG
+        // 新しいエンティティは CloudKit にレコードタイプが無いと同期されないため、
+        // 開発中に一度だけスキーマを作成する
+        if CoreDataManager.initializesCloudKitSchemaOnLaunch {
+            do {
+                try container.initializeCloudKitSchema(options: [])
+                print("[CoreDataManager] CloudKit schema initialized. スイッチを false に戻してください。")
+            } catch {
+                print("[CoreDataManager] CloudKit schema initialization failed: \(error)")
+            }
+        }
+        #endif
 
         // ViewContextの設定
         container.viewContext.automaticallyMergesChangesFromParent = true
@@ -104,6 +131,31 @@ class CoreDataManager {
 
             do {
                 try viewContext.execute(batchDeleteRequest)
+            } catch {
+            }
+        }
+
+        saveContext()
+    }
+
+    /// 指定ユーザーの全データを削除（アカウント削除用）
+    /// NSBatchDeleteRequestはCloudKitへ同期されないため、オブジェクト単位で削除する
+    func deleteAllUserData(userId: String) {
+        let entityPredicates: [(String, NSPredicate)] = [
+            ("PlanEntity", NSPredicate(format: "userId == %@", userId)),
+            ("VisitedPlaceEntity", NSPredicate(format: "userId == %@", userId)),
+            ("TravelPlanEntity", NSPredicate(format: "userId == %@ OR ownerId == %@", userId, userId))
+        ]
+
+        for (entityName, predicate) in entityPredicates {
+            let fetchRequest = NSFetchRequest<NSManagedObject>(entityName: entityName)
+            fetchRequest.predicate = predicate
+
+            do {
+                let objects = try viewContext.fetch(fetchRequest)
+                for object in objects {
+                    viewContext.delete(object)
+                }
             } catch {
             }
         }

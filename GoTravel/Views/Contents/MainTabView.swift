@@ -7,8 +7,10 @@ struct MainTabView: View {
     @State private var hasCheckedICloud = false
     @StateObject private var plansViewModel = PlansViewModel()
     @StateObject private var travelPlanViewModel = TravelPlanViewModel()
+    @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.scenePhase) var scenePhase
 
     private var tabBarBackground: Color {
         colorScheme == .dark
@@ -16,7 +18,8 @@ struct MainTabView: View {
             : themeManager.currentTheme.backgroundLight
     }
 
-    var body: some View {
+    /// タブ本体。body に全部並べると型チェックが通らなくなるため分けている
+    private var tabs: some View {
         TabView(selection: $selectedTab) {
             EnjoyWorldView()
                 .tabItem{ Label("計画", systemImage: "list.clipboard") }
@@ -36,21 +39,38 @@ struct MainTabView: View {
         .accentColor(themeManager.currentTheme.secondary)
         .toolbarBackground(tabBarBackground, for: .tabBar)
         .toolbarBackground(.visible, for: .tabBar)
+    }
+
+    var body: some View {
+        tabs
         .onChange(of: selectedTab) { oldValue, newValue in
             if oldValue != newValue {
                 let impact = UIImpactFeedbackGenerator(style: .light)
                 impact.impactOccurred()
+                updateWidgetSnapshot()
             }
         }
         .task {
+            // カテゴリーはどのタブからも参照されるためここで用意する
+            if let userId = authVM.userId {
+                PlaceCategoryManager.shared.setup(userId: userId)
+            }
+
             if !hasCheckedICloud {
                 hasCheckedICloud = true
                 await checkICloudStatus()
             }
         }
+        // ウィジェット用のデータを書き出す。
+        // TravelPlan は Equatable ではないため配列を直接監視できないので、
+        // 起動時・タブ切り替え時・バックグラウンドへ移る時に更新する
+        .onAppear { updateWidgetSnapshot() }
+        .onChange(of: scenePhase) { _, phase in
+            if phase != .active { updateWidgetSnapshot() }
+        }
         .alert("iCloudが必要です", isPresented: $showICloudAlert) {
             Button("設定を開く", role: .none) {
-                if let url = URL(string: "App-prefs:CASTLE") {
+                if let url = URL(string: UIApplication.openSettingsURLString) {
                     UIApplication.shared.open(url)
                 }
             }
@@ -58,6 +78,13 @@ struct MainTabView: View {
         } message: {
             Text("このアプリはデータを保存するためにiCloudを使用します。iCloudにサインインしてください。\n\n設定 > [あなたの名前] > iCloud")
         }
+    }
+
+    private func updateWidgetSnapshot() {
+        WidgetSnapshotBuilder.update(
+            travelPlans: travelPlanViewModel.travelPlans,
+            plans: plansViewModel.plans
+        )
     }
 
     private func checkICloudStatus() async {

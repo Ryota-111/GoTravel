@@ -194,15 +194,17 @@ struct ThemePreset {
             custom = Color.black
             
         case .pastelPink:
-            primary = Color(red: 255/255, green: 182/255, blue: 193/255)
-            secondary = Color(red: 255/255, green: 209/255, blue: 220/255)
-            tertiary = Color.gray
+            // primary/secondary は白文字を載せるボタン・バッジの塗りに使われるため、
+            // 白文字が読める濃さのローズピンクにする（薄いピンクだと白文字が消える）
+            primary = Color(red: 0.85, green: 0.38, blue: 0.52)
+            secondary = Color(red: 0.89, green: 0.44, blue: 0.57)
+            tertiary = Color(red: 1.0, green: 0.92, blue: 0.94)
 
-            xprimary = Color(red: 255/255, green: 182/255, blue: 193/255)
-            xsecondary = Color(red: 255/255, green: 209/255, blue: 220/255)
+            xprimary = Color(red: 0.85, green: 0.38, blue: 0.52)
+            xsecondary = Color(red: 0.89, green: 0.44, blue: 0.57)
 
-            yprimary = Color(red: 255/255, green: 182/255, blue: 193/255)
-            ysecondary = Color(red: 255/255, green: 209/255, blue: 220/255)
+            yprimary = Color(red: 0.85, green: 0.38, blue: 0.52)
+            ysecondary = Color(red: 0.89, green: 0.44, blue: 0.57)
 
             backgroundLight = Color(red: 1, green: 1, blue: 1)
             secondaryBackgroundLight = Color(red: 0.98, green: 0.94, blue: 0.96)
@@ -219,18 +221,21 @@ struct ThemePreset {
             budgetDarkText = Color(white: 0.4)
 
             accent1 = Color(red: 0.2, green: 0.2, blue: 0.2)
-            accent2 = Color.white
+            // このテーマは背景（gradientDark/dark）が白のため、
+            // accent2 を白にすると文字が背景に溶けて見えなくなる。
+            // 白背景で読め、かつ白文字を載せられる濃いローズにする
+            accent2 = Color(red: 0.78, green: 0.33, blue: 0.45)
             accent3 = Color(red: 0.5, green: 0.4, blue: 0.45)
-            
+
             success = Color.green
             warning = Color.orange
             error = Color.red
             info = Color.blue
-            
+
             cardBackground1 = Color(red: 255/255, green: 209/255, blue: 220/255).opacity(0.08)
             cardBackground2 = Color(red: 255/255, green: 209/255, blue: 220/255).opacity(0.08)
-            cardBorder = Color(red: 255/255, green: 209/255, blue: 220/255).opacity(0.3)
-            shadow = Color.orange.opacity(0.2)
+            cardBorder = Color(red: 0.89, green: 0.44, blue: 0.57).opacity(0.4)
+            shadow = Color(red: 0.85, green: 0.38, blue: 0.52).opacity(0.15)
             
             gradientLight = Color.white
             gradientDark = Color.white

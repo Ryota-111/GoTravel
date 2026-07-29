@@ -4,12 +4,31 @@ import SwiftUI
 struct ShareTravelPlanView: View {
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.colorScheme) var colorScheme
+    @EnvironmentObject var viewModel: TravelPlanViewModel
+    @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
     let plan: TravelPlan
     let onShareCodeGenerated: (String) -> Void
 
     @State private var shareCode: String = ""
     @State private var showCopiedAlert = false
+    @State private var showStopSharingConfirmation = false
+
+    /// ViewModelから常に最新のプランを参照する
+    /// （`plan`はシート表示時点のコピーなので、コード生成やメンバー参加が反映されない）
+    private var currentPlan: TravelPlan {
+        viewModel.travelPlans.first(where: { $0.id == plan.id }) ?? plan
+    }
+
+    /// 招待メッセージ（共有シートで送る本文）
+    private var inviteMessage: String {
+        """
+        「\(currentPlan.title)」の旅行計画に招待します！
+        Travoryアプリの「共有に参加」から、この共有コードを入力してください。
+
+        共有コード: \(shareCode)
+        """
+    }
 
     var body: some View {
         NavigationView {
@@ -40,9 +59,17 @@ struct ShareTravelPlanView: View {
                     }
                 }
             }
+            .confirmationDialog("共有を停止", isPresented: $showStopSharingConfirmation, titleVisibility: .visible) {
+                Button("共有を停止する", role: .destructive) {
+                    stopSharing()
+                }
+                Button("キャンセル", role: .cancel) {}
+            } message: {
+                Text("共有コードが無効になり、メンバーには今後の変更が共有されなくなります。")
+            }
         }
         .onAppear {
-            if let code = plan.shareCode {
+            if let code = currentPlan.shareCode {
                 shareCode = code
             }
         }
@@ -139,9 +166,41 @@ struct ShareTravelPlanView: View {
             }
             .animation(.easeInOut(duration: 0.3), value: showCopiedAlert)
 
+            // Share Button（LINEやメッセージでコードを送る）
+            ShareLink(item: inviteMessage) {
+                HStack {
+                    Image(systemName: "square.and.arrow.up")
+                        .font(.title3)
+
+                    Text("コードを送る")
+                        .font(.headline)
+                }
+                .foregroundColor(themeManager.currentTheme.dark)
+                .frame(maxWidth: .infinity)
+                .padding()
+                .background(themeManager.currentTheme.light.opacity(0.3))
+                .cornerRadius(12)
+            }
+
             // Shared Users
-            if !plan.sharedWith.isEmpty {
+            if !currentPlan.sharedWith.isEmpty {
                 sharedUsersSection
+            }
+
+            // Stop Sharing（オーナーのみ）
+            if let userId = authVM.userId, currentPlan.isOwner(userId: userId) {
+                Button(action: { showStopSharingConfirmation = true }) {
+                    HStack {
+                        Image(systemName: "person.2.slash")
+                            .font(.subheadline)
+
+                        Text("共有を停止")
+                            .font(.subheadline.weight(.medium))
+                    }
+                    .foregroundColor(themeManager.currentTheme.error)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                }
             }
         }
         .padding()
@@ -168,7 +227,7 @@ struct ShareTravelPlanView: View {
 
                 Spacer()
 
-                Text("\(plan.sharedWith.count)人")
+                Text("\(currentPlan.sharedWith.count)人")
                     .font(.subheadline)
                     .foregroundColor(themeManager.currentTheme.dark)
                     .padding(.horizontal, 10)
@@ -179,8 +238,8 @@ struct ShareTravelPlanView: View {
 
             // Member list
             VStack(spacing: 8) {
-                ForEach(plan.sharedWith, id: \.self) { userId in
-                    memberRow(userId: userId, isOwner: userId == plan.ownerId)
+                ForEach(currentPlan.sharedWith, id: \.self) { userId in
+                    memberRow(userId: userId, isOwner: userId == currentPlan.ownerId)
                 }
             }
         }
@@ -284,6 +343,12 @@ struct ShareTravelPlanView: View {
         let code = TravelPlan.generateShareCode()
         shareCode = code
         onShareCodeGenerated(code)
+    }
+
+    private func stopSharing() {
+        guard let planId = currentPlan.id, let userId = authVM.userId else { return }
+        viewModel.stopSharing(planId: planId, userId: userId)
+        shareCode = ""
     }
 
     private func copyShareCode() {
