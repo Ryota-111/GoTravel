@@ -23,6 +23,7 @@ struct TravelPlanDetailView: View {
     @State private var showBudgetSummary = false
     @State private var showShareView = false
     @State private var showScheduleMap = false
+    @State private var exportItems: [Any]?
     @State private var animateContent = false
     @State private var navigatingItem: ScheduleItem?
     @State private var editingItem: ScheduleItem?
@@ -128,6 +129,14 @@ struct TravelPlanDetailView: View {
         }
         .fullScreenCover(isPresented: $showScheduleMap) {
             TravelPlanMapView(plan: plan, initialDay: selectedDay)
+        }
+        .sheet(isPresented: Binding(
+            get: { exportItems != nil },
+            set: { if !$0 { exportItems = nil } }
+        )) {
+            if let exportItems {
+                ShareSheet(items: exportItems)
+            }
         }
         .fullScreenCover(item: $editingItem) { item in
             if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }) {
@@ -423,6 +432,29 @@ struct TravelPlanDetailView: View {
                 Spacer()
 
                 HStack(spacing: 10) {
+                    // アプリを持っていない相手にも旅程を渡せるようにする
+                    Menu {
+                        Button {
+                            exportItems = [TravelPlanTextExporter.fullItinerary(for: plan)]
+                        } label: {
+                            Label("テキストで送る（全日程）", systemImage: "doc.plaintext")
+                        }
+
+                        Button {
+                            exportCurrentDayImage(plan: plan)
+                        } label: {
+                            Label("画像で送る（Day \(selectedDay)）", systemImage: "photo")
+                        }
+                    } label: {
+                        ZStack {
+                            Circle().fill(.ultraThinMaterial).frame(width: 40, height: 40)
+                            Image(systemName: "square.and.arrow.up")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundColor(.white)
+                        }
+                    }
+                    .accessibilityLabel("旅程を書き出す")
+
                     Button(action: { showShareView = true }) {
                         ZStack {
                             Circle().fill(.ultraThinMaterial).frame(width: 40, height: 40)
@@ -701,6 +733,28 @@ struct TravelPlanDetailView: View {
     }
 
     // MARK: - Helper Methods
+    /// 表示中の日の旅程を画像にして共有する
+    @MainActor
+    private func exportCurrentDayImage(plan: TravelPlan) {
+        let daySchedule = plan.daySchedules.first { $0.dayNumber == selectedDay }
+            ?? DaySchedule(
+                dayNumber: selectedDay,
+                date: Calendar.current.date(byAdding: .day, value: selectedDay - 1, to: plan.startDate) ?? plan.startDate
+            )
+
+        let card = TravelPlanShareCard(
+            plan: plan,
+            daySchedule: daySchedule,
+            accentColor: scheduleAccentColor
+        )
+
+        let renderer = ImageRenderer(content: card)
+        renderer.scale = 3
+
+        guard let image = renderer.uiImage else { return }
+        exportItems = [image]
+    }
+
     /// 地図に出せる（座標を持つ）スケジュール項目が1件でもあるか
     private func hasMappableScheduleItems(plan: TravelPlan) -> Bool {
         for daySchedule in plan.daySchedules {

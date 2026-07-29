@@ -24,25 +24,35 @@ struct TravoryProvider: AppIntentTimelineProvider {
 
     func timeline(for configuration: TravoryWidgetIntent, in context: Context) async -> Timeline<TravoryEntry> {
         let now = Date()
-        let snapshot = WidgetDataStore.load()
-        let entry = TravoryEntry(date: now, snapshot: snapshot, contentType: configuration.contentType)
+        let stored = WidgetDataStore.load()
 
-        // 残り日数や「今日・明日」の表記は日付が変わると変わるため0時に作り直す
-        let nextMidnight = Calendar.current.nextDate(
+        let calendar = Calendar.current
+        let nextMidnight = calendar.nextDate(
             after: now,
             matching: DateComponents(hour: 0, minute: 0),
             matchingPolicy: .nextTime
         ) ?? now.addingTimeInterval(60 * 60)
 
-        // 予定の時刻を過ぎたら一覧から消したいので、直近の予定時刻でも作り直す
-        let nextPlanTime = snapshot.upcomingPlans
+        // 予定の時刻ごとに区切ってエントリを作る。
+        // 1件だけだとアプリを起動するまで古い予定が残り続けるため、
+        // 各時刻の時点で正しい内容をあらかじめ用意しておく
+        var checkpoints: [Date] = [now]
+        checkpoints += stored.upcomingPlans
             .compactMap(\.occursAt)
-            .filter { $0 > now }
-            .min()
+            .filter { $0 > now && $0 < nextMidnight }
 
-        let refreshDate = min(nextMidnight, nextPlanTime ?? nextMidnight)
+        let sortedCheckpoints = Array(Set(checkpoints)).sorted().prefix(12)
 
-        return Timeline(entries: [entry], policy: .after(refreshDate))
+        let entries = sortedCheckpoints.map { date in
+            TravoryEntry(
+                date: date,
+                snapshot: stored.filtered(at: date),
+                contentType: configuration.contentType
+            )
+        }
+
+        // 日付が変わると残り日数や「今日・明日」の表記が変わるので0時に作り直す
+        return Timeline(entries: entries, policy: .after(nextMidnight))
     }
 }
 
@@ -53,7 +63,11 @@ struct GoTravelWidget: Widget {
 
     var body: some WidgetConfiguration {
         AppIntentConfiguration(kind: kind, intent: TravoryWidgetIntent.self, provider: TravoryProvider()) { entry in
-            TravoryWidgetView(snapshot: entry.snapshot, contentType: entry.contentType)
+            TravoryWidgetView(
+                snapshot: entry.snapshot,
+                contentType: entry.contentType,
+                referenceDate: entry.date
+            )
                 // ウィジェットは壁紙と切り離して描画されるため Material のぼかしは効かない。
                 // 透明化も不可なので、システム標準の塗りを使う
                 .containerBackground(.fill.tertiary, for: .widget)
@@ -78,17 +92,27 @@ enum TravoryWidgetPalette {
 struct TravoryWidgetView: View {
     let snapshot: WidgetSnapshot
     let contentType: WidgetContentType
+    /// このエントリが表示される時刻。先の時刻の分も前もって描画されるため Date() は使わない
+    let referenceDate: Date
     @Environment(\.widgetFamily) private var family
 
     var body: some View {
         switch family {
         case .accessoryRectangular:
-            LockScreenView(snapshot: snapshot, contentType: contentType.resolved(for: snapshot))
+            LockScreenView(
+                snapshot: snapshot,
+                contentType: contentType.resolved(for: snapshot),
+                referenceDate: referenceDate
+            )
         case .systemMedium:
             // 中サイズは旅行と予定の両方を並べるので設定に関わらず同じ
-            MediumView(snapshot: snapshot)
+            MediumView(snapshot: snapshot, referenceDate: referenceDate)
         default:
-            SmallView(snapshot: snapshot, contentType: contentType.resolved(for: snapshot))
+            SmallView(
+                snapshot: snapshot,
+                contentType: contentType.resolved(for: snapshot),
+                referenceDate: referenceDate
+            )
         }
     }
 }
@@ -106,6 +130,7 @@ extension WidgetContentType {
 private struct SmallView: View {
     let snapshot: WidgetSnapshot
     let contentType: WidgetContentType
+    let referenceDate: Date
 
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
@@ -136,10 +161,10 @@ private struct SmallView: View {
 
             if let next = snapshot.todayItems.first {
                 Spacer(minLength: 0)
-                ItemRow(item: next, compact: true, showsDate: false)
+                ItemRow(item: next, compact: true, showsDate: false, referenceDate: referenceDate)
             }
 
-        } else if let days = snapshot.daysUntilTravel, let title = snapshot.travelTitle {
+        } else if let days = snapshot.daysUntilTravel(asOf: referenceDate), let title = snapshot.travelTitle {
             Text(title)
                 .font(.caption.weight(.semibold))
                 .foregroundStyle(.secondary)
@@ -187,7 +212,7 @@ private struct SmallView: View {
 
             // 1件が2行になるため、小サイズは2件までにして名前を切らさない
             ForEach(snapshot.upcomingPlans.prefix(2)) { item in
-                ItemRow(item: item, compact: true, showsDate: true)
+                ItemRow(item: item, compact: true, showsDate: true, referenceDate: referenceDate)
             }
         }
     }
@@ -197,6 +222,7 @@ private struct SmallView: View {
 
 private struct MediumView: View {
     let snapshot: WidgetSnapshot
+    let referenceDate: Date
 
     /// 旅行中はその日のスケジュール、それ以外は今後の予定を並べる
     private var listItems: [WidgetSnapshot.Item] {
@@ -222,7 +248,7 @@ private struct MediumView: View {
                 } else {
                     ForEach(listItems.prefix(3)) { item in
                         // 旅行中の一覧はすべて当日なので日付は出さない
-                        ItemRow(item: item, compact: true, showsDate: !snapshot.isTravelOngoing)
+                        ItemRow(item: item, compact: true, showsDate: !snapshot.isTravelOngoing, referenceDate: referenceDate)
                     }
                 }
 
@@ -248,7 +274,7 @@ private struct MediumView: View {
                 Spacer(minLength: 0)
             }
 
-        } else if let days = snapshot.daysUntilTravel, let title = snapshot.travelTitle {
+        } else if let days = snapshot.daysUntilTravel(asOf: referenceDate), let title = snapshot.travelTitle {
             VStack(alignment: .leading, spacing: 4) {
                 Text(title)
                     .font(.caption.weight(.semibold))
@@ -304,6 +330,7 @@ private struct MediumView: View {
 private struct LockScreenView: View {
     let snapshot: WidgetSnapshot
     let contentType: WidgetContentType
+    let referenceDate: Date
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
@@ -331,7 +358,7 @@ private struct LockScreenView: View {
                     .lineLimit(1)
             }
 
-        } else if let days = snapshot.daysUntilTravel, let title = snapshot.travelTitle {
+        } else if let days = snapshot.daysUntilTravel(asOf: referenceDate), let title = snapshot.travelTitle {
             Text("あと\(days)日")
                 .font(.headline)
             Text(title)
@@ -373,7 +400,7 @@ private struct LockScreenView: View {
     /// 「次の予定 · 今日 14:00」のような見出し行
     private func metaLine(for item: WidgetSnapshot.Item) -> String {
         var parts = ["次の予定"]
-        if let label = TravoryWidgetFormatter.dayLabel(for: item.date) {
+        if let label = TravoryWidgetFormatter.dayLabel(for: item.date, asOf: referenceDate) {
             parts.append(label)
         }
         if let time = item.time {
@@ -385,7 +412,7 @@ private struct LockScreenView: View {
     /// 「今日 14:00 ジム」のように、日付と時刻を前に置く
     private func line(for item: WidgetSnapshot.Item, showsDate: Bool = true) -> String {
         var parts: [String] = []
-        if showsDate, let label = TravoryWidgetFormatter.dayLabel(for: item.date) {
+        if showsDate, let label = TravoryWidgetFormatter.dayLabel(for: item.date, asOf: referenceDate) {
             parts.append(label)
         }
         if let time = item.time {
@@ -403,9 +430,10 @@ private struct ItemRow: View {
     let compact: Bool
     /// 「今日」「明日」などの日付を先頭に出すか
     var showsDate: Bool = false
+    var referenceDate: Date = Date()
 
     private var dayLabel: String? {
-        showsDate ? TravoryWidgetFormatter.dayLabel(for: item.date) : nil
+        showsDate ? TravoryWidgetFormatter.dayLabel(for: item.date, asOf: referenceDate) : nil
     }
 
     var body: some View {
@@ -494,14 +522,21 @@ enum TravoryWidgetFormatter {
         return formatter
     }()
 
-    /// 近い日付は「今日」「明日」、それ以降は日付で返す
-    static func dayLabel(for date: Date?) -> String? {
+    /// 近い日付は「今日」「明日」、それ以降は日付で返す。
+    /// 先の時刻の分も前もって描画されるため、基準時刻を受け取る
+    static func dayLabel(for date: Date?, asOf now: Date) -> String? {
         guard let date else { return nil }
 
         let calendar = Calendar.current
-        if calendar.isDateInToday(date) { return "今日" }
-        if calendar.isDateInTomorrow(date) { return "明日" }
-        return monthDay.string(from: date)
+        let targetDay = calendar.startOfDay(for: date)
+        let baseDay = calendar.startOfDay(for: now)
+        let diff = calendar.dateComponents([.day], from: baseDay, to: targetDay).day ?? 0
+
+        switch diff {
+        case 0: return "今日"
+        case 1: return "明日"
+        default: return monthDay.string(from: date)
+        }
     }
 }
 

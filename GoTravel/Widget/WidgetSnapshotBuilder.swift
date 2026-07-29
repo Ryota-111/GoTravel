@@ -5,6 +5,12 @@ import WidgetKit
 /// 表示の優先順位は「旅行中の今日の予定」→「次の旅行までのカウントダウン」→「次の予定」。
 enum WidgetSnapshotBuilder {
 
+    /// ウィジェットが同時に見せる件数より多めに保存しておく。
+    /// 時刻を過ぎた予定はウィジェット側で順に消えていくため、
+    /// 表示件数ぴったりだと途中で「予定なし」になってしまう
+    private static let maxUpcomingPlans = 12
+    private static let maxTodayItems = 8
+
     @MainActor
     static func update(travelPlans: [TravelPlan], plans: [Plan]) {
         let snapshot = build(travelPlans: travelPlans, plans: plans)
@@ -65,7 +71,7 @@ enum WidgetSnapshotBuilder {
 
         return daySchedule.scheduleItems
             .sorted { minutes(of: $0.time) < minutes(of: $1.time) }
-            .prefix(4)
+            .prefix(maxTodayItems)
             .map { item in
                 WidgetSnapshot.Item(
                     id: item.id,
@@ -107,7 +113,7 @@ enum WidgetSnapshotBuilder {
                 if lDay != rDay { return lDay < rDay }
                 return minutes(of: lhs.time) < minutes(of: rhs.time)
             }
-            .prefix(4)
+            .prefix(maxUpcomingPlans)
             .map { plan in
                 // 進行中の期間プランは今日として扱い、未来のものは開始日を見せる
                 let displayDate = calendar.startOfDay(for: plan.startDate) < today ? now : plan.startDate

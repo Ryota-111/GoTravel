@@ -55,14 +55,37 @@ struct WidgetSnapshot: Codable, Equatable {
 
     static let empty = WidgetSnapshot()
 
-    /// 出発までの日数。旅行が無い、または進行中の場合は nil
-    var daysUntilTravel: Int? {
+    /// 出発までの日数。旅行が無い、または進行中の場合は nil。
+    /// ウィジェットは先の時刻の分も前もって描画するため、基準時刻を受け取る
+    func daysUntilTravel(asOf now: Date) -> Int? {
         guard !isTravelOngoing, let start = travelStartDate else { return nil }
         let calendar = Calendar.current
-        let today = calendar.startOfDay(for: Date())
+        let today = calendar.startOfDay(for: now)
         let startDay = calendar.startOfDay(for: start)
         guard startDay > today else { return nil }
         return calendar.dateComponents([.day], from: today, to: startDay).day
+    }
+
+    /// 指定時刻の時点で有効な内容に絞り込む。
+    /// アプリが起動されなくてもウィジェット側で古い予定が消えるようにするため、
+    /// 書き出し時ではなく表示時にこの絞り込みを通す
+    func filtered(at date: Date) -> WidgetSnapshot {
+        let calendar = Calendar.current
+        var copy = self
+
+        copy.upcomingPlans = upcomingPlans.filter { item in
+            guard let itemDate = item.date else { return true }
+
+            // 時刻のある予定は、その時刻を過ぎたら消す
+            if item.time != nil, let occursAt = item.occursAt {
+                return occursAt >= date
+            }
+
+            // 時刻のない予定はその日いっぱい残す
+            return calendar.startOfDay(for: itemDate) >= calendar.startOfDay(for: date)
+        }
+
+        return copy
     }
 
     var hasContent: Bool {
