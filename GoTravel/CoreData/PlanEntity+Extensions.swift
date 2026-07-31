@@ -125,19 +125,14 @@ extension PlanEntity {
         self.descriptionText = plan.description
         self.linkURL = plan.linkURL
 
-        // placesをエンコード
-        if !plan.places.isEmpty {
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            self.placesData = try? encoder.encode(plan.places)
-        }
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
 
-        // scheduleItemsをエンコード
-        if !plan.scheduleItems.isEmpty {
-            let encoder = JSONEncoder()
-            encoder.dateEncodingStrategy = .iso8601
-            self.scheduleItemsData = try? encoder.encode(plan.scheduleItems)
-        }
+        // placesをエンコード（空の場合は nil にして古いデータを残さない）
+        self.placesData = plan.places.isEmpty ? nil : try? encoder.encode(plan.places)
+
+        // scheduleItemsをエンコード（空の場合は nil にして古いデータを残さない）
+        self.scheduleItemsData = plan.scheduleItems.isEmpty ? nil : try? encoder.encode(plan.scheduleItems)
     }
 
     /// Plan構造体から新しいEntityを作成

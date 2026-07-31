@@ -16,6 +16,8 @@ struct PlanDetailView: View {
     @State private var showDeleteConfirmation = false
     @State private var showScheduleEditor = false
     @State private var editingScheduleItem: PlanScheduleItem?
+    /// 新規スケジュール追加時に初期選択する日付
+    @State private var newScheduleItemDate: Date?
 
     // 編集用の一時変数
     @State private var editedTitle: String = ""
@@ -923,6 +925,7 @@ struct PlanDetailView: View {
 
                 Button(action: {
                     editingScheduleItem = nil
+                    newScheduleItemDate = plan.scheduleDates.first
                     showScheduleEditor = true
                 }) {
                     HStack(spacing: 4) {
@@ -935,17 +938,15 @@ struct PlanDetailView: View {
                 }
             }
 
-            if plan.scheduleItems.isEmpty {
-                VStack(spacing: 12) {
-                    Image(systemName: "calendar.badge.clock")
-                        .font(.system(size: 40))
-                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.separatorDark : themeManager.currentTheme.separatorLight)
-                    Text("スケジュールがまだありません")
-                        .font(.subheadline)
-                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.separatorDark : themeManager.currentTheme.separatorLight)
+            if plan.hasMultipleScheduleDays {
+                // 複数日のおでかけプランは日付ごとにグループ表示
+                VStack(alignment: .leading, spacing: 20) {
+                    ForEach(scheduleDayGroups) { group in
+                        scheduleDayGroupView(group)
+                    }
                 }
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 30)
+            } else if plan.scheduleItems.isEmpty {
+                scheduleEmptyState
             } else {
                 VStack(spacing: 10) {
                     ForEach(sortedScheduleItems) { item in
@@ -959,6 +960,7 @@ struct PlanDetailView: View {
             ScheduleItemEditorView(
                 plan: $plan,
                 scheduleItem: editingScheduleItem,
+                initialDate: newScheduleItemDate,
                 onSave: { updatedPlan in
                     plan = updatedPlan
                     if let userId = authVM.userId {
@@ -969,7 +971,119 @@ struct PlanDetailView: View {
         }
     }
 
-    private func scheduleItemRow(item: PlanScheduleItem) -> some View {
+    private var scheduleEmptyState: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "calendar.badge.clock")
+                .font(.system(size: 40))
+                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.separatorDark : themeManager.currentTheme.separatorLight)
+            Text("スケジュールがまだありません")
+                .font(.subheadline)
+                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.separatorDark : themeManager.currentTheme.separatorLight)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 30)
+    }
+
+    // MARK: - Day Group
+
+    /// 1日分のスケジュール
+    struct ScheduleDayGroup: Identifiable {
+        let date: Date
+        /// プラン日程内なら「何日目」、範囲外なら nil
+        let dayNumber: Int?
+        let items: [PlanScheduleItem]
+
+        var id: Date { date }
+    }
+
+    /// 日付ごとにグループ化したスケジュール。
+    /// 日付未設定の既存項目は初日に含める。日程変更などで範囲外になった項目は末尾にまとめる。
+    private var scheduleDayGroups: [ScheduleDayGroup] {
+        let calendar = Calendar.current
+        let planDates = plan.scheduleDates
+        let fallbackDate = planDates.first ?? calendar.startOfDay(for: plan.startDate)
+
+        let grouped = Dictionary(grouping: plan.scheduleItems) { item in
+            item.dayKey(fallbackDate: fallbackDate)
+        }
+
+        // プラン日程内の日は、予定が無くても枠を表示する
+        var groups = planDates.enumerated().map { index, date in
+            ScheduleDayGroup(
+                date: date,
+                dayNumber: index + 1,
+                items: sortByTime(grouped[date] ?? [])
+            )
+        }
+
+        // 日程の範囲外にある項目（開始日・終了日を変更した場合など）
+        let outOfRangeDates = grouped.keys.filter { !planDates.contains($0) }.sorted()
+        groups += outOfRangeDates.map { date in
+            ScheduleDayGroup(date: date, dayNumber: nil, items: sortByTime(grouped[date] ?? []))
+        }
+
+        return groups
+    }
+
+    private func scheduleDayGroupView(_ group: ScheduleDayGroup) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                if let dayNumber = group.dayNumber {
+                    Text("\(dayNumber)日目")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(planColor))
+                } else {
+                    Text("日程外")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 4)
+                        .background(Capsule().fill(Color.secondary))
+                }
+
+                Text(formatDayHeader(group.date))
+                    .font(.subheadline)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+
+                Spacer()
+
+                Button(action: {
+                    editingScheduleItem = nil
+                    newScheduleItemDate = group.date
+                    showScheduleEditor = true
+                }) {
+                    Image(systemName: "plus.circle")
+                        .font(.body)
+                        .foregroundColor(planColor)
+                }
+            }
+
+            if group.items.isEmpty {
+                Text("この日の予定はまだありません")
+                    .font(.caption)
+                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.separatorDark : themeManager.currentTheme.separatorLight)
+                    .padding(.vertical, 8)
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(group.items) { item in
+                        scheduleItemRow(item: item, dayDate: group.date)
+                    }
+                }
+            }
+        }
+    }
+
+    private func formatDayHeader(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateFormat = "M月d日(E)"
+        return formatter.string(from: date)
+    }
+
+    private func scheduleItemRow(item: PlanScheduleItem, dayDate: Date? = nil) -> some View {
         HStack(alignment: .top, spacing: 12) {
             // Time
             VStack(spacing: 2) {
@@ -1011,6 +1125,8 @@ struct PlanDetailView: View {
             Menu {
                 Button(action: {
                     editingScheduleItem = item
+                    // 日付未設定の既存項目は表示中の日を初期値にする
+                    newScheduleItemDate = item.date ?? dayDate
                     showScheduleEditor = true
                 }) {
                     Label("編集", systemImage: "pencil")
@@ -1031,9 +1147,14 @@ struct PlanDetailView: View {
     }
 
     private var sortedScheduleItems: [PlanScheduleItem] {
+        sortByTime(plan.scheduleItems)
+    }
+
+    /// 同じ日の項目を時刻順（時・分のみ）に並べる
+    private func sortByTime(_ items: [PlanScheduleItem]) -> [PlanScheduleItem] {
         let calendar = Calendar.current
 
-        return plan.scheduleItems.sorted { item1, item2 in
+        return items.sorted { item1, item2 in
             // Extract hour and minute components only (ignore date)
             let components1 = calendar.dateComponents([.hour, .minute], from: item1.time)
             let components2 = calendar.dateComponents([.hour, .minute], from: item2.time)

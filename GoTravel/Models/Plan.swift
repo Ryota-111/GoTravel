@@ -107,6 +107,47 @@ struct Plan: Identifiable, Codable, Equatable {
     }
 }
 
+// MARK: - 日程ヘルパー
+
+extension Plan {
+    /// プランの各日（0:00）の配列。開始日〜終了日を1日ずつ並べる
+    var scheduleDates: [Date] {
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: startDate)
+        let end = calendar.startOfDay(for: max(endDate, startDate))
+        var dates: [Date] = []
+        var current = start
+        while current <= end {
+            dates.append(current)
+            guard let next = calendar.date(byAdding: .day, value: 1, to: current) else { break }
+            current = next
+        }
+        return dates.isEmpty ? [start] : dates
+    }
+
+    /// プランの日数（1以上）
+    var numberOfDays: Int {
+        scheduleDates.count
+    }
+
+    /// 複数日にまたがるプランか
+    var isMultiDay: Bool {
+        numberOfDays > 1
+    }
+
+    /// スケジュールを日付ごとに分ける必要があるか（複数日のおでかけプラン）
+    var hasMultipleScheduleDays: Bool {
+        planType == .outing && isMultiDay
+    }
+
+    /// 指定日がプランの何日目か（範囲外なら nil）
+    func dayNumber(for date: Date) -> Int? {
+        let day = Calendar.current.startOfDay(for: date)
+        guard let index = scheduleDates.firstIndex(of: day) else { return nil }
+        return index + 1
+    }
+}
+
 extension Color {
     init?(hex: String) {
         let r, g, b: CGFloat
