@@ -826,7 +826,7 @@ struct AddScheduleItemToEditorView: View {
             if let url = result.url {
                 HStack(spacing: 8) {
                     Image(systemName: "safari.fill")
-                        .foregroundStyle(themeManager.currentTheme.primary)
+                        .foregroundStyle(themeManager.currentTheme.actionFill)
                         .font(.title3)
                     Text(url.host ?? "Website")
                         .font(.subheadline)
@@ -839,7 +839,7 @@ struct AddScheduleItemToEditorView: View {
                             .font(.caption)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(themeManager.currentTheme.primary)
+                            .background(themeManager.currentTheme.actionFill)
                             .foregroundStyle(.white)
                             .cornerRadius(8)
                     }
@@ -855,8 +855,8 @@ struct AddScheduleItemToEditorView: View {
                     Label("経路", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(themeManager.currentTheme.primary.opacity(0.1))
-                        .foregroundStyle(themeManager.currentTheme.primary)
+                        .background(themeManager.currentTheme.actionFill.opacity(0.12))
+                        .foregroundStyle(themeManager.currentTheme.actionFill)
                         .cornerRadius(10)
                 }
 
@@ -866,8 +866,8 @@ struct AddScheduleItemToEditorView: View {
                     Label("選択", systemImage: "checkmark.circle.fill")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(themeManager.currentTheme.accent1.opacity(0.1))
-                        .foregroundStyle(themeManager.currentTheme.accent1)
+                        .background(themeManager.currentTheme.adaptiveText(for: colorScheme).opacity(0.12))
+                        .foregroundStyle(themeManager.currentTheme.adaptiveText(for: colorScheme))
                         .cornerRadius(10)
                 }
             }

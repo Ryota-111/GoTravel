@@ -684,11 +684,11 @@ struct AccountActionView: View {
                         VStack(spacing: 8) {
                             Text("アカウント管理")
                                 .font(.title2.bold())
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
+                                .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
 
                             Text("サインアウトまたはアカウント削除を行います")
                                 .font(.subheadline)
-                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
                                 .multilineTextAlignment(.center)
                         }
                     }
@@ -704,11 +704,11 @@ struct AccountActionView: View {
                             HStack {
                                 Image(systemName: "rectangle.portrait.and.arrow.right")
                                     .font(.title3)
-                                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                                    .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
 
                                 Text("サインアウト")
                                     .font(.headline)
-                                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                                    .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
 
                                 Spacer()
                             }
@@ -733,11 +733,11 @@ struct AccountActionView: View {
                             HStack {
                                 Image(systemName: "trash.fill")
                                     .font(.title3)
-                                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                                    .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
 
                                 Text("アカウント削除")
                                     .font(.headline)
-                                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                                    .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
 
                                 Spacer()
                             }
@@ -763,11 +763,11 @@ struct AccountActionView: View {
 
                             Text("• サインアウト: 再度ログインすることでアカウントを復元できます")
                                 .font(.caption)
-                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
 
                             Text("• アカウント削除: すべてのデータが完全に削除されます。この操作は取り消せません")
                                 .font(.caption)
-                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
                         }
                         .padding()
                         .background(
@@ -846,11 +846,11 @@ struct HelpSupportView: View {
                         VStack(spacing: 8) {
                             Text("ヘルプ・サポート")
                                 .font(.title2.bold())
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
+                                .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
 
                             Text("使い方やお困りの際はこちら")
                                 .font(.subheadline)
-                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
                         }
                     }
                     .opacity(animateCards ? 1 : 0)
@@ -982,17 +982,18 @@ struct AppSettingView: View {
                     VStack(spacing: 15) {
                         Image(systemName: "paintpalette.fill")
                             .font(.system(size: 60))
-                            .foregroundColor(themeManager.currentTheme.primary.opacity(0.8))
+                            // primary は白黒テーマで白になり背景に溶けるため actionFill を使う
+                            .foregroundColor(themeManager.currentTheme.actionFill.opacity(0.8))
                             .padding(.top, 30)
 
                         VStack(spacing: 8) {
                             Text("アプリ設定")
                                 .font(.title2.bold())
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
+                                .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
 
                             Text("テーマカラーをカスタマイズ")
                                 .font(.subheadline)
-                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
                         }
                     }
                     .opacity(animateCards ? 1 : 0)
@@ -1002,7 +1003,7 @@ struct AppSettingView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         Text("現在のテーマ")
                             .font(.headline)
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                            .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
 
                         HStack {
                             HStack(spacing: 8) {
@@ -1015,7 +1016,7 @@ struct AppSettingView: View {
 
                             Text(themeManager.currentTheme.type.displayName)
                                 .font(.headline)
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
+                                .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
                         }
                         .padding()
                         .background(
@@ -1037,7 +1038,7 @@ struct AppSettingView: View {
                     VStack(alignment: .leading, spacing: 16) {
                         Text("テーマを選択")
                             .font(.headline)
-                            .foregroundColor(colorScheme == .dark ? .white : .black)
+                            .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
                             .padding(.horizontal)
 
                         ForEach(Array(ThemePreset.ThemeType.allCases.enumerated()), id: \.offset) { index, themeType in
@@ -1115,7 +1116,7 @@ struct ThemeCard: View {
                 HStack {
                     Text(themeType.displayName)
                         .font(.headline)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
 
                     Spacer()
 
@@ -1138,11 +1139,12 @@ struct ThemeCard: View {
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 16)
-                    .fill(isSelected ? themeManager.currentTheme.primary.opacity(0.1) : themeManager.currentTheme.cardBackground2)
+                    // 選択中の枠が白黒テーマで白くなり、どれを選んでいるか分からなくなるため actionFill を使う
+                    .fill(isSelected ? themeManager.currentTheme.actionFill.opacity(0.1) : themeManager.currentTheme.cardBackground2)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 16)
-                    .stroke(isSelected ? themeManager.currentTheme.primary : themeManager.currentTheme.cardBorder, lineWidth: isSelected ? 2 : 1)
+                    .stroke(isSelected ? themeManager.currentTheme.actionFill : themeManager.currentTheme.cardBorder, lineWidth: isSelected ? 2 : 1)
             )
             .shadow(color: isSelected ? themeManager.currentTheme.shadow : Color.clear, radius: isSelected ? 15 : 5, x: 0, y: 5)
             .scaleEffect(isSelected ? 1.02 : 1.0)
@@ -1185,11 +1187,11 @@ struct HelpCard: View {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(title)
                         .font(.headline)
-                        .foregroundColor(colorScheme == .dark ? .white : .black)
+                        .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
 
                     Text(description)
                         .font(.caption)
-                        .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
 
                 Spacer()
@@ -1295,16 +1297,16 @@ struct UserGuideView: View {
                         VStack(spacing: 10) {
                             Image(systemName: "book.fill")
                                 .font(.system(size: 50))
-                                .foregroundColor(themeManager.currentTheme.primary.opacity(0.8))
+                                .foregroundColor(themeManager.currentTheme.actionFill.opacity(0.8))
                                 .padding(.top, 20)
 
                             Text("使い方ガイド")
                                 .font(.title.bold())
-                                .foregroundColor(colorScheme == .dark ? .white : .black)
+                                .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
 
                             Text("GoTravelの基本的な使い方")
                                 .font(.subheadline)
-                                .foregroundColor(colorScheme == .dark ? .white.opacity(0.7) : .gray)
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
                         }
                         .padding(.bottom, 10)
 
@@ -1341,7 +1343,7 @@ struct UserGuideView: View {
                     .foregroundColor(.yellow)
                 Text("便利なヒント")
                     .font(.headline)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
             }
 
             VStack(alignment: .leading, spacing: 10) {
@@ -1366,8 +1368,8 @@ struct UserGuideView: View {
     private var backgroundGradient: some View {
         LinearGradient(
             gradient: Gradient(colors: colorScheme == .dark ?
-                [themeManager.currentTheme.primary.opacity(0.7), themeManager.currentTheme.dark] :
-                [themeManager.currentTheme.primary.opacity(0.6), themeManager.currentTheme.light.opacity(0.3)]),
+                [themeManager.currentTheme.backgroundDark, themeManager.currentTheme.secondaryBackgroundDark] :
+                [themeManager.currentTheme.backgroundLight, themeManager.currentTheme.secondaryBackgroundLight]),
             startPoint: .top,
             endPoint: .bottom
         )
@@ -1414,7 +1416,7 @@ struct GuideSectionCard: View {
 
                 Text(section.title)
                     .font(.headline)
-                    .foregroundColor(colorScheme == .dark ? .white : .black)
+                    .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
 
                 Spacer()
             }
@@ -1430,7 +1432,7 @@ struct GuideSectionCard: View {
 
                         Text(step)
                             .font(.caption)
-                            .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .gray)
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
                     }
                 }
             }
@@ -1453,6 +1455,7 @@ struct TipRow: View {
     let text: String
     let color: Color
     @Environment(\.colorScheme) var colorScheme
+    @ObservedObject var themeManager = ThemeManager.shared
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -1463,7 +1466,7 @@ struct TipRow: View {
 
             Text(text)
                 .font(.caption)
-                .foregroundColor(colorScheme == .dark ? .white.opacity(0.8) : .gray)
+                .foregroundColor(themeManager.currentTheme.secondaryText)
         }
     }
 }

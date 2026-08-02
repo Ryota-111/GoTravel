@@ -5,6 +5,7 @@ struct AddPlanView: View {
 
     // MARK: - Properties
     @Environment(\.presentationMode) var presentationMode
+    @Environment(\.colorScheme) var colorScheme
     @ObservedObject var themeManager = ThemeManager.shared
 
     /// 履歴の元データ。既存の予定をそのままテンプレートとして再利用する
@@ -923,14 +924,14 @@ struct AddPlanView: View {
             if let url = result.url {
                 HStack(spacing: 8) {
                     Image(systemName: "safari.fill")
-                        .foregroundStyle(themeManager.currentTheme.primary)
+                        .foregroundStyle(themeManager.currentTheme.actionFill)
                         .font(.title3)
                     Text(url.host ?? "Website").font(.subheadline).lineLimit(1)
                     Spacer()
                     Button { UIApplication.shared.open(url) } label: {
                         Text("開く").font(.caption)
                             .padding(.horizontal, 12).padding(.vertical, 6)
-                            .background(themeManager.currentTheme.primary)
+                            .background(themeManager.currentTheme.actionFill)
                             .foregroundStyle(.white).cornerRadius(8)
                     }
                 }
@@ -942,14 +943,14 @@ struct AddPlanView: View {
                 Button { result.openInMaps() } label: {
                     Label("経路", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
                         .frame(maxWidth: .infinity).padding(.vertical, 12)
-                        .background(themeManager.currentTheme.primary.opacity(0.1))
-                        .foregroundStyle(themeManager.currentTheme.primary).cornerRadius(10)
+                        .background(themeManager.currentTheme.actionFill.opacity(0.12))
+                        .foregroundStyle(themeManager.currentTheme.actionFill).cornerRadius(10)
                 }
                 Button { addPlaceFromMapResult(result) } label: {
                     Label("追加", systemImage: "plus.circle.fill")
                         .frame(maxWidth: .infinity).padding(.vertical, 12)
-                        .background(themeManager.currentTheme.accent1.opacity(0.1))
-                        .foregroundStyle(themeManager.currentTheme.accent1).cornerRadius(10)
+                        .background(themeManager.currentTheme.adaptiveText(for: colorScheme).opacity(0.12))
+                        .foregroundStyle(themeManager.currentTheme.adaptiveText(for: colorScheme)).cornerRadius(10)
                 }
             }
         }

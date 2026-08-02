@@ -255,3 +255,22 @@ struct ThemePreset {
         }
     }
 }
+
+// MARK: - コントラストを保証する色
+
+extension ThemePreset {
+    /// 塗りつぶしボタンの背景に使う色。
+    /// 白黒テーマの primary は白のため、そのまま使うと白地に白文字になる
+    var actionFill: Color {
+        switch type {
+        case .whiteBlack: return .black
+        default: return primary
+        }
+    }
+
+    /// 明るい背景でも暗い背景でも読める文字色。
+    /// accent1 は黒固定のため、ダークモードで背景に溶ける
+    func adaptiveText(for scheme: ColorScheme) -> Color {
+        scheme == .dark ? accent2 : accent1
+    }
+}
