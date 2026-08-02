@@ -10,6 +10,7 @@ struct ScheduleItemEditorView: View {
     @ObservedObject var themeManager = ThemeManager.shared
 
     @State private var time: Date
+    @State private var selectedDay: Int
     @State private var title: String
     @State private var selectedPlaceId: String?
     @State private var note: String
@@ -28,12 +29,104 @@ struct ScheduleItemEditorView: View {
         _title = State(initialValue: item?.title ?? "")
         _selectedPlaceId = State(initialValue: item?.placeId)
         _note = State(initialValue: item?.note ?? "")
+
+        // 何日目の予定かを復元する。新規なら1日目から
+        let planValue = plan.wrappedValue
+        _selectedDay = State(initialValue: item.map { planValue.dayNumber(for: $0) } ?? 1)
+    }
+
+    /// 選んだ日と時刻を合成した、保存する日時
+    private var composedDate: Date {
+        let calendar = Calendar.current
+        let dayDate = plan.date(forDay: selectedDay)
+        let components = calendar.dateComponents([.hour, .minute], from: time)
+
+        return calendar.date(
+            bySettingHour: components.hour ?? 0,
+            minute: components.minute ?? 0,
+            second: 0,
+            of: dayDate
+        ) ?? dayDate
+    }
+
+    /// 何日目の予定かを選ぶ
+    private var daySelectionSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("日付")
+                .font(.subheadline)
+                .fontWeight(.semibold)
+                .foregroundColor(.secondary)
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(1...plan.dayCount, id: \.self) { day in
+                        dayChip(day)
+                    }
+                }
+                .padding(.horizontal, 2)
+                .padding(.vertical, 2)
+            }
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(Color(.secondarySystemBackground))
+                .shadow(color: Color.black.opacity(0.05), radius: 8, x: 0, y: 2)
+        )
+    }
+
+    private func dayChip(_ day: Int) -> some View {
+        let isSelected = selectedDay == day
+        let accent = plan.planType == .daily
+            ? themeManager.currentTheme.dailyPlanColor
+            : themeManager.currentTheme.outingPlanColor
+
+        return Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                selectedDay = day
+            }
+        } label: {
+            VStack(spacing: 3) {
+                Text("\(day)日目")
+                    .font(.caption.weight(.bold))
+                Text(dayLabel(for: day))
+                    .font(.caption2)
+                    .opacity(0.85)
+            }
+            .foregroundColor(isSelected ? .white : .primary)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background {
+                if isSelected {
+                    RoundedRectangle(cornerRadius: 12).fill(accent)
+                } else {
+                    RoundedRectangle(cornerRadius: 12).fill(Color(.systemBackground))
+                }
+            }
+            .overlay(
+                RoundedRectangle(cornerRadius: 12)
+                    .stroke(isSelected ? Color.clear : Color(.separator).opacity(0.5), lineWidth: 1)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    private func dayLabel(for day: Int) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateFormat = "M/d(E)"
+        return formatter.string(from: plan.date(forDay: day))
     }
 
     var body: some View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 20) {
+                    // 2日以上の予定のときだけ、何日目かを選べるようにする
+                    if plan.isMultiDay {
+                        daySelectionSection
+                    }
+
                     // Time Picker
                     VStack(alignment: .leading, spacing: 8) {
                         Text("時刻")
@@ -220,7 +313,7 @@ struct ScheduleItemEditorView: View {
             if let index = updatedPlan.scheduleItems.firstIndex(where: { $0.id == existingItem.id }) {
                 updatedPlan.scheduleItems[index] = PlanScheduleItem(
                     id: existingItem.id,
-                    time: time,
+                    time: composedDate,
                     title: title,
                     placeId: selectedPlaceId,
                     note: note.isEmpty ? nil : note
@@ -229,7 +322,7 @@ struct ScheduleItemEditorView: View {
         } else {
             // 新規追加モード
             let newItem = PlanScheduleItem(
-                time: time,
+                time: composedDate,
                 title: title,
                 placeId: selectedPlaceId,
                 note: note.isEmpty ? nil : note

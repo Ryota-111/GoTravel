@@ -135,3 +135,39 @@ extension Color {
         return String(format: "#%02X%02X%02X", Int(r*255), Int(g*255), Int(b*255))
     }
 }
+
+// MARK: - 複数日のスケジュール
+
+extension Plan {
+    /// 予定の日数（1始まり）
+    var dayCount: Int {
+        let calendar = Calendar.current
+        let days = calendar.dateComponents(
+            [.day],
+            from: calendar.startOfDay(for: startDate),
+            to: calendar.startOfDay(for: endDate)
+        ).day ?? 0
+        return max(days + 1, 1)
+    }
+
+    /// 2日以上にまたがるか。日付の選択欄や見出しを出すかの判定に使う
+    var isMultiDay: Bool { dayCount > 1 }
+
+    /// スケジュール項目が何日目かを返す（1始まり）。
+    /// 日付を指定できなかった頃のデータは期間外の日付を持つため、1日目として扱う
+    func dayNumber(for item: PlanScheduleItem) -> Int {
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: startDate)
+        let itemDay = calendar.startOfDay(for: item.time)
+
+        guard itemDay >= start else { return 1 }
+
+        let diff = calendar.dateComponents([.day], from: start, to: itemDay).day ?? 0
+        return min(diff + 1, dayCount)
+    }
+
+    /// 指定の日番号に対応する日付
+    func date(forDay dayNumber: Int) -> Date {
+        Calendar.current.date(byAdding: .day, value: dayNumber - 1, to: startDate) ?? startDate
+    }
+}

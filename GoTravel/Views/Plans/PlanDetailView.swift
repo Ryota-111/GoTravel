@@ -1064,9 +1064,18 @@ struct PlanDetailView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 30)
             } else {
-                VStack(spacing: 10) {
-                    ForEach(sortedScheduleItems) { item in
-                        scheduleItemRow(item: item)
+                VStack(alignment: .leading, spacing: 18) {
+                    ForEach(scheduleItemsByDay, id: \.day) { group in
+                        VStack(alignment: .leading, spacing: 10) {
+                            // 1日だけの予定では見出しが冗長になるので出さない
+                            if plan.isMultiDay {
+                                dayHeader(for: group.day)
+                            }
+
+                            ForEach(group.items) { item in
+                                scheduleItemRow(item: item)
+                            }
+                        }
                     }
                 }
             }
@@ -1084,6 +1093,31 @@ struct PlanDetailView: View {
                 }
             )
         }
+    }
+
+    /// 「1日目 8/1(土)」の見出し
+    private func dayHeader(for day: Int) -> some View {
+        HStack(spacing: 8) {
+            Text("\(day)日目")
+                .font(.caption.weight(.bold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(planColor, in: Capsule())
+
+            Text(formatDayHeaderDate(plan.date(forDay: day)))
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+
+            Spacer()
+        }
+    }
+
+    private func formatDayHeaderDate(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateFormat = "M月d日(E)"
+        return formatter.string(from: date)
     }
 
     private func scheduleItemRow(item: PlanScheduleItem) -> some View {
@@ -1147,26 +1181,21 @@ struct PlanDetailView: View {
         .padding(.vertical, 8)
     }
 
-    private var sortedScheduleItems: [PlanScheduleItem] {
-        let calendar = Calendar.current
+    /// 何日目かでまとめ、日ごとに時刻順で並べる。
+    /// 複数日のおでかけで1日目と2日目の予定が混ざらないようにするため
+    private var scheduleItemsByDay: [(day: Int, items: [PlanScheduleItem])] {
+        let grouped = Dictionary(grouping: plan.scheduleItems) { plan.dayNumber(for: $0) }
 
-        return plan.scheduleItems.sorted { item1, item2 in
-            // Extract hour and minute components only (ignore date)
-            let components1 = calendar.dateComponents([.hour, .minute], from: item1.time)
-            let components2 = calendar.dateComponents([.hour, .minute], from: item2.time)
-
-            let hour1 = components1.hour ?? 0
-            let minute1 = components1.minute ?? 0
-            let hour2 = components2.hour ?? 0
-            let minute2 = components2.minute ?? 0
-
-            // Compare by hour first, then by minute
-            if hour1 != hour2 {
-                return hour1 < hour2
-            } else {
-                return minute1 < minute2
-            }
+        return grouped.keys.sorted().map { day in
+            let items = (grouped[day] ?? []).sorted { minutesOfDay($0.time) < minutesOfDay($1.time) }
+            return (day, items)
         }
+    }
+
+    /// 日付部分を無視して時刻だけで比較するための分換算
+    private func minutesOfDay(_ date: Date) -> Int {
+        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return (components.hour ?? 0) * 60 + (components.minute ?? 0)
     }
 
     private func deleteScheduleItem(_ item: PlanScheduleItem) {
@@ -1264,7 +1293,8 @@ struct PlanDetailView: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(schedulePlan.title)
                         .font(.system(size: 15, weight: .semibold))
-                        .foregroundColor(themeManager.currentTheme.light)
+                        // light は全テーマで白のため、明るいカード背景では読めなかった
+                        .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
                         .lineLimit(1)
 
                     HStack(spacing: 4) {
@@ -1636,7 +1666,7 @@ struct PlanDetailView: View {
             if let url = result.url {
                 HStack(spacing: 8) {
                     Image(systemName: "safari.fill")
-                        .foregroundStyle(themeManager.currentTheme.primary)
+                        .foregroundStyle(themeManager.currentTheme.actionFill)
                         .font(.title3)
                     Text(url.host ?? "Website")
                         .font(.subheadline)
@@ -1649,7 +1679,7 @@ struct PlanDetailView: View {
                             .font(.caption)
                             .padding(.horizontal, 12)
                             .padding(.vertical, 6)
-                            .background(themeManager.currentTheme.primary)
+                            .background(themeManager.currentTheme.actionFill)
                             .foregroundStyle(.white)
                             .cornerRadius(8)
                     }
@@ -1665,8 +1695,8 @@ struct PlanDetailView: View {
                     Label("経路", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(themeManager.currentTheme.primary.opacity(0.1))
-                        .foregroundStyle(themeManager.currentTheme.primary)
+                        .background(themeManager.currentTheme.actionFill.opacity(0.12))
+                        .foregroundStyle(themeManager.currentTheme.actionFill)
                         .cornerRadius(10)
                 }
 
@@ -1676,8 +1706,8 @@ struct PlanDetailView: View {
                     Label("追加", systemImage: "plus.circle.fill")
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
-                        .background(themeManager.currentTheme.accent1.opacity(0.1))
-                        .foregroundStyle(themeManager.currentTheme.accent1)
+                        .background(themeManager.currentTheme.adaptiveText(for: colorScheme).opacity(0.12))
+                        .foregroundStyle(themeManager.currentTheme.adaptiveText(for: colorScheme))
                         .cornerRadius(10)
                 }
             }
