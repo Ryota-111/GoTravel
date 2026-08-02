@@ -6,6 +6,7 @@ import CoreLocation
 final class SavePlaceViewModel: ObservableObject {
     @Published var title: String = ""
     @Published var notes: String = ""
+    @Published var linkURL: String = ""
     @Published var image: UIImage?
     @Published var visitedAt: Date? = nil
     @Published var categoryId: String = "hotel"
@@ -34,6 +35,9 @@ final class SavePlaceViewModel: ObservableObject {
             longitude: coord.longitude,
             createdAt: Date(),
             visitedAt: visitedAt,
+            linkURL: linkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? nil
+                : linkURL.trimmingCharacters(in: .whitespacesAndNewlines),
             categoryId: categoryId
         )
 

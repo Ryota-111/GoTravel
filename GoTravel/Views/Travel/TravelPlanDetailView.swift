@@ -311,6 +311,11 @@ struct TravelPlanDetailView: View {
                         .foregroundColor(themeManager.currentTheme.secondaryText)
                         .lineLimit(2)
                 }
+
+                // 入力できるのに表示先が無く、開く手段がなかったため追加
+                if let linkURL = item.linkURL {
+                    LinkChip(rawURL: linkURL, tint: themeManager.currentTheme.info)
+                }
             }
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)

@@ -14,6 +14,7 @@ public class VisitedPlaceEntity: NSManagedObject {
     @NSManaged public var visitedAt: Date?
     @NSManaged public var localPhotoFileName: String?
     @NSManaged public var address: String?
+    @NSManaged public var linkURL: String?
     @NSManaged public var tagsData: Data?
     @NSManaged public var category: String?
     @NSManaged public var travelPlanId: String?
@@ -90,6 +91,7 @@ extension VisitedPlaceEntity {
             photoURL: nil, // ローカルファイルから読み込むため
             localPhotoFileName: localPhotoFileName,
             address: address,
+            linkURL: linkURL,
             tags: tags,
             categoryId: category ?? "hotel",
             travelPlanId: travelPlanId,
@@ -112,6 +114,7 @@ extension VisitedPlaceEntity {
         self.visitedAt = place.visitedAt
         self.localPhotoFileName = place.localPhotoFileName
         self.address = place.address
+        self.linkURL = place.linkURL
         self.category = place.categoryId
         self.travelPlanId = place.travelPlanId
         self.userId = place.userId ?? ""

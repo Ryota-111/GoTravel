@@ -60,6 +60,7 @@ struct SavePlaceView: View {
                         categorySection
                         dateSection
                         notesSection
+                        linkSection
 
                         if let error = vm.error {
                             errorView(error)
@@ -232,6 +233,24 @@ struct SavePlaceView: View {
     }
 
     // MARK: - Notes Section
+    private var linkSection: some View {
+        sectionCard {
+            VStack(alignment: .leading, spacing: 10) {
+                sectionLabel("リンク（任意）", icon: "link")
+                TextField("公式サイトや予約ページなど", text: $vm.linkURL)
+                    .font(.body)
+                    .foregroundColor(accentColor)
+                    .keyboardType(.URL)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
+                    .padding(14)
+                    .background(fieldBg)
+                    .cornerRadius(12)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(themeManager.currentTheme.xprimary.opacity(0.15), lineWidth: 1))
+            }
+        }
+    }
+
     private var notesSection: some View {
         sectionCard {
             VStack(alignment: .leading, spacing: 10) {

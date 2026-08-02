@@ -13,6 +13,8 @@ struct VisitedPlace: Identifiable, Codable, Hashable {
     var localPhotoFileName: String?
     var address: String?
     var tags: [String]?
+    /// 公式サイトや予約ページなど、場所に紐づくリンク
+    var linkURL: String?
     var categoryId: String
     var travelPlanId: String?
     var userId: String?
@@ -31,6 +33,7 @@ struct VisitedPlace: Identifiable, Codable, Hashable {
          photoURL: String? = nil,
          localPhotoFileName: String? = nil,
          address: String? = nil,
+         linkURL: String? = nil,
          tags: [String]? = nil,
          categoryId: String = "other",
          travelPlanId: String? = nil,
@@ -45,6 +48,7 @@ struct VisitedPlace: Identifiable, Codable, Hashable {
         self.photoURL = photoURL
         self.localPhotoFileName = localPhotoFileName
         self.address = address
+        self.linkURL = linkURL
         self.tags = tags
         self.categoryId = categoryId
         self.travelPlanId = travelPlanId

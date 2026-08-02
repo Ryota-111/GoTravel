@@ -22,6 +22,7 @@ struct PlaceDetailView: View {
     // 編集用の一時変数
     @State private var editedTitle: String = ""
     @State private var editedNotes: String = ""
+    @State private var editedLinkURL: String = ""
     @State private var editedCategoryId: String = "other"
     @State private var editedVisitedAt: Date = Date()
 
@@ -271,6 +272,36 @@ struct PlaceDetailView: View {
                     RoundedRectangle(cornerRadius: 16)
                         .fill(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
                         .shadow(color: themeManager.currentTheme.dark.opacity(0.05), radius: 8, x: 0, y: 2)
+                )
+
+                // Link Card
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("リンク（任意）")
+                        .font(.subheadline)
+                        .fontWeight(.semibold)
+                        .foregroundColor(textColor)
+
+                    HStack(spacing: 10) {
+                        Image(systemName: "link")
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
+                        TextField("公式サイトや予約ページなど", text: $editedLinkURL)
+                            .font(.body)
+                            .keyboardType(.URL)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                    }
+                    .padding(14)
+                    .background(colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight)
+                    .cornerRadius(10)
+                }
+                .padding(16)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(themeManager.currentTheme.cardBackground2)
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 16)
+                        .stroke(themeManager.currentTheme.xprimary.opacity(0.3), lineWidth: 1)
                 )
 
                 // Notes Card
@@ -640,6 +671,10 @@ struct PlaceDetailView: View {
                     .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
                     .italic()
             }
+
+            if let link = place.linkURL, !link.isEmpty {
+                LinkChip(rawURL: link, tint: themeManager.currentTheme.xprimary)
+            }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
     }
@@ -768,6 +803,7 @@ struct PlaceDetailView: View {
     private func enterEditMode() {
         editedTitle = place.title
         editedNotes = place.notes ?? ""
+        editedLinkURL = place.linkURL ?? ""
         editedCategoryId = place.categoryId
         editedVisitedAt = place.visitedAt ?? Date()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
@@ -810,6 +846,7 @@ struct PlaceDetailView: View {
         var updatedPlace = place
         updatedPlace.title = editedTitle
         updatedPlace.notes = editedNotes.isEmpty ? nil : editedNotes
+        updatedPlace.linkURL = editedLinkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : editedLinkURL.trimmingCharacters(in: .whitespacesAndNewlines)
         updatedPlace.categoryId = editedCategoryId
         updatedPlace.visitedAt = editedVisitedAt
         updatedPlace.localPhotoFileName = localFileName

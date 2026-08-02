@@ -34,6 +34,9 @@ enum TravelPlanTextExporter {
                 if let notes = item.notes, !notes.isEmpty {
                     lines.append("　　\(notes)")
                 }
+                if let link = item.linkURL, !link.isEmpty {
+                    lines.append("　　\(link)")
+                }
             }
         }
 

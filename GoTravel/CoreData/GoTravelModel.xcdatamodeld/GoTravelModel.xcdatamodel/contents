@@ -63,6 +63,7 @@
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="id" optional="YES" attributeType="String"/>
         <attribute name="latitude" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
+        <attribute name="linkURL" optional="YES" attributeType="String"/>
         <attribute name="localPhotoFileName" optional="YES" attributeType="String"/>
         <attribute name="longitude" optional="YES" attributeType="Double" usesScalarValueType="YES"/>
         <attribute name="notes" optional="YES" attributeType="String"/>
