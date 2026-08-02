@@ -37,11 +37,13 @@ struct TravoryProvider: AppIntentTimelineProvider {
         // 1件だけだとアプリを起動するまで古い予定が残り続けるため、
         // 各時刻の時点で正しい内容をあらかじめ用意しておく
         var checkpoints: [Date] = [now]
-        checkpoints += stored.upcomingPlans
-            .compactMap(\.occursAt)
-            .filter { $0 > now && $0 < nextMidnight }
+        checkpoints += stored.upcomingPlans.compactMap(\.occursAt)
+        // 旅行中は次の予定の時刻で表示が切り替わるので、こちらも区切り点にする
+        checkpoints += stored.travelScheduleItems.compactMap(\.occursAt)
 
-        let sortedCheckpoints = Array(Set(checkpoints)).sorted().prefix(12)
+        checkpoints = checkpoints.filter { $0 == now || ($0 > now && $0 < nextMidnight) }
+
+        let sortedCheckpoints = Array(Set(checkpoints)).sorted().prefix(16)
 
         let entries = sortedCheckpoints.map { date in
             TravoryEntry(
@@ -101,7 +103,7 @@ struct TravoryWidgetView: View {
         case .accessoryRectangular:
             LockScreenView(
                 snapshot: snapshot,
-                contentType: contentType.resolved(for: snapshot),
+                contentType: contentType.resolved(for: snapshot, asOf: referenceDate),
                 referenceDate: referenceDate
             )
         case .systemMedium:
@@ -110,7 +112,7 @@ struct TravoryWidgetView: View {
         default:
             SmallView(
                 snapshot: snapshot,
-                contentType: contentType.resolved(for: snapshot),
+                contentType: contentType.resolved(for: snapshot, asOf: referenceDate),
                 referenceDate: referenceDate
             )
         }
@@ -119,9 +121,9 @@ struct TravoryWidgetView: View {
 
 extension WidgetContentType {
     /// 「自動」を、実際に表示する側へ解決する
-    func resolved(for snapshot: WidgetSnapshot) -> WidgetContentType {
+    func resolved(for snapshot: WidgetSnapshot, asOf date: Date) -> WidgetContentType {
         guard self == .automatic else { return self }
-        return snapshot.prefersTravel ? .travel : .plan
+        return snapshot.prefersTravel(asOf: date) ? .travel : .plan
     }
 }
 
@@ -150,18 +152,34 @@ private struct SmallView: View {
 
     @ViewBuilder
     private var travelContent: some View {
-        if snapshot.isTravelOngoing, let title = snapshot.travelTitle {
-            Label("旅行中", systemImage: "airplane")
+        if snapshot.isTravelOngoing(asOf: referenceDate), let title = snapshot.travelTitle {
+            Label(title, systemImage: "airplane")
                 .font(.caption2.weight(.bold))
                 .foregroundStyle(TravoryWidgetPalette.ongoing)
+                .lineLimit(1)
 
-            Text(title)
-                .font(.system(.subheadline, design: .rounded).weight(.bold))
-                .lineLimit(2)
+            if let current = snapshot.travelScheduleItems.first {
+                // 旅行中は「今どこにいる予定か」を主役にする
+                Text(TravoryWidgetFormatter.time.string(from: current.time ?? referenceDate))
+                    .font(.system(size: 15, weight: .bold, design: .rounded).monospacedDigit())
+                    .foregroundStyle(TravoryWidgetPalette.accent)
 
-            if let next = snapshot.todayItems.first {
-                Spacer(minLength: 0)
-                ItemRow(item: next, compact: true, showsDate: false, referenceDate: referenceDate)
+                Text(current.title)
+                    .font(.system(.subheadline, design: .rounded).weight(.bold))
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.85)
+
+                if let location = current.subtitle, !location.isEmpty {
+                    Label(location, systemImage: "mappin")
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+            } else {
+                Text("今日の予定はありません")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
         } else if let days = snapshot.daysUntilTravel(asOf: referenceDate), let title = snapshot.travelTitle {
@@ -226,7 +244,7 @@ private struct MediumView: View {
 
     /// 旅行中はその日のスケジュール、それ以外は今後の予定を並べる
     private var listItems: [WidgetSnapshot.Item] {
-        snapshot.isTravelOngoing ? snapshot.todayItems : snapshot.upcomingPlans
+        snapshot.isTravelOngoing(asOf: referenceDate) ? snapshot.travelScheduleItems : snapshot.upcomingPlans
     }
 
     var body: some View {
@@ -237,7 +255,7 @@ private struct MediumView: View {
             Divider()
 
             VStack(alignment: .leading, spacing: 6) {
-                Text(snapshot.isTravelOngoing ? "今日の予定" : "これからの予定")
+                Text(snapshot.isTravelOngoing(asOf: referenceDate) ? "ここからの予定" : "これからの予定")
                     .font(.caption2.weight(.bold))
                     .foregroundStyle(.secondary)
 
@@ -248,7 +266,7 @@ private struct MediumView: View {
                 } else {
                     ForEach(listItems.prefix(3)) { item in
                         // 旅行中の一覧はすべて当日なので日付は出さない
-                        ItemRow(item: item, compact: true, showsDate: !snapshot.isTravelOngoing, referenceDate: referenceDate)
+                        ItemRow(item: item, compact: true, showsDate: !snapshot.isTravelOngoing(asOf: referenceDate), referenceDate: referenceDate)
                     }
                 }
 
@@ -260,7 +278,7 @@ private struct MediumView: View {
 
     @ViewBuilder
     private var leadingColumn: some View {
-        if snapshot.isTravelOngoing, let title = snapshot.travelTitle {
+        if snapshot.isTravelOngoing(asOf: referenceDate), let title = snapshot.travelTitle {
             VStack(alignment: .leading, spacing: 6) {
                 Label("旅行中", systemImage: "airplane")
                     .font(.caption2.weight(.bold))
@@ -345,17 +363,27 @@ private struct LockScreenView: View {
 
     @ViewBuilder
     private var travelContent: some View {
-        if snapshot.isTravelOngoing, let title = snapshot.travelTitle {
-            Text(title)
-                .font(.headline)
-                .lineLimit(1)
-                .minimumScaleFactor(0.8)
-            if let next = snapshot.todayItems.first {
-                // 旅行中の一覧は当日のみなので日付は出さない
-                Text(line(for: next, showsDate: false))
+        if snapshot.isTravelOngoing(asOf: referenceDate), let title = snapshot.travelTitle {
+            if let current = snapshot.travelScheduleItems.first {
+                // 旅行名より、今の予定を大きく見せる
+                Text(headerLine(travelTitle: title, item: current))
                     .font(.caption)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
+
+                Text(current.title)
+                    .font(.headline)
+                    .lineLimit(2)
+                    .minimumScaleFactor(0.8)
+
+            } else {
+                Text(title)
+                    .font(.headline)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+                Text("今日の予定はありません")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
             }
 
         } else if let days = snapshot.daysUntilTravel(asOf: referenceDate), let title = snapshot.travelTitle {
@@ -407,6 +435,12 @@ private struct LockScreenView: View {
             parts.append(TravoryWidgetFormatter.time.string(from: time))
         }
         return parts.joined(separator: " · ")
+    }
+
+    /// 「沖縄旅行 · 14:00」のような見出し行
+    private func headerLine(travelTitle: String, item: WidgetSnapshot.Item) -> String {
+        guard let time = item.time else { return travelTitle }
+        return "\(travelTitle) · \(TravoryWidgetFormatter.time.string(from: time))"
     }
 
     /// 「今日 14:00 ジム」のように、日付と時刻を前に置く

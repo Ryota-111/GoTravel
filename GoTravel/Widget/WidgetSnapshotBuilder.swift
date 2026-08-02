@@ -9,7 +9,9 @@ enum WidgetSnapshotBuilder {
     /// 時刻を過ぎた予定はウィジェット側で順に消えていくため、
     /// 表示件数ぴったりだと途中で「予定なし」になってしまう
     private static let maxUpcomingPlans = 12
-    private static let maxTodayItems = 8
+    /// 旅行スケジュールは期間全体を保存する。1日あたりと全体の上限
+    private static let maxItemsPerDay = 8
+    private static let maxTravelScheduleItems = 80
 
     @MainActor
     static func update(travelPlans: [TravelPlan], plans: [Plan]) {
@@ -45,11 +47,10 @@ enum WidgetSnapshotBuilder {
             snapshot.travelDestination = travel.destination
             snapshot.travelStartDate = travel.startDate
             snapshot.travelEndDate = travel.endDate
-            snapshot.isTravelOngoing = (ongoing != nil)
 
-            if ongoing != nil {
-                snapshot.todayItems = todaySchedule(of: travel, on: now)
-            }
+            // 旅行中かどうかはウィジェット側で日付から判定するため保存しない。
+            // スケジュールは期間全体を持たせ、アプリ未起動でも翌日以降に追従させる
+            snapshot.travelScheduleItems = travelSchedule(of: travel)
         }
 
         snapshot.upcomingPlans = upcomingPlanItems(from: plans, now: now)
@@ -58,29 +59,39 @@ enum WidgetSnapshotBuilder {
 
     // MARK: - Helpers
 
-    /// 旅行中の当日にあたる日程のスケジュールを時刻順で返す
-    private static func todaySchedule(of travel: TravelPlan, on now: Date) -> [WidgetSnapshot.Item] {
+    /// 旅行期間の全日分のスケジュールを、それぞれの日付付きで返す。
+    /// 各項目に実際の日付を持たせることで、ウィジェット側が
+    /// アプリを起動しなくても当日分を選び出せる
+    private static func travelSchedule(of travel: TravelPlan) -> [WidgetSnapshot.Item] {
         let calendar = Calendar.current
-        let today = calendar.startOfDay(for: now)
+        var result: [WidgetSnapshot.Item] = []
 
-        let dayNumber = (calendar.dateComponents([.day], from: calendar.startOfDay(for: travel.startDate), to: today).day ?? 0) + 1
+        for daySchedule in travel.daySchedules.sorted(by: { $0.dayNumber < $1.dayNumber }) {
+            // daySchedule.date が未設定の場合に備えて開始日から算出する
+            let dayDate = calendar.date(
+                byAdding: .day,
+                value: daySchedule.dayNumber - 1,
+                to: travel.startDate
+            ) ?? daySchedule.date
 
-        guard let daySchedule = travel.daySchedules.first(where: { $0.dayNumber == dayNumber }) else {
-            return []
+            let items = daySchedule.scheduleItems
+                .sorted { minutes(of: $0.time) < minutes(of: $1.time) }
+                .prefix(maxItemsPerDay)
+                .map { item in
+                    WidgetSnapshot.Item(
+                        id: item.id,
+                        date: dayDate,
+                        time: item.time,
+                        title: item.title,
+                        subtitle: item.location
+                    )
+                }
+
+            result.append(contentsOf: items)
+            if result.count >= maxTravelScheduleItems { break }
         }
 
-        return daySchedule.scheduleItems
-            .sorted { minutes(of: $0.time) < minutes(of: $1.time) }
-            .prefix(maxTodayItems)
-            .map { item in
-                WidgetSnapshot.Item(
-                    id: item.id,
-                    date: now,
-                    time: item.time,
-                    title: item.title,
-                    subtitle: item.location
-                )
-            }
+        return Array(result.prefix(maxTravelScheduleItems))
     }
 
     /// 今日以降の予定を日付順に返す

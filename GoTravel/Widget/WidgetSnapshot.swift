@@ -39,11 +39,10 @@ struct WidgetSnapshot: Codable, Equatable {
     var travelStartDate: Date?
     var travelEndDate: Date?
 
-    /// 旅行中かどうか。true なら todayItems を主役に表示する
-    var isTravelOngoing: Bool = false
-
-    /// 旅行中の当日のスケジュール
-    var todayItems: [Item] = []
+    /// 旅行期間中の全日分のスケジュール。
+    /// 当日分だけを持つと、アプリを起動しないまま日付をまたいだときに
+    /// 表示が止まってしまうため、期間全体を保存して表示時に日付で絞り込む
+    var travelScheduleItems: [Item] = []
 
     /// 旅行がないときに出す直近の予定
     var upcomingPlans: [Item] = []
@@ -55,15 +54,32 @@ struct WidgetSnapshot: Codable, Equatable {
 
     static let empty = WidgetSnapshot()
 
-    /// 出発までの日数。旅行が無い、または進行中の場合は nil。
-    /// ウィジェットは先の時刻の分も前もって描画するため、基準時刻を受け取る
+    /// 旅行中かどうか。保存時の値を持つとアプリ未起動で切り替わらないため、
+    /// 表示する時刻から毎回判定する
+    func isTravelOngoing(asOf now: Date) -> Bool {
+        guard let start = travelStartDate, let end = travelEndDate else { return false }
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: now)
+        return calendar.startOfDay(for: start) <= today && calendar.startOfDay(for: end) >= today
+    }
+
+    /// 出発までの日数。旅行が無い、または進行中の場合は nil
     func daysUntilTravel(asOf now: Date) -> Int? {
-        guard !isTravelOngoing, let start = travelStartDate else { return nil }
+        guard !isTravelOngoing(asOf: now), let start = travelStartDate else { return nil }
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: now)
         let startDay = calendar.startOfDay(for: start)
         guard startDay > today else { return nil }
         return calendar.dateComponents([.day], from: today, to: startDay).day
+    }
+
+    /// 指定時刻の日にあたる旅行スケジュール
+    func travelItems(on date: Date) -> [Item] {
+        let calendar = Calendar.current
+        return travelScheduleItems.filter { item in
+            guard let itemDate = item.date else { return false }
+            return calendar.isDate(itemDate, inSameDayAs: date)
+        }
     }
 
     /// 指定時刻の時点で有効な内容に絞り込む。
@@ -72,6 +88,10 @@ struct WidgetSnapshot: Codable, Equatable {
     func filtered(at date: Date) -> WidgetSnapshot {
         let calendar = Calendar.current
         var copy = self
+
+        // その日の分だけを取り出し、進行中のものを先頭にして以降を残す。
+        // 常に先頭を出すと、夕方でも朝の予定が表示されたままになる
+        copy.travelScheduleItems = Self.currentAndUpcoming(travelItems(on: date), at: date)
 
         copy.upcomingPlans = upcomingPlans.filter { item in
             guard let itemDate = item.date else { return true }
@@ -92,10 +112,28 @@ struct WidgetSnapshot: Codable, Equatable {
         travelTitle != nil || !upcomingPlans.isEmpty
     }
 
+    /// 進行中の予定を先頭に、それ以降を返す。
+    /// 開始済みの予定は次の予定が始まるまで「今やっていること」として残す
+    private static func currentAndUpcoming(_ items: [Item], at date: Date) -> [Item] {
+        guard !items.isEmpty else { return [] }
+
+        var startIndex = 0
+        for (index, item) in items.enumerated() {
+            guard let occursAt = item.occursAt else { continue }
+            if occursAt <= date {
+                startIndex = index
+            } else {
+                break
+            }
+        }
+
+        return Array(items[startIndex...])
+    }
+
     /// 「自動」表示のときに旅行と予定のどちらを主役にするか。
     /// 旅行中なら旅行、そうでなければ先に来るほうを選ぶ
-    var prefersTravel: Bool {
-        if isTravelOngoing { return true }
+    func prefersTravel(asOf now: Date) -> Bool {
+        if isTravelOngoing(asOf: now) { return true }
 
         let calendar = Calendar.current
         switch (travelStartDate, upcomingPlans.first?.date) {
