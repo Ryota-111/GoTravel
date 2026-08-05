@@ -42,8 +42,13 @@ struct JapanPhotoView: View {
         .sheet(item: $selectedPrefecture) { prefecture in
             PrefecturePhotoEditorView(
                 prefecture: prefecture,
+                existingImage: viewModel.photos[prefecture],
                 onSave: { image in
                     viewModel.savePhoto(for: prefecture, image: image)
+                    selectedPrefecture = nil
+                },
+                onDelete: {
+                    viewModel.deletePhoto(for: prefecture)
                     selectedPrefecture = nil
                 }
             )
@@ -429,12 +434,22 @@ struct PrefectureGridCard: View {
 // MARK: - Prefecture Photo Editor View
 struct PrefecturePhotoEditorView: View {
     let prefecture: Prefecture
+    /// 登録済みの写真。差し替え前でも現在の写真が見えるようにする
+    let existingImage: UIImage?
     let onSave: (UIImage) -> Void
+    let onDelete: () -> Void
+
     @State private var selectedImage: UIImage?
     @State private var showImagePicker = false
+    @State private var showDeleteConfirm = false
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.colorScheme) var colorScheme
     @ObservedObject var themeManager = ThemeManager.shared
+
+    /// 選択中があればそれを、なければ登録済みの写真を表示する
+    private var displayedImage: UIImage? {
+        selectedImage ?? existingImage
+    }
 
     private var accentColor: Color {
         colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
@@ -535,7 +550,7 @@ struct PrefecturePhotoEditorView: View {
 
     private var imagePreviewSection: some View {
         Group {
-            if let image = selectedImage {
+            if let image = displayedImage {
                 Image(uiImage: image)
                     .resizable()
                     .aspectRatio(contentMode: .fill)
@@ -583,7 +598,7 @@ struct PrefecturePhotoEditorView: View {
             Button(action: { showImagePicker = true }) {
                 HStack(spacing: 6) {
                     Image(systemName: "photo.on.rectangle")
-                    Text("写真を選択")
+                    Text(existingImage == nil ? "写真を選択" : "写真を変更")
                 }
                 .font(.headline.weight(.bold))
                 .foregroundColor(.white)
@@ -620,8 +635,41 @@ struct PrefecturePhotoEditorView: View {
                 .buttonStyle(PlainButtonStyle())
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
             }
+
+            // 登録済みの写真を消す手段が無かったため追加
+            if existingImage != nil {
+                Button(action: { showDeleteConfirm = true }) {
+                    HStack(spacing: 6) {
+                        Image(systemName: "trash")
+                        Text("写真を削除")
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(themeManager.currentTheme.error)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(themeManager.currentTheme.error.opacity(0.1))
+                    )
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 14)
+                            .stroke(themeManager.currentTheme.error.opacity(0.3), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
         }
         .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selectedImage != nil)
+        .confirmationDialog(
+            "\(prefecture.name)の写真を削除しますか？",
+            isPresented: $showDeleteConfirm,
+            titleVisibility: .visible
+        ) {
+            Button("削除", role: .destructive) { onDelete() }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("削除した写真は元に戻せません")
+        }
     }
 }
 
