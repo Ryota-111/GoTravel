@@ -35,15 +35,31 @@ struct TravoryProvider: AppIntentTimelineProvider {
 
         // 予定の時刻ごとに区切ってエントリを作る。
         // 1件だけだとアプリを起動するまで古い予定が残り続けるため、
-        // 各時刻の時点で正しい内容をあらかじめ用意しておく
+        // 各時刻の時点で正しい内容をあらかじめ用意しておく。
+        //
+        // WidgetKit の更新は時刻ちょうどに走る保証がなく、特にロック画面は
+        // 機会が少ない。今日の分しか用意しないと日付が変わっても前日の表示が
+        // 残るため、数日先まで作っておく
+        let windowEnd = calendar.date(byAdding: .day, value: 3, to: calendar.startOfDay(for: now))
+            ?? now.addingTimeInterval(60 * 60 * 72)
+
         var checkpoints: [Date] = [now]
+
+        // 日付の変わり目。残り日数と「今日 / 明日」の表記がここで変わる
+        var midnight = nextMidnight
+        while midnight < windowEnd {
+            checkpoints.append(midnight)
+            guard let next = calendar.date(byAdding: .day, value: 1, to: midnight) else { break }
+            midnight = next
+        }
+
         checkpoints += stored.upcomingPlans.compactMap(\.occursAt)
         // 旅行中は次の予定の時刻で表示が切り替わるので、こちらも区切り点にする
         checkpoints += stored.travelScheduleItems.compactMap(\.occursAt)
 
-        checkpoints = checkpoints.filter { $0 == now || ($0 > now && $0 < nextMidnight) }
+        checkpoints = checkpoints.filter { $0 == now || ($0 > now && $0 <= windowEnd) }
 
-        let sortedCheckpoints = Array(Set(checkpoints)).sorted().prefix(16)
+        let sortedCheckpoints = Array(Set(checkpoints)).sorted().prefix(40)
 
         let entries = sortedCheckpoints.map { date in
             TravoryEntry(
@@ -53,7 +69,7 @@ struct TravoryProvider: AppIntentTimelineProvider {
             )
         }
 
-        // 日付が変わると残り日数や「今日・明日」の表記が変わるので0時に作り直す
+        // 0時以降に取り直してよい。取れなくても上のエントリで数日は正しく表示される
         return Timeline(entries: entries, policy: .after(nextMidnight))
     }
 }

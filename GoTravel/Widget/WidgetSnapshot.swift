@@ -96,9 +96,11 @@ struct WidgetSnapshot: Codable, Equatable {
         copy.upcomingPlans = upcomingPlans.filter { item in
             guard let itemDate = item.date else { return true }
 
-            // 時刻のある予定は、その時刻を過ぎたら消す
+            // 時刻のある予定は、その時刻になったら消す。
+            // ここが >= だと、その予定の時刻ちょうどに作ったエントリが自分自身を
+            // 残してしまい、次の区切り点まで「次の予定」として居座る
             if item.time != nil, let occursAt = item.occursAt {
-                return occursAt >= date
+                return occursAt > date
             }
 
             // 時刻のない予定はその日いっぱい残す
