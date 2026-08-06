@@ -940,9 +940,8 @@ struct HelpSupportView: View {
     }
 
     private func requestReview() {
-        if let scene = UIApplication.shared.connectedScenes.first(where: { $0.activationState == .foregroundActive }) as? UIWindowScene {
-            AppStore.requestReview(in: scene)
-        }
+        // 自分でタップした場合は回数や間隔の条件を見ずに出す
+        ReviewRequestManager.shared.requestManually()
     }
 
     private func openEmail() {

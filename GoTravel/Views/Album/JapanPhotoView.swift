@@ -46,6 +46,8 @@ struct JapanPhotoView: View {
                 onSave: { image in
                     viewModel.savePhoto(for: prefecture, image: image)
                     selectedPrefecture = nil
+                    // 地図が1県埋まるのは達成感のある場面
+                    ReviewRequestManager.shared.record(.prefectureAdded)
                 },
                 onDelete: {
                     viewModel.deletePhoto(for: prefecture)

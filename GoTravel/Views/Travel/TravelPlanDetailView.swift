@@ -193,6 +193,11 @@ struct TravelPlanDetailView: View {
                 animateContent = true
             }
             fetchPlanWeather()
+
+            // 終わった旅行を見返すのは、思い出が良い形で残っている場面
+            if Calendar.current.startOfDay(for: plan.endDate) < Calendar.current.startOfDay(for: Date()) {
+                ReviewRequestManager.shared.record(.travelCompleted)
+            }
         }
     }
 
