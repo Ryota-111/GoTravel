@@ -152,33 +152,36 @@ struct FeedbackFormView: View {
                                      : themeManager.currentTheme.secondaryText)
             }
 
-            ZStack(alignment: .topLeading) {
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(cardFill)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(Color.gray.opacity(0.25), lineWidth: 1)
-                    )
-
-                // TextEditor には placeholder が無いので、空のときだけ例文を重ねる
-                if message.isEmpty {
-                    Text(kind.placeholder)
-                        .font(.subheadline)
-                        .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.6))
-                        .padding(.horizontal, 16)
-                        .padding(.vertical, 18)
-                        .allowsHitTesting(false)
+            // 高さは TextEditor に持たせる。伸縮する図形を ZStack で重ねて
+            // minHeight で折り合いをつけると、余白を引いた途中の計算が負になる
+            TextEditor(text: $message)
+                .focused($messageFocused)
+                .font(.subheadline)
+                .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
+                .scrollContentBackground(.hidden)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 10)
+                .frame(height: 190)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(cardFill)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(Color.gray.opacity(0.25), lineWidth: 1)
+                        )
+                )
+                // TextEditor には placeholder が無いので、空のときだけ例文を重ねる。
+                // overlay なので高さの計算には関わらない
+                .overlay(alignment: .topLeading) {
+                    if message.isEmpty {
+                        Text(kind.placeholder)
+                            .font(.subheadline)
+                            .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.6))
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 18)
+                            .allowsHitTesting(false)
+                    }
                 }
-
-                TextEditor(text: $message)
-                    .focused($messageFocused)
-                    .font(.subheadline)
-                    .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
-                    .scrollContentBackground(.hidden)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 10)
-            }
-            .frame(minHeight: 190)
         }
     }
 
