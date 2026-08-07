@@ -259,8 +259,9 @@ struct ThemePreset {
 // MARK: - コントラストを保証する色
 
 extension ThemePreset {
-    /// 塗りつぶしボタンの背景に使う色。
-    /// 白黒テーマの primary は白のため、そのまま使うと白地に白文字になる
+    /// primary の代わりに使う、背景と必ず差がつく色。
+    /// 塗りつぶしボタンの背景のほか、背景の上に直接置く文字・枠線・選択状態にも使う。
+    /// 白黒テーマの primary は白で、背景も白いため、そのまま使うと消える
     var actionFill: Color {
         switch type {
         case .whiteBlack: return .black

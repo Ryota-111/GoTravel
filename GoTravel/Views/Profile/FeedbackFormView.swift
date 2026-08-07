@@ -80,7 +80,7 @@ struct FeedbackFormView: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button(didSend ? "閉じる" : "キャンセル") { dismiss() }
-                        .foregroundColor(themeManager.currentTheme.primary)
+                        .foregroundColor(themeManager.currentTheme.actionFill)
                 }
                 ToolbarItemGroup(placement: .keyboard) {
                     Spacer()
@@ -129,7 +129,7 @@ struct FeedbackFormView: View {
                     FeedbackKindButton(
                         kind: item,
                         isSelected: kind == item,
-                        accent: themeManager.currentTheme.primary,
+                        accent: themeManager.currentTheme.actionFill,
                         inactive: themeManager.currentTheme.secondaryText,
                         fill: cardFill
                     ) {
