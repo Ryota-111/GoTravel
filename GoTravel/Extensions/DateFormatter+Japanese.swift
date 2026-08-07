@@ -1,10 +1,17 @@
 import Foundation
 
 extension DateFormatter {
+    /// 日本語表記のフォーマッタ。
+    ///
+    /// タイムゾーンは端末の設定に従う。以前は Asia/Tokyo に固定していたが、
+    /// 予定の入力に使う DatePicker は端末のタイムゾーンで値を書くため、
+    /// 海外では入力した時刻と表示される時刻がずれていた。
+    /// また、ここを使わず個別に組み立てているフォーマッタは端末側に従うので、
+    /// 固定すると同じ予定が画面によって違う時刻に見えていた。
+    /// 国内では端末のタイムゾーンが Asia/Tokyo のため表示は変わらない。
     static var japanese: DateFormatter {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ja_JP")
-        formatter.timeZone = TimeZone(identifier: "Asia/Tokyo")
         return formatter
     }
 
