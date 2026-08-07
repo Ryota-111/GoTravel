@@ -829,6 +829,7 @@ struct HelpSupportView: View {
     @State private var animateCards = false
     @State private var showUserGuide = false
     @State private var showContactAlert = false
+    @State private var showFeedbackForm = false
 
     var body: some View {
         ZStack {
@@ -871,18 +872,31 @@ struct HelpSupportView: View {
                         .offset(y: animateCards ? 0 : 20)
                         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: animateCards)
 
-                        // Contact
-                        Button(action: { showContactAlert = true }) {
+                        // Feedback
+                        Button(action: { showFeedbackForm = true }) {
                             HelpCard(
-                                icon: "envelope.fill",
-                                title: "お問い合わせ",
-                                description: "ご質問やご要望はこちらから",
-                                color: .green
+                                icon: "lightbulb.fill",
+                                title: "ご意見・ご要望",
+                                description: "欲しい機能や不具合をこの場で送れます",
+                                color: .yellow
                             )
                         }
                         .opacity(animateCards ? 1 : 0)
                         .offset(y: animateCards ? 0 : 20)
                         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.15), value: animateCards)
+
+                        // Contact
+                        Button(action: { showContactAlert = true }) {
+                            HelpCard(
+                                icon: "envelope.fill",
+                                title: "メールでお問い合わせ",
+                                description: "個別のご相談はこちらから",
+                                color: .green
+                            )
+                        }
+                        .opacity(animateCards ? 1 : 0)
+                        .offset(y: animateCards ? 0 : 20)
+                        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.18), value: animateCards)
 
                         // Review
                         Button(action: { requestReview() }) {
@@ -923,6 +937,9 @@ struct HelpSupportView: View {
         .sheet(isPresented: $showUserGuide) {
             UserGuideView()
         }
+        .sheet(isPresented: $showFeedbackForm) {
+            FeedbackFormView()
+        }
         .alert("お問い合わせ", isPresented: $showContactAlert) {
             Button("メールを送る") {
                 openEmail()
@@ -946,7 +963,7 @@ struct HelpSupportView: View {
 
     private func openEmail() {
         let email = "taismryotasis@gmail.com"
-        let subject = "GoTravelアプリについてのお問い合わせ"
+        let subject = "Travoryについてのお問い合わせ"
         let urlString = "mailto:\(email)?subject=\(subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
 
         if let url = URL(string: urlString) {
