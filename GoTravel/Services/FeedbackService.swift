@@ -69,8 +69,21 @@ final class FeedbackService {
         do {
             _ = try await container.publicCloudDatabase.save(record)
         } catch {
+            // 利用者には短い案内を出すが、原因が分からないと調べようがないので開発中は残す
+            #if DEBUG
+            if let ckError = error as? CKError {
+                print("[FeedbackService] save failed: code=\(ckError.code.rawValue) \(ckError.localizedDescription)")
+                print("[FeedbackService] detail: \(ckError)")
+            } else {
+                print("[FeedbackService] save failed: \(error)")
+            }
+            #endif
             throw SubmitError.failed
         }
+
+        #if DEBUG
+        print("[FeedbackService] saved to Development. CloudKit Console の Development で \(Self.recordType) を確認してください。")
+        #endif
 
         recordSubmission()
     }
