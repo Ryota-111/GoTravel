@@ -103,7 +103,7 @@ enum WidgetSnapshotBuilder {
             .filter { plan in
                 guard calendar.startOfDay(for: plan.endDate) >= today else { return false }
 
-                // 今日の予定で、すでに時刻を過ぎているものは出さない
+                // 今日の予定で、すでに切り替え時刻を過ぎているものは出さない
                 if let time = plan.time,
                    calendar.startOfDay(for: plan.startDate) == today {
                     let components = calendar.dateComponents([.hour, .minute], from: time)
@@ -113,7 +113,7 @@ enum WidgetSnapshotBuilder {
                         second: 0,
                         of: now
                     ) ?? now
-                    return todayAtTime >= now
+                    return todayAtTime.addingTimeInterval(WidgetSnapshot.Item.timedGrace) > now
                 }
 
                 return true

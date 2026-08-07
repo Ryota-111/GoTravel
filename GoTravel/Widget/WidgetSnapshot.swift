@@ -31,6 +31,29 @@ struct WidgetSnapshot: Codable, Equatable {
                 of: date
             )
         }
+
+        /// 「次の予定」として見せ終える時刻。ここを過ぎたら次の予定に切り替わる。
+        ///
+        /// 時刻のある予定はその1分後まで残す。時刻ちょうどで消すと、
+        /// 始まった瞬間に手元から消えて確認できないため。
+        /// 時刻のない予定は日付しか決まっていないので、その日の8時を区切りにする
+        static let timedGrace: TimeInterval = 60
+        static let untimedHandoverHour = 8
+
+        var expiresAt: Date? {
+            guard let date else { return nil }
+
+            if time != nil, let occursAt {
+                return occursAt.addingTimeInterval(Self.timedGrace)
+            }
+
+            return Calendar.current.date(
+                bySettingHour: Self.untimedHandoverHour,
+                minute: 0,
+                second: 0,
+                of: date
+            )
+        }
     }
 
     /// 直近の旅行（進行中または今後）
@@ -86,25 +109,18 @@ struct WidgetSnapshot: Codable, Equatable {
     /// アプリが起動されなくてもウィジェット側で古い予定が消えるようにするため、
     /// 書き出し時ではなく表示時にこの絞り込みを通す
     func filtered(at date: Date) -> WidgetSnapshot {
-        let calendar = Calendar.current
         var copy = self
 
         // その日の分だけを取り出し、進行中のものを先頭にして以降を残す。
         // 常に先頭を出すと、夕方でも朝の予定が表示されたままになる
         copy.travelScheduleItems = Self.currentAndUpcoming(travelItems(on: date), at: date)
 
+        // 区切りを過ぎた予定を落として次の予定に切り替える。
+        // 比較が >= だと、区切り時刻ちょうどに作ったエントリが自分自身を残してしまい、
+        // 次の区切り点まで「次の予定」として居座る
         copy.upcomingPlans = upcomingPlans.filter { item in
-            guard let itemDate = item.date else { return true }
-
-            // 時刻のある予定は、その時刻になったら消す。
-            // ここが >= だと、その予定の時刻ちょうどに作ったエントリが自分自身を
-            // 残してしまい、次の区切り点まで「次の予定」として居座る
-            if item.time != nil, let occursAt = item.occursAt {
-                return occursAt > date
-            }
-
-            // 時刻のない予定はその日いっぱい残す
-            return calendar.startOfDay(for: itemDate) >= calendar.startOfDay(for: date)
+            guard let expiresAt = item.expiresAt else { return true }
+            return expiresAt > date
         }
 
         return copy
