@@ -417,9 +417,24 @@ struct EnjoyWorldView: View {
                         .fill(themeManager.currentTheme.secondary.opacity(0.15))
                 )
             }
+
+            sectionAddButton(label: "旅行計画を追加") { showAddTravelPlan = true }
         }
         .padding(.horizontal, 20)
         .padding(.top, 10)
+    }
+
+    /// 見出しの横に置く追加ボタン。
+    /// 一覧の末尾にしか追加口が無いと、件数が増えるほどスクロールが必要になるため
+    private func sectionAddButton(label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: "plus")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(themeManager.currentTheme.light)
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(themeManager.currentTheme.secondary))
+        }
+        .accessibilityLabel(Text(label))
     }
 
     private var tabSelectionSection: some View {
@@ -464,6 +479,8 @@ struct EnjoyWorldView: View {
                 .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
                 .font(.title.weight(.semibold))
             Spacer()
+
+            sectionAddButton(label: "予定を追加") { showAddPlan = true }
         }
         .padding(.horizontal, 20)
         .padding(.top, 10)
