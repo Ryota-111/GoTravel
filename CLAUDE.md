@@ -80,6 +80,10 @@ MVVM アーキテクチャ（SwiftUI + Core Data）:
 
 - **CloudKitService**: `CKContainer` への直接アクセスが必要な操作（iCloud 利用可否確認など）に使用するシングルトン
 
+- **共有機能のみパブリックDB**: 旅行計画の共有（共有コード）だけは `SharedTravelPlan` レコードとして
+  パブリックDBに手動で読み書きする。Core Data 自動同期はプライベートDBで他人から見えないため
+  → **詳細は [docs/共有機能.md](docs/共有機能.md)**（仕組み・CloudKit環境の罠・問い合わせ対応手順）
+
 - **CloudKitMigrationService**: 旧データからの初回移行処理を担当（初回起動時のみ実行）
 
 ### 認証
