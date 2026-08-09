@@ -55,6 +55,12 @@ struct OnboardingView: View {
         )
     ]
 
+    /// 機能紹介の後ろにテーマ選択ページを足すため、総ページ数は pages より1多い
+    private var totalPages: Int { pages.count + 1 }
+
+    /// テーマ選択ページの背景。機能紹介とは違う色にして切り替わったことを伝える
+    private let themePageGradient: [Color] = [Color.indigo, Color.purple]
+
     var body: some View {
         ZStack {
             // Background gradient
@@ -64,10 +70,10 @@ struct OnboardingView: View {
                 // Skip button
                 HStack {
                     Spacer()
-                    if currentPage < pages.count - 1 {
+                    if currentPage < totalPages - 1 {
                         Button(action: {
                             withAnimation {
-                                currentPage = pages.count - 1
+                                currentPage = totalPages - 1
                             }
                         }) {
                             Text("スキップ")
@@ -87,13 +93,16 @@ struct OnboardingView: View {
                         OnboardingPageView(page: pages[index])
                             .tag(index)
                     }
+
+                    OnboardingThemePage()
+                        .tag(pages.count)
                 }
                 .tabViewStyle(.page(indexDisplayMode: .never))
                 .animation(.easeInOut, value: currentPage)
 
                 // Custom page indicator
                 HStack(spacing: 10) {
-                    ForEach(0..<pages.count, id: \.self) { index in
+                    ForEach(0..<totalPages, id: \.self) { index in
                         Circle()
                             .fill(currentPage == index ? Color.white : Color.white.opacity(0.3))
                             .frame(width: currentPage == index ? 10 : 8, height: currentPage == index ? 10 : 8)
@@ -105,7 +114,7 @@ struct OnboardingView: View {
 
                 // Action buttons
                 VStack(spacing: 15) {
-                    if currentPage == pages.count - 1 {
+                    if currentPage == totalPages - 1 {
                         Button(action: {
                             onComplete()
                         }) {
@@ -184,10 +193,15 @@ struct OnboardingView: View {
         }
     }
 
+    /// テーマ選択ページは pages に含まれないため、範囲外参照を避けて振り分ける
+    private var currentGradientColors: [Color] {
+        currentPage < pages.count ? pages[currentPage].gradientColors : themePageGradient
+    }
+
     private var backgroundGradient: some View {
         ZStack {
             LinearGradient(
-                gradient: Gradient(colors: pages[currentPage].gradientColors),
+                gradient: Gradient(colors: currentGradientColors),
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             )
@@ -298,6 +312,142 @@ struct OnboardingPageView: View {
                 animateIcon = true
             }
             withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.3)) {
+                animateContent = true
+            }
+        }
+    }
+}
+
+// MARK: - Onboarding Theme Card
+/// テーマ1つ分の選択肢。
+/// オンボーディングの背景は色が濃いため、文字と枠は白で統一する
+private struct OnboardingThemeCard: View {
+    let themeType: ThemePreset.ThemeType
+    let isSelected: Bool
+    let onSelect: () -> Void
+
+    private var preset: ThemePreset { ThemePreset(type: themeType) }
+
+    /// 配色のプレビュー。白い色でも分かるよう明るい下地の上に置いて縁取りする
+    private var swatch: some View {
+        HStack(spacing: 5) {
+            dot(preset.primary)
+            dot(preset.secondary)
+            dot(preset.travelColor)
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 12)
+        .background(RoundedRectangle(cornerRadius: 10).fill(preset.backgroundLight))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10)
+                .stroke(Color.white.opacity(0.6), lineWidth: 1)
+        )
+    }
+
+    private func dot(_ color: Color) -> some View {
+        Circle()
+            .fill(color)
+            .frame(width: 14, height: 14)
+            .overlay(Circle().stroke(Color.black.opacity(0.18), lineWidth: 1))
+    }
+
+    var body: some View {
+        Button(action: onSelect) {
+            HStack(spacing: 14) {
+                swatch
+
+                Text(themeType.displayName)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+
+                Spacer(minLength: 0)
+
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 22))
+                    .foregroundColor(.white.opacity(isSelected ? 1 : 0.45))
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(Color.white.opacity(isSelected ? 0.28 : 0.14))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(Color.white.opacity(isSelected ? 0.85 : 0.25), lineWidth: isSelected ? 2 : 1)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+}
+
+// MARK: - Onboarding Theme Page
+/// 配色を選ぶページ。
+/// 色を変えられること自体を知らないまま使っている人がいたため、
+/// 最初に一度触ってもらって存在を知らせる
+struct OnboardingThemePage: View {
+    @ObservedObject var themeManager = ThemeManager.shared
+    @State private var animateContent = false
+
+    var body: some View {
+        VStack(spacing: 24) {
+            Spacer()
+
+            ZStack {
+                Circle()
+                    .fill(Color.white.opacity(0.15))
+                    .frame(width: 120, height: 120)
+                    .overlay(Circle().stroke(Color.white.opacity(0.3), lineWidth: 2))
+
+                Image(systemName: "paintpalette.fill")
+                    .font(.system(size: 54, weight: .light))
+                    .foregroundColor(.white)
+            }
+            .scaleEffect(animateContent ? 1.0 : 0.8)
+            .opacity(animateContent ? 1.0 : 0.0)
+
+            VStack(spacing: 10) {
+                Text("好きな配色を選べます")
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
+                    .foregroundColor(.white)
+                    .multilineTextAlignment(.center)
+
+                Text("アプリ全体の色を変えられます。タップして試してみてください")
+                    .font(.system(size: 16, weight: .medium))
+                    .foregroundColor(.white.opacity(0.9))
+                    .multilineTextAlignment(.center)
+                    .padding(.horizontal, 30)
+            }
+            .opacity(animateContent ? 1.0 : 0.0)
+            .offset(y: animateContent ? 0 : 20)
+
+            VStack(spacing: 12) {
+                ForEach(ThemePreset.ThemeType.allCases, id: \.self) { type in
+                    OnboardingThemeCard(
+                        themeType: type,
+                        isSelected: themeManager.currentTheme.type == type
+                    ) {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            themeManager.setTheme(type)
+                        }
+                    }
+                }
+            }
+            .padding(.horizontal, 30)
+            .opacity(animateContent ? 1.0 : 0.0)
+            .offset(y: animateContent ? 0 : 30)
+
+            Text("あとから「プロフィール」→「アプリ設定」で\nいつでも変更できます")
+                .font(.system(size: 13))
+                .foregroundColor(.white.opacity(0.8))
+                .multilineTextAlignment(.center)
+                .opacity(animateContent ? 1.0 : 0.0)
+
+            Spacer()
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.15)) {
                 animateContent = true
             }
         }
