@@ -677,7 +677,8 @@ final class CloudKitService {
         }
 
         Self.shareLogger.notice("""
-            検索完了 type=\(recordType, privacy: .public) \
+            検索完了 env=\(Self.environmentHint, privacy: .public) \
+            type=\(recordType, privacy: .public) \
             predicate=\(predicate.predicateFormat, privacy: .public) \
             hit=\(records.count, privacy: .public) failed=\(failures, privacy: .public)
             """)
@@ -729,7 +730,8 @@ final class CloudKitService {
         }
 
         Self.shareLogger.notice("""
-            公開開始 planId=\(planId, privacy: .public) \
+            公開開始 env=\(Self.environmentHint, privacy: .public) \
+            planId=\(planId, privacy: .public) \
             shareCode=\(plan.shareCode ?? "nil", privacy: .public) \
             isShared=\(plan.isShared, privacy: .public)
             """)
@@ -765,7 +767,7 @@ final class CloudKitService {
             throw error
         }
 
-        Self.shareLogger.notice("公開成功 planId=\(planId, privacy: .public)")
+        Self.shareLogger.notice("公開成功 env=\(Self.environmentHint, privacy: .public) planId=\(planId, privacy: .public)")
     }
 
     /// 共有まわりのログ。Console.app で
@@ -774,6 +776,20 @@ final class CloudKitService {
         subsystem: "com.gmail.taismryotasis.Travory",
         category: "sharing"
     )
+
+    /// 読み書きしている CloudKit の環境。
+    /// 実行時に環境を取得する API が無いためビルド種別から判断する。
+    /// エンタイトルメントで環境を固定した場合はこの表示と食い違うので注意。
+    ///
+    /// 環境が違うと、公開は成功しているのに相手から見つからないという
+    /// 紛らわしい症状になるため、ログに必ず添える
+    static var environmentHint: String {
+        #if DEBUG
+        return "Development(デバッグビルド)"
+        #else
+        return "Production(リリースビルド)"
+        #endif
+    }
 
     /// 共有プランの公開が失敗した理由を記録する
     private static func logShareFailure(_ error: Error, planId: String, phase: String) {
