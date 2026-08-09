@@ -43,13 +43,24 @@ struct WhatsNewView: View {
     @State private var showFeedbackForm = false
 
     private var accent: Color { themeManager.currentTheme.actionFill }
-    private var titleColor: Color { themeManager.currentTheme.adaptiveText(for: colorScheme) }
-    private var bodyColor: Color { themeManager.currentTheme.secondaryText }
 
     private var cardFill: Color {
         colorScheme == .dark
             ? themeManager.currentTheme.secondaryBackgroundDark
             : themeManager.currentTheme.secondaryBackgroundLight
+    }
+
+    /// 背景グラデーションの上に置く文字色。
+    /// グラデーションの明暗はテーマによって逆転する（デフォルトカラーだけ暗い）ので
+    /// colorScheme ではなく背景色そのものから決める
+    private var onBackground: Color {
+        ThemePreset.readableText(on: themeManager.currentTheme.dark)
+    }
+
+    /// カードの上に置く文字色。
+    /// 白黒・パステルピンクはダークモードでもカードが白いため同様に色から決める
+    private var onCard: Color {
+        ThemePreset.readableText(on: cardFill)
     }
 
     var body: some View {
@@ -72,7 +83,7 @@ struct WhatsNewView: View {
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("閉じる") { dismiss() }
-                        .foregroundColor(accent)
+                        .foregroundColor(onBackground)
                 }
             }
         }
@@ -92,11 +103,11 @@ struct WhatsNewView: View {
 
             Text("Version \(content.version) の新機能")
                 .font(.title3.bold())
-                .foregroundColor(titleColor)
+                .foregroundColor(onBackground)
 
             Text("いつもTravoryをご利用いただきありがとうございます")
                 .font(.caption)
-                .foregroundColor(bodyColor)
+                .foregroundColor(onBackground.opacity(0.75))
                 .multilineTextAlignment(.center)
         }
     }
@@ -109,8 +120,8 @@ struct WhatsNewView: View {
                 WhatsNewRow(
                     item: item,
                     accent: accent,
-                    titleColor: titleColor,
-                    bodyColor: bodyColor
+                    titleColor: onCard,
+                    bodyColor: onCard.opacity(0.75)
                 )
             }
         }
@@ -124,18 +135,24 @@ struct WhatsNewView: View {
         VStack(spacing: 10) {
             Text("みなさんと一緒に作っていきたいです")
                 .font(.subheadline.bold())
-                .foregroundColor(titleColor)
+                .foregroundColor(onCard)
                 .multilineTextAlignment(.center)
 
             Text("Travoryは一人で開発しています。「こんな機能が欲しい」「ここが使いにくい」など、どんなことでもお気軽にお寄せください。いただいた声をもとに改善を続けています。")
                 .font(.caption)
-                .foregroundColor(bodyColor)
+                .foregroundColor(onCard.opacity(0.75))
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding(18)
         .frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 16).fill(accent.opacity(0.1)))
+        // accent の薄塗りだけだと背景が透けて文字色を保証できないため
+        // カードを敷いた上に色味を重ねる
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(cardFill)
+                .overlay(RoundedRectangle(cornerRadius: 16).fill(accent.opacity(0.1)))
+        )
         .overlay(
             RoundedRectangle(cornerRadius: 16)
                 .stroke(accent.opacity(0.3), lineWidth: 1)
@@ -152,7 +169,7 @@ struct WhatsNewView: View {
                     Text("ご意見・ご要望を送る")
                         .font(.headline)
                 }
-                .foregroundColor(.white)
+                .foregroundColor(ThemePreset.readableText(on: accent))
                 .frame(maxWidth: .infinity)
                 .padding()
                 .background(RoundedRectangle(cornerRadius: 14).fill(accent))
@@ -161,14 +178,14 @@ struct WhatsNewView: View {
             Button(action: { dismiss() }) {
                 Text("あとで")
                     .font(.subheadline)
-                    .foregroundColor(bodyColor)
+                    .foregroundColor(onBackground.opacity(0.8))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
             }
 
             Text("「ヘルプ・サポート」からいつでも送れます")
                 .font(.caption2)
-                .foregroundColor(bodyColor)
+                .foregroundColor(onBackground.opacity(0.75))
         }
     }
 

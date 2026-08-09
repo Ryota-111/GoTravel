@@ -274,4 +274,21 @@ extension ThemePreset {
     func adaptiveText(for scheme: ColorScheme) -> Color {
         scheme == .dark ? accent2 : accent1
     }
+
+    /// 指定した背景色の上で必ず読める文字色。
+    ///
+    /// テーマによっては colorScheme と実際の明暗が一致しない：
+    /// - 背景グラデーション（gradientDark→dark）はデフォルトカラーだけ暗く、
+    ///   白黒・パステルピンクは白。ライトモードでも暗い背景になる
+    /// - secondaryBackgroundDark は白黒(0.95)・パステルピンク(0.98)では
+    ///   ダークモードなのに白いカードになる
+    ///
+    /// そのため colorScheme で判断すると背景に文字が溶ける。
+    /// 背景そのものの明るさから決めることで、テーマが増えても破綻しない。
+    static func readableText(on background: Color) -> Color {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(background).getRed(&r, green: &g, blue: &b, alpha: &a)
+        let brightness = 0.299 * r + 0.587 * g + 0.114 * b
+        return brightness > 0.6 ? Color(white: 0.12) : Color(white: 0.97)
+    }
 }
