@@ -19,6 +19,7 @@ struct EditScheduleItemView: View {
     @State private var notes: String
     @State private var time: Date
     @State private var cost: String
+    @State private var actualCost: String
     @State private var linkURL: String
     @State private var showDeleteConfirmation = false
 
@@ -52,6 +53,7 @@ struct EditScheduleItemView: View {
         _notes = State(initialValue: item.notes ?? "")
         _time = State(initialValue: item.time)
         _cost = State(initialValue: item.cost != nil ? String(Int(item.cost!)) : "")
+        _actualCost = State(initialValue: item.actualCost != nil ? String(Int(item.actualCost!)) : "")
         _linkURL = State(initialValue: item.linkURL ?? "")
 
         // 既存の場所情報を選択済み状態として復元
@@ -309,7 +311,7 @@ struct EditScheduleItemView: View {
                     Image(systemName: "yensign.circle")
                         .foregroundColor(travelColor.opacity(0.7))
                         .frame(width: 24)
-                    TextField("金額", text: $cost)
+                    TextField("予算", text: $cost)
                         .keyboardType(.decimalPad)
                         .foregroundColor(textColor)
                     Text("円")
@@ -318,6 +320,29 @@ struct EditScheduleItemView: View {
                 .padding(14)
                 .background(fieldBg)
                 .cornerRadius(12)
+
+                // 旅行後に実際いくら使ったかを記録する欄
+                HStack(spacing: 12) {
+                    Image(systemName: "checkmark.circle")
+                        .foregroundColor(themeManager.currentTheme.success.opacity(0.8))
+                        .frame(width: 24)
+                    TextField("実際に使った金額", text: $actualCost)
+                        .keyboardType(.decimalPad)
+                        .foregroundColor(textColor)
+                    Text("円")
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                }
+                .padding(14)
+                .background(fieldBg)
+                .cornerRadius(12)
+
+                if let diff = costDifference {
+                    Text(diff > 0
+                         ? "予算より \(Int(diff))円 多く使いました"
+                         : (diff < 0 ? "予算より \(Int(-diff))円 少なく済みました" : "予算どおりです"))
+                        .font(.caption)
+                        .foregroundColor(diff > 0 ? themeManager.currentTheme.error : themeManager.currentTheme.success)
+                }
 
                 Divider()
 
@@ -464,8 +489,15 @@ struct EditScheduleItemView: View {
             latitude: selectedCoordinate?.latitude,
             longitude: selectedCoordinate?.longitude,
             cost: costValue,
+            actualCost: actualCost.isEmpty ? nil : Double(actualCost),
             linkURL: linkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : linkURL.trimmingCharacters(in: .whitespacesAndNewlines)
         )
+    }
+
+    /// 実績 - 予算。どちらかが未入力なら比較しない
+    private var costDifference: Double? {
+        guard let budget = Double(cost), let actual = Double(actualCost) else { return nil }
+        return actual - budget
     }
 
     private func updatePlanWithItem(_ updatedItem: ScheduleItem) -> TravelPlan {

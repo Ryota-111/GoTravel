@@ -162,8 +162,8 @@ struct ScheduleItemCard: View {
                 locationInfo(location: location)
             }
 
-            if let cost = item.cost {
-                costInfo(cost: cost)
+            if item.cost != nil || item.actualCost != nil {
+                costInfo(cost: item.cost, actualCost: item.actualCost)
             }
 
             if let linkURL = item.linkURL {
@@ -187,14 +187,29 @@ struct ScheduleItemCard: View {
         }
     }
 
-    private func costInfo(cost: Double) -> some View {
-        HStack(spacing: 5) {
-            Image(systemName: "yensign.circle.fill")
-                .font(.caption)
-                .foregroundColor(themeManager.currentTheme.success)
-            Text(formatCurrency(cost))
-                .font(.subheadline)
-                .foregroundColor(themeManager.currentTheme.success)
+    /// 予算と実績。実績が入っていれば「予算」と明示して取り違えを防ぐ
+    private func costInfo(cost: Double?, actualCost: Double?) -> some View {
+        HStack(spacing: 10) {
+            if let cost {
+                HStack(spacing: 5) {
+                    Image(systemName: "yensign.circle.fill")
+                        .font(.caption)
+                        .foregroundColor(themeManager.currentTheme.success)
+                    Text(actualCost == nil ? formatCurrency(cost) : "予算 \(formatCurrency(cost))")
+                        .font(.subheadline)
+                        .foregroundColor(themeManager.currentTheme.success)
+                }
+            }
+
+            if let actualCost {
+                HStack(spacing: 4) {
+                    Image(systemName: "checkmark.circle.fill")
+                        .font(.caption)
+                    Text("実績 \(formatCurrency(actualCost))")
+                        .font(.subheadline.weight(.semibold))
+                }
+                .foregroundColor(themeManager.currentTheme.info)
+            }
         }
     }
 

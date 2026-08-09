@@ -192,9 +192,6 @@ struct ScheduleEditorView: View {
                             },
                             onEdit: {
                                 // 編集機能は後で追加可能
-                            },
-                            onUpdateActualCost: { newValue in
-                                updateActualCost(for: item, to: newValue)
                             }
                         )
                     }
@@ -313,50 +310,13 @@ struct ScheduleItemEditCard: View {
     let plan: TravelPlan
     let onDelete: () -> Void
     let onEdit: () -> Void
-    let onUpdateActualCost: (Double?) -> Void
 
     @State private var showSaveAsVisited = false
     @State private var showMapView = false
-    @State private var showActualCostEditor = false
     @ObservedObject var themeManager = ThemeManager.shared
 
     private var hasLocationData: Bool {
         item.latitude != nil && item.longitude != nil
-    }
-
-    private var secondaryTextColor: Color {
-        colorScheme == .dark ? themeManager.currentTheme.budgetDarkText : themeManager.currentTheme.budgetLightText
-    }
-
-    /// 予算と実績。実績はタップして後から記録できる
-    private var costRow: some View {
-        HStack(spacing: 10) {
-            if let cost = item.cost {
-                Label(formatCurrency(cost), systemImage: "yensign.circle")
-                    .font(.caption)
-                    .foregroundColor(secondaryTextColor)
-            }
-
-            Button(action: { showActualCostEditor = true }) {
-                HStack(spacing: 4) {
-                    Image(systemName: item.actualCost == nil ? "plus.circle" : "checkmark.circle.fill")
-                    Text(item.actualCost.map { "実績 \(formatCurrency($0))" } ?? "実績を記録")
-                }
-                .font(.caption.weight(.medium))
-                .foregroundColor(themeManager.currentTheme.success)
-                .padding(.horizontal, 8)
-                .padding(.vertical, 4)
-                .background(Capsule().fill(themeManager.currentTheme.success.opacity(0.15)))
-            }
-            .buttonStyle(.borderless)
-        }
-    }
-
-    private func formatCurrency(_ value: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 0
-        return "¥\(formatter.string(from: NSNumber(value: value)) ?? "0")"
     }
 
     var body: some View {
@@ -394,8 +354,6 @@ struct ScheduleItemEditCard: View {
                         .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.budgetDarkText : themeManager.currentTheme.budgetLightText)
                         .lineLimit(2)
                 }
-
-                costRow
             }
 
             Spacer()
@@ -437,9 +395,6 @@ struct ScheduleItemEditCard: View {
         }
         .sheet(isPresented: $showMapView) {
             scheduleMapViewSheet
-        }
-        .sheet(isPresented: $showActualCostEditor) {
-            ActualCostEditorView(item: item, onSave: onUpdateActualCost)
         }
     }
 
