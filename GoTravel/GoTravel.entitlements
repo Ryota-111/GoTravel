@@ -10,6 +10,11 @@
 	<array>
 		<string>iCloud.com.gmail.taismryotasis.Travory</string>
 	</array>
+	<!-- 調査用: Xcode から実行したビルドも Production の CloudKit を見るようにする。
+	     通常は Development を見るため、実ユーザーと同じ状況を再現できない。
+	     調査が終わったらこの2行を必ず削除すること（開発中の操作が本番データに入るため） -->
+	<key>com.apple.developer.icloud-container-environment</key>
+	<string>Production</string>
 	<key>com.apple.developer.icloud-services</key>
 	<array>
 		<string>CloudKit</string>
