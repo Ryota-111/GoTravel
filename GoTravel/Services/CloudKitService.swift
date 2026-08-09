@@ -1,6 +1,7 @@
 import Foundation
 import CloudKit
 import SwiftUI
+import os
 
 // MARK: - CloudKit Service
 final class CloudKitService {
@@ -709,7 +710,47 @@ final class CloudKitService {
             // 他メンバーと同時保存が競合した場合はサーバー側レコードに再適用して保存
             guard let serverRecord = ckError.serverRecord else { throw ckError }
             applySharedPlanFields(to: serverRecord, from: plan)
-            _ = try await publicDatabase.save(serverRecord)
+            do {
+                _ = try await publicDatabase.save(serverRecord)
+            } catch {
+                Self.logShareFailure(error, planId: planId, phase: "save(conflict)")
+                throw error
+            }
+        } catch {
+            // 呼び出し側が try? で握り潰しており、失敗しても誰にも見えなかった。
+            // 不具合は Production でしか起きないことがあるため、
+            // DEBUG 限定ではなくリリースビルドにも残る Logger で記録する
+            Self.logShareFailure(error, planId: planId, phase: "save")
+            throw error
+        }
+    }
+
+    /// 共有プランの公開が失敗した理由を記録する。
+    /// Console.app で subsystem: com.gmail.taismryotasis.Travory / category: sharing を見る
+    private static func logShareFailure(_ error: Error, planId: String, phase: String) {
+        let logger = Logger(subsystem: "com.gmail.taismryotasis.Travory", category: "sharing")
+
+        if let ckError = error as? CKError {
+            logger.error("""
+                共有プランの公開に失敗 phase=\(phase, privacy: .public) \
+                planId=\(planId, privacy: .public) \
+                code=\(ckError.code.rawValue, privacy: .public) \
+                desc=\(ckError.localizedDescription, privacy: .public)
+                """)
+
+            // どのフィールドが原因かはここに入る（Production で未反映のフィールドなど）
+            if let partial = ckError.partialErrorsByItemID, !partial.isEmpty {
+                logger.error("部分エラー: \(String(describing: partial), privacy: .public)")
+            }
+            if let reason = ckError.userInfo[NSLocalizedFailureReasonErrorKey] as? String {
+                logger.error("理由: \(reason, privacy: .public)")
+            }
+        } else {
+            logger.error("""
+                共有プランの公開に失敗 phase=\(phase, privacy: .public) \
+                planId=\(planId, privacy: .public) \
+                error=\(String(describing: error), privacy: .public)
+                """)
         }
     }
 
