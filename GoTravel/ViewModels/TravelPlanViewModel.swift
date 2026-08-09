@@ -2,6 +2,7 @@ import Foundation
 import Combine
 import UIKit
 import CoreData
+import os
 
 /// TravelPlan管理用ViewModel（Core Data + CloudKit自動同期版）
 final class TravelPlanViewModel: NSObject, ObservableObject {
@@ -258,7 +259,15 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
     /// 共有コードを設定してプランをパブリックDBに公開
     @MainActor
     func updateShareCode(planId: String, shareCode: String, userId: String) {
-        guard var plan = travelPlans.first(where: { $0.id == planId }) else { return }
+        guard var plan = travelPlans.first(where: { $0.id == planId }) else {
+            // ここで抜けると共有コードは画面に出るのに公開されない
+            Logger(subsystem: "com.gmail.taismryotasis.Travory", category: "sharing")
+                .error("共有コード設定中止: 手元にプランが見つからない planId=\(planId, privacy: .public)")
+            return
+        }
+
+        Logger(subsystem: "com.gmail.taismryotasis.Travory", category: "sharing")
+            .notice("共有コード設定 planId=\(planId, privacy: .public) code=\(shareCode, privacy: .public)")
 
         plan.isShared = true
         plan.shareCode = shareCode

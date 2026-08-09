@@ -690,8 +690,15 @@ final class CloudKitService {
     /// 共有プランをパブリックDBに公開・更新する
     func publishSharedTravelPlan(_ plan: TravelPlan) async throws {
         guard let planId = plan.id else {
+            Self.shareLogger.error("公開中止: plan.id が nil")
             throw CloudKitError.recordNotFound
         }
+
+        Self.shareLogger.notice("""
+            公開開始 planId=\(planId, privacy: .public) \
+            shareCode=\(plan.shareCode ?? "nil", privacy: .public) \
+            isShared=\(plan.isShared, privacy: .public)
+            """)
 
         let recordID = CKRecord.ID(recordName: "shared_\(planId)")
 
@@ -723,12 +730,20 @@ final class CloudKitService {
             Self.logShareFailure(error, planId: planId, phase: "save")
             throw error
         }
+
+        Self.shareLogger.notice("公開成功 planId=\(planId, privacy: .public)")
     }
 
-    /// 共有プランの公開が失敗した理由を記録する。
-    /// Console.app で subsystem: com.gmail.taismryotasis.Travory / category: sharing を見る
+    /// 共有まわりのログ。Console.app で
+    /// subsystem: com.gmail.taismryotasis.Travory / category: sharing を見る
+    private static let shareLogger = Logger(
+        subsystem: "com.gmail.taismryotasis.Travory",
+        category: "sharing"
+    )
+
+    /// 共有プランの公開が失敗した理由を記録する
     private static func logShareFailure(_ error: Error, planId: String, phase: String) {
-        let logger = Logger(subsystem: "com.gmail.taismryotasis.Travory", category: "sharing")
+        let logger = shareLogger
 
         if let ckError = error as? CKError {
             logger.error("""
