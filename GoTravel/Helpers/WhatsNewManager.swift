@@ -7,6 +7,14 @@ import Foundation
 enum WhatsNewManager {
     private static let lastShownVersionKey = "lastShownWhatsNewVersion"
 
+    /// 動作確認用。true の間は起動のたびにお知らせを出す。
+    ///
+    /// 本来の「1バージョンにつき1回」の挙動を確認したくなったら false に戻す。
+    /// DEBUG ビルド限定なので、消し忘れてもTestFlightやApp Storeには影響しない。
+    #if DEBUG
+    static let alwaysShowForTesting = true
+    #endif
+
     /// 現在のアプリバージョン（"2.4" など。ビルド番号は含めない）
     static var currentVersion: String {
         Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "1.0"
@@ -18,6 +26,11 @@ enum WhatsNewManager {
     /// 「新機能」と言われても、その人にとっては全部が新機能で意味がないため。
     static var shouldShow: Bool {
         guard WhatsNew.current != nil else { return false }
+
+        #if DEBUG
+        if alwaysShowForTesting { return true }
+        #endif
+
         guard let lastShown = UserDefaults.standard.string(forKey: lastShownVersionKey) else {
             // 記録が無い = 初回起動、または この仕組みを入れる前から使っている人。
             // 後者にはお知らせを見せたいので、オンボーディング済みかで判定する

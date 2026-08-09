@@ -64,7 +64,14 @@ struct MainTabView: View {
 
             // アップデート後の初回起動で新機能を知らせる。
             // iCloudアラートと重ならないよう、確認を終えてから出す
-            if !showICloudAlert, WhatsNewManager.shouldShow {
+            // （動作確認中はiCloud未サインインでも出さないと確認できないため通す）
+            #if DEBUG
+            let canShowWhatsNew = WhatsNewManager.alwaysShowForTesting || !showICloudAlert
+            #else
+            let canShowWhatsNew = !showICloudAlert
+            #endif
+
+            if canShowWhatsNew, WhatsNewManager.shouldShow {
                 whatsNew = WhatsNew.current
                 WhatsNewManager.markAsShown()
             }
