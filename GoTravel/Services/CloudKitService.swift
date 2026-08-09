@@ -647,8 +647,42 @@ final class CloudKitService {
     /// パブリックDBでクエリ
     private func queryPublic(recordType: String, predicate: NSPredicate) async throws -> [CKRecord] {
         let query = CKQuery(recordType: recordType, predicate: predicate)
-        let (results, _) = try await publicDatabase.records(matching: query)
-        return results.compactMap { try? $0.1.get() }
+
+        let results: [(CKRecord.ID, Result<CKRecord, Error>)]
+        do {
+            (results, _) = try await publicDatabase.records(matching: query)
+        } catch {
+            Self.shareLogger.error("""
+                検索に失敗 type=\(recordType, privacy: .public) \
+                predicate=\(predicate.predicateFormat, privacy: .public) \
+                error=\(String(describing: error), privacy: .public)
+                """)
+            throw error
+        }
+
+        // レコード単位の失敗を try? で捨てると、権限エラーでも0件と区別がつかない
+        var records: [CKRecord] = []
+        var failures = 0
+        for (id, result) in results {
+            switch result {
+            case .success(let record):
+                records.append(record)
+            case .failure(let error):
+                failures += 1
+                Self.shareLogger.error("""
+                    レコード取得に失敗 id=\(id.recordName, privacy: .public) \
+                    error=\(String(describing: error), privacy: .public)
+                    """)
+            }
+        }
+
+        Self.shareLogger.notice("""
+            検索完了 type=\(recordType, privacy: .public) \
+            predicate=\(predicate.predicateFormat, privacy: .public) \
+            hit=\(records.count, privacy: .public) failed=\(failures, privacy: .public)
+            """)
+
+        return records
     }
 
     /// TravelPlanのフィールドをCKRecordに反映（共有用・画像は含めない）
