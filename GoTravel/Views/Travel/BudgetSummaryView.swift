@@ -4,35 +4,62 @@ struct BudgetSummaryView: View {
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.colorScheme) var colorScheme
     @ObservedObject var themeManager = ThemeManager.shared
+    @EnvironmentObject var travelPlanViewModel: TravelPlanViewModel
+    @EnvironmentObject var authVM: AuthViewModel
 
     let plan: TravelPlan
 
+    /// ViewModelから最新のプランを見る。人数を変えた結果を即座に反映するため
+    private var currentPlan: TravelPlan {
+        travelPlanViewModel.travelPlans.first(where: { $0.id == plan.id }) ?? plan
+    }
+
+    private var allItems: [ScheduleItem] {
+        currentPlan.daySchedules.flatMap { $0.scheduleItems }
+    }
+
     // MARK: - Computed Properties
     private var totalCost: Double {
-        plan.daySchedules
-            .flatMap { $0.scheduleItems }
-            .compactMap { $0.cost }
-            .reduce(0, +)
+        allItems.compactMap { $0.cost }.reduce(0, +)
+    }
+
+    /// 実際に使った金額の合計。未入力の項目は集計しない
+    private var totalActualCost: Double {
+        allItems.compactMap { $0.actualCost }.reduce(0, +)
+    }
+
+    private var hasActualCost: Bool {
+        allItems.contains { $0.actualCost != nil }
+    }
+
+    /// 実績 - 予算。プラスなら予算オーバー
+    private var costDifference: Double {
+        totalActualCost - totalCost
     }
 
     private var memberCount: Int {
-        plan.isShared ? plan.sharedWith.count : 1
+        currentPlan.splitCount
+    }
+
+    /// 折半の対象になる金額。実績が入っていればそちらを優先する
+    private var splitBaseCost: Double {
+        hasActualCost ? totalActualCost : totalCost
     }
 
     private var costPerPerson: Double {
         guard memberCount > 0 else { return 0 }
-        return totalCost / Double(memberCount)
+        return splitBaseCost / Double(memberCount)
     }
 
     private var costByDay: [(dayNumber: Int, date: Date, cost: Double)] {
-        plan.daySchedules.map { day in
+        currentPlan.daySchedules.map { day in
             let cost = day.scheduleItems.compactMap { $0.cost }.reduce(0, +)
             return (day.dayNumber, day.date, cost)
         }.filter { $0.cost > 0 }
     }
 
     private var costByDayDetailed: [(dayNumber: Int, date: Date, items: [(title: String, cost: Double)])] {
-        plan.daySchedules.compactMap { day in
+        currentPlan.daySchedules.compactMap { day in
             let items = day.scheduleItems
                 .filter { ($0.cost ?? 0) > 0 }
                 .map { ($0.title, $0.cost!) }
@@ -42,7 +69,7 @@ struct BudgetSummaryView: View {
     }
 
     private var tripDays: Int {
-        (Calendar.current.dateComponents([.day], from: plan.startDate, to: plan.endDate).day ?? 0) + 1
+        (Calendar.current.dateComponents([.day], from: currentPlan.startDate, to: currentPlan.endDate).day ?? 0) + 1
     }
 
     // MARK: - Theme Colors
@@ -89,7 +116,12 @@ struct BudgetSummaryView: View {
                     VStack(spacing: 16) {
                         totalCostCard
 
-                        if plan.isShared && totalCost > 0 {
+                        if hasActualCost {
+                            actualCostCard
+                        }
+
+                        // 共有していなくても同行者と割り勘したい場面があるため常に出す
+                        if splitBaseCost > 0 {
                             costSplitCard
                         }
 
@@ -132,7 +164,7 @@ struct BudgetSummaryView: View {
                 Text("予算サマリー")
                     .font(.headline)
                     .foregroundColor(accentColor)
-                Text(plan.title)
+                Text(currentPlan.title)
                     .font(.caption)
                     .foregroundColor(themeManager.currentTheme.secondaryText)
                     .lineLimit(1)
@@ -187,7 +219,7 @@ struct BudgetSummaryView: View {
                     Image(systemName: "mappin.circle.fill")
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.7))
-                    Text(plan.destination)
+                    Text(currentPlan.destination)
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.7))
                 }
@@ -196,6 +228,72 @@ struct BudgetSummaryView: View {
         }
         .frame(height: 160)
         .shadow(color: budgetColor.opacity(0.35), radius: 12, x: 0, y: 6)
+    }
+
+    // MARK: - Actual Cost Card
+    /// 予算と実績の比較。実績が1件でも入っているときだけ出す
+    private var actualCostCard: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(spacing: 6) {
+                Image(systemName: "checkmark.seal.fill")
+                    .foregroundColor(budgetColor)
+                    .font(.subheadline)
+                Text("実際に使った金額")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(accentColor)
+            }
+
+            HStack(spacing: 12) {
+                amountColumn(label: "予算", amount: totalCost, color: themeManager.currentTheme.secondaryText)
+
+                Spacer()
+
+                amountColumn(label: "実績", amount: totalActualCost, color: budgetColor)
+
+                Spacer()
+
+                amountColumn(
+                    label: costDifference > 0 ? "超過" : "節約",
+                    amount: abs(costDifference),
+                    color: costDifference > 0 ? themeManager.currentTheme.error : themeManager.currentTheme.success
+                )
+            }
+            .padding(14)
+            .background(budgetColor.opacity(0.06))
+            .cornerRadius(12)
+
+            Text(differenceMessage)
+                .font(.caption)
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(cardBg)
+                .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
+        )
+    }
+
+    private func amountColumn(label: String, amount: Double, color: Color) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(label)
+                .font(.caption)
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+            Text(formatCurrency(amount))
+                .font(.subheadline.weight(.bold))
+                .foregroundColor(color)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+        }
+    }
+
+    private var differenceMessage: String {
+        if costDifference > 0 {
+            return "予算より \(formatCurrency(costDifference)) 多く使いました"
+        } else if costDifference < 0 {
+            return "予算より \(formatCurrency(abs(costDifference))) 少なく済みました"
+        }
+        return "予算どおりに収まりました"
     }
 
     // MARK: - Cost Split Card
@@ -208,23 +306,38 @@ struct BudgetSummaryView: View {
                 Text("金額折半")
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(accentColor)
-            }
-
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("参加人数")
-                        .font(.caption)
-                        .foregroundColor(themeManager.currentTheme.secondaryText)
-                    Text("\(memberCount)人")
-                        .font(.title3.weight(.bold))
-                        .foregroundColor(accentColor)
-                }
 
                 Spacer()
 
-                Image(systemName: "arrow.right")
-                    .font(.caption)
-                    .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.4))
+                // 共有していない同行者がいるため、人数は共有人数と一致しない
+                if currentPlan.customSplitCount != nil {
+                    Button("自動に戻す") { updateSplitCount(nil) }
+                        .font(.caption)
+                        .foregroundColor(budgetColor)
+                }
+            }
+
+            HStack(spacing: 12) {
+                VStack(alignment: .leading, spacing: 6) {
+                    Text("割る人数")
+                        .font(.caption)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+
+                    HStack(spacing: 10) {
+                        splitStepButton(systemName: "minus", enabled: memberCount > 1) {
+                            updateSplitCount(memberCount - 1)
+                        }
+
+                        Text("\(memberCount)人")
+                            .font(.title3.weight(.bold))
+                            .foregroundColor(accentColor)
+                            .frame(minWidth: 52)
+
+                        splitStepButton(systemName: "plus", enabled: memberCount < 99) {
+                            updateSplitCount(memberCount + 1)
+                        }
+                    }
+                }
 
                 Spacer()
 
@@ -235,13 +348,15 @@ struct BudgetSummaryView: View {
                     Text(formatCurrency(costPerPerson))
                         .font(.title3.weight(.bold))
                         .foregroundColor(budgetColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
                 }
             }
             .padding(14)
             .background(budgetColor.opacity(0.06))
             .cornerRadius(12)
 
-            Text("合計 \(formatCurrency(totalCost)) ÷ \(memberCount)人")
+            Text("\(hasActualCost ? "実績" : "合計") \(formatCurrency(splitBaseCost)) ÷ \(memberCount)人")
                 .font(.caption)
                 .foregroundColor(themeManager.currentTheme.secondaryText)
         }
@@ -251,6 +366,25 @@ struct BudgetSummaryView: View {
                 .fill(cardBg)
                 .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
         )
+    }
+
+    private func splitStepButton(systemName: String, enabled: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 14, weight: .bold))
+                .foregroundColor(enabled ? budgetColor : themeManager.currentTheme.secondaryText.opacity(0.4))
+                .frame(width: 32, height: 32)
+                .background(Circle().fill(budgetColor.opacity(enabled ? 0.12 : 0.05)))
+        }
+        .disabled(!enabled)
+    }
+
+    /// 割り勘の人数を保存する。nil を渡すと自動（共有人数）に戻る
+    private func updateSplitCount(_ count: Int?) {
+        guard let userId = authVM.userId else { return }
+        var updated = currentPlan
+        updated.customSplitCount = count
+        travelPlanViewModel.update(updated, userId: userId)
     }
 
     // MARK: - Cost By Day Card (progress bars)

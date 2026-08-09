@@ -23,12 +23,15 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
     var notes: String?
     var latitude: Double?
     var longitude: Double?
+    /// 予定していた金額
     var cost: Double?
+    /// 実際に使った金額。未入力なら nil（0円で使ったのと区別する）
+    var actualCost: Double?
     var mapURL: String?
     var linkURL: String?
 
     enum CodingKeys: String, CodingKey {
-        case id, time, title, location, notes, latitude, longitude, cost, mapURL, linkURL
+        case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL
     }
 
     init(id: String = UUID().uuidString,
@@ -39,6 +42,7 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
          latitude: Double? = nil,
          longitude: Double? = nil,
          cost: Double? = nil,
+         actualCost: Double? = nil,
          mapURL: String? = nil,
          linkURL: String? = nil) {
         self.id = id
@@ -49,6 +53,7 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
         self.latitude = latitude
         self.longitude = longitude
         self.cost = cost
+        self.actualCost = actualCost
         self.mapURL = mapURL
         self.linkURL = linkURL
     }

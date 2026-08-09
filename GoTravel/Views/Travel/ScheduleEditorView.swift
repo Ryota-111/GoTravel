@@ -192,6 +192,9 @@ struct ScheduleEditorView: View {
                             },
                             onEdit: {
                                 // 編集機能は後で追加可能
+                            },
+                            onUpdateActualCost: { newValue in
+                                updateActualCost(for: item, to: newValue)
                             }
                         )
                     }
@@ -272,6 +275,15 @@ struct ScheduleEditorView: View {
         }
     }
 
+    /// 実際に使った金額を書き戻す。他の項目には触れない
+    private func updateActualCost(for item: ScheduleItem, to newValue: Double?) {
+        guard let dayIndex = daySchedules.firstIndex(where: { $0.dayNumber == selectedDay }),
+              let itemIndex = daySchedules[dayIndex].scheduleItems.firstIndex(where: { $0.id == item.id }) else {
+            return
+        }
+        daySchedules[dayIndex].scheduleItems[itemIndex].actualCost = newValue
+    }
+
     private func saveSchedule() {
         isSaving = true
 
@@ -301,13 +313,50 @@ struct ScheduleItemEditCard: View {
     let plan: TravelPlan
     let onDelete: () -> Void
     let onEdit: () -> Void
+    let onUpdateActualCost: (Double?) -> Void
 
     @State private var showSaveAsVisited = false
     @State private var showMapView = false
+    @State private var showActualCostEditor = false
     @ObservedObject var themeManager = ThemeManager.shared
 
     private var hasLocationData: Bool {
         item.latitude != nil && item.longitude != nil
+    }
+
+    private var secondaryTextColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.budgetDarkText : themeManager.currentTheme.budgetLightText
+    }
+
+    /// 予算と実績。実績はタップして後から記録できる
+    private var costRow: some View {
+        HStack(spacing: 10) {
+            if let cost = item.cost {
+                Label(formatCurrency(cost), systemImage: "yensign.circle")
+                    .font(.caption)
+                    .foregroundColor(secondaryTextColor)
+            }
+
+            Button(action: { showActualCostEditor = true }) {
+                HStack(spacing: 4) {
+                    Image(systemName: item.actualCost == nil ? "plus.circle" : "checkmark.circle.fill")
+                    Text(item.actualCost.map { "実績 \(formatCurrency($0))" } ?? "実績を記録")
+                }
+                .font(.caption.weight(.medium))
+                .foregroundColor(themeManager.currentTheme.success)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 4)
+                .background(Capsule().fill(themeManager.currentTheme.success.opacity(0.15)))
+            }
+            .buttonStyle(.borderless)
+        }
+    }
+
+    private func formatCurrency(_ value: Double) -> String {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .decimal
+        formatter.maximumFractionDigits = 0
+        return "¥\(formatter.string(from: NSNumber(value: value)) ?? "0")"
     }
 
     var body: some View {
@@ -345,6 +394,8 @@ struct ScheduleItemEditCard: View {
                         .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.budgetDarkText : themeManager.currentTheme.budgetLightText)
                         .lineLimit(2)
                 }
+
+                costRow
             }
 
             Spacer()
@@ -386,6 +437,9 @@ struct ScheduleItemEditCard: View {
         }
         .sheet(isPresented: $showMapView) {
             scheduleMapViewSheet
+        }
+        .sheet(isPresented: $showActualCostEditor) {
+            ActualCostEditorView(item: item, onSave: onUpdateActualCost)
         }
     }
 
@@ -457,6 +511,7 @@ struct AddScheduleItemToEditorView: View {
     @State private var notes: String = ""
     @State private var time: Date = Date()
     @State private var cost: String = ""
+    @State private var actualCost: String = ""
     @State private var linkURL: String = ""
 
     // Location search properties
@@ -493,7 +548,21 @@ struct AddScheduleItemToEditorView: View {
                             HStack {
                                 Image(systemName: "yensign.circle")
                                     .foregroundColor(.white.opacity(0.7))
-                                TextField("金額（任意）", text: $cost)
+                                TextField("予算（任意）", text: $cost)
+                                    .foregroundColor(.white)
+                                    .keyboardType(.decimalPad)
+                                Text("円")
+                                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+                            }
+                            .padding()
+                            .background(themeManager.currentTheme.accent2.opacity(0.2))
+                            .cornerRadius(10)
+
+                            // 旅行後に実際の金額を記録できるようにする（予算と別で持つ）
+                            HStack {
+                                Image(systemName: "checkmark.circle")
+                                    .foregroundColor(.white.opacity(0.7))
+                                TextField("実際に使った金額（任意）", text: $actualCost)
                                     .foregroundColor(.white)
                                     .keyboardType(.decimalPad)
                                 Text("円")
@@ -669,6 +738,7 @@ struct AddScheduleItemToEditorView: View {
             latitude: selectedCoordinate?.latitude,
             longitude: selectedCoordinate?.longitude,
             cost: costValue,
+            actualCost: actualCost.isEmpty ? nil : Double(actualCost),
             linkURL: linkURL.isEmpty ? nil : linkURL.trimmingCharacters(in: .whitespacesAndNewlines)
         )
 

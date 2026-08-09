@@ -152,6 +152,8 @@ struct TravelPlanDetailView: View {
         .sheet(isPresented: $showBudgetSummary) {
             if let currentPlan = currentPlan {
                 BudgetSummaryView(plan: currentPlan)
+                    .environmentObject(viewModel)
+                    .environmentObject(authVM)
             }
         }
         .confirmationDialog(

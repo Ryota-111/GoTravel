@@ -708,6 +708,8 @@ final class CloudKitService {
         record["sharedWith"] = plan.sharedWith.isEmpty ? nil : plan.sharedWith
         record["ownerId"] = plan.ownerId
         record["lastEditedBy"] = plan.lastEditedBy
+        // 割り勘の人数は同行者に合わせて手動設定されるためメンバー間で共有する
+        record["customSplitCount"] = plan.customSplitCount
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -950,7 +952,9 @@ final class CloudKitService {
             sharedWith: sharedWith,
             ownerId: ownerId,
             lastEditedBy: lastEditedBy,
-            updatedAt: updatedAt
+            updatedAt: updatedAt,
+            customSplitCount: (record["customSplitCount"] as? Int64).map { Int($0) }
+                ?? record["customSplitCount"] as? Int
         )
     }
 }

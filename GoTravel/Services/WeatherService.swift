@@ -119,7 +119,7 @@ final class WeatherService {
 
             return DayWeather(
                 date: date,
-                condition: dayWeather.condition.description,
+                condition: dayWeather.condition.japaneseDescription,
                 symbolName: dayWeather.symbolName,
                 highTemperature: dayWeather.highTemperature.value,
                 lowTemperature: dayWeather.lowTemperature.value,
@@ -189,7 +189,7 @@ final class WeatherService {
             return forecast.map { dayWeather in
                 DayWeather(
                     date: dayWeather.date,
-                    condition: dayWeather.condition.description,
+                    condition: dayWeather.condition.japaneseDescription,
                     symbolName: dayWeather.symbolName,
                     highTemperature: dayWeather.highTemperature.value,
                     lowTemperature: dayWeather.lowTemperature.value,

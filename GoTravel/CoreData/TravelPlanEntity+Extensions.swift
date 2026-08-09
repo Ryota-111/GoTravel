@@ -24,6 +24,7 @@ public class TravelPlanEntity: NSManagedObject {
     @NSManaged public var updatedAt: Date?
     @NSManaged public var daySchedulesData: Data?
     @NSManaged public var packingItemsData: Data?
+    @NSManaged public var customSplitCount: NSNumber?
 }
 
 // MARK: - Fetch Request
@@ -117,7 +118,8 @@ extension TravelPlanEntity {
             sharedWith: sharedWith,
             ownerId: ownerId,
             lastEditedBy: lastEditedBy,
-            updatedAt: updatedAt ?? Date()
+            updatedAt: updatedAt ?? Date(),
+            customSplitCount: customSplitCount?.intValue
         )
     }
 
@@ -150,6 +152,7 @@ extension TravelPlanEntity {
         self.ownerId = plan.ownerId
         self.lastEditedBy = plan.lastEditedBy
         self.updatedAt = plan.updatedAt
+        self.customSplitCount = plan.customSplitCount.map { NSNumber(value: $0) }
 
         // sharedWithをエンコード（空になった場合もクリアして反映する）
         if !plan.sharedWith.isEmpty {
