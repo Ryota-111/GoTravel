@@ -1,4 +1,5 @@
 import SwiftUI
+import CloudKit
 
 // MARK: - Join Travel Plan View
 struct JoinTravelPlanView: View {
@@ -242,6 +243,9 @@ struct JoinTravelPlanView: View {
                     default:
                         errorMessage = apiError.localizedDescription
                     }
+                } else if let ckError = error as? CKError, ckError.code == .notAuthenticated {
+                    // iCloud未サインインだと汎用文言では原因に辿り着けない
+                    errorMessage = "iCloudにサインインしていないため、共有機能を利用できません。設定アプリでiCloudにサインインしてから、もう一度お試しください。"
                 } else {
                     errorMessage = "参加できませんでした。通信環境をご確認のうえ、もう一度お試しください。"
                 }

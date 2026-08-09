@@ -1,4 +1,5 @@
 import SwiftUI
+import CloudKit
 
 // MARK: - Share Travel Plan View
 struct ShareTravelPlanView: View {
@@ -8,11 +9,15 @@ struct ShareTravelPlanView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
     let plan: TravelPlan
-    let onShareCodeGenerated: (String) -> Void
+    /// 生成したコードをパブリックDBへ公開する。失敗は throw で返る
+    let onShareCodeGenerated: (String) async throws -> Void
 
     @State private var shareCode: String = ""
     @State private var showCopiedAlert = false
     @State private var showStopSharingConfirmation = false
+    @State private var isPublishing = false
+    @State private var showPublishError = false
+    @State private var publishErrorMessage = ""
 
     /// ViewModelから常に最新のプランを参照する
     /// （`plan`はシート表示時点のコピーなので、コード生成やメンバー参加が反映されない）
@@ -65,7 +70,12 @@ struct ShareTravelPlanView: View {
                 }
                 Button("キャンセル", role: .cancel) {}
             } message: {
-                Text("共有コードが無効になり、メンバーには今後の変更が共有されなくなります。")
+                Text("共有コードが無効になり、参加中のメンバーは全員この計画から外れます。再度共有する場合は、新しいコードを作成して全員に参加し直してもらう必要があります。")
+            }
+            .alert("共有コードを発行できませんでした", isPresented: $showPublishError) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(publishErrorMessage)
             }
         }
         .onAppear {
@@ -104,11 +114,19 @@ struct ShareTravelPlanView: View {
     private var generateCodeButton: some View {
         Button(action: generateShareCode) {
             HStack {
-                Image(systemName: "plus.circle.fill")
-                    .font(.title3)
+                if isPublishing {
+                    ProgressView()
+                        .progressViewStyle(CircularProgressViewStyle(tint: themeManager.currentTheme.dark))
 
-                Text("共有コードを生成")
-                    .font(.headline)
+                    Text("発行中...")
+                        .font(.headline)
+                } else {
+                    Image(systemName: "plus.circle.fill")
+                        .font(.title3)
+
+                    Text("共有コードを生成")
+                        .font(.headline)
+                }
             }
             .foregroundColor(themeManager.currentTheme.dark)
             .frame(maxWidth: .infinity)
@@ -123,6 +141,7 @@ struct ShareTravelPlanView: View {
             .cornerRadius(15)
             .shadow(color: themeManager.currentTheme.accent1.opacity(0.3), radius: 10, x: 0, y: 5)
         }
+        .disabled(isPublishing)
     }
 
     // MARK: - Share Code Section
@@ -339,10 +358,34 @@ struct ShareTravelPlanView: View {
     }
 
     // MARK: - Actions
+
+    /// コードを生成してパブリックDBへ公開する。
+    /// 公開に**成功してから**コードを表示する。先に表示すると、
+    /// 公開されていないコードをコピーして相手に送れてしまい、
+    /// 参加側で「見つかりませんでした」になる（実際に問い合わせが来た症状）。
     private func generateShareCode() {
+        guard !isPublishing else { return }
         let code = TravelPlan.generateShareCode()
-        shareCode = code
-        onShareCodeGenerated(code)
+        isPublishing = true
+
+        Task {
+            do {
+                try await onShareCodeGenerated(code)
+                shareCode = code
+            } catch {
+                publishErrorMessage = Self.publishErrorText(for: error)
+                showPublishError = true
+            }
+            isPublishing = false
+        }
+    }
+
+    private static func publishErrorText(for error: Error) -> String {
+        if let ckError = error as? CKError,
+           ckError.code == .notAuthenticated {
+            return "iCloudにサインインしていないため、共有機能を利用できません。設定アプリでiCloudにサインインしてから、もう一度お試しください。"
+        }
+        return "通信環境をご確認のうえ、もう一度お試しください。"
     }
 
     private func stopSharing() {

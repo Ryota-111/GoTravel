@@ -181,9 +181,10 @@ struct TravelPlanDetailView: View {
         .sheet(isPresented: $showShareView) {
             if let currentPlan = currentPlan {
                 ShareTravelPlanView(plan: currentPlan) { shareCode in
-                    if let userId = authVM.userId {
-                        viewModel.updateShareCode(planId: currentPlan.id ?? "", shareCode: shareCode, userId: userId)
+                    guard let planId = currentPlan.id, let userId = authVM.userId else {
+                        throw APIClientError.authenticationError
                     }
+                    try await viewModel.updateShareCode(planId: planId, shareCode: shareCode, userId: userId)
                 }
                 .environmentObject(viewModel)
             }

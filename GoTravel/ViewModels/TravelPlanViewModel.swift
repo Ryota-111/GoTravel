@@ -257,13 +257,17 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
     // パブリックDBと双方向に同期する。
 
     /// 共有コードを設定してプランをパブリックDBに公開
+    ///
+    /// 公開に**成功してから**ローカルを共有状態にする。
+    /// 以前は公開を投げっぱなしにしていたため、失敗しても画面にはコードが表示され、
+    /// 「公開されていないコード」を相手に送れてしまっていた
+    /// （参加側には「共有コードに一致する旅行計画が見つかりませんでした」と出る）。
     @MainActor
-    func updateShareCode(planId: String, shareCode: String, userId: String) {
+    func updateShareCode(planId: String, shareCode: String, userId: String) async throws {
         guard var plan = travelPlans.first(where: { $0.id == planId }) else {
-            // ここで抜けると共有コードは画面に出るのに公開されない
             Logger(subsystem: "com.gmail.taismryotasis.Travory", category: "sharing")
                 .error("共有コード設定中止: 手元にプランが見つからない planId=\(planId, privacy: .public)")
-            return
+            throw APIClientError.notFound
         }
 
         Logger(subsystem: "com.gmail.taismryotasis.Travory", category: "sharing")
@@ -281,7 +285,10 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
         plan.lastEditedBy = userId
         plan.updatedAt = Date()
 
-        // update() 内で isShared を判定してパブリックDBにも公開される
+        // 先にパブリックDBへ公開する。失敗したらローカルは共有状態にしない
+        try await CloudKitService.shared.publishSharedTravelPlan(plan)
+
+        // update() 内の再公開は保存済みレコードへの上書きになるだけなので無害
         update(plan, userId: userId)
     }
 
@@ -304,11 +311,35 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
         }
     }
 
+    /// 写し間違いの救済候補。O↔0・I↔1 は見た目が紛らわしく、
+    /// 手入力や口頭伝達で混同されるため、見つからない場合は置換した候補でも検索する
+    private func shareCodeCandidates(for code: String) -> [String] {
+        var candidates = [code]
+        let toDigits = code
+            .replacingOccurrences(of: "O", with: "0")
+            .replacingOccurrences(of: "I", with: "1")
+        let toLetters = code
+            .replacingOccurrences(of: "0", with: "O")
+            .replacingOccurrences(of: "1", with: "I")
+        for candidate in [toDigits, toLetters] where !candidates.contains(candidate) {
+            candidates.append(candidate)
+        }
+        return candidates
+    }
+
     /// 共有コードでプランに参加（パブリックDBを検索）
     func joinPlanByShareCode(_ shareCode: String, userId: String, completion: @escaping (Result<TravelPlan, Error>) -> Void) {
         Task {
             do {
-                guard var plan = try await CloudKitService.shared.fetchSharedTravelPlan(byShareCode: shareCode) else {
+                var foundPlan: TravelPlan?
+                for candidate in shareCodeCandidates(for: shareCode) {
+                    if let plan = try await CloudKitService.shared.fetchSharedTravelPlan(byShareCode: candidate) {
+                        foundPlan = plan
+                        break
+                    }
+                }
+
+                guard var plan = foundPlan else {
                     await MainActor.run {
                         completion(.failure(APIClientError.notFound))
                     }

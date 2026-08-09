@@ -164,7 +164,8 @@ struct TravelPlan: Identifiable, Codable {
 
     static func generateShareCode() -> String {
         let prefix = "TRAVEL"
-        let randomString = String((0..<8).map { _ in "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789".randomElement()! })
+        // O と I は 0・1 と見間違えて手入力で写し間違えるため含めない
+        let randomString = String((0..<8).map { _ in "ABCDEFGHJKLMNPQRSTUVWXYZ0123456789".randomElement()! })
         return "\(prefix)-\(randomString)"
     }
 }
