@@ -852,6 +852,12 @@ struct HelpSupportView: View {
                             Text("使い方やお困りの際はこちら")
                                 .font(.subheadline)
                                 .foregroundColor(themeManager.currentTheme.secondaryText)
+
+                            Text("みなさんの声をもとに改善しています。\nご要望をお気軽にお寄せください")
+                                .font(.caption)
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
+                                .multilineTextAlignment(.center)
+                                .padding(.top, 2)
                         }
                     }
                     .opacity(animateCards ? 1 : 0)
@@ -877,7 +883,7 @@ struct HelpSupportView: View {
                             HelpCard(
                                 icon: "lightbulb.fill",
                                 title: "ご意見・ご要望",
-                                description: "欲しい機能や不具合をこの場で送れます",
+                                description: "欲しい機能や不具合をこの場で送れます。いただいた声をもとに改善しています",
                                 color: .yellow
                             )
                         }

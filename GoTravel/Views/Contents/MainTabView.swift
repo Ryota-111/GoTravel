@@ -5,6 +5,7 @@ struct MainTabView: View {
     @State private var selectedTab: Int = 0
     @State private var showICloudAlert = false
     @State private var hasCheckedICloud = false
+    @State private var whatsNew: WhatsNew?
     @StateObject private var plansViewModel = PlansViewModel()
     @StateObject private var travelPlanViewModel = TravelPlanViewModel()
     @EnvironmentObject var authVM: AuthViewModel
@@ -60,6 +61,13 @@ struct MainTabView: View {
                 hasCheckedICloud = true
                 await checkICloudStatus()
             }
+
+            // アップデート後の初回起動で新機能を知らせる。
+            // iCloudアラートと重ならないよう、確認を終えてから出す
+            if !showICloudAlert, WhatsNewManager.shouldShow {
+                whatsNew = WhatsNew.current
+                WhatsNewManager.markAsShown()
+            }
         }
         // ウィジェット用のデータを書き出す。
         // TravelPlan は Equatable ではないため配列を直接監視できないので、
@@ -77,6 +85,9 @@ struct MainTabView: View {
             Button("OK", role: .cancel) {}
         } message: {
             Text("このアプリはデータを保存するためにiCloudを使用します。iCloudにサインインしてください。\n\n設定 > [あなたの名前] > iCloud")
+        }
+        .sheet(item: $whatsNew) { content in
+            WhatsNewView(content: content)
         }
     }
 
