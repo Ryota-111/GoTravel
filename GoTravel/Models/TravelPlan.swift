@@ -142,8 +142,20 @@ struct TravelPlan: Identifiable, Codable {
     }
 
     // Helper methods
+    /// このプランの持ち主かどうか。
+    ///
+    /// 参加者のローカルコピーは userId が自分のIDに書き換えられる
+    /// （FetchedResultsController の条件に合わせるため）。
+    /// そのため共有中のプランを userId で判定すると、参加者を持ち主と誤認する。
+    /// 誤認したまま削除するとパブリックDBの共有レコードごと消え、
+    /// 他のメンバーが誰も参加できなくなるため、判断できない場合は false を返す。
     func isOwner(userId: String) -> Bool {
-        return ownerId == userId || (ownerId == nil && self.userId == userId)
+        if let ownerId {
+            return ownerId == userId
+        }
+
+        // ownerId は共有時に設定される。無いのは一度も共有していないプラン
+        return !isShared && self.userId == userId
     }
 
     func isSharedWithUser(userId: String) -> Bool {
