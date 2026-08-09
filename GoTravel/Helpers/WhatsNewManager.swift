@@ -12,7 +12,7 @@ enum WhatsNewManager {
     /// 本来の「1バージョンにつき1回」の挙動を確認したくなったら false に戻す。
     /// DEBUG ビルド限定なので、消し忘れてもTestFlightやApp Storeには影響しない。
     #if DEBUG
-    static let alwaysShowForTesting = true
+    static let alwaysShowForTesting = false
     #endif
 
     /// 現在のアプリバージョン（"2.4" など。ビルド番号は含めない）
