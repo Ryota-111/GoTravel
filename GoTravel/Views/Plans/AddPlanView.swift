@@ -854,10 +854,15 @@ struct AddPlanView: View {
     private func performMapSearch() async {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = searchText
-        request.resultTypes = .pointOfInterest
-        request.region = mapVisibleRegion ?? MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
-            span: MKCoordinateSpan(latitudeDelta: 0.0125, longitudeDelta: 0.0125)
+        // 施設だけに絞ると住所で検索できないため住所も対象にする
+        request.resultTypes = [.pointOfInterest, .address]
+
+        // 表示中の狭い範囲に限定すると遠方の場所が一切ヒットしない。
+        // 近くを優先しつつ遠方も拾えるよう、中心だけ引き継いで範囲は広く取る
+        request.region = MKCoordinateRegion(
+            center: mapVisibleRegion?.center
+                ?? CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
+            span: MKCoordinateSpan(latitudeDelta: 60, longitudeDelta: 60)
         )
         let search = MKLocalSearch(request: request)
         do {

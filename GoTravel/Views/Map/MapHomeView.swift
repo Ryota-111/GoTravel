@@ -46,7 +46,43 @@ struct MapHomeView: View {
     @State private var isSearching = false
     @State private var hasLoadedPlaces = false
 
+    /// 長押しで立てたピン。検索に出てこない場所を登録するためのもの
+    @State private var droppedPin: CLLocationCoordinate2D?
+    @State private var droppedPinTitle: String = ""
+    @State private var showingDroppedPinSheet = false
+
     var body: some View {
+        MapReader { proxy in
+            mapContent(proxy: proxy)
+        }
+    }
+
+    private func mapContent(proxy: MapProxy) -> some View {
+        mapBody
+            // 地図のパン・ズームを妨げないよう simultaneousGesture で重ねる。
+            // 長押しの座標が必要なので、長押し成立後の指の位置を DragGesture で受け取る
+            .simultaneousGesture(
+                LongPressGesture(minimumDuration: 0.45)
+                    .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .local))
+                    .onEnded { value in
+                        guard case .second(true, let drag?) = value,
+                              let coordinate = proxy.convert(drag.location, from: .local) else { return }
+                        dropPin(at: coordinate)
+                    }
+            )
+            .sheet(isPresented: $showingDroppedPinSheet, onDismiss: { droppedPin = nil }) {
+                if let droppedPin {
+                    SavePlaceView(vm: {
+                        let saveVM = SavePlaceViewModel(coord: droppedPin, placesVM: vm)
+                        saveVM.title = droppedPinTitle
+                        return saveVM
+                    }())
+                    .environmentObject(auth)
+                }
+            }
+    }
+
+    private var mapBody: some View {
         Map(position: $position, selection: $selectedResult) {
             UserAnnotation(anchor: .top) { userLocation in
                 EmptyView()
@@ -59,6 +95,16 @@ struct MapHomeView: View {
             ForEach(searchResults, id: \.self) { result in
                 Marker(item: result)
                     .tint(themeManager.currentTheme.error)
+            }
+
+            // 長押しで立てたピン
+            if let droppedPin {
+                Annotation("追加する場所", coordinate: droppedPin) {
+                    Image(systemName: "mappin.circle.fill")
+                        .font(.system(size: 34))
+                        .foregroundStyle(themeManager.currentTheme.success)
+                        .shadow(radius: 3)
+                }
             }
 
             // 保存済み場所マーカー（赤+カテゴリーアイコン）
@@ -83,6 +129,8 @@ struct MapHomeView: View {
             if let selectedResult {
                 selectedResultDetailView(selectedResult)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if searchResults.isEmpty {
+                longPressHint
             }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: selectedResult != nil)
@@ -109,6 +157,21 @@ struct MapHomeView: View {
                 hasLoadedPlaces = true
             }
         }
+    }
+
+    /// 長押しは見えない操作なので、検索結果が無いときだけ案内を出す
+    private var longPressHint: some View {
+        HStack(spacing: 6) {
+            Image(systemName: "hand.tap.fill")
+                .font(.caption)
+            Text("地図を長押しすると、その場所を登録できます")
+                .font(.caption)
+        }
+        .foregroundStyle(.white)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .background(Capsule().fill(Color.black.opacity(0.55)))
+        .padding(.bottom, 10)
     }
 
     // MARK: - Search Bar
@@ -295,14 +358,48 @@ struct MapHomeView: View {
         }
     }
 
+    /// 長押しした地点にピンを立てて保存画面を開く。
+    /// 検索に出てこない場所（友人宅・地図に無い店・公園の一角など）を登録するための導線
+    private func dropPin(at coordinate: CLLocationCoordinate2D) {
+        droppedPin = coordinate
+        droppedPinTitle = ""
+
+        let generator = UIImpactFeedbackGenerator(style: .medium)
+        generator.impactOccurred()
+
+        // 住所が分かれば名前の初期値にする。分からなくても保存はできる
+        Task {
+            let placemark = try? await CLGeocoder().reverseGeocodeLocation(
+                CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+            ).first
+
+            let name = placemark?.name
+                ?? [placemark?.locality, placemark?.thoroughfare].compactMap { $0 }.joined()
+
+            await MainActor.run {
+                droppedPinTitle = name ?? ""
+                showingDroppedPinSheet = true
+            }
+        }
+    }
+
     private func searchLocations(searchText: String) async -> [MKMapItem] {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = searchText
-        request.resultTypes = .pointOfInterest
-        request.region = visibleRegion ?? MKCoordinateRegion(
-            center: location,
-            span: MKCoordinateSpan(latitudeDelta: 0.0125, longitudeDelta: 0.0125)
+
+        // 施設だけに絞ると住所で検索できない。
+        // 「◯◯県◯◯市…」のような入力でも見つかるようにする
+        request.resultTypes = [.pointOfInterest, .address]
+
+        // 表示中の範囲だけを対象にすると、地図を動かさない限り遠方の場所が
+        // 一切ヒットしない（東京を表示中に「通天閣」で0件になる）。
+        // 近くを優先しつつ遠方も拾えるよう、中心だけ引き継いで範囲は広く取る
+        let center = visibleRegion?.center ?? location
+        request.region = MKCoordinateRegion(
+            center: center,
+            span: MKCoordinateSpan(latitudeDelta: 60, longitudeDelta: 60)
         )
+
         do {
             let search = MKLocalSearch(request: request)
             return try await search.start().mapItems

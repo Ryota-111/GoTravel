@@ -129,7 +129,8 @@ struct PlacesListView: View {
                     .font(.headline)
                     .foregroundColor(textColor)
 
-                Text(vm.places.isEmpty ? "マップをタップして場所を追加しましょう" : "別のカテゴリを選ぶか、場所を追加しましょう")
+                // 以前は「マップをタップ」と案内していたが、その操作は存在しなかった
+                Text(vm.places.isEmpty ? "マップで検索するか、地図を長押しして場所を追加できます" : "別のカテゴリを選ぶか、場所を追加しましょう")
                     .font(.subheadline)
                     .foregroundColor(secondaryTextColor)
 
