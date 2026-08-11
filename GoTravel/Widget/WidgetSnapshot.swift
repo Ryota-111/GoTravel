@@ -40,11 +40,24 @@ struct WidgetSnapshot: Codable, Equatable {
         static let timedGrace: TimeInterval = 60
         static let untimedHandoverHour = 8
 
+        /// 旅行のタイムテーブルは開始5分後に次へ渡す。
+        /// 予定より長いのは、移動の途中で見返す場面が多いため
+        static let travelGrace: TimeInterval = 300
+
         var expiresAt: Date? {
+            expires(after: Self.timedGrace)
+        }
+
+        /// 旅行スケジュール用の区切り
+        var travelExpiresAt: Date? {
+            expires(after: Self.travelGrace)
+        }
+
+        private func expires(after grace: TimeInterval) -> Date? {
             guard let date else { return nil }
 
             if time != nil, let occursAt {
-                return occursAt.addingTimeInterval(Self.timedGrace)
+                return occursAt.addingTimeInterval(grace)
             }
 
             return Calendar.current.date(
@@ -111,9 +124,13 @@ struct WidgetSnapshot: Codable, Equatable {
     func filtered(at date: Date) -> WidgetSnapshot {
         var copy = self
 
-        // その日の分だけを取り出し、進行中のものを先頭にして以降を残す。
-        // 常に先頭を出すと、夕方でも朝の予定が表示されたままになる
-        copy.travelScheduleItems = Self.currentAndUpcoming(travelItems(on: date), at: date)
+        // その日の分から、区切りを過ぎたものを落とす。
+        // 以前は開始済みの項目を「今やっていること」として次が始まるまで残していたが、
+        // 予定側と挙動が違って分かりにくいため、同じ「時刻＋猶予」の考え方に揃えた
+        copy.travelScheduleItems = travelItems(on: date).filter { item in
+            guard let travelExpiresAt = item.travelExpiresAt else { return true }
+            return travelExpiresAt > date
+        }
 
         // 区切りを過ぎた予定を落として次の予定に切り替える。
         // 比較が >= だと、区切り時刻ちょうどに作ったエントリが自分自身を残してしまい、
@@ -128,24 +145,6 @@ struct WidgetSnapshot: Codable, Equatable {
 
     var hasContent: Bool {
         travelTitle != nil || !upcomingPlans.isEmpty
-    }
-
-    /// 進行中の予定を先頭に、それ以降を返す。
-    /// 開始済みの予定は次の予定が始まるまで「今やっていること」として残す
-    private static func currentAndUpcoming(_ items: [Item], at date: Date) -> [Item] {
-        guard !items.isEmpty else { return [] }
-
-        var startIndex = 0
-        for (index, item) in items.enumerated() {
-            guard let occursAt = item.occursAt else { continue }
-            if occursAt <= date {
-                startIndex = index
-            } else {
-                break
-            }
-        }
-
-        return Array(items[startIndex...])
     }
 
     /// 「自動」表示のときに旅行と予定のどちらを主役にするか。

@@ -53,10 +53,10 @@ struct TravoryProvider: AppIntentTimelineProvider {
             midnight = next
         }
 
-        // 予定は開始時刻ではなく、次に譲る時刻で表示が変わる
+        // 予定・旅行とも、開始時刻ではなく次に譲る時刻で表示が変わる。
+        // 開始時刻を区切り点にすると、切り替わる瞬間にエントリが無く反映が遅れる
         checkpoints += stored.upcomingPlans.compactMap(\.expiresAt)
-        // 旅行中は次の予定の時刻で表示が切り替わるので、こちらも区切り点にする
-        checkpoints += stored.travelScheduleItems.compactMap(\.occursAt)
+        checkpoints += stored.travelScheduleItems.compactMap(\.travelExpiresAt)
 
         checkpoints = checkpoints.filter { $0 == now || ($0 > now && $0 <= windowEnd) }
 
