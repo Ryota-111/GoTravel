@@ -46,29 +46,28 @@ struct MapHomeView: View {
     @State private var isSearching = false
     @State private var hasLoadedPlaces = false
 
-    /// 長押しで立てたピン。検索に出てこない場所を登録するためのもの
-    @State private var droppedPin: CLLocationCoordinate2D?
-    @State private var droppedPinTitle: String = ""
+    /// 地図から場所を選んでいる最中かどうか。
+    ///
+    /// 以前は長押しした地点を座標に変換していたが、ジェスチャの座標空間と
+    /// 地図の座標空間がずれて、指の位置と違うところにピンが立った。
+    /// 画面中央を使えば変換が要らず、原理的にずれない
+    @State private var isPickingLocation = false
+    @State private var pickedPinTitle: String = ""
     @State private var showingDroppedPinSheet = false
+    @State private var pickedCoordinate: CLLocationCoordinate2D?
 
-    var body: some View {
-        MapReader { proxy in
-            mapContent(proxy: proxy)
-        }
+    /// 選択中に採用する地点。常に地図の中心
+    private var pickerCenter: CLLocationCoordinate2D? {
+        visibleRegion?.center
     }
 
-    /// 地図そのものの座標空間。
-    /// .local だと safeAreaInset を含む外側のビューが基準になり、
-    /// 検索バーの高さぶん下にずれた地点にピンが立つ
-    private static let mapSpace = "mapArea"
-
-    private func mapContent(proxy: MapProxy) -> some View {
-        mapBody(proxy: proxy)
-            .sheet(isPresented: $showingDroppedPinSheet, onDismiss: { droppedPin = nil }) {
-                if let droppedPin {
+    var body: some View {
+        mapBody
+            .sheet(isPresented: $showingDroppedPinSheet, onDismiss: { pickedCoordinate = nil }) {
+                if let pickedCoordinate {
                     SavePlaceView(vm: {
-                        let saveVM = SavePlaceViewModel(coord: droppedPin, placesVM: vm)
-                        saveVM.title = droppedPinTitle
+                        let saveVM = SavePlaceViewModel(coord: pickedCoordinate, placesVM: vm)
+                        saveVM.title = pickedPinTitle
                         return saveVM
                     }())
                     .environmentObject(auth)
@@ -76,7 +75,7 @@ struct MapHomeView: View {
             }
     }
 
-    private func mapBody(proxy: MapProxy) -> some View {
+    private var mapBody: some View {
         Map(position: $position, selection: $selectedResult) {
             UserAnnotation(anchor: .top) { userLocation in
                 EmptyView()
@@ -89,16 +88,6 @@ struct MapHomeView: View {
             ForEach(searchResults, id: \.self) { result in
                 Marker(item: result)
                     .tint(themeManager.currentTheme.error)
-            }
-
-            // 長押しで立てたピン
-            if let droppedPin {
-                Annotation("追加する場所", coordinate: droppedPin) {
-                    Image(systemName: "mappin.circle.fill")
-                        .font(.system(size: 34))
-                        .foregroundStyle(themeManager.currentTheme.success)
-                        .shadow(radius: 3)
-                }
             }
 
             // 保存済み場所マーカー（赤+カテゴリーアイコン）
@@ -116,28 +105,23 @@ struct MapHomeView: View {
                 }
             }
         }
-        // 変換の基準を地図自身に固定する。この2行は safeAreaInset より前に置くこと
-        .coordinateSpace(.named(Self.mapSpace))
-        // 地図のパン・ズームを妨げないよう simultaneousGesture で重ねる。
-        // 長押しの座標が必要なので、長押し成立後の指の位置を DragGesture で受け取る
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.45)
-                .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.mapSpace)))
-                .onEnded { value in
-                    guard case .second(true, let drag?) = value,
-                          let coordinate = proxy.convert(drag.location, from: .named(Self.mapSpace)) else { return }
-                    dropPin(at: coordinate)
-                }
-        )
+        // 中央の十字。地図には重ねるだけで、操作は一切奪わない
+        .overlay(alignment: .center) {
+            if isPickingLocation {
+                centerCrosshair
+            }
+        }
         .safeAreaInset(edge: .top) {
             searchBarView
         }
         .safeAreaInset(edge: .bottom) {
-            if let selectedResult {
+            if isPickingLocation {
+                locationPickerBar
+            } else if let selectedResult {
                 selectedResultDetailView(selectedResult)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
-            } else if searchResults.isEmpty {
-                longPressHint
+            } else {
+                addFromMapButton
             }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: selectedResult != nil)
@@ -166,19 +150,104 @@ struct MapHomeView: View {
         }
     }
 
-    /// 長押しは見えない操作なので、検索結果が無いときだけ案内を出す
-    private var longPressHint: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "hand.tap.fill")
-                .font(.caption)
-            Text("地図を長押しすると、その場所を登録できます")
-                .font(.caption)
+    // MARK: - 地図から場所を選ぶ
+
+    /// 中央の十字。位置は画面中央に固定で、地図側は動かさない
+    private var centerCrosshair: some View {
+        VStack(spacing: 0) {
+            Image(systemName: "mappin")
+                .font(.system(size: 30, weight: .bold))
+                .foregroundStyle(themeManager.currentTheme.error)
+                .shadow(color: .black.opacity(0.3), radius: 3, y: 1)
+
+            // ピン先端の位置を示す。ここが実際に保存される地点
+            Circle()
+                .fill(themeManager.currentTheme.error)
+                .frame(width: 6, height: 6)
         }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Capsule().fill(Color.black.opacity(0.55)))
+        // ピンの先端が中央に来るよう、絵の高さのぶん持ち上げる
+        .offset(y: -18)
+        .allowsHitTesting(false)
+    }
+
+    private var addFromMapButton: some View {
+        Button {
+            withAnimation { isPickingLocation = true }
+        } label: {
+            Label("地図から場所を追加", systemImage: "mappin.and.ellipse")
+                .font(.subheadline.weight(.semibold))
+                .foregroundStyle(.white)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 12)
+                .background(Capsule().fill(themeManager.currentTheme.xprimary))
+                .shadow(color: .black.opacity(0.2), radius: 6, y: 2)
+        }
+        .padding(.bottom, 12)
+    }
+
+    private var locationPickerBar: some View {
+        VStack(spacing: 10) {
+            Text("地図を動かして、追加したい場所に十字を合わせてください")
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            HStack(spacing: 12) {
+                Button {
+                    withAnimation { isPickingLocation = false }
+                } label: {
+                    Text("キャンセル")
+                        .font(.subheadline.weight(.medium))
+                        .foregroundStyle(themeManager.currentTheme.error)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Capsule().fill(Color(.systemBackground)))
+                }
+
+                Button {
+                    confirmPickedLocation()
+                } label: {
+                    Text("この場所にする")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundStyle(.white)
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .background(Capsule().fill(themeManager.currentTheme.xprimary))
+                }
+                .disabled(pickerCenter == nil)
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 12)
         .padding(.bottom, 10)
+        .background(.ultraThinMaterial)
+    }
+
+    /// 十字の位置を確定して保存画面へ。
+    /// 座標は地図の中心そのものなので、画面座標からの変換は行わない
+    private func confirmPickedLocation() {
+        guard let coordinate = pickerCenter else { return }
+
+        pickedCoordinate = coordinate
+        pickedPinTitle = ""
+        withAnimation { isPickingLocation = false }
+
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+
+        // 住所が分かれば名前の初期値にする。分からなくても保存はできる
+        Task {
+            let placemark = try? await CLGeocoder().reverseGeocodeLocation(
+                CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+            ).first
+
+            let name = placemark?.name
+                ?? [placemark?.locality, placemark?.thoroughfare].compactMap { $0 }.joined()
+
+            await MainActor.run {
+                pickedPinTitle = name ?? ""
+                showingDroppedPinSheet = true
+            }
+        }
     }
 
     // MARK: - Search Bar
@@ -362,31 +431,6 @@ struct MapHomeView: View {
                 }
             }
             inputText = ""
-        }
-    }
-
-    /// 長押しした地点にピンを立てて保存画面を開く。
-    /// 検索に出てこない場所（友人宅・地図に無い店・公園の一角など）を登録するための導線
-    private func dropPin(at coordinate: CLLocationCoordinate2D) {
-        droppedPin = coordinate
-        droppedPinTitle = ""
-
-        let generator = UIImpactFeedbackGenerator(style: .medium)
-        generator.impactOccurred()
-
-        // 住所が分かれば名前の初期値にする。分からなくても保存はできる
-        Task {
-            let placemark = try? await CLGeocoder().reverseGeocodeLocation(
-                CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-            ).first
-
-            let name = placemark?.name
-                ?? [placemark?.locality, placemark?.thoroughfare].compactMap { $0 }.joined()
-
-            await MainActor.run {
-                droppedPinTitle = name ?? ""
-                showingDroppedPinSheet = true
-            }
         }
     }
 
