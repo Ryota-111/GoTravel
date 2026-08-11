@@ -57,19 +57,13 @@ struct MapHomeView: View {
         }
     }
 
+    /// 地図そのものの座標空間。
+    /// .local だと safeAreaInset を含む外側のビューが基準になり、
+    /// 検索バーの高さぶん下にずれた地点にピンが立つ
+    private static let mapSpace = "mapArea"
+
     private func mapContent(proxy: MapProxy) -> some View {
-        mapBody
-            // 地図のパン・ズームを妨げないよう simultaneousGesture で重ねる。
-            // 長押しの座標が必要なので、長押し成立後の指の位置を DragGesture で受け取る
-            .simultaneousGesture(
-                LongPressGesture(minimumDuration: 0.45)
-                    .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .local))
-                    .onEnded { value in
-                        guard case .second(true, let drag?) = value,
-                              let coordinate = proxy.convert(drag.location, from: .local) else { return }
-                        dropPin(at: coordinate)
-                    }
-            )
+        mapBody(proxy: proxy)
             .sheet(isPresented: $showingDroppedPinSheet, onDismiss: { droppedPin = nil }) {
                 if let droppedPin {
                     SavePlaceView(vm: {
@@ -82,7 +76,7 @@ struct MapHomeView: View {
             }
     }
 
-    private var mapBody: some View {
+    private func mapBody(proxy: MapProxy) -> some View {
         Map(position: $position, selection: $selectedResult) {
             UserAnnotation(anchor: .top) { userLocation in
                 EmptyView()
@@ -122,6 +116,19 @@ struct MapHomeView: View {
                 }
             }
         }
+        // 変換の基準を地図自身に固定する。この2行は safeAreaInset より前に置くこと
+        .coordinateSpace(.named(Self.mapSpace))
+        // 地図のパン・ズームを妨げないよう simultaneousGesture で重ねる。
+        // 長押しの座標が必要なので、長押し成立後の指の位置を DragGesture で受け取る
+        .simultaneousGesture(
+            LongPressGesture(minimumDuration: 0.45)
+                .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .named(Self.mapSpace)))
+                .onEnded { value in
+                    guard case .second(true, let drag?) = value,
+                          let coordinate = proxy.convert(drag.location, from: .named(Self.mapSpace)) else { return }
+                    dropPin(at: coordinate)
+                }
+        )
         .safeAreaInset(edge: .top) {
             searchBarView
         }
