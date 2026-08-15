@@ -51,6 +51,10 @@ struct MapHomeView: View {
     @State private var pickedPinTitle: String = ""
     @State private var showingDroppedPinSheet = false
 
+    /// 1回の長押しでピンを立て直さないための目印。
+    /// 押している間ドラッグの更新が何度も届くため
+    @State private var hasDroppedPinInThisPress = false
+
     var body: some View {
         MapReader { proxy in
             mapBody(proxy: proxy)
@@ -89,6 +93,8 @@ struct MapHomeView: View {
                         .font(.system(size: 34))
                         .foregroundStyle(themeManager.currentTheme.success)
                         .shadow(radius: 3)
+                        // 絵の中心が座標に来ると指に隠れるので、少し上に出す
+                        .offset(y: -8)
                 }
             }
 
@@ -115,7 +121,21 @@ struct MapHomeView: View {
         .simultaneousGesture(
             LongPressGesture(minimumDuration: 0.45)
                 .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .local))
+                // 長押しが成立した時点、つまり指を離す前にピンを立てる
+                .onChanged { value in
+                    guard case .second(true, let drag?) = value else { return }
+                    guard !hasDroppedPinInThisPress else { return }
+                    hasDroppedPinInThisPress = true
+
+                    guard let coordinate = proxy.convert(drag.location, from: .local) else { return }
+                    dropPin(at: coordinate)
+                }
+                // 指を動かさないとドラッグの更新が届かない場合の保険。
+                // onChanged で立てられていたら何もしない
                 .onEnded { value in
+                    defer { hasDroppedPinInThisPress = false }
+                    guard !hasDroppedPinInThisPress else { return }
+
                     guard case .second(true, let drag?) = value,
                           let coordinate = proxy.convert(drag.location, from: .local) else { return }
                     dropPin(at: coordinate)
