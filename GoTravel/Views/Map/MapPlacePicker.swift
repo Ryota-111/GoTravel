@@ -110,7 +110,8 @@ struct LongPressHintLabel: View {
         HStack(spacing: 6) {
             Image(systemName: "hand.tap.fill")
                 .font(.caption)
-            Text("地図を長押しすると、その場所を登録できます")
+            // 右下の追加ボタンと重ならないよう短くしている
+            Text("地図を長押しして場所を登録")
                 .font(.caption)
         }
         .foregroundStyle(.white)

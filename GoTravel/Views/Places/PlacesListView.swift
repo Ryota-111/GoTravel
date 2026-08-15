@@ -74,6 +74,12 @@ struct PlacesListView: View {
                     }
                 }
             }
+            // 地図の情報パネルと重なるときだけ引っ込める
+            .overlay(alignment: .bottomTrailing) {
+                if !(showMap && selectedPlace != nil) {
+                    addPlaceFloatingButton
+                }
+            }
             .navigationBarHidden(true)
         }
         .navigationViewStyle(.stack)
@@ -98,6 +104,22 @@ struct PlacesListView: View {
                 hasLoadedData = true
             }
         }
+    }
+
+    /// 追加ボタン。
+    /// リストの末尾に置くと件数が増えるほど遠ざかるため、内容に左右されない右下に浮かせる
+    private var addPlaceFloatingButton: some View {
+        NavigationLink(destination: MapHomeView()) {
+            Image(systemName: "plus")
+                .font(.system(size: 24, weight: .bold))
+                .foregroundColor(ThemePreset.readableText(on: mainColor))
+                .frame(width: 56, height: 56)
+                .background(Circle().fill(mainColor))
+                .shadow(color: .black.opacity(0.25), radius: 8, x: 0, y: 4)
+        }
+        .padding(.trailing, 20)
+        .padding(.bottom, 20)
+        .accessibilityLabel(Text("場所を追加"))
     }
 
     // MARK: - View Components
@@ -186,6 +208,8 @@ struct PlacesListView: View {
                 .padding(.top, 10)
             }
             .padding()
+            // 右下の追加ボタンに最後の項目が隠れないようにする
+            .padding(.bottom, 70)
         }
     }
 
@@ -325,17 +349,6 @@ struct PlacesListView: View {
                 }
                 .foregroundColor(textColor)
             }
-
-            // 追加口がリストの末尾にしか無く、件数が増えるほど遠ざかっていた。
-            // ここなら位置が件数に左右されず、マップ表示中も出たままになる
-            NavigationLink(destination: MapHomeView()) {
-                Image(systemName: "plus")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(ThemePreset.readableText(on: mainColor))
-                    .frame(width: 32, height: 32)
-                    .background(Circle().fill(mainColor))
-            }
-            .accessibilityLabel(Text("場所を追加"))
         }
         .padding(.horizontal, 20)
         .padding(.top, 10)
