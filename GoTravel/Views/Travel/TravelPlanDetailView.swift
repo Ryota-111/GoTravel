@@ -302,14 +302,29 @@ struct TravelPlanDetailView: View {
                     }
                 }
 
-                if let cost = item.cost, cost > 0 {
-                    HStack(spacing: 4) {
-                        Image(systemName: "yensign.circle")
-                            .font(.system(size: 11))
+                // 実績が入っているときは予算と並べる。
+                // 金額が2つ並ぶので、どちらか分かるよう「予算」と明示する
+                if (item.cost ?? 0) > 0 || item.actualCost != nil {
+                    HStack(spacing: 10) {
+                        if let cost = item.cost, cost > 0 {
+                            HStack(spacing: 4) {
+                                Image(systemName: "yensign.circle")
+                                    .font(.system(size: 11))
+                                Text(item.actualCost == nil ? "¥\(Int(cost))" : "予算 ¥\(Int(cost))")
+                                    .font(.system(size: 12))
+                            }
                             .foregroundColor(themeManager.currentTheme.secondaryText)
-                        Text("¥\(Int(cost))")
-                            .font(.system(size: 12))
-                            .foregroundColor(themeManager.currentTheme.secondaryText)
+                        }
+
+                        if let actualCost = item.actualCost {
+                            HStack(spacing: 4) {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.system(size: 11))
+                                Text("実績 ¥\(Int(actualCost))")
+                                    .font(.system(size: 12, weight: .semibold))
+                            }
+                            .foregroundColor(themeManager.currentTheme.info)
+                        }
                     }
                 }
 
