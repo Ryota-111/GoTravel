@@ -22,6 +22,9 @@ struct PlacesListView: View {
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.scenePhase) var scenePhase
 
+    /// 地図の長押しで場所を追加する導線。マップ画面と同じ処理を使う
+    @StateObject private var placePicker = MapPlacePicker()
+
     // MARK: - Computed Properties
     private var filteredPlaces: [VisitedPlace] {
         if selectedCategoryId == Self.allCategoryId {
@@ -77,6 +80,16 @@ struct PlacesListView: View {
         // sheetはNavigationView外に置いてview再構築による不安定化を防ぐ
         .sheet(isPresented: $showManageCategories) {
             ManageCategoriesView()
+        }
+        .sheet(isPresented: $placePicker.isPresentingSheet, onDismiss: { placePicker.clearPin() }) {
+            if let coordinate = placePicker.coordinate {
+                SavePlaceView(vm: {
+                    let saveVM = SavePlaceViewModel(coord: coordinate, placesVM: vm)
+                    saveVM.title = placePicker.title
+                    return saveVM
+                }())
+                .environmentObject(authVM)
+            }
         }
         .task {
             // 初回のみCore DataのFetchedResultsControllerをセットアップ
@@ -312,6 +325,17 @@ struct PlacesListView: View {
                 }
                 .foregroundColor(textColor)
             }
+
+            // 追加口がリストの末尾にしか無く、件数が増えるほど遠ざかっていた。
+            // ここなら位置が件数に左右されず、マップ表示中も出たままになる
+            NavigationLink(destination: MapHomeView()) {
+                Image(systemName: "plus")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(ThemePreset.readableText(on: mainColor))
+                    .frame(width: 32, height: 32)
+                    .background(Circle().fill(mainColor))
+            }
+            .accessibilityLabel(Text("場所を追加"))
         }
         .padding(.horizontal, 20)
         .padding(.top, 10)
@@ -321,9 +345,30 @@ struct PlacesListView: View {
     // MARK: - Map View
     private var mapView: some View {
         ZStack(alignment: .bottom) {
-            Map(position: $mapPosition) {
-                ForEach(vm.places) { place in
-                    Annotation(place.title, coordinate: place.coordinate) {
+            // 長押しの変換基準を合わせるため、ignoresSafeArea は MapReader 側に付ける。
+            // Map だけが安全領域を無視すると枠がずれ、押した位置と違う所にピンが立つ
+            MapReader { proxy in
+                placesMap
+                    .longPressToDropPin(proxy: proxy, picker: placePicker)
+            }
+            .ignoresSafeArea(edges: .bottom)
+
+            if let place = selectedPlace {
+                placeBottomPanel(place)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else {
+                LongPressHintLabel()
+            }
+        }
+    }
+
+    private var placesMap: some View {
+        Map(position: $mapPosition) {
+            // 長押しで立てたピン
+            droppedPinContent(at: placePicker.coordinate, color: themeManager.currentTheme.success)
+
+            ForEach(vm.places) { place in
+                Annotation(place.title, coordinate: place.coordinate) {
                         Button(action: {
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
                                 selectedPlace = place
@@ -347,16 +392,8 @@ struct PlacesListView: View {
                     }
                 }
             }
-            .ignoresSafeArea(edges: .bottom)
-            .onTapGesture {
-                withAnimation { selectedPlace = nil }
-            }
-
-            // 選択済み場所のボトムパネル
-            if let place = selectedPlace {
-                placeBottomPanel(place)
-                    .transition(.move(edge: .bottom).combined(with: .opacity))
-            }
+        .onTapGesture {
+            withAnimation { selectedPlace = nil }
         }
     }
 

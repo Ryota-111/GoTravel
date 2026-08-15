@@ -46,23 +46,17 @@ struct MapHomeView: View {
     @State private var isSearching = false
     @State private var hasLoadedPlaces = false
 
-    /// 長押しで立てたピン。検索に出てこない場所を登録するためのもの
-    @State private var pickedCoordinate: CLLocationCoordinate2D?
-    @State private var pickedPinTitle: String = ""
-    @State private var showingDroppedPinSheet = false
-
-    /// 1回の長押しでピンを立て直さないための目印。
-    /// 押している間ドラッグの更新が何度も届くため
-    @State private var hasDroppedPinInThisPress = false
+    /// 長押しで場所を追加する導線。場所保存タブの地図と同じ処理を使う
+    @StateObject private var placePicker = MapPlacePicker()
 
     var body: some View {
         MapReader { proxy in
             mapBody(proxy: proxy)
-                .sheet(isPresented: $showingDroppedPinSheet, onDismiss: { pickedCoordinate = nil }) {
-                    if let pickedCoordinate {
+                .sheet(isPresented: $placePicker.isPresentingSheet, onDismiss: { placePicker.clearPin() }) {
+                    if let coordinate = placePicker.coordinate {
                         SavePlaceView(vm: {
-                            let saveVM = SavePlaceViewModel(coord: pickedCoordinate, placesVM: vm)
-                            saveVM.title = pickedPinTitle
+                            let saveVM = SavePlaceViewModel(coord: coordinate, placesVM: vm)
+                            saveVM.title = placePicker.title
                             return saveVM
                         }())
                         .environmentObject(auth)
@@ -87,16 +81,7 @@ struct MapHomeView: View {
             }
 
             // 長押しで立てたピン
-            if let pickedCoordinate {
-                Annotation("追加する場所", coordinate: pickedCoordinate) {
-                    Image(systemName: "mappin.circle.fill")
-                        .font(.system(size: 34))
-                        .foregroundStyle(themeManager.currentTheme.success)
-                        .shadow(radius: 3)
-                        // 絵の中心が座標に来ると指に隠れるので、少し上に出す
-                        .offset(y: -8)
-                }
-            }
+            droppedPinContent(at: placePicker.coordinate, color: themeManager.currentTheme.success)
 
             // 保存済み場所マーカー（赤+カテゴリーアイコン）
             ForEach(vm.places) { place in
@@ -113,34 +98,7 @@ struct MapHomeView: View {
                 }
             }
         }
-        // 長押しの座標は proxy が測る Map の枠を基準に変換される。
-        // このジェスチャは必ず Map の直下（safeAreaInset より前）に置き、
-        // 座標空間は .local のままにすること。
-        // - safeAreaInset の後に付けると、検索バーのぶん下にずれる
-        // - .named(...) を使うと基準が食い違ってさらにずれる
-        .simultaneousGesture(
-            LongPressGesture(minimumDuration: 0.45)
-                .sequenced(before: DragGesture(minimumDistance: 0, coordinateSpace: .local))
-                // 長押しが成立した時点、つまり指を離す前にピンを立てる
-                .onChanged { value in
-                    guard case .second(true, let drag?) = value else { return }
-                    guard !hasDroppedPinInThisPress else { return }
-                    hasDroppedPinInThisPress = true
-
-                    guard let coordinate = proxy.convert(drag.location, from: .local) else { return }
-                    dropPin(at: coordinate)
-                }
-                // 指を動かさないとドラッグの更新が届かない場合の保険。
-                // onChanged で立てられていたら何もしない
-                .onEnded { value in
-                    defer { hasDroppedPinInThisPress = false }
-                    guard !hasDroppedPinInThisPress else { return }
-
-                    guard case .second(true, let drag?) = value,
-                          let coordinate = proxy.convert(drag.location, from: .local) else { return }
-                    dropPin(at: coordinate)
-                }
-        )
+        .longPressToDropPin(proxy: proxy, picker: placePicker)
         .safeAreaInset(edge: .top) {
             searchBarView
         }
@@ -149,7 +107,7 @@ struct MapHomeView: View {
                 selectedResultDetailView(selectedResult)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             } else if searchResults.isEmpty {
-                longPressHint
+                LongPressHintLabel()
             }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: selectedResult != nil)
@@ -174,45 +132,6 @@ struct MapHomeView: View {
             if !hasLoadedPlaces, let userId = auth.userId {
                 vm.setupFetchedResultsController(userId: userId)
                 hasLoadedPlaces = true
-            }
-        }
-    }
-
-    /// 長押しは見えない操作なので、検索結果が無いときだけ案内を出す
-    private var longPressHint: some View {
-        HStack(spacing: 6) {
-            Image(systemName: "hand.tap.fill")
-                .font(.caption)
-            Text("地図を長押しすると、その場所を登録できます")
-                .font(.caption)
-        }
-        .foregroundStyle(.white)
-        .padding(.horizontal, 12)
-        .padding(.vertical, 8)
-        .background(Capsule().fill(Color.black.opacity(0.55)))
-        .padding(.bottom, 10)
-    }
-
-    /// 長押しした地点にピンを立てて保存画面を開く。
-    /// 検索に出てこない場所（友人宅・地図に無い店・公園の一角など）を登録するための導線
-    private func dropPin(at coordinate: CLLocationCoordinate2D) {
-        pickedCoordinate = coordinate
-        pickedPinTitle = ""
-
-        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-
-        // 住所が分かれば名前の初期値にする。分からなくても保存はできる
-        Task {
-            let placemark = try? await CLGeocoder().reverseGeocodeLocation(
-                CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
-            ).first
-
-            let name = placemark?.name
-                ?? [placemark?.locality, placemark?.thoroughfare].compactMap { $0 }.joined()
-
-            await MainActor.run {
-                pickedPinTitle = name ?? ""
-                showingDroppedPinSheet = true
             }
         }
     }
