@@ -244,8 +244,10 @@ struct JoinTravelPlanView: View {
                         errorMessage = apiError.localizedDescription
                     }
                 } else if let ckError = error as? CKError, ckError.code == .notAuthenticated {
-                    // iCloud未サインインだと汎用文言では原因に辿り着けない
-                    errorMessage = "iCloudにサインインしていないため、共有機能を利用できません。設定アプリでiCloudにサインインしてから、もう一度お試しください。"
+                    // 汎用文言では原因に辿り着けない。
+                    // サインイン済みでも規約更新の未同意などでCloudKitだけ使えない場合がある
+                    // （実際の問い合わせで確定した事例）ため、サインイン限定の書き方をしない
+                    errorMessage = "iCloudが利用できない状態です。設定アプリを開き、iCloudにサインインしているか、規約への同意などの確認が保留になっていないかをご確認ください。"
                 } else {
                     errorMessage = "参加できませんでした。通信環境をご確認のうえ、もう一度お試しください。"
                 }

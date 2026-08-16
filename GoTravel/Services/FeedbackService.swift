@@ -29,7 +29,7 @@ final class FeedbackService {
             case .rateLimited:
                 return "本日の送信上限に達しました。お手数ですが、明日以降にお試しください。"
             case .iCloudUnavailable:
-                return "iCloudにサインインすると送信できます。設定アプリからサインインしてください。"
+                return "iCloudが利用できないため送信できません。設定アプリで、iCloudへのサインインや規約への同意が保留になっていないかをご確認ください。"
             case .failed:
                 return "送信できませんでした。通信環境をご確認のうえ、もう一度お試しください。"
             }

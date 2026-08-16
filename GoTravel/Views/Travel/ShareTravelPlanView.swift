@@ -383,7 +383,9 @@ struct ShareTravelPlanView: View {
     private static func publishErrorText(for error: Error) -> String {
         if let ckError = error as? CKError,
            ckError.code == .notAuthenticated {
-            return "iCloudにサインインしていないため、共有機能を利用できません。設定アプリでiCloudにサインインしてから、もう一度お試しください。"
+            // サインイン済みでも規約更新の未同意などでCloudKitだけ使えない場合がある
+            // （実際の問い合わせで確定した事例）ため、サインイン限定の書き方をしない
+            return "iCloudが利用できない状態です。設定アプリを開き、iCloudにサインインしているか、規約への同意などの確認が保留になっていないかをご確認ください。"
         }
         return "通信環境をご確認のうえ、もう一度お試しください。"
     }
