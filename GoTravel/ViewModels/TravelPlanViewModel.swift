@@ -256,6 +256,15 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
     // 共有プランは publishSharedTravelPlan / fetchSharedTravelPlans で
     // パブリックDBと双方向に同期する。
 
+    /// 共有停止時に飛ばした削除のうち、まだ完了していないもの。
+    ///
+    /// 削除は投げっぱなしのTaskなので、直後に共有を作り直すと
+    /// 新レコードの公開と旧レコードの削除が同じレコードID
+    /// （shared_<planId>）に対して並走する。削除が後から着弾すると
+    /// **発行したばかりのコードのレコードが消える**ため、
+    /// 公開の前に必ずここを待つ
+    private var pendingShareDeletions: [String: Task<Void, Never>] = [:]
+
     /// 共有コードを設定してプランをパブリックDBに公開
     ///
     /// 公開に**成功してから**ローカルを共有状態にする。
@@ -264,6 +273,11 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
     /// （参加側には「共有コードに一致する旅行計画が見つかりませんでした」と出る）。
     @MainActor
     func updateShareCode(planId: String, shareCode: String, userId: String) async throws {
+        // 直前の共有停止の削除がまだ残っていれば、先に完了させる
+        if let pendingDeletion = pendingShareDeletions.removeValue(forKey: planId) {
+            await pendingDeletion.value
+        }
+
         guard var plan = travelPlans.first(where: { $0.id == planId }) else {
             Logger(subsystem: "com.gmail.taismryotasis.Travory", category: "sharing")
                 .error("共有コード設定中止: 手元にプランが見つからない planId=\(planId, privacy: .public)")
@@ -306,7 +320,8 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
         // isShared = false なので update() からパブリックDBへは公開されない
         update(plan, userId: userId)
 
-        Task {
+        // 削除は待たずに返すが、再発行時に順序を保証できるよう覚えておく
+        pendingShareDeletions[planId] = Task {
             try? await CloudKitService.shared.deleteSharedTravelPlan(planId: planId)
         }
     }
