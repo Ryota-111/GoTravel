@@ -9,6 +9,7 @@ struct PlaceDetailView: View {
     @StateObject private var placesVM = PlacesViewModel()
     @ObservedObject var themeManager = ThemeManager.shared
     @State private var showStreetView = false
+    @State private var showAsoview = false
     @State private var showMap = true
     @State private var lookAroundScene: MKLookAroundScene?
     @State private var isEditMode = false
@@ -98,6 +99,11 @@ struct PlaceDetailView: View {
         .sheet(isPresented: $showImagePicker) {
             ImagePicker(image: $selectedImage)
         }
+        .sheet(isPresented: $showAsoview) {
+            if let url = AffiliateLink.asoviewSearchURL(keyword: place.title) {
+                SafariView(url: url)
+            }
+        }
         .alert("エラー", isPresented: $showAlert) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -158,10 +164,37 @@ struct PlaceDetailView: View {
                 // Visit Date
                 visitDateSection
                     .padding(.horizontal, 24)
+
+                experienceSection
+                    .padding(.horizontal, 24)
                     .padding(.bottom, 24)
             }
         }
     }
+
+    /// この場所の遊び・体験を探す導線（提携先へ遷移）。
+    ///
+    /// 施設名での検索は該当商品が無いと0件になるため、
+    /// **レジャーに関係するカテゴリのときだけ出す**。
+    /// ホテルやレストランに出すと無関係な検索結果へ送ることになる。
+    @ViewBuilder
+    private var experienceSection: some View {
+        if AffiliateLink.isAsoviewAvailable, Self.leisureCategoryIds.contains(place.categoryId) {
+            AffiliateLinkRow(
+                title: "この場所の遊び・体験を探す",
+                serviceName: "アソビュー",
+                icon: "ticket.fill",
+                accentColor: themeManager.currentTheme.actionFill
+            ) {
+                showAsoview = true
+            }
+            .padding(.top, 20)
+        }
+    }
+
+    /// 体験商品が見つかりやすいカテゴリ。
+    /// 既定の「風景」と、ユーザーが自分で足した観光系の名前を拾う
+    private static let leisureCategoryIds: Set<String> = ["sightseeing"]
 
     // MARK: - Edit Mode View
     private var editModeView: some View {
