@@ -701,7 +701,7 @@ struct TravelPlanDetailView: View {
                 emptyScheduleMessage(plan: plan)
             }
         }
-        .padding(.top, 20)
+        .padding(.top, 4)
         .opacity(animateContent ? 1 : 0)
         .offset(y: animateContent ? 0 : 10)
         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.25), value: animateContent)
@@ -721,7 +721,7 @@ struct TravelPlanDetailView: View {
                 )
             )
             .frame(height: 1)
-            .padding(.vertical, 14)
+            .padding(.vertical, 10)
     }
 
     /// 写真のすぐ下に置く3つの入口。
@@ -740,7 +740,7 @@ struct TravelPlanDetailView: View {
                     .foregroundColor(themeManager.currentTheme.secondaryText)
             }
         }
-        .padding(.top, 16)
+        .padding(.top, 14)
         .opacity(animateContent ? 1 : 0)
         .offset(y: animateContent ? 0 : 10)
         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.05), value: animateContent)
@@ -826,7 +826,7 @@ struct TravelPlanDetailView: View {
             weatherAttributionLine
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(.vertical, 10)
+        .padding(.vertical, 2)
         .opacity(animateContent ? 1 : 0)
         .offset(y: animateContent ? 0 : 10)
         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: animateContent)

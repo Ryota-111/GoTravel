@@ -47,6 +47,10 @@ struct PackingListView: View {
 
     private var textColor: Color { ThemePreset.readableText(on: cardFill) }
 
+    /// カードの縁。白黒テーマは背景(0.96)とカード(0.95)がほぼ同じ明るさで
+    /// 塗りだけだと境界が見えないため、どのテーマでも薄い枠を必ず引く
+    private var cardStroke: Color { textColor.opacity(0.12) }
+
     // MARK: - Body
     var body: some View {
         VStack(spacing: 14) {
@@ -104,7 +108,11 @@ struct PackingListView: View {
                 .foregroundColor(textColor)
                 .padding(.horizontal, 14)
                 .padding(.vertical, 11)
-                .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+                .background(
+                    RoundedRectangle(cornerRadius: 12)
+                        .fill(cardFill)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(cardStroke, lineWidth: 1))
+                )
 
             Button(action: addItem) {
                 Image(systemName: "plus")
@@ -165,7 +173,11 @@ struct PackingListView: View {
         }
         .frame(maxWidth: .infinity)
         .padding(18)
-        .background(RoundedRectangle(cornerRadius: 14).fill(cardFill))
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(cardFill)
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(cardStroke, lineWidth: 1))
+        )
     }
 
     private static let presets = [
@@ -256,6 +268,9 @@ struct PackingItemRow: View {
 
     private var textColor: Color { ThemePreset.readableText(on: cardFill) }
 
+    /// 白黒テーマは背景とカードの明るさがほぼ同じなので、必ず縁を引く
+    private var cardStroke: Color { textColor.opacity(0.12) }
+
     // MARK: - Body
     var body: some View {
         // 行全体を押せるようにする。丸だけを狙わせると小さくて押しにくい
@@ -274,7 +289,14 @@ struct PackingItemRow: View {
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
-            .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(cardFill)
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(item.isChecked ? themeManager.currentTheme.success.opacity(0.35) : cardStroke, lineWidth: 1)
+                    )
+            )
             .opacity(item.isChecked ? 0.6 : 1)
         }
         .buttonStyle(.plain)
