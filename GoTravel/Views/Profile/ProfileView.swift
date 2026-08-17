@@ -1210,13 +1210,19 @@ struct HelpCard: View {
                     Text(title)
                         .font(.headline)
                         .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
+                        .fixedSize(horizontal: false, vertical: true)
 
+                    // fixedSize が無いと HStack 内で横に潰され、
+                    // 1文字だけ次行に落ちるような不自然な折り返しになる
                     Text(description)
                         .font(.caption)
                         .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
+                .multilineTextAlignment(.leading)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-                Spacer()
+                Spacer(minLength: 0)
             }
         }
         .padding()
