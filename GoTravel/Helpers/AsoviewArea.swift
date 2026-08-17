@@ -33,6 +33,35 @@ enum AsoviewArea {
     /// 逆ジオコーディングは回数制限があるため、同じ地点を繰り返し引かない
     private static var prefectureCache: [String: String] = [:]
 
+    /// 一覧に出すための地域区分。47件を並べると探しにくいため
+    struct Region: Identifiable {
+        var id: String { name }
+        let name: String
+        let prefectures: [Prefecture]
+    }
+
+    struct Prefecture: Identifiable {
+        var id: String { slug }
+        let name: String
+        let slug: String
+    }
+
+    static let regions: [Region] = {
+        let all = shortNames.map { Prefecture(name: $0.0, slug: $0.1) }
+        return [
+            Region(name: "北海道・東北", prefectures: Array(all[0..<7])),
+            Region(name: "関東", prefectures: Array(all[7..<14])),
+            Region(name: "中部", prefectures: Array(all[14..<23])),
+            Region(name: "近畿", prefectures: Array(all[23..<30])),
+            Region(name: "中国・四国", prefectures: Array(all[30..<39])),
+            Region(name: "九州・沖縄", prefectures: Array(all[39..<47]))
+        ]
+    }()
+
+    static func url(slug: String) -> URL? {
+        URL(string: "https://www.asoview.com/\(slug)/")
+    }
+
     static func url(matching text: String) -> URL? {
         guard let slug = slug(matching: text) else { return nil }
         return URL(string: "https://www.asoview.com/\(slug)/")

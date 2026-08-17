@@ -341,6 +341,16 @@ struct PlacesListView: View {
             }
             .accessibilityLabel(showMap ? "リスト表示に切り替え" : "マップ表示に切り替え")
 
+            // 旅行計画（しおり）には提携リンクを置かないので、ここを入口にする
+            NavigationLink(destination: ExperienceSearchView()) {
+                Image(systemName: "ticket.fill")
+                    .foregroundColor(textColor)
+                    .padding(8)
+                    .background(textColor.opacity(0.1))
+                    .clipShape(Circle())
+            }
+            .accessibilityLabel(Text("あそび・体験を探す"))
+
             Button(action: { showManageCategories = true }) {
                 HStack(spacing: 4) {
                     Image(systemName: "slider.horizontal.3")

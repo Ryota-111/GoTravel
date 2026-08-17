@@ -31,6 +31,12 @@ enum AffiliateLink {
         !asoviewGeneratedLink.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
+    /// 都道府県を直接指定してリンクを作る（一覧から選んだとき）
+    static func asoviewURL(slug: String) -> URL? {
+        guard isAsoviewAvailable, let target = AsoviewArea.url(slug: slug)?.absoluteString else { return nil }
+        return trackedURL(target: target)
+    }
+
     /// 座標から都道府県を確定して、アソビューのページへのリンクを作る。
     ///
     /// 行き先の文字列から推測するより確実。地名の表記ゆれ（「京都市」「嵐山」など）や
@@ -58,9 +64,14 @@ enum AffiliateLink {
     /// 常に全件が返る（実際に確認済み）。行き先を絞るには
     /// `https://www.asoview.com/<ローマ字>/` のパス形式を使う必要がある。
     static func asoviewURL(forDestination destination: String) -> URL? {
+        guard let target = AsoviewArea.url(matching: destination)?.absoluteString else { return nil }
+        return trackedURL(target: target)
+    }
+
+    /// 遷移先を A8 の計測リンクに包む
+    private static func trackedURL(target: String) -> URL? {
         let link = asoviewGeneratedLink.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !link.isEmpty else { return nil }
-        guard let target = AsoviewArea.url(matching: destination)?.absoluteString else { return nil }
 
         // クエリの値として渡すので遷移先URL全体をエンコードする。
         // 予約されていない文字（-._~）は残し、A8の出力と同じ形にする

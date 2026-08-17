@@ -9,9 +9,6 @@ struct PlaceDetailView: View {
     @StateObject private var placesVM = PlacesViewModel()
     @ObservedObject var themeManager = ThemeManager.shared
     @State private var showStreetView = false
-    @State private var showAsoview = false
-    /// 座標から都道府県を確定してから作る。決まらなければ導線を出さない
-    @State private var asoviewURL: URL?
     @State private var showMap = true
     @State private var lookAroundScene: MKLookAroundScene?
     @State private var isEditMode = false
@@ -101,19 +98,6 @@ struct PlaceDetailView: View {
         .sheet(isPresented: $showImagePicker) {
             ImagePicker(image: $selectedImage)
         }
-        .sheet(isPresented: $showAsoview) {
-            if let asoviewURL {
-                SafariView(url: asoviewURL)
-            }
-        }
-        // 座標から都道府県を引くので非同期。決まるまで導線は出ない
-        .task(id: place.id) {
-            asoviewURL = await AffiliateLink.asoviewURL(
-                latitude: place.latitude,
-                longitude: place.longitude,
-                fallbackText: asoviewMatchText
-            )
-        }
         .alert("エラー", isPresented: $showAlert) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -175,42 +159,9 @@ struct PlaceDetailView: View {
                 visitDateSection
                     .padding(.horizontal, 24)
 
-                experienceSection
-                    .padding(.horizontal, 24)
                     .padding(.bottom, 24)
             }
         }
-    }
-
-    /// この場所の遊び・体験を探す導線（提携先へ遷移）。
-    ///
-    /// 施設名での検索は該当商品が無いと0件になるため、
-    /// **レジャーに関係するカテゴリのときだけ出す**。
-    /// ホテルやレストランに出すと無関係な検索結果へ送ることになる。
-    @ViewBuilder
-    private var experienceSection: some View {
-        if Self.leisureCategoryIds.contains(place.categoryId), asoviewURL != nil {
-            AffiliateLinkRow(
-                // 遷移先は都道府県のページなので、施設単位に読める文言にしない
-                title: "周辺の遊び・体験を探す",
-                serviceName: "アソビュー",
-                icon: "ticket.fill",
-                accentColor: themeManager.currentTheme.actionFill
-            ) {
-                showAsoview = true
-            }
-            .padding(.top, 20)
-        }
-    }
-
-    /// 体験商品が見つかりやすいカテゴリ。
-    /// 既定の「風景」と、ユーザーが自分で足した観光系の名前を拾う
-    private static let leisureCategoryIds: Set<String> = ["sightseeing"]
-
-    /// 都道府県の判定に使う文字列。
-    /// 施設名だけでは都道府県が分からないため、住所を優先して見る
-    private var asoviewMatchText: String {
-        [place.address, place.title].compactMap { $0 }.joined(separator: " ")
     }
 
     // MARK: - Edit Mode View

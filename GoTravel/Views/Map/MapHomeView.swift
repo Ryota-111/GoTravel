@@ -10,6 +10,9 @@ extension CLLocationCoordinate2D {
 class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
     private let manager = CLLocationManager()
     @Published var authorizationStatus: CLAuthorizationStatus = .notDetermined
+    /// 一度だけ現在地を取りたい場面（「現在地から探す」など）で使う
+    @Published var currentLocation: CLLocationCoordinate2D?
+    @Published var didFailToLocate = false
 
     override init() {
         super.init()
@@ -22,8 +25,40 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
         manager.requestWhenInUseAuthorization()
     }
 
+    /// 現在地を1回だけ取得する。許可がまだなら先に許可を求める
+    func requestCurrentLocation() {
+        didFailToLocate = false
+
+        switch manager.authorizationStatus {
+        case .notDetermined:
+            manager.requestWhenInUseAuthorization()
+        case .restricted, .denied:
+            didFailToLocate = true
+        default:
+            manager.requestLocation()
+        }
+    }
+
     func locationManagerDidChangeAuthorization(_ manager: CLLocationManager) {
         authorizationStatus = manager.authorizationStatus
+
+        // 許可した直後に取得を続ける。拒否ならその場で諦める
+        switch manager.authorizationStatus {
+        case .authorizedWhenInUse, .authorizedAlways:
+            manager.requestLocation()
+        case .restricted, .denied:
+            didFailToLocate = true
+        default:
+            break
+        }
+    }
+
+    func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+        currentLocation = locations.last?.coordinate
+    }
+
+    func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+        didFailToLocate = true
     }
 }
 
