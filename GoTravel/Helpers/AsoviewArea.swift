@@ -58,6 +58,30 @@ enum AsoviewArea {
         ]
     }()
 
+    /// 表示に使う都道府県名（「東京」など）
+    static func displayName(forSlug slug: String) -> String? {
+        shortNames.first { $0.1 == slug }?.0
+    }
+
+    /// 座標を優先し、無ければ文字列から都道府県を決める。
+    /// 表示用の名前も一緒に返す
+    static func resolvedArea(
+        latitude: Double?,
+        longitude: Double?,
+        fallbackText: String
+    ) async -> (name: String, slug: String)? {
+        if let latitude, let longitude,
+           let prefecture = await prefecture(latitude: latitude, longitude: longitude),
+           let slug = slug(matching: prefecture) {
+            return (displayName(forSlug: slug) ?? prefecture, slug)
+        }
+
+        if let slug = slug(matching: fallbackText) {
+            return (displayName(forSlug: slug) ?? fallbackText, slug)
+        }
+        return nil
+    }
+
     static func url(slug: String) -> URL? {
         URL(string: "https://www.asoview.com/\(slug)/")
     }

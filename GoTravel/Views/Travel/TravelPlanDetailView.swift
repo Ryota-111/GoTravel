@@ -26,6 +26,10 @@ struct TravelPlanDetailView: View {
     @State private var showPackingList = false
     @State private var showReservations = false
     @State private var showExperienceSearch = false
+    /// 行き先から決まるアソビューのページ。決まらないときは都道府県一覧へ送る
+    @State private var asoviewURL: URL?
+    @State private var asoviewAreaName: String?
+    @State private var showExperienceWeb = false
     @State private var exportItems: [Any]?
     @State private var animateContent = false
     @State private var navigatingItem: ScheduleItem?
@@ -163,6 +167,21 @@ struct TravelPlanDetailView: View {
             ReservationListView(plan: plan)
                 .environmentObject(viewModel)
                 .environmentObject(authVM)
+        }
+        .sheet(isPresented: $showExperienceWeb) {
+            if let asoviewURL {
+                SafariView(url: asoviewURL)
+            }
+        }
+        .task(id: "\(plan.destination)_\(plan.latitude ?? 0)_\(plan.longitude ?? 0)") {
+            guard AffiliateLink.isAsoviewAvailable else { return }
+            let area = await AsoviewArea.resolvedArea(
+                latitude: plan.latitude,
+                longitude: plan.longitude,
+                fallbackText: plan.destination
+            )
+            asoviewAreaName = area?.name
+            asoviewURL = area.flatMap { AffiliateLink.asoviewURL(slug: $0.slug) }
         }
         .sheet(isPresented: $showExperienceSearch) {
             NavigationStack {
@@ -691,6 +710,24 @@ struct TravelPlanDetailView: View {
     /// 持ち物リストは縦に積むと場所を取り、タイムスケジュールを押し下げていたので
     /// ここへ移した。予約リストは同じ性質のもの、遊び・体験は外部への出口。
     private func quickActionRow(plan: TravelPlan) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            quickActionButtons(plan: plan)
+
+            // 「あそび」から外部サイトへ直接移るので、
+            // 景品表示法（ステマ規制）の開示をここに置く。バッジではなく注記の形にしている
+            if AffiliateLink.isAsoviewAvailable {
+                Text("「あそび」は提携サイトへ移動します（広告）")
+                    .font(.system(size: 10))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+        }
+        .padding(.top, 16)
+        .opacity(animateContent ? 1 : 0)
+        .offset(y: animateContent ? 0 : 10)
+        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.05), value: animateContent)
+    }
+
+    private func quickActionButtons(plan: TravelPlan) -> some View {
         HStack(spacing: 10) {
             quickAction(
                 icon: "bag.fill",
@@ -707,13 +744,16 @@ struct TravelPlanDetailView: View {
             quickAction(
                 icon: "sparkles",
                 title: "あそび",
-                detail: "体験を探す"
-            ) { showExperienceSearch = true }
+                detail: asoviewAreaName.map { "\($0)の体験" } ?? "体験を探す"
+            ) {
+                // 行き先が決まっていればそのまま結果へ、決まらなければ一覧から選んでもらう
+                if asoviewURL != nil {
+                    showExperienceWeb = true
+                } else {
+                    showExperienceSearch = true
+                }
+            }
         }
-        .padding(.top, 16)
-        .opacity(animateContent ? 1 : 0)
-        .offset(y: animateContent ? 0 : 10)
-        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.05), value: animateContent)
     }
 
     private func quickAction(icon: String, title: String, detail: String, action: @escaping () -> Void) -> some View {
