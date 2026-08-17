@@ -9,111 +9,225 @@ struct PackingListView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
     let plan: TravelPlan
-    @State private var newItemName: String = ""
 
-    // Computed property to get current plan from viewModel
+    @State private var newItemName: String = ""
+    @FocusState private var isInputFocused: Bool
+
     private var currentPlan: TravelPlan? {
         viewModel.travelPlans.first(where: { $0.id == plan.id })
     }
 
+    private var items: [PackingItem] {
+        currentPlan?.packingItems ?? []
+    }
+
+    /// 済んだものは下へ送る。まだ入れていないものを上に集めて見やすくする
+    private var sortedItems: [PackingItem] {
+        items.enumerated()
+            .sorted { lhs, rhs in
+                if lhs.element.isChecked != rhs.element.isChecked {
+                    return !lhs.element.isChecked
+                }
+                return lhs.offset < rhs.offset
+            }
+            .map(\.element)
+    }
+
+    private var checkedCount: Int {
+        items.filter(\.isChecked).count
+    }
+
+    private var accent: Color { themeManager.currentTheme.actionFill }
+
+    private var cardFill: Color {
+        colorScheme == .dark
+            ? themeManager.currentTheme.secondaryBackgroundDark
+            : themeManager.currentTheme.secondaryBackgroundLight
+    }
+
+    private var textColor: Color { ThemePreset.readableText(on: cardFill) }
+
     // MARK: - Body
     var body: some View {
-        VStack(spacing: 12) {
-            // Add new item section
+        VStack(spacing: 14) {
+            if !items.isEmpty {
+                progressHeader
+            }
+
             addItemSection
 
-            // Items list
-            if let currentPlan = currentPlan {
-                if currentPlan.packingItems.isEmpty {
-                    emptyStateView
-                } else {
-                    itemsList(for: currentPlan)
-                }
-            } else {
+            if items.isEmpty {
                 emptyStateView
+            } else {
+                itemsList
             }
         }
     }
 
-    // MARK: - View Components
+    // MARK: - 進捗
+
+    /// 何個中いくつ入れ終えたかは、出発前に一番知りたい情報
+    private var progressHeader: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline, spacing: 4) {
+                Text("\(checkedCount)")
+                    .font(.system(size: 24, weight: .bold, design: .rounded))
+                    .foregroundColor(checkedCount == items.count ? themeManager.currentTheme.success : accent)
+                Text("/ \(items.count)")
+                    .font(.subheadline)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+
+                Spacer()
+
+                if checkedCount == items.count {
+                    Label("準備完了", systemImage: "checkmark.circle.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(themeManager.currentTheme.success)
+                }
+            }
+
+            ProgressView(value: Double(checkedCount), total: Double(max(items.count, 1)))
+                .tint(checkedCount == items.count ? themeManager.currentTheme.success : accent)
+        }
+    }
+
+    // MARK: - 追加
+
     private var addItemSection: some View {
         HStack(spacing: 10) {
             TextField("持ち物を追加", text: $newItemName)
                 .font(.system(size: 15))
-                .padding(10)
-                .background(
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(colorScheme == .dark ? themeManager.currentTheme.accent2.opacity(0.08) : themeManager.currentTheme.accent2.opacity(0.08))
-                )
-                .overlay(
-                    RoundedRectangle(cornerRadius: 10)
-                        .stroke(themeManager.currentTheme.cardBorder, lineWidth: 1)
-                )
+                .focused($isInputFocused)
+                .submitLabel(.done)
+                // 続けて入力することが多いので、確定で追加してそのまま次を打てるようにする
+                .onSubmit(addItem)
+                .foregroundColor(textColor)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 11)
+                .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
 
             Button(action: addItem) {
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [themeManager.currentTheme.cardBorder.opacity(0.9), themeManager.currentTheme.cardBorder.opacity(0.9)]),
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 36, height: 36)
-                    Image(systemName: "plus")
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(themeManager.currentTheme.accent2)
-                }
+                Image(systemName: "plus")
+                    .font(.system(size: 16, weight: .bold))
+                    .foregroundColor(ThemePreset.readableText(on: accent))
+                    .frame(width: 40, height: 40)
+                    .background(Circle().fill(accent))
             }
-            .disabled(newItemName.trimmingCharacters(in: .whitespaces).isEmpty)
-            .opacity(newItemName.trimmingCharacters(in: .whitespaces).isEmpty ? 0.5 : 1.0)
+            .disabled(trimmedNewItemName.isEmpty)
+            .opacity(trimmedNewItemName.isEmpty ? 0.4 : 1)
         }
     }
 
-    private var emptyStateView: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "bag")
-                .font(.system(size: 36))
-                .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.6))
-
-            Text("持ち物を追加してください")
-                .font(.system(size: 14))
-                .foregroundColor(themeManager.currentTheme.secondaryText)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 24)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(colorScheme == .dark ? themeManager.currentTheme.cardBackground1 : themeManager.currentTheme.cardBackground2)
-        )
+    private var trimmedNewItemName: String {
+        newItemName.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func itemsList(for plan: TravelPlan) -> some View {
-        VStack(spacing: 6) {
-            ForEach(plan.packingItems) { item in
+    // MARK: - 一覧
+
+    private var itemsList: some View {
+        VStack(spacing: 8) {
+            ForEach(sortedItems) { item in
                 PackingItemRow(item: item, planId: plan.id ?? "")
                     .environmentObject(viewModel)
+                    .environmentObject(authVM)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: sortedItems.map(\.isChecked))
     }
 
-    // MARK: - Actions
-    private func addItem() {
-        let trimmedName = newItemName.trimmingCharacters(in: .whitespaces)
-        guard !trimmedName.isEmpty else { return }
+    // MARK: - 空のとき
 
-        let newItem = PackingItem(name: trimmedName)
-        var updatedPlan = plan
-        updatedPlan.packingItems.append(newItem)
+    private var emptyStateView: some View {
+        VStack(spacing: 14) {
+            Image(systemName: "bag")
+                .font(.system(size: 34))
+                .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
+
+            Text("忘れ物を防ぐために、持ち物を書き出しておきましょう")
+                .font(.caption)
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+                .multilineTextAlignment(.center)
+                .fixedSize(horizontal: false, vertical: true)
+
+            // 最初の1件を入力する手間が一番の障壁なので、よく使うものから足せるようにする
+            VStack(alignment: .leading, spacing: 8) {
+                Text("よく使う持ち物")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+
+                FlowChips(items: Self.presets) { preset in
+                    add(name: preset)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(18)
+        .background(RoundedRectangle(cornerRadius: 14).fill(cardFill))
+    }
+
+    private static let presets = [
+        "充電器", "モバイルバッテリー", "常備薬", "歯ブラシ",
+        "着替え", "洗面用具", "傘", "身分証", "現金"
+    ]
+
+    // MARK: - Actions
+
+    private func addItem() {
+        add(name: trimmedNewItemName)
+        newItemName = ""
+    }
+
+    private func add(name: String) {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        guard var updatedPlan = currentPlan ?? Optional(plan) else { return }
+
+        updatedPlan.packingItems.append(PackingItem(name: trimmed))
 
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             if let userId = authVM.userId {
                 viewModel.update(updatedPlan, userId: userId)
             }
-            newItemName = ""
         }
+    }
+}
 
+// MARK: - チップの折り返し
+
+/// 幅に応じて折り返す横並び。プリセットの数だけ行が伸びる
+private struct FlowChips: View {
+    let items: [String]
+    let onTap: (String) -> Void
+
+    @ObservedObject var themeManager = ThemeManager.shared
+
+    var body: some View {
+        // 3列に固定すると文字数で崩れるため、可変幅のグリッドで折り返す
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 8)], spacing: 8) {
+            ForEach(items, id: \.self) { item in
+                Button {
+                    onTap(item)
+                } label: {
+                    HStack(spacing: 3) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 9, weight: .bold))
+                        Text(item)
+                            .font(.caption)
+                            .lineLimit(1)
+                            .minimumScaleFactor(0.8)
+                    }
+                    .foregroundColor(themeManager.currentTheme.actionFill)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 7)
+                    .frame(maxWidth: .infinity)
+                    .background(Capsule().fill(themeManager.currentTheme.actionFill.opacity(0.12)))
+                }
+                .buttonStyle(.plain)
+            }
+        }
     }
 }
 
@@ -128,59 +242,64 @@ struct PackingItemRow: View {
     let item: PackingItem
     let planId: String
 
-    // Computed property to get current plan from viewModel
     private var currentPlan: TravelPlan? {
         viewModel.travelPlans.first(where: { $0.id == planId })
     }
 
+    private var accent: Color { themeManager.currentTheme.actionFill }
+
+    private var cardFill: Color {
+        colorScheme == .dark
+            ? themeManager.currentTheme.secondaryBackgroundDark
+            : themeManager.currentTheme.secondaryBackgroundLight
+    }
+
+    private var textColor: Color { ThemePreset.readableText(on: cardFill) }
+
     // MARK: - Body
     var body: some View {
-        HStack(spacing: 10) {
-            // Checkbox
-            Button(action: toggleCheck) {
-                ZStack {
-                    Circle()
-                        .stroke(item.isChecked ? themeManager.currentTheme.success.opacity(0.5) : themeManager.currentTheme.cardBorder, lineWidth: 2)
-                        .frame(width: 22, height: 22)
-                    if item.isChecked {
-                        Image(systemName: "checkmark")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(themeManager.currentTheme.success)
-                    }
-                }
+        // 行全体を押せるようにする。丸だけを狙わせると小さくて押しにくい
+        Button(action: toggleCheck) {
+            HStack(spacing: 12) {
+                checkmark
+
+                Text(item.name)
+                    .font(.system(size: 15))
+                    .foregroundColor(item.isChecked ? themeManager.currentTheme.secondaryText : textColor)
+                    .strikethrough(item.isChecked, color: themeManager.currentTheme.secondaryText)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+
+                Spacer(minLength: 0)
             }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+            .opacity(item.isChecked ? 0.6 : 1)
+        }
+        .buttonStyle(.plain)
+        .contextMenu {
+            Button("削除", role: .destructive, action: deleteItem)
+        }
+    }
 
-            // Item name
-            Text(item.name)
-                .font(.system(size: 15))
-                .foregroundColor(item.isChecked ? themeManager.currentTheme.secondaryText : (colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1))
-                .strikethrough(item.isChecked, color: .secondary)
+    private var checkmark: some View {
+        ZStack {
+            Circle()
+                .fill(item.isChecked ? themeManager.currentTheme.success : Color.clear)
+                .frame(width: 24, height: 24)
 
-            Spacer()
+            Circle()
+                .stroke(item.isChecked ? themeManager.currentTheme.success : themeManager.currentTheme.secondaryText.opacity(0.4),
+                        lineWidth: 2)
+                .frame(width: 24, height: 24)
 
-            // Delete button
-            Button(action: deleteItem) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 18))
-                    .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
+            if item.isChecked {
+                Image(systemName: "checkmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(ThemePreset.readableText(on: themeManager.currentTheme.success))
             }
         }
-        .padding(.horizontal, 12)
-        .padding(.vertical, 10)
-        .background(
-            RoundedRectangle(cornerRadius: 10)
-                .fill(item.isChecked
-                    ? themeManager.currentTheme.success.opacity(0.08)
-                      : (colorScheme == .dark ? themeManager.currentTheme.cardBackground1 : themeManager.currentTheme.cardBackground2)
-                )
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 10)
-                .stroke(
-                    item.isChecked ? themeManager.currentTheme.success.opacity(0.3) : Color.clear,
-                    lineWidth: 1
-                )
-        )
     }
 
     // MARK: - Actions
@@ -189,6 +308,7 @@ struct PackingItemRow: View {
 
         if let index = updatedPlan.packingItems.firstIndex(where: { $0.id == item.id }) {
             updatedPlan.packingItems[index].isChecked.toggle()
+            UIImpactFeedbackGenerator(style: .light).impactOccurred()
 
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 if let userId = authVM.userId {

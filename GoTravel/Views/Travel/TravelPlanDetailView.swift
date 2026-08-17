@@ -157,6 +157,7 @@ struct TravelPlanDetailView: View {
                 ScrollView {
                     PackingListView(plan: plan)
                         .environmentObject(viewModel)
+                        .environmentObject(authVM)
                         .padding(20)
                 }
                 .background(backgroundGradient)
@@ -732,7 +733,7 @@ struct TravelPlanDetailView: View {
         HStack(spacing: 10) {
             quickAction(
                 icon: "bag.fill",
-                title: "持ち物",
+                title: "持ち物リスト",
                 detail: packingSummary(plan: plan)
             ) { showPackingList = true }
 
