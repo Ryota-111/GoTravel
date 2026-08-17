@@ -716,7 +716,7 @@ struct TravelPlanDetailView: View {
             // 「あそび」から外部サイトへ直接移るので、
             // 景品表示法（ステマ規制）の開示をここに置く。バッジではなく注記の形にしている
             if AffiliateLink.isAsoviewAvailable {
-                Text("「あそび」はアソビューへの広告リンクです")
+                Text("※「あそび」はプロモーションを含みます")
                     .font(.system(size: 10))
                     .foregroundColor(themeManager.currentTheme.secondaryText)
             }
