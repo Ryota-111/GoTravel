@@ -758,23 +758,28 @@ struct TravelPlanDetailView: View {
 
     private func quickAction(icon: String, title: String, detail: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            VStack(spacing: 5) {
-                Image(systemName: icon)
-                    .font(.system(size: 18))
-                    .foregroundColor(scheduleAccentColor)
+            // アイコンと見出しは横に並べる。縦に積むと3行ぶんの高さになるため
+            VStack(spacing: 2) {
+                HStack(spacing: 5) {
+                    Image(systemName: icon)
+                        .font(.system(size: 14))
+                        .foregroundColor(scheduleAccentColor)
 
-                Text(title)
-                    .font(.system(size: 13, weight: .semibold))
-                    .foregroundColor(accentColor)
+                    Text(title)
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(accentColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
 
                 Text(detail)
                     .font(.system(size: 10))
                     .foregroundColor(themeManager.currentTheme.secondaryText)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.8)
+                    .minimumScaleFactor(0.7)
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 12)
+            .padding(.vertical, 9)
             .background(
                 RoundedRectangle(cornerRadius: 14)
                     .fill(colorScheme == .dark
