@@ -740,6 +740,7 @@ struct TravelPlanDetailView: View {
                     .fill(colorScheme == .dark
                           ? themeManager.currentTheme.secondaryBackgroundDark
                           : themeManager.currentTheme.secondaryBackgroundLight)
+                    .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
             )
         }
         .buttonStyle(.plain)
