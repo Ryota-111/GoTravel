@@ -718,6 +718,10 @@ final class CloudKitService {
            let daySchedulesJSON = String(data: daySchedulesData, encoding: .utf8) {
             record["daySchedulesJSON"] = daySchedulesJSON
         }
+        if let reservationsData = try? encoder.encode(plan.reservations),
+           let reservationsJSON = String(data: reservationsData, encoding: .utf8) {
+            record["reservationsJSON"] = reservationsJSON
+        }
         if let packingItemsData = try? encoder.encode(plan.packingItems),
            let packingItemsJSON = String(data: packingItemsData, encoding: .utf8) {
             record["packingItemsJSON"] = packingItemsJSON
@@ -926,6 +930,13 @@ final class CloudKitService {
             daySchedules = decodedSchedules
         }
 
+        var reservations: [Reservation] = []
+        if let reservationsJSON = record["reservationsJSON"] as? String,
+           let reservationsData = reservationsJSON.data(using: .utf8),
+           let decoded = try? decoder.decode([Reservation].self, from: reservationsData) {
+            reservations = decoded
+        }
+
         var packingItems: [PackingItem] = []
         if let packingItemsJSON = record["packingItemsJSON"] as? String,
            let packingItemsData = packingItemsJSON.data(using: .utf8),
@@ -947,6 +958,7 @@ final class CloudKitService {
             userId: userId,
             daySchedules: daySchedules,
             packingItems: packingItems,
+            reservations: reservations,
             isShared: isShared,
             shareCode: shareCode,
             sharedWith: sharedWith,

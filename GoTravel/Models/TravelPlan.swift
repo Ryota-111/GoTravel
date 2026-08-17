@@ -28,6 +28,7 @@ struct TravelPlan: Identifiable, Codable {
     var userId: String?
     var daySchedules: [DaySchedule]
     var packingItems: [PackingItem]
+    var reservations: [Reservation]
 
     // Sharing properties
     var isShared: Bool
@@ -42,6 +43,7 @@ struct TravelPlan: Identifiable, Codable {
 
     enum CodingKeys: String, CodingKey {
         case id, title, startDate, endDate, destination, latitude, longitude, localImageFileName, cardColorHex, createdAt, userId, daySchedules, packingItems
+        case reservations
         case isShared, shareCode, sharedWith, ownerId, lastEditedBy, updatedAt, customSplitCount
     }
 
@@ -76,6 +78,7 @@ struct TravelPlan: Identifiable, Codable {
          userId: String? = nil,
          daySchedules: [DaySchedule] = [],
          packingItems: [PackingItem] = [],
+         reservations: [Reservation] = [],
          isShared: Bool = false,
          shareCode: String? = nil,
          sharedWith: [String] = [],
@@ -96,6 +99,7 @@ struct TravelPlan: Identifiable, Codable {
         self.userId = userId
         self.daySchedules = daySchedules
         self.packingItems = packingItems
+        self.reservations = reservations
         self.isShared = isShared
         self.shareCode = shareCode
         self.sharedWith = sharedWith
@@ -119,6 +123,7 @@ struct TravelPlan: Identifiable, Codable {
         userId = try container.decodeIfPresent(String.self, forKey: .userId)
         daySchedules = try container.decodeIfPresent([DaySchedule].self, forKey: .daySchedules) ?? []
         packingItems = try container.decodeIfPresent([PackingItem].self, forKey: .packingItems) ?? []
+        reservations = try container.decodeIfPresent([Reservation].self, forKey: .reservations) ?? []
         isShared = try container.decodeIfPresent(Bool.self, forKey: .isShared) ?? false
         shareCode = try container.decodeIfPresent(String.self, forKey: .shareCode)
         sharedWith = try container.decodeIfPresent([String].self, forKey: .sharedWith) ?? []
@@ -149,6 +154,7 @@ struct TravelPlan: Identifiable, Codable {
         try container.encodeIfPresent(userId, forKey: .userId)
         try container.encode(daySchedules, forKey: .daySchedules)
         try container.encode(packingItems, forKey: .packingItems)
+        try container.encode(reservations, forKey: .reservations)
         try container.encode(isShared, forKey: .isShared)
         try container.encodeIfPresent(shareCode, forKey: .shareCode)
         try container.encode(sharedWith, forKey: .sharedWith)

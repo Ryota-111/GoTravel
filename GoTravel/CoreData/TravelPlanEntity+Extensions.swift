@@ -24,6 +24,7 @@ public class TravelPlanEntity: NSManagedObject {
     @NSManaged public var updatedAt: Date?
     @NSManaged public var daySchedulesData: Data?
     @NSManaged public var packingItemsData: Data?
+    @NSManaged public var reservationsData: Data?
     @NSManaged public var customSplitCount: NSNumber?
 }
 
@@ -87,6 +88,14 @@ extension TravelPlanEntity {
             packingItems = (try? decoder.decode([PackingItem].self, from: data)) ?? []
         }
 
+        // reservationsをデコード
+        var reservations: [Reservation] = []
+        if let data = reservationsData {
+            let decoder = JSONDecoder()
+            decoder.dateDecodingStrategy = .iso8601
+            reservations = (try? decoder.decode([Reservation].self, from: data)) ?? []
+        }
+
         // sharedWithをデコード
         var sharedWith: [String] = []
         if let data = sharedWithData {
@@ -113,6 +122,7 @@ extension TravelPlanEntity {
             userId: userId ?? "",
             daySchedules: daySchedules,
             packingItems: packingItems,
+            reservations: reservations,
             isShared: isShared?.boolValue ?? false,
             shareCode: shareCode,
             sharedWith: sharedWith,
@@ -169,6 +179,15 @@ extension TravelPlanEntity {
             self.daySchedulesData = try? encoder.encode(plan.daySchedules)
         } else {
             self.daySchedulesData = nil
+        }
+
+        // reservationsをエンコード
+        if !plan.reservations.isEmpty {
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            self.reservationsData = try? encoder.encode(plan.reservations)
+        } else {
+            self.reservationsData = nil
         }
 
         // packingItemsをエンコード

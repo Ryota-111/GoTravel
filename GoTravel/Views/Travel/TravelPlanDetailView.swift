@@ -23,6 +23,9 @@ struct TravelPlanDetailView: View {
     @State private var showBudgetSummary = false
     @State private var showShareView = false
     @State private var showScheduleMap = false
+    @State private var showPackingList = false
+    @State private var showReservations = false
+    @State private var showExperienceSearch = false
     @State private var exportItems: [Any]?
     @State private var animateContent = false
     @State private var navigatingItem: ScheduleItem?
@@ -110,10 +113,10 @@ struct TravelPlanDetailView: View {
                         planHeaderSection(plan: plan)
 
                         VStack(spacing: 0) {
+                            quickActionRow(plan: plan)
                             planWeatherSection
                             budgetCard(plan: plan)
                             dayScheduleSection(plan: plan)
-                            packingListSection(plan: plan)
                         }
                         .padding(.horizontal, 16)
                         .padding(.bottom, 30)
@@ -142,6 +145,28 @@ struct TravelPlanDetailView: View {
                 EditScheduleItemView(plan: plan, daySchedule: daySchedule, item: item)
                     .environmentObject(viewModel)
                     .environmentObject(authVM)
+            }
+        }
+        .sheet(isPresented: $showPackingList) {
+            NavigationStack {
+                ScrollView {
+                    PackingListView(plan: plan)
+                        .environmentObject(viewModel)
+                        .padding(20)
+                }
+                .background(backgroundGradient)
+                .navigationTitle("持ち物リスト")
+                .navigationBarTitleDisplayMode(.inline)
+            }
+        }
+        .sheet(isPresented: $showReservations) {
+            ReservationListView(plan: plan)
+                .environmentObject(viewModel)
+                .environmentObject(authVM)
+        }
+        .sheet(isPresented: $showExperienceSearch) {
+            NavigationStack {
+                ExperienceSearchView()
             }
         }
         .sheet(isPresented: $showBasicInfoEditor) {
@@ -661,6 +686,71 @@ struct TravelPlanDetailView: View {
 
     // MARK: - Weather Section
     @ViewBuilder
+    /// 写真のすぐ下に置く3つの入口。
+    ///
+    /// 持ち物リストは縦に積むと場所を取り、タイムスケジュールを押し下げていたので
+    /// ここへ移した。予約リストは同じ性質のもの、遊び・体験は外部への出口。
+    private func quickActionRow(plan: TravelPlan) -> some View {
+        HStack(spacing: 10) {
+            quickAction(
+                icon: "bag.fill",
+                title: "持ち物",
+                detail: packingSummary(plan: plan)
+            ) { showPackingList = true }
+
+            quickAction(
+                icon: "ticket.fill",
+                title: "予約",
+                detail: plan.reservations.isEmpty ? "未登録" : "\(plan.reservations.count)件"
+            ) { showReservations = true }
+
+            quickAction(
+                icon: "sparkles",
+                title: "あそび",
+                detail: "体験を探す"
+            ) { showExperienceSearch = true }
+        }
+        .padding(.top, 16)
+        .opacity(animateContent ? 1 : 0)
+        .offset(y: animateContent ? 0 : 10)
+        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.05), value: animateContent)
+    }
+
+    private func quickAction(icon: String, title: String, detail: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 5) {
+                Image(systemName: icon)
+                    .font(.system(size: 18))
+                    .foregroundColor(scheduleAccentColor)
+
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(accentColor)
+
+                Text(detail)
+                    .font(.system(size: 10))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(colorScheme == .dark
+                          ? themeManager.currentTheme.secondaryBackgroundDark
+                          : themeManager.currentTheme.secondaryBackgroundLight)
+            )
+        }
+        .buttonStyle(.plain)
+    }
+
+    private func packingSummary(plan: TravelPlan) -> String {
+        guard !plan.packingItems.isEmpty else { return "未登録" }
+        let checked = plan.packingItems.filter(\.isChecked).count
+        return "\(checked)/\(plan.packingItems.count)"
+    }
+
     /// 天気。以前は見出し・大きな円アイコン・縦積みの出典で約150pt使っていたが、
     /// 出ている情報は「天気と最高気温」だけだった。
     /// 1行に畳んで、代わりに最低気温と降水確率も出している。
