@@ -119,8 +119,9 @@ struct TravelPlanDetailView: View {
                         VStack(spacing: 0) {
                             quickActionRow(plan: plan)
                             planWeatherSection
-                            budgetCard(plan: plan)
+                            // 毎回見るのはタイムスケジュールなので、予算はその下に置く
                             dayScheduleSection(plan: plan)
+                            budgetCard(plan: plan)
                         }
                         .padding(.horizontal, 16)
                         .padding(.bottom, 30)
