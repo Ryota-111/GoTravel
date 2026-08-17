@@ -118,7 +118,9 @@ struct TravelPlanDetailView: View {
 
                         VStack(spacing: 0) {
                             quickActionRow(plan: plan)
+                            sectionSeparator
                             planWeatherSection
+                            sectionSeparator
                             // 毎回見るのはタイムスケジュールなので、予算はその下に置く
                             dayScheduleSection(plan: plan)
                             budgetCard(plan: plan)
@@ -707,6 +709,21 @@ struct TravelPlanDetailView: View {
 
     // MARK: - Weather Section
     @ViewBuilder
+    /// セクションの区切り。両端が消えるので線が主張しすぎない
+    /// （保存した場所の詳細と同じ意匠に揃えている）
+    private var sectionSeparator: some View {
+        Rectangle()
+            .fill(
+                LinearGradient(
+                    colors: [Color.clear, accentColor.opacity(0.25), Color.clear],
+                    startPoint: .leading,
+                    endPoint: .trailing
+                )
+            )
+            .frame(height: 1)
+            .padding(.vertical, 14)
+    }
+
     /// 写真のすぐ下に置く3つの入口。
     ///
     /// 持ち物リストは縦に積むと場所を取り、タイムスケジュールを押し下げていたので
