@@ -662,80 +662,113 @@ struct TravelPlanDetailView: View {
 
     // MARK: - Weather Section
     @ViewBuilder
+    /// 天気。以前は見出し・大きな円アイコン・縦積みの出典で約150pt使っていたが、
+    /// 出ている情報は「天気と最高気温」だけだった。
+    /// 1行に畳んで、代わりに最低気温と降水確率も出している。
     private var planWeatherSection: some View {
-        if #available(iOS 16.0, *) {
-            VStack(alignment: .leading, spacing: 15) {
-                HStack {
-                    Text("天気")
-                        .font(.system(size: 18, weight: .semibold))
-                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-                    
-                    if let attribution = weatherAttribution {
-                        VStack(alignment: .trailing, spacing: 4) {
-                            AsyncImage(url: colorScheme == .dark ? attribution.combinedMarkDarkURL : attribution.combinedMarkLightURL) { image in
-                                image
-                                    .resizable()
-                                    .scaledToFit()
-                                    .frame(height: 15)
-                            } placeholder: {
-                                ProgressView()
-                                    .controlSize(.mini)
-                            }
+        VStack(alignment: .leading, spacing: 6) {
+            weatherBody
+            // WeatherKit は出典の表示が必須。横1行に収める
+            weatherAttributionLine
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(12)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(colorScheme == .dark
+                      ? themeManager.currentTheme.secondaryBackgroundDark
+                      : themeManager.currentTheme.secondaryBackgroundLight)
+        )
+        .padding(.top, 16)
+        .opacity(animateContent ? 1 : 0)
+        .offset(y: animateContent ? 0 : 10)
+        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: animateContent)
+    }
 
-                            Link(destination: attribution.legalPageURL) {
-                                Text("その他のデータソース")
-                                    .font(.caption2)
-                                    .foregroundColor(themeManager.currentTheme.accent2)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, alignment: .trailing)
-                    }
+    @ViewBuilder
+    private var weatherBody: some View {
+        if let plan = currentPlan {
+            if plan.latitude == nil || plan.longitude == nil {
+                weatherNote("設定された場所には天気の情報がありませんでした", icon: "cloud.slash")
+            } else if isLoadingPlanWeather {
+                HStack(spacing: 8) {
+                    ProgressView().controlSize(.small)
+                    Text("天気を確認しています…")
+                        .font(.caption)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
-
-                if let plan = currentPlan {
-                    if plan.latitude == nil || plan.longitude == nil {
-                        // 座標が設定されていない場合
-                        Text("設定された場所には天気の情報がありませんでした")
-                            .font(.caption)
-                            .foregroundColor(themeManager.currentTheme.secondaryText)
-                    } else if isLoadingPlanWeather {
-                        ProgressView()
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    } else if planWeatherError != nil {
-                        Text("10日前になると天気が表示されます")
-                            .font(.caption)
-                            .foregroundColor(themeManager.currentTheme.secondaryText)
-                    } else if let weather = planWeather {
-                        HStack(spacing: 15) {
-                            ZStack {
-                                Circle()
-                                    .fill(scheduleAccentColor.opacity(0.15))
-                                    .frame(width: 60, height: 60)
-                                Image(systemName: weather.symbolName)
-                                    .font(.system(size: 28))
-                                    .foregroundColor(scheduleAccentColor.opacity(0.7))
-                            }
-
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(weather.condition)
-                                    .font(.system(size: 20, weight: .medium))
-                                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-                                Text("\(Int(weather.highTemperature))°C")
-                                    .font(.system(size: 32, weight: .bold))
-                                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-                            }
-                            Spacer()
-                        }
-                    }
-                }
+            } else if planWeatherError != nil {
+                weatherNote("10日前になると天気が表示されます", icon: "calendar")
+            } else if let weather = planWeather {
+                weatherSummary(weather)
             }
-            // 幅いっぱいに左寄せで固定する
-            // （幅指定がないと天気未表示時にセクション全体が親の中央に寄ってしまう）
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 20)
-            .opacity(animateContent ? 1 : 0)
-            .offset(y: animateContent ? 0 : 10)
-            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: animateContent)
+        }
+    }
+
+    private func weatherNote(_ text: String, icon: String) -> some View {
+        HStack(spacing: 6) {
+            Image(systemName: icon)
+                .font(.caption)
+            Text(text)
+                .font(.caption)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .foregroundColor(themeManager.currentTheme.secondaryText)
+    }
+
+    private func weatherSummary(_ weather: WeatherService.DayWeather) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: weather.symbolName)
+                .font(.system(size: 22))
+                .foregroundColor(scheduleAccentColor)
+                .frame(width: 30)
+
+            Text(weather.condition)
+                .font(.subheadline.weight(.medium))
+                .foregroundColor(accentColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+
+            Spacer(minLength: 4)
+
+            HStack(spacing: 6) {
+                Text("\(Int(weather.highTemperature))°")
+                    .font(.system(size: 20, weight: .bold))
+                    .foregroundColor(accentColor)
+                Text("\(Int(weather.lowTemperature))°")
+                    .font(.subheadline)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+
+            // 傘が要るかは旅行の準備に直結するので、縮めた分ここに回す
+            HStack(spacing: 3) {
+                Image(systemName: "umbrella.fill")
+                    .font(.caption2)
+                Text(weather.precipitationText)
+                    .font(.caption)
+            }
+            .foregroundColor(themeManager.currentTheme.secondaryText)
+        }
+    }
+
+    @ViewBuilder
+    private var weatherAttributionLine: some View {
+        if let attribution = weatherAttribution {
+            HStack(spacing: 6) {
+                AsyncImage(url: colorScheme == .dark ? attribution.combinedMarkDarkURL : attribution.combinedMarkLightURL) { image in
+                    image.resizable().scaledToFit().frame(height: 12)
+                } placeholder: {
+                    Color.clear.frame(height: 12)
+                }
+
+                Link(destination: attribution.legalPageURL) {
+                    Text("その他のデータソース")
+                        .font(.system(size: 10))
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                }
+
+                Spacer(minLength: 0)
+            }
         }
     }
 
