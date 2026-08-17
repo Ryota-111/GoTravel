@@ -711,33 +711,33 @@ struct TravelPlanDetailView: View {
     private func weatherSummary(_ weather: WeatherService.DayWeather) -> some View {
         HStack(spacing: 10) {
             Image(systemName: weather.symbolName)
-                .font(.system(size: 22))
+                .font(.system(size: 28))
                 .foregroundColor(scheduleAccentColor)
-                .frame(width: 30)
+                .frame(width: 36)
 
             Text(weather.condition)
-                .font(.subheadline.weight(.medium))
+                .font(.system(size: 17, weight: .medium))
                 .foregroundColor(accentColor)
                 .lineLimit(1)
-                .minimumScaleFactor(0.8)
+                .minimumScaleFactor(0.7)
 
             Spacer(minLength: 4)
 
             HStack(spacing: 6) {
                 Text("\(Int(weather.highTemperature))°")
-                    .font(.system(size: 20, weight: .bold))
+                    .font(.system(size: 26, weight: .bold))
                     .foregroundColor(accentColor)
                 Text("\(Int(weather.lowTemperature))°")
-                    .font(.subheadline)
+                    .font(.system(size: 17))
                     .foregroundColor(themeManager.currentTheme.secondaryText)
             }
 
             // 傘が要るかは旅行の準備に直結するので、縮めた分ここに回す
             HStack(spacing: 3) {
                 Image(systemName: "umbrella.fill")
-                    .font(.caption2)
-                Text(weather.precipitationText)
                     .font(.caption)
+                Text(weather.precipitationText)
+                    .font(.system(size: 13))
             }
             .foregroundColor(themeManager.currentTheme.secondaryText)
         }
@@ -748,14 +748,14 @@ struct TravelPlanDetailView: View {
         if let attribution = weatherAttribution {
             HStack(spacing: 6) {
                 AsyncImage(url: colorScheme == .dark ? attribution.combinedMarkDarkURL : attribution.combinedMarkLightURL) { image in
-                    image.resizable().scaledToFit().frame(height: 12)
+                    image.resizable().scaledToFit().frame(height: 10)
                 } placeholder: {
-                    Color.clear.frame(height: 12)
+                    Color.clear.frame(height: 10)
                 }
 
                 Link(destination: attribution.legalPageURL) {
                     Text("その他のデータソース")
-                        .font(.system(size: 10))
+                        .font(.system(size: 9))
                         .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
 
