@@ -20,6 +20,7 @@ struct TravelPlanDetailView: View {
     @State private var selectedDay: Int = 1
     @State private var showAddScheduleItem = false
     @State private var showBasicInfoEditor = false
+    @State private var showAsoview = false
     @State private var showBudgetSummary = false
     @State private var showShareView = false
     @State private var showScheduleMap = false
@@ -114,12 +115,18 @@ struct TravelPlanDetailView: View {
                                 .padding(.top, 16)
                             budgetCard(plan: plan)
                             dayScheduleSection(plan: plan)
+                            experienceSection(plan: plan)
                             packingListSection(plan: plan)
                         }
                         .padding(.horizontal, 16)
                         .padding(.bottom, 30)
                     }
                 }
+            }
+        }
+        .sheet(isPresented: $showAsoview) {
+            if let url = AffiliateLink.asoviewURL(forDestination: plan.destination) {
+                SafariView(url: url)
             }
         }
         .fullScreenCover(isPresented: $showAddScheduleItem) {
@@ -812,6 +819,52 @@ struct TravelPlanDetailView: View {
             } else {
                 return minute1 < minute2
             }
+        }
+    }
+
+    /// 目的地の体験・アクティビティを探す導線（提携先へ遷移）。
+    ///
+    /// スケジュールを組んだ直後は「何をするか」を考えている場面なので、
+    /// 予定の下に置く。リンク未設定のあいだは何も表示しない。
+    /// 広告に見えないよう常時のバナーにはせず、押して初めて外部へ移る形にしている。
+    @ViewBuilder
+    private func experienceSection(plan: TravelPlan) -> some View {
+        if AffiliateLink.isAsoviewAvailable {
+            Button(action: { showAsoview = true }) {
+                HStack(spacing: 12) {
+                    Image(systemName: "ticket.fill")
+                        .font(.system(size: 18))
+                        .foregroundColor(scheduleAccentColor)
+                        .frame(width: 38, height: 38)
+                        .background(Circle().fill(scheduleAccentColor.opacity(0.14)))
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("\(plan.destination)の体験を探す")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(accentColor)
+                            .lineLimit(1)
+
+                        Text("レジャーや体験の予約（アソビュー）")
+                            .font(.caption2)
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    // 外部サイトへ移ることが分かるようにする
+                    Image(systemName: "arrow.up.forward.square")
+                        .font(.caption)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                }
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: 16)
+                        .fill(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
+                        .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
+                )
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 16)
         }
     }
 
