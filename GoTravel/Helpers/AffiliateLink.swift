@@ -31,10 +31,25 @@ enum AffiliateLink {
         !asoviewGeneratedLink.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
     }
 
-    /// 行き先から都道府県が特定できるかどうか。
-    /// できない場合は導線を出さない（トップページへ送っても役に立たないため）
-    static func hasAsoviewArea(for destination: String) -> Bool {
-        isAsoviewAvailable && AsoviewArea.slug(matching: destination) != nil
+    /// 座標から都道府県を確定して、アソビューのページへのリンクを作る。
+    ///
+    /// 行き先の文字列から推測するより確実。地名の表記ゆれ（「京都市」「嵐山」など）や
+    /// 「東京都」に「京都」が含まれる問題を踏まないうえ、
+    /// 国外かどうかも国コードで判定できる。
+    /// 座標が無いプランのために、文字列での判定も残してある。
+    static func asoviewURL(
+        latitude: Double?,
+        longitude: Double?,
+        fallbackText: String
+    ) async -> URL? {
+        guard isAsoviewAvailable else { return nil }
+
+        if let latitude, let longitude,
+           let prefecture = await AsoviewArea.prefecture(latitude: latitude, longitude: longitude) {
+            return asoviewURL(forDestination: prefecture)
+        }
+
+        return asoviewURL(forDestination: fallbackText)
     }
 
     /// 行き先の都道府県ページへ送る。

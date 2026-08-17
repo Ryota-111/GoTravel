@@ -10,6 +10,8 @@ struct PlaceDetailView: View {
     @ObservedObject var themeManager = ThemeManager.shared
     @State private var showStreetView = false
     @State private var showAsoview = false
+    /// 座標から都道府県を確定してから作る。決まらなければ導線を出さない
+    @State private var asoviewURL: URL?
     @State private var showMap = true
     @State private var lookAroundScene: MKLookAroundScene?
     @State private var isEditMode = false
@@ -100,9 +102,17 @@ struct PlaceDetailView: View {
             ImagePicker(image: $selectedImage)
         }
         .sheet(isPresented: $showAsoview) {
-            if let url = AffiliateLink.asoviewURL(forDestination: asoviewMatchText) {
-                SafariView(url: url)
+            if let asoviewURL {
+                SafariView(url: asoviewURL)
             }
+        }
+        // 座標から都道府県を引くので非同期。決まるまで導線は出ない
+        .task(id: place.id) {
+            asoviewURL = await AffiliateLink.asoviewURL(
+                latitude: place.latitude,
+                longitude: place.longitude,
+                fallbackText: asoviewMatchText
+            )
         }
         .alert("エラー", isPresented: $showAlert) {
             Button("OK", role: .cancel) {}
@@ -179,8 +189,7 @@ struct PlaceDetailView: View {
     /// ホテルやレストランに出すと無関係な検索結果へ送ることになる。
     @ViewBuilder
     private var experienceSection: some View {
-        if Self.leisureCategoryIds.contains(place.categoryId),
-           AffiliateLink.hasAsoviewArea(for: asoviewMatchText) {
+        if Self.leisureCategoryIds.contains(place.categoryId), asoviewURL != nil {
             AffiliateLinkRow(
                 // 遷移先は都道府県のページなので、施設単位に読める文言にしない
                 title: "周辺の遊び・体験を探す",

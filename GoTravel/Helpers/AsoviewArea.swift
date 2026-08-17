@@ -1,4 +1,5 @@
 import Foundation
+import CoreLocation
 
 /// アソビューの都道府県ページを引くための対応表。
 ///
@@ -7,6 +8,30 @@ import Foundation
 /// 行き先を絞るには `https://www.asoview.com/<ローマ字>/` のパス形式を使う。
 /// 47都道府県すべてで200が返ることを確認済み。
 enum AsoviewArea {
+
+    /// 座標から都道府県名を引く（例: "東京都"）。
+    ///
+    /// 表示言語に左右されないよう ja_JP で問い合わせる。
+    /// 国外の座標は nil を返すので、そのまま導線を出さない判定に使える。
+    static func prefecture(latitude: Double, longitude: Double) async -> String? {
+        let key = "\(round(latitude * 1000))_\(round(longitude * 1000))"
+        if let cached = prefectureCache[key] { return cached }
+
+        let placemark = try? await CLGeocoder().reverseGeocodeLocation(
+            CLLocation(latitude: latitude, longitude: longitude),
+            preferredLocale: Locale(identifier: "ja_JP")
+        ).first
+
+        // アソビューは国内専用なので、日本以外は対象にしない
+        guard placemark?.isoCountryCode == "JP",
+              let prefecture = placemark?.administrativeArea else { return nil }
+
+        prefectureCache[key] = prefecture
+        return prefecture
+    }
+
+    /// 逆ジオコーディングは回数制限があるため、同じ地点を繰り返し引かない
+    private static var prefectureCache: [String: String] = [:]
 
     static func url(matching text: String) -> URL? {
         guard let slug = slug(matching: text) else { return nil }

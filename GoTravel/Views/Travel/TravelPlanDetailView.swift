@@ -21,6 +21,8 @@ struct TravelPlanDetailView: View {
     @State private var showAddScheduleItem = false
     @State private var showBasicInfoEditor = false
     @State private var showAsoview = false
+    /// 座標から都道府県を確定してから作る。決まらなければ導線を出さない
+    @State private var asoviewURL: URL?
     @State private var showBudgetSummary = false
     @State private var showShareView = false
     @State private var showScheduleMap = false
@@ -125,9 +127,17 @@ struct TravelPlanDetailView: View {
             }
         }
         .sheet(isPresented: $showAsoview) {
-            if let url = AffiliateLink.asoviewURL(forDestination: plan.destination) {
-                SafariView(url: url)
+            if let asoviewURL {
+                SafariView(url: asoviewURL)
             }
+        }
+        // 座標から都道府県を引くので非同期。決まるまで導線は出ない
+        .task(id: "\(plan.destination)_\(plan.latitude ?? 0)_\(plan.longitude ?? 0)") {
+            asoviewURL = await AffiliateLink.asoviewURL(
+                latitude: plan.latitude,
+                longitude: plan.longitude,
+                fallbackText: plan.destination
+            )
         }
         .fullScreenCover(isPresented: $showAddScheduleItem) {
             AddScheduleItemView(plan: plan, dayNumber: selectedDay)
@@ -831,7 +841,7 @@ struct TravelPlanDetailView: View {
     private func experienceSection(plan: TravelPlan) -> some View {
         // 都道府県が特定できないとき（海外など）は出さない。
         // アソビューは国内専用で、トップへ送っても役に立たないため
-        if AffiliateLink.hasAsoviewArea(for: plan.destination) {
+        if asoviewURL != nil {
             AffiliateLinkRow(
                 title: "\(plan.destination)の遊び・体験を探す",
                 serviceName: "アソビュー",
