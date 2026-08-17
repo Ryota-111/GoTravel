@@ -2,51 +2,53 @@ import Foundation
 
 /// 提携先（アソビュー / A8.net）へのリンク。
 ///
-/// A8.net の管理画面で発行したリンクをここに1つだけ置く。
-/// 生成コードは `<a href="https://px.a8.net/svt/ejp?a8mat=...">` の形なので、
-/// **href の中のURLだけ**を貼ること。
+/// A8.net の商品リンクは、`px.a8.net` を経由するのではなく
+/// **遷移先URLに `a8=` という追跡パラメータを付けた直リンク**として発行される。
+///
+/// ```
+/// https://www.asoview.com/search/?keyword=%E6%9D%B1%E4%BA%AC&a8=<トークン>
+/// ```
+///
+/// キーワードは通常のクエリなので、`a8=` を保ったまま差し替えれば
+/// 任意の地名・施設名で検索できる。
 ///
 /// - 未設定（空文字）のあいだは、アプリ内に導線が一切出ない。
-///   貼り忘れてリンク切れが表示される事故を防ぐため。
 /// - **掲載する場合はプライバシーポリシー §3.4 の
 ///   "The App does NOT display advertisements." を先に修正する必要がある。**
-/// - 景品表示法（ステマ規制）により、リンクの近くに広告であることの表示が必須。
-///   表示は `AffiliateLinkRow` が担っている。
+/// - 景品表示法（ステマ規制）により広告であることの表示が必須。
+///   表示は `AffiliateLinkRow` が担っているので、提携リンクは必ずあれを通す。
 enum AffiliateLink {
 
-    /// アソビューへのアフィリエイトリンク（A8.net で発行したもの）
-    private static let asoviewBaseURLString = ""
+    /// A8.net の商品リンクに付く追跡パラメータ（`a8=` の値）。
+    /// 管理画面で発行したリンクから、`a8=` より後ろの値だけを貼る
+    private static let asoviewTrackingToken = "pwyQew5093Csj480j-gW0tI9Cba263ybr-6W5PCMTWG09tyDF3B8Ety0EPAOBOR6fWl3kSy8fwyQYs00000019330001"
 
-    /// 導線を出すかどうか。リンクが設定されていなければ出さない
+    /// 遷移先は提携先ドメイン内に固定する。
+    /// 広告主URL以外へのリンクは提携解除の対象になるため、
+    /// ユーザー入力を混ぜるのはキーワードの値だけに限る
+    private static let asoviewSearchBase = "https://www.asoview.com/search/"
+
     static var isAsoviewAvailable: Bool {
-        !asoviewBaseURLString.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        !asoviewTrackingToken.isEmpty
     }
 
-    /// 施設名や地名で検索した結果ページへ送る。
+    /// 地名や施設名で検索した結果ページへ送る。
     ///
     /// アソビュー内の商品ページを施設名から特定する手段（API・商品DB）が
-    /// 提供されていないため、**商品ページへの直リンクはできない**。
-    /// A8.net の `a8ejpredirect` に検索URLを渡し、検索結果を出す形にしている。
-    /// 検索結果が0件になりうるので、UIの文言は「探す」に留めること。
+    /// 無いため、商品ページへの直リンクはできない。検索結果を出す形にしている。
+    /// 0件になりうるので、UIの文言は「探す」に留めること。
     static func asoviewSearchURL(keyword: String) -> URL? {
-        let base = asoviewBaseURLString.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !base.isEmpty else { return nil }
+        guard !asoviewTrackingToken.isEmpty else { return nil }
 
-        let trimmedKeyword = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmedKeyword.isEmpty else { return URL(string: base) }
+        var query = "a8=\(asoviewTrackingToken)"
 
-        // 遷移先URL自体をクエリの値として渡すので、二重にエンコードする必要がある
-        guard let encodedKeyword = trimmedKeyword.addingPercentEncoding(
-            withAllowedCharacters: .alphanumerics
-        ) else { return URL(string: base) }
+        let trimmed = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !trimmed.isEmpty,
+           // 記号をすべてエンコードする。`&` や `+` を含む地名でURLが壊れないようにする
+           let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .alphanumerics) {
+            query = "keyword=\(encoded)&" + query
+        }
 
-        let target = "https://www.asoview.com/search/?keyword=\(encodedKeyword)"
-
-        guard let encodedTarget = target.addingPercentEncoding(
-            withAllowedCharacters: .alphanumerics
-        ) else { return URL(string: base) }
-
-        let separator = base.contains("?") ? "&" : "?"
-        return URL(string: "\(base)\(separator)a8ejpredirect=\(encodedTarget)")
+        return URL(string: "\(asoviewSearchBase)?\(query)")
     }
 }
