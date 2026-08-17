@@ -100,7 +100,7 @@ struct PlaceDetailView: View {
             ImagePicker(image: $selectedImage)
         }
         .sheet(isPresented: $showAsoview) {
-            if let url = AffiliateLink.asoviewSearchURL(keyword: place.title) {
+            if let url = AffiliateLink.asoviewURL(forDestination: asoviewMatchText) {
                 SafariView(url: url)
             }
         }
@@ -179,9 +179,11 @@ struct PlaceDetailView: View {
     /// ホテルやレストランに出すと無関係な検索結果へ送ることになる。
     @ViewBuilder
     private var experienceSection: some View {
-        if AffiliateLink.isAsoviewAvailable, Self.leisureCategoryIds.contains(place.categoryId) {
+        if Self.leisureCategoryIds.contains(place.categoryId),
+           AffiliateLink.hasAsoviewArea(for: asoviewMatchText) {
             AffiliateLinkRow(
-                title: "この場所の遊び・体験を探す",
+                // 遷移先は都道府県のページなので、施設単位に読める文言にしない
+                title: "周辺の遊び・体験を探す",
                 serviceName: "アソビュー",
                 icon: "ticket.fill",
                 accentColor: themeManager.currentTheme.actionFill
@@ -195,6 +197,12 @@ struct PlaceDetailView: View {
     /// 体験商品が見つかりやすいカテゴリ。
     /// 既定の「風景」と、ユーザーが自分で足した観光系の名前を拾う
     private static let leisureCategoryIds: Set<String> = ["sightseeing"]
+
+    /// 都道府県の判定に使う文字列。
+    /// 施設名だけでは都道府県が分からないため、住所を優先して見る
+    private var asoviewMatchText: String {
+        [place.address, place.title].compactMap { $0 }.joined(separator: " ")
+    }
 
     // MARK: - Edit Mode View
     private var editModeView: some View {

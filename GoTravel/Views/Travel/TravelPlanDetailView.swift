@@ -125,7 +125,7 @@ struct TravelPlanDetailView: View {
             }
         }
         .sheet(isPresented: $showAsoview) {
-            if let url = AffiliateLink.asoviewSearchURL(keyword: plan.destination) {
+            if let url = AffiliateLink.asoviewURL(forDestination: plan.destination) {
                 SafariView(url: url)
             }
         }
@@ -829,7 +829,9 @@ struct TravelPlanDetailView: View {
     /// リンク未設定のあいだは何も表示しない。
     @ViewBuilder
     private func experienceSection(plan: TravelPlan) -> some View {
-        if AffiliateLink.isAsoviewAvailable, !plan.destination.isEmpty {
+        // 都道府県が特定できないとき（海外など）は出さない。
+        // アソビューは国内専用で、トップへ送っても役に立たないため
+        if AffiliateLink.hasAsoviewArea(for: plan.destination) {
             AffiliateLinkRow(
                 title: "\(plan.destination)の遊び・体験を探す",
                 serviceName: "アソビュー",
