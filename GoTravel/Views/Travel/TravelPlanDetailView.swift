@@ -716,7 +716,7 @@ struct TravelPlanDetailView: View {
             // 「あそび」から外部サイトへ直接移るので、
             // 景品表示法（ステマ規制）の開示をここに置く。バッジではなく注記の形にしている
             if AffiliateLink.isAsoviewAvailable {
-                Text("「あそび」は提携サイトへ移動します（広告）")
+                Text("「あそび」はアソビューへの広告リンクです")
                     .font(.system(size: 10))
                     .foregroundColor(themeManager.currentTheme.secondaryText)
             }
@@ -737,7 +737,7 @@ struct TravelPlanDetailView: View {
 
             quickAction(
                 icon: "ticket.fill",
-                title: "予約",
+                title: "予約確認",
                 detail: plan.reservations.isEmpty ? "未登録" : "\(plan.reservations.count)件"
             ) { showReservations = true }
 
@@ -878,6 +878,8 @@ struct TravelPlanDetailView: View {
     private var weatherAttributionLine: some View {
         if let attribution = weatherAttribution {
             HStack(spacing: 6) {
+                Spacer(minLength: 0)
+
                 AsyncImage(url: colorScheme == .dark ? attribution.combinedMarkDarkURL : attribution.combinedMarkLightURL) { image in
                     image.resizable().scaledToFit().frame(height: 10)
                 } placeholder: {
@@ -889,8 +891,6 @@ struct TravelPlanDetailView: View {
                         .font(.system(size: 9))
                         .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
-
-                Spacer(minLength: 0)
             }
         }
     }
