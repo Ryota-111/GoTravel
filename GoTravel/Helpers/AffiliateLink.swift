@@ -25,7 +25,7 @@ enum AffiliateLink {
 
     /// A8.net の管理画面で発行した商品リンク（生成コードの `href` の中身）を
     /// **そのまま**貼る。`a8ejpredirect` は付いたままでよく、こちらで差し替える
-    private static let asoviewGeneratedLink = ""
+    private static let asoviewGeneratedLink = "https://px.a8.net/svt/ejp?a8mat=4B9ZD9+2P1ODU+455G+BW8O2&a8ejpredirect=https%3A%2F%2Fwww.asoview.com%2Fsearch%2F%3Fkeyword%3D%E6%9D%B1%E4%BA%AC"
 
     /// 遷移先は提携先ドメイン内に固定する。
     /// 広告主URL以外へのリンクは提携解除の対象になるため、
@@ -45,18 +45,26 @@ enum AffiliateLink {
         let link = asoviewGeneratedLink.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !link.isEmpty else { return nil }
 
-        // 記号をすべてエンコードする。`&` や `+` を含む地名でURLが壊れないようにする
+        // クエリの区切りに使われる記号だけを先に潰す。
+        // ここで全部エンコードすると、次の全体エンコードで二重になり
+        // A8が発行する形（キーワードのエンコードは1回）と食い違う
         let trimmedKeyword = keyword.trimmingCharacters(in: .whitespacesAndNewlines)
-        let encodedKeyword = trimmedKeyword
-            .addingPercentEncoding(withAllowedCharacters: .alphanumerics) ?? ""
+        let sanitizedKeyword = trimmedKeyword
+            .replacingOccurrences(of: "%", with: "%25")
+            .replacingOccurrences(of: "&", with: "%26")
+            .replacingOccurrences(of: "=", with: "%3D")
+            .replacingOccurrences(of: "?", with: "%3F")
+            .replacingOccurrences(of: "#", with: "%23")
+            .replacingOccurrences(of: "+", with: "%2B")
 
-        let target = encodedKeyword.isEmpty
+        let target = sanitizedKeyword.isEmpty
             ? asoviewSearchBase
-            : "\(asoviewSearchBase)?keyword=\(encodedKeyword)"
+            : "\(asoviewSearchBase)?keyword=\(sanitizedKeyword)"
 
-        // クエリの値として渡すので、遷移先URL全体をもう一度エンコードする
+        // クエリの値として渡すので遷移先URL全体をエンコードする。
+        // 予約されていない文字（-._~）は残し、A8の出力と同じ形にする
         guard let encodedTarget = target
-            .addingPercentEncoding(withAllowedCharacters: .alphanumerics) else { return nil }
+            .addingPercentEncoding(withAllowedCharacters: Self.unreserved) else { return nil }
 
         // a8mat は "+" を含み、URLComponents で組み直すと壊れる。
         // 発行されたリンクの文字列をそのまま使い、遷移先だけ差し替える
@@ -70,4 +78,11 @@ enum AffiliateLink {
 
         return URL(string: base + "a8ejpredirect=" + encodedTarget)
     }
+
+    /// RFC 3986 の unreserved。これ以外はエンコードする
+    private static let unreserved: CharacterSet = {
+        var set = CharacterSet.alphanumerics
+        set.insert(charactersIn: "-._~")
+        return set
+    }()
 }
