@@ -111,7 +111,6 @@ struct TravelPlanDetailView: View {
 
                         VStack(spacing: 0) {
                             planWeatherSection
-                                .padding(.top, 16)
                             budgetCard(plan: plan)
                             dayScheduleSection(plan: plan)
                             packingListSection(plan: plan)
@@ -672,14 +671,7 @@ struct TravelPlanDetailView: View {
             weatherAttributionLine
         }
         .frame(maxWidth: .infinity, alignment: .leading)
-        .padding(12)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(colorScheme == .dark
-                      ? themeManager.currentTheme.secondaryBackgroundDark
-                      : themeManager.currentTheme.secondaryBackgroundLight)
-        )
-        .padding(.top, 16)
+        .padding(.vertical, 10)
         .opacity(animateContent ? 1 : 0)
         .offset(y: animateContent ? 0 : 10)
         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: animateContent)
