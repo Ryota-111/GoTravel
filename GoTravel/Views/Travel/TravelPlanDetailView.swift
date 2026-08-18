@@ -42,7 +42,9 @@ struct TravelPlanDetailView: View {
     @ObservedObject var themeManager = ThemeManager.shared
     @State private var selectedDay: Int = 1
     @State private var selectedTab: DetailTab = .schedule
-    /// 写真が上に隠れたかどうか。隠れたらタイトルと日付を細い帯で残す
+    /// 写真が上に隠れたかどうか。
+    /// 隠れた後はスクロール中の内容がステータスバーの領域に見えてしまうので、
+    /// そこを覆うかどうかの判定に使う
     @State private var isHeaderCollapsed = false
     @State private var showAddScheduleItem = false
     @State private var showBasicInfoEditor = false
@@ -174,7 +176,7 @@ struct TravelPlanDetailView: View {
                                 }
                                 .frame(maxWidth: .infinity)
                             } header: {
-                                pinnedHeader(plan: plan)
+                                detailTabBar
                             }
                         }
                     }
@@ -772,52 +774,6 @@ struct TravelPlanDetailView: View {
     // MARK: - Weather Section
     @ViewBuilder
     // MARK: - タブ
-
-    /// 上に貼り付く部分。
-    ///
-    /// 貼り付いた状態では、この上（ステータスバーの領域）を
-    /// スクロール中の内容が通り抜けて見えてしまう。
-    /// 背景を安全領域の外まで伸ばして覆う
-    private func pinnedHeader(plan: TravelPlan) -> some View {
-        VStack(spacing: 0) {
-            if isHeaderCollapsed {
-                compactHeader(plan: plan)
-            }
-            detailTabBar
-        }
-        .background(tabBarBackground)
-    }
-
-    /// 写真が隠れたあとに残す帯。写真の中と同じ情報を細く出す
-    private func compactHeader(plan: TravelPlan) -> some View {
-        HStack(spacing: 10) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text(plan.title)
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(accentColor)
-                    .lineLimit(1)
-
-                Text(tripDateRange(plan: plan))
-                    .font(.system(size: 11))
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-                    .lineLimit(1)
-            }
-
-            Spacer(minLength: 0)
-
-            if let status = tripStatusText(plan: plan) {
-                Text(status)
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(scheduleAccentColor)
-                    .padding(.horizontal, 9)
-                    .padding(.vertical, 3)
-                    .background(Capsule().fill(scheduleAccentColor.opacity(0.12)))
-            }
-        }
-        .padding(.horizontal, 16)
-        .padding(.top, 10)
-        .padding(.bottom, 4)
-    }
 
     /// 貼り付く帯の背景。中身が透けないよう不透明にする
     private var tabBarBackground: some View {
