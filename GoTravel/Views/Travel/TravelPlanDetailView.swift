@@ -250,12 +250,17 @@ struct TravelPlanDetailView: View {
                 // 時刻バッジ
                 Text(formatTime(item.time))
                     .font(.system(size: 12, weight: .bold))
+                    // 枠が狭く、太字設定などで幅が増えると折り返していた。
+                    // 折り返さずに縮める
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .fixedSize(horizontal: false, vertical: true)
                     .foregroundColor(.white)
                     .padding(.horizontal, 8)
                     .padding(.vertical, 5)
                     .background(scheduleAccentColor)
                     .clipShape(Capsule())
-                    .frame(width: 54)
+                    .frame(width: 58)
 
                 if !isLast {
                     Rectangle()
@@ -265,7 +270,7 @@ struct TravelPlanDetailView: View {
                         .padding(.vertical, 6)
                 }
             }
-            .frame(width: 54)
+            .frame(width: 58)
 
             // カードコンテンツ
             VStack(alignment: .leading, spacing: 6) {

@@ -663,6 +663,7 @@ struct PlanDetailView: View {
                                     .font(.caption)
                                 Text(formatTime(time))
                                     .font(.subheadline)
+                                    .lineLimit(1)
                             }
                             .padding(.leading, 4)
                         }
@@ -761,6 +762,7 @@ struct PlanDetailView: View {
                                 .font(.caption)
                             Text(formatTime(time))
                                 .font(.subheadline)
+                                .lineLimit(1)
                         }
                         .padding(.leading, 4)
                     }
@@ -1126,9 +1128,12 @@ struct PlanDetailView: View {
             VStack(spacing: 2) {
                 Text(formatTime(item.time))
                     .font(.system(size: 16, weight: .bold))
+                    // 16ptの時刻に対して枠が狭く、折り返しが起きていた
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
                     .foregroundColor(planColor)
             }
-            .frame(width: 50)
+            .frame(width: 56)
 
             // Content
             VStack(alignment: .leading, spacing: 6) {
