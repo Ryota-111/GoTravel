@@ -51,7 +51,7 @@ struct TravelPlanDetailView: View {
     /// 地図タブで、地図と行程表のどちらから選んでも共有する項目
     @State private var focusedItemID: String?
     /// 地図タブで下半分が画面に占める割合。地図を広く見せたいので控えめにする
-    private static let mapSheetFraction: CGFloat = 0.40
+    private static let mapSheetFraction: CGFloat = 0.33
     /// 写真が上に隠れたかどうか。
     /// 隠れた後はスクロール中の内容がステータスバーの領域に見えてしまうので、
     /// そこを覆うかどうかの判定に使う
