@@ -51,6 +51,8 @@ struct TravelPlanDetailView: View {
     @State private var selectedTab: DetailTab = .schedule
     /// 地図タブで、地図と行程表のどちらから選んでも共有する項目
     @State private var focusedItemID: String?
+    /// 1回のドラッグで何度もタブが飛ばないようにする目印
+    @State private var hasSwitchedTabInDrag = false
     /// 写真が上に隠れたかどうか。
     /// 隠れた後はスクロール中の内容がステータスバーの領域に見えてしまうので、
     /// そこを覆うかどうかの判定に使う
@@ -734,17 +736,31 @@ struct TravelPlanDetailView: View {
     }
 
     /// 横にはっきり振ったときだけタブを移す。
-    /// 縦スクロールと取り合わないよう simultaneousGesture で重ねて使う
+    ///
+    /// 指を離した時点（onEnded）で判定していたが、ScrollView が縦スクロールを
+    /// 引き受けるとこのジェスチャは取り消され、onEnded 自体が呼ばれない。
+    /// そのため反応しないことが多かった。
+    /// ドラッグの途中で条件を満たした時点で切り替える。
     private var tabSwipeGesture: some Gesture {
-        // 内側（タブの中身）に付けると ScrollView の縦スクロール判定が
-        // 先に効いて鈍くなるため、外側に付けていた頃より条件をゆるめる
-        DragGesture(minimumDistance: 12)
-            .onEnded { value in
+        DragGesture(minimumDistance: 10)
+            .onChanged { value in
                 let dx = value.translation.width
                 let dy = value.translation.height
-                guard abs(dx) > 36, abs(dx) > abs(dy) * 1.1 else { return }
+
+                // 指を置き直した直後は解除する。
+                // 取り消されると onEnded が来ないので、ここでも戻しておく
+                if abs(dx) < 14 && abs(dy) < 14 {
+                    hasSwitchedTabInDrag = false
+                    return
+                }
+
+                guard !hasSwitchedTabInDrag else { return }
+                guard abs(dx) > 40, abs(dx) > abs(dy) * 1.2 else { return }
+
+                hasSwitchedTabInDrag = true
                 moveTab(forward: dx < 0)
             }
+            .onEnded { _ in hasSwitchedTabInDrag = false }
     }
 
     /// 隣のタブへ移る。端では止まる（一周させると今どこにいるか分からなくなる）
