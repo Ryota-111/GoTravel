@@ -896,7 +896,7 @@ struct TravelPlanDetailView: View {
                 linkedDay: $selectedDay,
                 linkedItemID: $focusedItemID
             )
-            .frame(height: 264)
+            .frame(height: 274)
             // 貼り付けている地図は狭いので、じっくり見たいときは全画面へ。
             // 右上は「全体を表示」が使っているので左上に置く
             .overlay(alignment: .topLeading) {
