@@ -8,6 +8,15 @@ struct TravelPlanDetailView: View {
     /// 写真の高さ。スクロール量の判定でも同じ値を使う
     static let headerHeight: CGFloat = 240
 
+    /// ステータスバーの高さ。覆いを高さゼロで置くと何も描画されないため、
+    /// 実際の値を取って明示的に埋める
+    private var topSafeAreaInset: CGFloat {
+        UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+            .first(where: { $0.activationState == .foregroundActive })?
+            .keyWindow?.safeAreaInsets.top ?? 0
+    }
+
     /// 写真の下で切り替える画面。増やすときはここに1つ足す
     enum DetailTab: String, CaseIterable, Identifiable {
         case schedule = "行程表"
@@ -200,7 +209,7 @@ struct TravelPlanDetailView: View {
         .overlay(alignment: .top) {
             if isHeaderCollapsed {
                 tabBarBackground
-                    .frame(height: 0)
+                    .frame(height: topSafeAreaInset)
                     .ignoresSafeArea(edges: .top)
             }
         }
