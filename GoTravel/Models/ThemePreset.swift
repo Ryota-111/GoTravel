@@ -269,6 +269,48 @@ extension ThemePreset {
         }
     }
 
+    /// テーマ色を薄く敷いた上に、その色で文字を置くときの色。
+    ///
+    /// オレンジのような明るい色はそのまま載せると読めない
+    /// （デフォルトカラーの「共有に参加」で比 1.95 しかなかった）。
+    /// 十分な差が出るまで暗く（暗い背景なら明るく）して返す。
+    static func readableTint(_ color: Color, on background: Color) -> Color {
+        var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
+        guard UIColor(color).getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha) else {
+            return color
+        }
+
+        let backgroundIsLight = luminance(of: background) > 0.4
+        var adjusted = color
+
+        // 実際には同じ色を薄く敷いた上に載るので、無地の背景に対しては
+        // 目標より高め（5.0）まで寄せておく
+        // 段階的に寄せる。色相と鮮やかさは保つので、テーマの印象は変わらない
+        for _ in 0..<14 where contrastRatio(adjusted, background) < 5.0 {
+            brightness = backgroundIsLight
+                ? max(brightness - 0.07, 0.05)
+                : min(brightness + 0.07, 1.0)
+            adjusted = Color(UIColor(hue: hue, saturation: saturation, brightness: brightness, alpha: alpha))
+        }
+        return adjusted
+    }
+
+    static func contrastRatio(_ a: Color, _ b: Color) -> Double {
+        let la = luminance(of: a), lb = luminance(of: b)
+        return (max(la, lb) + 0.05) / (min(la, lb) + 0.05)
+    }
+
+    private static func luminance(of color: Color) -> Double {
+        var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
+        UIColor(color).getRed(&r, green: &g, blue: &b, alpha: &a)
+
+        func channel(_ value: CGFloat) -> Double {
+            let v = Double(value)
+            return v <= 0.03928 ? v / 12.92 : pow((v + 0.055) / 1.055, 2.4)
+        }
+        return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b)
+    }
+
     /// 明るい背景でも暗い背景でも読める文字色。
     /// accent1 は黒固定のため、ダークモードで背景に溶ける
     func adaptiveText(for scheme: ColorScheme) -> Color {

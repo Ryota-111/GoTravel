@@ -409,7 +409,16 @@ struct EnjoyWorldView: View {
                     Text("共有に参加")
                         .font(.subheadline.weight(.medium))
                 }
-                .foregroundColor(themeManager.currentTheme.secondary)
+                // テーマ色をそのまま載せると、明るい色（オレンジなど）で
+                // 読めなくなる。背景に対して差が出る濃さに調整して使う
+                .foregroundColor(
+                    ThemePreset.readableTint(
+                        themeManager.currentTheme.secondary,
+                        on: colorScheme == .dark
+                            ? themeManager.currentTheme.backgroundDark
+                            : themeManager.currentTheme.backgroundLight
+                    )
+                )
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
                 .background(
