@@ -30,6 +30,8 @@ struct TravelPlanDetailView: View {
     @ObservedObject var themeManager = ThemeManager.shared
     @State private var selectedDay: Int = 1
     @State private var selectedTab: DetailTab = .schedule
+    /// 写真が上に隠れたかどうか。隠れたらタイトルと日付を細い帯で残す
+    @State private var isHeaderCollapsed = false
     @State private var showAddScheduleItem = false
     @State private var showBasicInfoEditor = false
     @State private var showBudgetSummary = false
@@ -141,9 +143,18 @@ struct TravelPlanDetailView: View {
                 }
             } else {
                 ScrollView(showsIndicators: false) {
-                    // タブバーだけを上に貼り付けたいので Section の見出しに置く
+                    // タブバーを上に貼り付けたいので Section の見出しに置く
                     LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                         planHeaderSection(plan: plan)
+                            // 写真がどこまで上に流れたかを測る
+                            .background(
+                                GeometryReader { proxy in
+                                    Color.clear.preference(
+                                        key: HeaderOffsetKey.self,
+                                        value: proxy.frame(in: .named("planScroll")).maxY
+                                    )
+                                }
+                            )
 
                         Section {
                             Group {
@@ -157,9 +168,22 @@ struct TravelPlanDetailView: View {
                             }
                             .frame(maxWidth: .infinity)
                         } header: {
-                            detailTabBar
+                            VStack(spacing: 0) {
+                                // 写真が隠れても、どの旅行を見ているか分かるようにする
+                                if isHeaderCollapsed {
+                                    compactHeader(plan: plan)
+                                }
+                                detailTabBar
+                            }
                         }
                     }
+                }
+                .coordinateSpace(name: "planScroll")
+                .onPreferenceChange(HeaderOffsetKey.self) { maxY in
+                    // 写真の下端が上に抜けたら切り替える
+                    let collapsed = maxY < 72
+                    guard collapsed != isHeaderCollapsed else { return }
+                    withAnimation(.easeInOut(duration: 0.2)) { isHeaderCollapsed = collapsed }
                 }
                 // 縦スクロールを妨げないよう simultaneousGesture で重ね、
                 // 横方向がはっきりしているときだけタブを切り替える。
@@ -735,6 +759,45 @@ struct TravelPlanDetailView: View {
     @ViewBuilder
     // MARK: - タブ
 
+    /// 写真が隠れたあとに残す帯。写真の中と同じ情報を細く出す
+    private func compactHeader(plan: TravelPlan) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 1) {
+                Text(plan.title)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(accentColor)
+                    .lineLimit(1)
+
+                Text(tripDateRange(plan: plan))
+                    .font(.system(size: 11))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .lineLimit(1)
+            }
+
+            Spacer(minLength: 0)
+
+            if let status = tripStatusText(plan: plan) {
+                Text(status)
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(scheduleAccentColor)
+                    .padding(.horizontal, 9)
+                    .padding(.vertical, 3)
+                    .background(Capsule().fill(scheduleAccentColor.opacity(0.12)))
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.top, 10)
+        .padding(.bottom, 4)
+        .background(tabBarBackground)
+    }
+
+    /// 貼り付く帯の背景。中身が透けないよう不透明にする
+    private var tabBarBackground: some View {
+        (colorScheme == .dark
+         ? themeManager.currentTheme.backgroundDark
+         : themeManager.currentTheme.backgroundLight)
+    }
+
     /// 隣のタブへ移る。端では止まる（一周させると今どこにいるか分からなくなる）
     private func moveTab(forward: Bool) {
         let tabs = DetailTab.allCases
@@ -761,12 +824,7 @@ struct TravelPlanDetailView: View {
 
             tabButtons
         }
-        .background(
-            (colorScheme == .dark
-             ? themeManager.currentTheme.backgroundDark
-             : themeManager.currentTheme.backgroundLight)
-                .shadow(color: themeManager.currentTheme.shadow, radius: 4, y: 2)
-        )
+        .background(tabBarBackground.shadow(color: themeManager.currentTheme.shadow, radius: 4, y: 2))
     }
 
     private var tabButtons: some View {
@@ -1363,3 +1421,11 @@ private struct SwipeBackEnabler: UIViewControllerRepresentable {
     }
 }
 
+
+/// 写真がどこまで上に流れたかを親へ伝えるための入れ物
+private struct HeaderOffsetKey: PreferenceKey {
+    static var defaultValue: CGFloat = .greatestFiniteMagnitude
+    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
+        value = nextValue()
+    }
+}
