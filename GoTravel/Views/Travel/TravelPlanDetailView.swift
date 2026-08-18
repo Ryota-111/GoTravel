@@ -459,36 +459,44 @@ struct TravelPlanDetailView: View {
             .frame(height: 300)
 
             // テキスト情報（下部）
-            VStack(alignment: .leading, spacing: 8) {
-                // 目的地バッジ
-                HStack(spacing: 4) {
-                    Image(systemName: "mappin.circle.fill")
-                        .font(.caption.weight(.semibold))
-                    Text(plan.destination)
-                        .font(.caption.weight(.semibold))
-                }
-                .foregroundColor(.white.opacity(0.85))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(.ultraThinMaterial)
-                .clipShape(Capsule())
+            //
+            // 以前はバッジ・タイトル・アイコン付きの日付が同じ調子で並び、
+            // 視線の行き先が定まっていなかった。
+            // 目的地と日数を細い1行にまとめ、タイトルを主役にして、
+            // 日付は期間で見せる。装飾のアイコンは外した
+            VStack(alignment: .leading, spacing: 6) {
+                Text("\(plan.destination) · \(formatTripDuration())")
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundColor(.white.opacity(0.75))
+                    .lineLimit(1)
 
                 Text(plan.title)
-                    .font(.system(size: 26, weight: .bold))
+                    .font(.system(size: 28, weight: .bold))
                     .foregroundColor(.white)
-                    .shadow(color: .black.opacity(0.4), radius: 3, x: 0, y: 1)
                     .lineLimit(2)
+                    .minimumScaleFactor(0.8)
 
-                HStack(spacing: 16) {
-                    Label(formatDateWithWeekday(plan.startDate), systemImage: "calendar")
-                        .font(.subheadline)
+                HStack(alignment: .firstTextBaseline, spacing: 10) {
+                    Text(tripDateRange(plan: plan))
+                        .font(.system(size: 15, weight: .medium))
                         .foregroundColor(.white.opacity(0.9))
-                    Label(formatTripDuration(), systemImage: "moon.stars.fill")
-                        .font(.subheadline)
-                        .foregroundColor(.white.opacity(0.9))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+
+                    Spacer(minLength: 0)
+
+                    // 開くたびに「いま知りたいこと」が出るようにする
+                    if let status = tripStatusText(plan: plan) {
+                        Text(status)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 10)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(.ultraThinMaterial))
+                    }
                 }
-                .shadow(color: .black.opacity(0.3), radius: 2, x: 0, y: 1)
             }
+            .shadow(color: .black.opacity(0.45), radius: 4, x: 0, y: 1)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
@@ -1071,6 +1079,40 @@ struct TravelPlanDetailView: View {
         let formatter = DateFormatter.japanese
         formatter.dateFormat = "M/d HH:mm"
         return formatter.string(from: date)
+    }
+
+    /// 「8/20 (木) — 8/22 (土)」の形。年は今年と違うときだけ添える
+    private func tripDateRange(plan: TravelPlan) -> String {
+        let calendar = Calendar.current
+        let formatter = DateFormatter.japanese
+        let currentYear = calendar.component(.year, from: Date())
+        let startYear = calendar.component(.year, from: plan.startDate)
+
+        formatter.dateFormat = startYear == currentYear ? "M/d (E)" : "yyyy/M/d (E)"
+        let start = formatter.string(from: plan.startDate)
+
+        guard !calendar.isDate(plan.startDate, inSameDayAs: plan.endDate) else { return start }
+
+        formatter.dateFormat = "M/d (E)"
+        return "\(start) — \(formatter.string(from: plan.endDate))"
+    }
+
+    /// 出発前は残り日数、旅行中は何日目か。終わった旅行では出さない
+    private func tripStatusText(plan: TravelPlan) -> String? {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let start = calendar.startOfDay(for: plan.startDate)
+        let end = calendar.startOfDay(for: plan.endDate)
+
+        if today < start {
+            let days = calendar.dateComponents([.day], from: today, to: start).day ?? 0
+            return days == 1 ? "明日から" : "あと\(days)日"
+        }
+        if today <= end {
+            let elapsed = calendar.dateComponents([.day], from: start, to: today).day ?? 0
+            return "Day \(elapsed + 1)"
+        }
+        return nil
     }
 
     private func formatTripDuration() -> String {
