@@ -894,6 +894,19 @@ struct TravelPlanDetailView: View {
                 linkedItemID: $focusedItemID
             )
             .frame(height: 264)
+            // 貼り付けている地図は狭いので、じっくり見たいときは全画面へ。
+            // 右上は「全体を表示」が使っているので左上に置く
+            .overlay(alignment: .topLeading) {
+                Button(action: { showScheduleMap = true }) {
+                    Image(systemName: "arrow.up.left.and.arrow.down.right")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(accentColor)
+                        .frame(width: 36, height: 36)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .padding(12)
+                .accessibilityLabel(Text("地図を全画面で見る"))
+            }
 
             compactDayTabs(plan: plan)
                 .padding(.vertical, 8)
