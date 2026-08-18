@@ -72,8 +72,12 @@ struct TravelPlanMapView: View {
     ]
 
     // MARK: - Initialization
-    init(plan: TravelPlan, initialDay: Int) {
+    /// タブに埋め込むときは true。閉じるボタンを出さない
+    var isEmbedded: Bool = false
+
+    init(plan: TravelPlan, initialDay: Int, isEmbedded: Bool = false) {
         self.plan = plan
+        self.isEmbedded = isEmbedded
         _scope = State(initialValue: .day(initialDay))
 
         // 実際の範囲は onAppear でピンに合わせ直す
@@ -329,14 +333,16 @@ struct TravelPlanMapView: View {
     // MARK: - Top Bar
     private var topBar: some View {
         HStack(spacing: 10) {
-            Button(action: { dismiss() }) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(accentColor)
-                    .frame(width: 36, height: 36)
-                    .background(.ultraThinMaterial, in: Circle())
+            if !isEmbedded {
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(accentColor)
+                        .frame(width: 36, height: 36)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .accessibilityLabel("閉じる")
             }
-            .accessibilityLabel("閉じる")
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(plan.title)

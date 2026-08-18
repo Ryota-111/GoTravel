@@ -8,6 +8,8 @@ struct BudgetSummaryView: View {
     @EnvironmentObject var authVM: AuthViewModel
 
     let plan: TravelPlan
+    /// タブに埋め込むときは true。独自のヘッダーを出さない
+    var isEmbedded: Bool = false
 
     /// ViewModelから最新のプランを見る。人数を変えた結果を即座に反映するため
     private var currentPlan: TravelPlan {
@@ -110,7 +112,7 @@ struct BudgetSummaryView: View {
             bgGradient
 
             VStack(spacing: 0) {
-                headerView
+                if !isEmbedded { headerView }
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 16) {

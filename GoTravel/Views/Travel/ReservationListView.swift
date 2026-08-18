@@ -6,6 +6,8 @@ import SwiftUI
 /// **予約番号をすぐ出せること**を中心に据えている。
 struct ReservationListView: View {
     let plan: TravelPlan
+    /// タブに埋め込むときは true。NavigationStack とツールバーを出さない
+    var isEmbedded: Bool = false
 
     @EnvironmentObject var viewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
@@ -42,6 +44,43 @@ struct ReservationListView: View {
     private var accent: Color { themeManager.currentTheme.actionFill }
 
     var body: some View {
+        if isEmbedded {
+            embeddedContent
+        } else {
+            standaloneContent
+        }
+    }
+
+    /// タブの中身。背景と枠は親が持つ
+    private var embeddedContent: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Spacer()
+                Button {
+                    editing = Reservation()
+                } label: {
+                    Label("予約を追加", systemImage: "plus")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(accent)
+                }
+            }
+
+            if reservations.isEmpty {
+                emptyState
+            } else {
+                ForEach(reservations) { reservation in
+                    reservationCard(reservation)
+                }
+            }
+        }
+        .sheet(item: $editing) { reservation in
+            ReservationEditorView(planId: plan.id ?? "", reservation: reservation)
+                .environmentObject(viewModel)
+                .environmentObject(authVM)
+        }
+    }
+
+    private var standaloneContent: some View {
         NavigationStack {
             ZStack {
                 (colorScheme == .dark

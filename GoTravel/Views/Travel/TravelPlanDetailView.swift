@@ -5,6 +5,17 @@ import MapKit
 // EnjoyWorldView -> TravelPlanの詳細画面
 struct TravelPlanDetailView: View {
 
+    /// 写真の下で切り替える画面。増やすときはここに1つ足す
+    enum DetailTab: String, CaseIterable, Identifiable {
+        case schedule = "行程表"
+        case map = "地図"
+        case packing = "持ち物"
+        case reservation = "予約"
+        case budget = "費用"
+
+        var id: String { rawValue }
+    }
+
     // MARK: - View State
     enum ViewState {
         case loading
@@ -18,13 +29,12 @@ struct TravelPlanDetailView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
     @State private var selectedDay: Int = 1
+    @State private var selectedTab: DetailTab = .schedule
     @State private var showAddScheduleItem = false
     @State private var showBasicInfoEditor = false
     @State private var showBudgetSummary = false
     @State private var showShareView = false
     @State private var showScheduleMap = false
-    @State private var showPackingList = false
-    @State private var showReservations = false
     @State private var showExperienceSearch = false
     /// 行き先から決まるアソビューのページ。決まらないときは都道府県一覧へ送る
     @State private var asoviewURL: URL?
@@ -111,25 +121,22 @@ struct TravelPlanDetailView: View {
         ZStack {
             backgroundGradient
 
+            // 写真は上に固定し、その下だけを切り替える。
+            // 縦に積み続けると増やすたびに深くなるため、タブで分ける
             VStack(spacing: 0) {
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 0) {
-                        planHeaderSection(plan: plan)
+                planHeaderSection(plan: plan)
+                detailTabBar
 
-                        VStack(spacing: 0) {
-                            quickActionRow(plan: plan)
-                            sectionSeparator
-                            planWeatherSection
-                            sectionSeparator
-                            // 毎回見るのはタイムスケジュールなので、予算はその下に置く
-                            dayScheduleSection(plan: plan)
-                            sectionSeparator
-                            budgetCard(plan: plan)
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.bottom, 30)
+                Group {
+                    switch selectedTab {
+                    case .schedule: scheduleTab(plan: plan)
+                    case .map: mapTab(plan: plan)
+                    case .packing: packingTab(plan: plan)
+                    case .reservation: reservationTab(plan: plan)
+                    case .budget: budgetTab(plan: plan)
                     }
                 }
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .fullScreenCover(isPresented: $showAddScheduleItem) {
@@ -154,24 +161,6 @@ struct TravelPlanDetailView: View {
                     .environmentObject(viewModel)
                     .environmentObject(authVM)
             }
-        }
-        .sheet(isPresented: $showPackingList) {
-            NavigationStack {
-                ScrollView {
-                    PackingListView(plan: plan)
-                        .environmentObject(viewModel)
-                        .environmentObject(authVM)
-                        .padding(20)
-                }
-                .background(backgroundGradient)
-                .navigationTitle("持ち物リスト")
-                .navigationBarTitleDisplayMode(.inline)
-            }
-        }
-        .sheet(isPresented: $showReservations) {
-            ReservationListView(plan: plan)
-                .environmentObject(viewModel)
-                .environmentObject(authVM)
         }
         .sheet(isPresented: $showExperienceWeb) {
             if let asoviewURL {
@@ -443,7 +432,7 @@ struct TravelPlanDetailView: View {
                         )
                 }
             }
-            .frame(height: 300)
+            .frame(height: 240)
             .clipped()
 
             // グラデーションオーバーレイ（下部を暗く）
@@ -456,7 +445,7 @@ struct TravelPlanDetailView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: 300)
+            .frame(height: 240)
 
             // テキスト情報（下部）
             //
@@ -561,7 +550,7 @@ struct TravelPlanDetailView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding(.top, 12)
         }
-        .frame(height: 300)
+        .frame(height: 240)
         .opacity(animateContent ? 1 : 0)
         .offset(y: animateContent ? 0 : -20)
         .animation(.spring(response: 0.6, dampingFraction: 0.8), value: animateContent)
@@ -718,6 +707,132 @@ struct TravelPlanDetailView: View {
 
     // MARK: - Weather Section
     @ViewBuilder
+    // MARK: - タブ
+
+    private var detailTabBar: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 0) {
+                ForEach(DetailTab.allCases) { tab in
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) { selectedTab = tab }
+                    } label: {
+                        VStack(spacing: 6) {
+                            Text(tab.rawValue)
+                                .font(.system(size: 15, weight: selectedTab == tab ? .bold : .regular))
+                                .foregroundColor(selectedTab == tab ? scheduleAccentColor : themeManager.currentTheme.secondaryText)
+
+                            // 選択中の下線。幅を文字に合わせるため VStack の中に置く
+                            Rectangle()
+                                .fill(selectedTab == tab ? scheduleAccentColor : Color.clear)
+                                .frame(height: 2)
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 12)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 4)
+        }
+        .background(
+            (colorScheme == .dark
+             ? themeManager.currentTheme.backgroundDark
+             : themeManager.currentTheme.backgroundLight)
+                .shadow(color: themeManager.currentTheme.shadow, radius: 4, y: 2)
+        )
+    }
+
+    // MARK: - 各タブの中身
+
+    private func scheduleTab(plan: TravelPlan) -> some View {
+        ScrollView(showsIndicators: false) {
+            VStack(spacing: 0) {
+                planWeatherSection
+                sectionSeparator
+                dayScheduleSection(plan: plan)
+                experienceRow
+            }
+            .padding(.horizontal, 16)
+            .padding(.bottom, 30)
+        }
+    }
+
+    /// 地図はタブの中に敷き込む。閉じるボタンは親のタブが担うので出さない
+    private func mapTab(plan: TravelPlan) -> some View {
+        TravelPlanMapView(plan: plan, initialDay: selectedDay, isEmbedded: true)
+    }
+
+    private func packingTab(plan: TravelPlan) -> some View {
+        ScrollView(showsIndicators: false) {
+            PackingListView(plan: plan)
+                .environmentObject(viewModel)
+                .environmentObject(authVM)
+                .padding(16)
+                .padding(.bottom, 30)
+        }
+    }
+
+    private func reservationTab(plan: TravelPlan) -> some View {
+        ScrollView(showsIndicators: false) {
+            ReservationListView(plan: plan, isEmbedded: true)
+                .environmentObject(viewModel)
+                .environmentObject(authVM)
+                .padding(16)
+                .padding(.bottom, 30)
+        }
+    }
+
+    private func budgetTab(plan: TravelPlan) -> some View {
+        BudgetSummaryView(plan: plan, isEmbedded: true)
+            .environmentObject(viewModel)
+            .environmentObject(authVM)
+    }
+
+    /// 行程を組んだ流れで体験を探せるよう、予定の下に置く
+    @ViewBuilder
+    private var experienceRow: some View {
+        if AffiliateLink.isAsoviewAvailable {
+            VStack(alignment: .leading, spacing: 6) {
+                Button {
+                    if asoviewURL != nil {
+                        showExperienceWeb = true
+                    } else {
+                        showExperienceSearch = true
+                    }
+                } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: "sparkles")
+                            .font(.system(size: 16))
+                            .foregroundColor(scheduleAccentColor)
+
+                        Text(asoviewAreaName.map { "\($0)の遊び・体験を探す" } ?? "遊び・体験を探す")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(accentColor)
+
+                        Spacer(minLength: 0)
+
+                        Image(systemName: "arrow.up.forward.square")
+                            .font(.caption)
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
+                    }
+                    .padding(14)
+                    .background(
+                        RoundedRectangle(cornerRadius: 14)
+                            .fill(colorScheme == .dark
+                                  ? themeManager.currentTheme.secondaryBackgroundDark
+                                  : themeManager.currentTheme.secondaryBackgroundLight)
+                    )
+                }
+                .buttonStyle(.plain)
+
+                Text("※ プロモーションを含みます")
+                    .font(.system(size: 10))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+            .padding(.top, 20)
+        }
+    }
+
     /// セクションの区切り。両端が消えるので線が主張しすぎない
     /// （保存した場所の詳細と同じ意匠に揃えている）
     private var sectionSeparator: some View {
@@ -731,98 +846,6 @@ struct TravelPlanDetailView: View {
             )
             .frame(height: 1)
             .padding(.vertical, 10)
-    }
-
-    /// 写真のすぐ下に置く3つの入口。
-    ///
-    /// 持ち物リストは縦に積むと場所を取り、タイムスケジュールを押し下げていたので
-    /// ここへ移した。予約リストは同じ性質のもの、遊び・体験は外部への出口。
-    private func quickActionRow(plan: TravelPlan) -> some View {
-        VStack(alignment: .leading, spacing: 6) {
-            quickActionButtons(plan: plan)
-
-            // 「あそび」から外部サイトへ直接移るので、
-            // 景品表示法（ステマ規制）の開示をここに置く。バッジではなく注記の形にしている
-            if AffiliateLink.isAsoviewAvailable {
-                Text("※「あそび」はプロモーションを含みます")
-                    .font(.system(size: 10))
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-            }
-        }
-        .padding(.top, 14)
-        .opacity(animateContent ? 1 : 0)
-        .offset(y: animateContent ? 0 : 10)
-        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.05), value: animateContent)
-    }
-
-    private func quickActionButtons(plan: TravelPlan) -> some View {
-        HStack(spacing: 10) {
-            quickAction(
-                icon: "bag.fill",
-                title: "持ち物リスト",
-                detail: packingSummary(plan: plan)
-            ) { showPackingList = true }
-
-            quickAction(
-                icon: "ticket.fill",
-                title: "予約確認",
-                detail: plan.reservations.isEmpty ? "未登録" : "\(plan.reservations.count)件"
-            ) { showReservations = true }
-
-            quickAction(
-                icon: "sparkles",
-                title: "あそび",
-                detail: asoviewAreaName.map { "\($0)の体験" } ?? "体験を探す"
-            ) {
-                // 行き先が決まっていればそのまま結果へ、決まらなければ一覧から選んでもらう
-                if asoviewURL != nil {
-                    showExperienceWeb = true
-                } else {
-                    showExperienceSearch = true
-                }
-            }
-        }
-    }
-
-    private func quickAction(icon: String, title: String, detail: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            // アイコンと見出しは横に並べる。縦に積むと3行ぶんの高さになるため
-            VStack(spacing: 2) {
-                HStack(spacing: 5) {
-                    Image(systemName: icon)
-                        .font(.system(size: 14))
-                        .foregroundColor(scheduleAccentColor)
-
-                    Text(title)
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(accentColor)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-                }
-
-                Text(detail)
-                    .font(.system(size: 10))
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-            }
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 9)
-            .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(colorScheme == .dark
-                          ? themeManager.currentTheme.secondaryBackgroundDark
-                          : themeManager.currentTheme.secondaryBackgroundLight)
-                    .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
-            )
-        }
-        .buttonStyle(.plain)
-    }
-
-    private func packingSummary(plan: TravelPlan) -> String {
-        guard !plan.packingItems.isEmpty else { return "未登録" }
-        let checked = plan.packingItems.filter(\.isChecked).count
-        return "\(checked)/\(plan.packingItems.count)"
     }
 
     /// 天気。以前は見出し・大きな円アイコン・縦積みの出典で約150pt使っていたが、
