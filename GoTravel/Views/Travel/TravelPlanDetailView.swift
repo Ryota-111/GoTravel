@@ -123,6 +123,7 @@ struct TravelPlanDetailView: View {
                             sectionSeparator
                             // 毎回見るのはタイムスケジュールなので、予算はその下に置く
                             dayScheduleSection(plan: plan)
+                            sectionSeparator
                             budgetCard(plan: plan)
                         }
                         .padding(.horizontal, 16)
