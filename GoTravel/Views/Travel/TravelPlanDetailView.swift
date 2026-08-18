@@ -8,6 +8,10 @@ struct TravelPlanDetailView: View {
     /// 写真の高さ。スクロール量の判定でも同じ値を使う
     static let headerHeight: CGFloat = 240
 
+    /// タブバーの高さ。地図タブで写真を畳む間、地図の大きさを変えないために
+    /// 明示的に決めておく。全タブで同じ高さになる利点もある
+    static let tabBarHeight: CGFloat = 46
+
     /// 写真が見えていない状態かどうか。
     /// 地図タブは写真を畳み終わってからこの状態になる
     private var isChromeCompact: Bool {
@@ -155,22 +159,31 @@ struct TravelPlanDetailView: View {
             // いきなり消すと他のタブから切り替えた瞬間に段差ができるので、
             // 一度出してから畳む
             if selectedTab == .map {
-                VStack(spacing: 0) {
-                    // 下端を残したまま高さを縮めるので、上へスクロールして
-                    // 消えていくように見える
-                    planHeaderSection(plan: plan)
-                        .frame(height: isMapPhotoFolded ? 0 : Self.headerHeight, alignment: .bottom)
-                        .clipped()
-                        .onAppear {
-                            withAnimation(.easeInOut(duration: 0.35)) {
-                                isMapPhotoFolded = true
-                            }
+                GeometryReader { proxy in
+                    ZStack(alignment: .top) {
+                        // 地図は最初から最終の大きさで置く。
+                        // 畳む間に高さが変わると地図の再レイアウトが毎フレーム
+                        // 走って、動きがはっきり重くなる
+                        VStack(spacing: 0) {
+                            Color.clear.frame(height: Self.tabBarHeight)
+                            mapTab(plan: plan)
                         }
-                        .onDisappear { isMapPhotoFolded = false }
 
-                    detailTabBar
-                    mapTab(plan: plan)
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        // 写真とタブバーだけを上へ抜けさせる。
+                        // 動かすのが位置だけなので滑らかに出る
+                        VStack(spacing: 0) {
+                            planHeaderSection(plan: plan)
+                            detailTabBar
+                        }
+                        .offset(y: isMapPhotoFolded ? -Self.headerHeight : 0)
+                    }
+                    .clipped()
+                    .onAppear {
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.9)) {
+                            isMapPhotoFolded = true
+                        }
+                    }
+                    .onDisappear { isMapPhotoFolded = false }
                 }
                 // 地図では中身をドラッグできないので、タブの切り替えは
                 // タブバーを押してもらう。スワイプは地図の操作を優先する
@@ -797,6 +810,7 @@ struct TravelPlanDetailView: View {
 
             tabButtons
         }
+        .frame(height: Self.tabBarHeight)
         .background(tabBarBackground)
         .shadow(color: themeManager.currentTheme.shadow, radius: 4, y: 2)
     }
