@@ -146,28 +146,45 @@ struct TravelPlanDetailView: View {
         ZStack {
             backgroundGradient
 
-            ScrollView(showsIndicators: false) {
-                // 写真は LazyVStack の外に置く。中に入れると画面外で
-                // 破棄され、位置を測る GeometryReader ごと消えてしまう
-                VStack(spacing: 0) {
-                    planHeaderSection(plan: plan)
+            ScrollViewReader { scrollProxy in
+                ScrollView(showsIndicators: false) {
+                    // 写真は LazyVStack の外に置く。中に入れると画面外で
+                    // 破棄され、位置を測る GeometryReader ごと消えてしまう
+                    VStack(spacing: 0) {
+                        planHeaderSection(plan: plan)
 
-                    // タブバーを上に貼り付けたいので Section の見出しに置く
-                    LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                        Section {
-                            Group {
-                                switch selectedTab {
-                                case .schedule: scheduleTab(plan: plan)
-                                case .packing: packingTab(plan: plan)
-                                case .reservation: reservationTab(plan: plan)
-                                case .budget: budgetTab(plan: plan)
-                                case .map: mapTab(plan: plan)
+                        // タブバーを上に貼り付けたいので Section の見出しに置く
+                        LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                            Section {
+                                Group {
+                                    switch selectedTab {
+                                    case .schedule: scheduleTab(plan: plan)
+                                    case .packing: packingTab(plan: plan)
+                                    case .reservation: reservationTab(plan: plan)
+                                    case .budget: budgetTab(plan: plan)
+                                    case .map: mapTab(plan: plan)
+                                    }
                                 }
+                                .frame(maxWidth: .infinity)
+                            } header: {
+                                VStack(spacing: 0) {
+                                    detailTabBar
+                                    // 地図タブでは地図も一緒に貼り付ける。
+                                    // 行程を追いながら位置を確認できるようにするため
+                                    if selectedTab == .map {
+                                        mapPinnedHeader(plan: plan)
+                                    }
+                                }
+                                .background(tabBarBackground)
                             }
-                            .frame(maxWidth: .infinity)
-                        } header: {
-                            detailTabBar
                         }
+                    }
+                }
+                // 地図でピンを押されたら、その行まで送る
+                .onChange(of: focusedItemID) { _, itemID in
+                    guard selectedTab == .map, let itemID else { return }
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        scrollProxy.scrollTo(itemID, anchor: .center)
                     }
                 }
             }
@@ -865,9 +882,8 @@ struct TravelPlanDetailView: View {
             }
     }
 
-    /// 地図タブ。他のタブと同じく、写真の下のスクロールに並ぶ内容として置く。
-    /// 地図は高さを決めた1つの塊にして、その下に行程表を続ける
-    private func mapTab(plan: TravelPlan) -> some View {
+    /// タブバーと一緒に貼り付ける部分。地図と Day の切り替えを常に見せる
+    private func mapPinnedHeader(plan: TravelPlan) -> some View {
         VStack(spacing: 0) {
             TravelPlanMapView(
                 plan: plan,
@@ -877,60 +893,44 @@ struct TravelPlanDetailView: View {
                 linkedDay: $selectedDay,
                 linkedItemID: $focusedItemID
             )
-            .frame(height: 320)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .padding(.horizontal, 16)
-            .padding(.top, 12)
+            .frame(height: 220)
 
-            mapScheduleList(plan: plan)
+            compactDayTabs(plan: plan)
+                .padding(.vertical, 8)
         }
-        .padding(.bottom, 30)
+        .background(tabBarBackground)
+        .shadow(color: themeManager.currentTheme.shadow, radius: 4, y: 2)
     }
 
-    /// 地図の下に置く行程表。地図側と選択を共有する
-    private func mapScheduleList(plan: TravelPlan) -> some View {
-        VStack(spacing: 0) {
-            compactDayTabs(plan: plan)
-                .padding(.top, 16)
-                .padding(.bottom, 8)
-
-            ScrollViewReader { scrollProxy in
-                ScrollView(showsIndicators: false) {
-                    if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }),
-                       !daySchedule.scheduleItems.isEmpty {
-                        let sortedItems = sortedScheduleItems(daySchedule.scheduleItems)
-                        VStack(spacing: 0) {
-                            ForEach(Array(sortedItems.enumerated()), id: \.element.id) { index, item in
-                                timelineItemView(item: item, isLast: index == sortedItems.count - 1, plan: plan)
-                                    .id(item.id)
-                                    .background(
-                                        RoundedRectangle(cornerRadius: 10)
-                                            .fill(focusedItemID == item.id
-                                                  ? scheduleAccentColor.opacity(0.10)
-                                                  : Color.clear)
-                                    )
-                                    .contentShape(Rectangle())
-                                    .onTapGesture {
-                                        // 地図をこの場所へ寄せる
-                                        focusedItemID = item.id
-                                    }
+    /// 地図タブの中身。地図と Day タブは貼り付く側にあるので、ここは予定だけ
+    private func mapTab(plan: TravelPlan) -> some View {
+        Group {
+            if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }),
+               !daySchedule.scheduleItems.isEmpty {
+                let sortedItems = sortedScheduleItems(daySchedule.scheduleItems)
+                VStack(spacing: 0) {
+                    ForEach(Array(sortedItems.enumerated()), id: \.element.id) { index, item in
+                        timelineItemView(item: item, isLast: index == sortedItems.count - 1, plan: plan)
+                            .id(item.id)
+                            .background(
+                                RoundedRectangle(cornerRadius: 10)
+                                    .fill(focusedItemID == item.id
+                                          ? scheduleAccentColor.opacity(0.10)
+                                          : Color.clear)
+                            )
+                            .contentShape(Rectangle())
+                            .onTapGesture {
+                                // 上の地図をこの場所へ寄せる
+                                focusedItemID = item.id
                             }
-                        }
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
-                        .padding(.bottom, 20)
-                    } else {
-                        emptyScheduleMessage(plan: plan)
-                            .padding(16)
                     }
                 }
-                // 地図でピンを押されたら、その行まで送る
-                .onChange(of: focusedItemID) { _, itemID in
-                    guard let itemID else { return }
-                    withAnimation(.easeInOut(duration: 0.3)) {
-                        scrollProxy.scrollTo(itemID, anchor: .center)
-                    }
-                }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+                .padding(.bottom, 30)
+            } else {
+                emptyScheduleMessage(plan: plan)
+                    .padding(16)
             }
         }
     }
