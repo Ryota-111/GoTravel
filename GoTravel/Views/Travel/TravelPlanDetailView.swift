@@ -125,7 +125,16 @@ struct TravelPlanDetailView: View {
             // 固定の配置にする。他のタブは写真がスクロールで隠れる形にする
             if selectedTab == .map {
                 VStack(spacing: 0) {
+                    // 地図の上ではスワイプが使えないので、写真の上で受ける
                     planHeaderSection(plan: plan)
+                        .simultaneousGesture(
+                            DragGesture(minimumDistance: 24)
+                                .onEnded { value in
+                                    let dx = value.translation.width
+                                    guard abs(dx) > 60, abs(dx) > abs(value.translation.height) * 1.5 else { return }
+                                    moveTab(forward: dx < 0)
+                                }
+                        )
                     detailTabBar
                     mapTab(plan: plan)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -152,6 +161,18 @@ struct TravelPlanDetailView: View {
                         }
                     }
                 }
+                // 縦スクロールを妨げないよう simultaneousGesture で重ね、
+                // 横方向がはっきりしているときだけタブを切り替える。
+                // 地図はドラッグが地図自身の操作と取り合うので付けない
+                .simultaneousGesture(
+                    DragGesture(minimumDistance: 24)
+                        .onEnded { value in
+                            let dx = value.translation.width
+                            let dy = value.translation.height
+                            guard abs(dx) > 60, abs(dx) > abs(dy) * 1.5 else { return }
+                            moveTab(forward: dx < 0)
+                        }
+                )
             }
         }
         .fullScreenCover(isPresented: $showAddScheduleItem) {
@@ -714,6 +735,18 @@ struct TravelPlanDetailView: View {
     @ViewBuilder
     // MARK: - タブ
 
+    /// 隣のタブへ移る。端では止まる（一周させると今どこにいるか分からなくなる）
+    private func moveTab(forward: Bool) {
+        let tabs = DetailTab.allCases
+        guard let index = tabs.firstIndex(of: selectedTab) else { return }
+        let next = forward ? index + 1 : index - 1
+        guard tabs.indices.contains(next) else { return }
+
+        withAnimation(.easeInOut(duration: 0.2)) {
+            selectedTab = tabs[next]
+        }
+    }
+
     private var detailTabBar: some View {
         HStack(spacing: 0) {
             // 写真がスクロールで隠れると、そこに置いた戻るボタンも消えてしまう。
@@ -767,10 +800,9 @@ struct TravelPlanDetailView: View {
 
     private func scheduleTab(plan: TravelPlan) -> some View {
         VStack(spacing: 0) {
-            dayScheduleSection(plan: plan)
-            sectionSeparator
-            // 天気は毎回見るものではないので予定より下に置く
             planWeatherSection
+            sectionSeparator
+            dayScheduleSection(plan: plan)
             experienceRow
         }
         .padding(.horizontal, 16)
