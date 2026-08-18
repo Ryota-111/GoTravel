@@ -877,18 +877,24 @@ struct TravelPlanDetailView: View {
 
     private func mapTab(plan: TravelPlan) -> some View {
         GeometryReader { proxy in
-            VStack(spacing: 0) {
-                TravelPlanMapView(
-                    plan: plan,
-                    initialDay: selectedDay,
-                    isEmbedded: true,
-                    isSplitMode: true,
-                    linkedDay: $selectedDay,
-                    linkedItemID: $focusedItemID
-                )
-                .frame(height: proxy.size.height * 0.52)
+            ZStack(alignment: .bottom) {
+                VStack(spacing: 0) {
+                    TravelPlanMapView(
+                        plan: plan,
+                        initialDay: selectedDay,
+                        isEmbedded: true,
+                        isSplitMode: true,
+                        linkedDay: $selectedDay,
+                        linkedItemID: $focusedItemID
+                    )
+                    .frame(height: proxy.size.height * 0.55)
 
+                    Spacer(minLength: 0)
+                }
+
+                // 地図に少し重ねて、引き上げたシートのように見せる
                 mapScheduleList(plan: plan)
+                    .frame(height: proxy.size.height * 0.5)
             }
         }
     }
@@ -896,11 +902,13 @@ struct TravelPlanDetailView: View {
     /// 地図の下に置く行程表。地図側と選択を共有する
     private func mapScheduleList(plan: TravelPlan) -> some View {
         VStack(spacing: 0) {
-            dayTabs(plan: plan)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 8)
+            Capsule()
+                .fill(themeManager.currentTheme.secondaryText.opacity(0.3))
+                .frame(width: 36, height: 4)
+                .padding(.top, 8)
 
-            Divider()
+            compactDayTabs(plan: plan)
+                .padding(.vertical, 8)
 
             ScrollViewReader { scrollProxy in
                 ScrollView(showsIndicators: false) {
@@ -940,6 +948,56 @@ struct TravelPlanDetailView: View {
                     }
                 }
             }
+        }
+        .background(
+            UnevenRoundedRectangle(topLeadingRadius: 20, topTrailingRadius: 20)
+                .fill(colorScheme == .dark
+                      ? themeManager.currentTheme.backgroundDark
+                      : themeManager.currentTheme.backgroundLight)
+                .shadow(color: .black.opacity(0.15), radius: 10, y: -3)
+        )
+    }
+
+    /// 地図タブ用の細い Day 切り替え。
+    /// 行程表タブのカード型は高さがあり、狭い下半分では場所を取りすぎる
+    private func compactDayTabs(plan: TravelPlan) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 6) {
+                ForEach(1...tripDuration, id: \.self) { day in
+                    let isSelected = selectedDay == day
+                    let dayDate = plan.daySchedules.first(where: { $0.dayNumber == day })?.date
+                        ?? Calendar.current.date(byAdding: .day, value: day - 1, to: plan.startDate)
+
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                            selectedDay = day
+                            focusedItemID = nil
+                        }
+                    } label: {
+                        HStack(spacing: 5) {
+                            Text("Day \(day)")
+                                .font(.system(size: 13, weight: .bold))
+                            if let dayDate {
+                                Text(formatDate(dayDate))
+                                    .font(.system(size: 11))
+                                    .opacity(0.8)
+                            }
+                        }
+                        .foregroundColor(isSelected ? .white : accentColor)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 7)
+                        .background(
+                            Capsule().fill(isSelected
+                                           ? scheduleAccentColor
+                                           : (colorScheme == .dark
+                                              ? themeManager.currentTheme.secondaryBackgroundDark
+                                              : themeManager.currentTheme.secondaryBackgroundLight))
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+            .padding(.horizontal, 16)
         }
     }
 
