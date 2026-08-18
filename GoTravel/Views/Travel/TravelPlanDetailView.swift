@@ -143,10 +143,10 @@ struct TravelPlanDetailView: View {
                 }
             } else {
                 ScrollView(showsIndicators: false) {
-                    // タブバーを上に貼り付けたいので Section の見出しに置く
-                    LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                    // 写真は LazyVStack の外に置く。中に入れると画面外で
+                    // 破棄され、位置を測る GeometryReader ごと消えてしまう
+                    VStack(spacing: 0) {
                         planHeaderSection(plan: plan)
-                            // 写真がどこまで上に流れたかを測る
                             .background(
                                 GeometryReader { proxy in
                                     Color.clear.preference(
@@ -156,24 +156,21 @@ struct TravelPlanDetailView: View {
                                 }
                             )
 
-                        Section {
-                            Group {
-                                switch selectedTab {
-                                case .schedule: scheduleTab(plan: plan)
-                                case .packing: packingTab(plan: plan)
-                                case .reservation: reservationTab(plan: plan)
-                                case .budget: budgetTab(plan: plan)
-                                case .map: EmptyView()
+                        // タブバーを上に貼り付けたいので Section の見出しに置く
+                        LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                            Section {
+                                Group {
+                                    switch selectedTab {
+                                    case .schedule: scheduleTab(plan: plan)
+                                    case .packing: packingTab(plan: plan)
+                                    case .reservation: reservationTab(plan: plan)
+                                    case .budget: budgetTab(plan: plan)
+                                    case .map: EmptyView()
+                                    }
                                 }
-                            }
-                            .frame(maxWidth: .infinity)
-                        } header: {
-                            VStack(spacing: 0) {
-                                // 写真が隠れても、どの旅行を見ているか分かるようにする
-                                if isHeaderCollapsed {
-                                    compactHeader(plan: plan)
-                                }
-                                detailTabBar
+                                .frame(maxWidth: .infinity)
+                            } header: {
+                                pinnedHeader(plan: plan)
                             }
                         }
                     }
@@ -759,6 +756,29 @@ struct TravelPlanDetailView: View {
     @ViewBuilder
     // MARK: - タブ
 
+    /// 上に貼り付く部分。
+    ///
+    /// 貼り付いた状態では、この上（ステータスバーの領域）を
+    /// スクロール中の内容が通り抜けて見えてしまう。
+    /// 背景を安全領域の外まで伸ばして覆う
+    private func pinnedHeader(plan: TravelPlan) -> some View {
+        VStack(spacing: 0) {
+            if isHeaderCollapsed {
+                compactHeader(plan: plan)
+            }
+            detailTabBar
+        }
+        .background(
+            Group {
+                if isHeaderCollapsed {
+                    tabBarBackground.ignoresSafeArea(edges: .top)
+                } else {
+                    tabBarBackground
+                }
+            }
+        )
+    }
+
     /// 写真が隠れたあとに残す帯。写真の中と同じ情報を細く出す
     private func compactHeader(plan: TravelPlan) -> some View {
         HStack(spacing: 10) {
@@ -788,7 +808,6 @@ struct TravelPlanDetailView: View {
         .padding(.horizontal, 16)
         .padding(.top, 10)
         .padding(.bottom, 4)
-        .background(tabBarBackground)
     }
 
     /// 貼り付く帯の背景。中身が透けないよう不透明にする
@@ -824,7 +843,8 @@ struct TravelPlanDetailView: View {
 
             tabButtons
         }
-        .background(tabBarBackground.shadow(color: themeManager.currentTheme.shadow, radius: 4, y: 2))
+        .background(tabBarBackground)
+        .shadow(color: themeManager.currentTheme.shadow, radius: 4, y: 2)
     }
 
     private var tabButtons: some View {
