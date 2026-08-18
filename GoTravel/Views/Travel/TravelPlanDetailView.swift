@@ -53,6 +53,9 @@ struct TravelPlanDetailView: View {
     @State private var focusedItemID: String?
     /// 1回のドラッグで何度もタブが飛ばないようにする目印
     @State private var hasSwitchedTabInDrag = false
+    /// 貼り付いた地図が画面のどこにあるか。
+    /// スワイプの判定から地図の上を外すために使う
+    @State private var pinnedMapFrame: CGRect = .zero
     /// 写真が上に隠れたかどうか。
     /// 隠れた後はスクロール中の内容がステータスバーの領域に見えてしまうので、
     /// そこを覆うかどうかの判定に使う
@@ -168,10 +171,6 @@ struct TravelPlanDetailView: View {
                                     }
                                 }
                                 .frame(maxWidth: .infinity)
-                                // 貼り付いた見出し（地図）には付けない。
-                                // スクロール全体に付けると、地図を動かした
-                                // だけでタブが変わってしまう
-                                .simultaneousGesture(tabSwipeGesture)
                             } header: {
                                 VStack(spacing: 0) {
                                     detailTabBar
@@ -197,6 +196,9 @@ struct TravelPlanDetailView: View {
                     guard collapsed != isHeaderCollapsed else { return }
                     withAnimation(.easeInOut(duration: 0.2)) { isHeaderCollapsed = collapsed }
                 }
+                // スワイプは ScrollView に付ける。内側の要素に付けると
+                // ScrollView に取り込まれて、ほとんど反応しなくなる
+                .simultaneousGesture(tabSwipeGesture)
                 // 地図でピンを押されたら、その行まで送る
                 .onChange(of: focusedItemID) { _, itemID in
                     guard selectedTab == .map, let itemID else { return }
@@ -215,6 +217,9 @@ struct TravelPlanDetailView: View {
                     .frame(height: topSafeAreaInset)
                     .ignoresSafeArea(edges: .top)
             }
+        }
+        .onChange(of: selectedTab) { _, tab in
+            if tab != .map { pinnedMapFrame = .zero }
         }
         .fullScreenCover(isPresented: $showAddScheduleItem) {
             AddScheduleItemView(plan: plan, dayNumber: selectedDay)
@@ -742,8 +747,11 @@ struct TravelPlanDetailView: View {
     /// そのため反応しないことが多かった。
     /// ドラッグの途中で条件を満たした時点で切り替える。
     private var tabSwipeGesture: some Gesture {
-        DragGesture(minimumDistance: 10)
+        DragGesture(minimumDistance: 10, coordinateSpace: .global)
             .onChanged { value in
+                // 地図の上で始めたドラッグは地図の操作。タブは動かさない
+                guard !pinnedMapFrame.contains(value.startLocation) else { return }
+
                 let dx = value.translation.width
                 let dy = value.translation.height
 
@@ -901,6 +909,12 @@ struct TravelPlanDetailView: View {
                 linkedItemID: $focusedItemID
             )
             .frame(height: 274)
+            // 地図の上はスワイプの対象から外したいので、位置を覚えておく
+            .onGeometryChange(for: CGRect.self) { proxy in
+                proxy.frame(in: .global)
+            } action: { frame in
+                pinnedMapFrame = frame
+            }
             // 貼り付けている地図は狭いので、じっくり見たいときは全画面へ。
             // 右上は「全体を表示」が使っているので左上に置く
             .overlay(alignment: .topLeading) {
