@@ -8,6 +8,12 @@ struct TravelPlanDetailView: View {
     /// 写真の高さ。スクロール量の判定でも同じ値を使う
     static let headerHeight: CGFloat = 240
 
+    /// 写真が見えていない状態かどうか。
+    /// 地図タブは写真を出さない（地図に画面を使いたい）ので常にこの状態になる
+    private var isChromeCompact: Bool {
+        selectedTab == .map || isHeaderCollapsed
+    }
+
     /// ステータスバーの高さ。覆いを高さゼロで置くと何も描画されないため、
     /// 実際の値を取って明示的に埋める
     private var topSafeAreaInset: CGFloat {
@@ -137,24 +143,17 @@ struct TravelPlanDetailView: View {
         ZStack {
             backgroundGradient
 
-            // 地図はスクロールと相性が悪い（ドラッグが取り合いになる）ので
-            // 固定の配置にする。他のタブは写真がスクロールで隠れる形にする
+            // 地図タブは写真を出さず、地図に画面を使う。
+            // 他のタブでスクロールし切った状態と同じ見た目になるので、
+            // 写真だけが残って地図が狭い、という中途半端さがなくなる
             if selectedTab == .map {
                 VStack(spacing: 0) {
-                    // 地図の上ではスワイプが使えないので、写真の上で受ける
-                    planHeaderSection(plan: plan)
-                        .simultaneousGesture(
-                            DragGesture(minimumDistance: 24)
-                                .onEnded { value in
-                                    let dx = value.translation.width
-                                    guard abs(dx) > 60, abs(dx) > abs(value.translation.height) * 1.5 else { return }
-                                    moveTab(forward: dx < 0)
-                                }
-                        )
                     detailTabBar
                     mapTab(plan: plan)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
                 }
+                // 地図では中身をドラッグできないので、タブの切り替えは
+                // タブバーを押してもらう。スワイプは地図の操作を優先する
             } else {
                 ScrollView(showsIndicators: false) {
                     // 写真は LazyVStack の外に置く。中に入れると画面外で
@@ -209,7 +208,7 @@ struct TravelPlanDetailView: View {
         // 通り抜けて見えてしまう。帯の中から ignoresSafeArea しても
         // 安全領域まで届かないため、画面の一番上に覆いを置く
         .overlay(alignment: .top) {
-            if isHeaderCollapsed {
+            if isChromeCompact {
                 tabBarBackground
                     .frame(height: topSafeAreaInset)
                     .ignoresSafeArea(edges: .top)
@@ -568,6 +567,18 @@ struct TravelPlanDetailView: View {
 
             // ナビゲーションボタン（上部）
             HStack {
+                // 写真が見えているあいだはここに置く。
+                // スクロールで写真が隠れたらタブバー側に出る
+                Button(action: { presentationMode.wrappedValue.dismiss() }) {
+                    ZStack {
+                        Circle().fill(.ultraThinMaterial).frame(width: 40, height: 40)
+                        Image(systemName: "chevron.left")
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
+                }
+                .padding(.leading, 16)
+
                 Spacer()
 
                 HStack(spacing: 10) {
@@ -796,15 +807,17 @@ struct TravelPlanDetailView: View {
 
     private var detailTabBar: some View {
         HStack(spacing: 0) {
-            // 写真がスクロールで隠れると、そこに置いた戻るボタンも消えてしまう。
-            // 常に押せるようここに移した
-            Button(action: { presentationMode.wrappedValue.dismiss() }) {
-                Image(systemName: "chevron.left")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(accentColor)
-                    .frame(width: 40, height: 44)
+            // 写真が隠れているあいだだけ出す。写真が見えているときは
+            // 写真の左上にあるので、ここには要らない
+            if isChromeCompact {
+                Button(action: { presentationMode.wrappedValue.dismiss() }) {
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(accentColor)
+                        .frame(width: 40, height: 44)
+                }
+                .accessibilityLabel(Text("戻る"))
             }
-            .accessibilityLabel(Text("戻る"))
 
             tabButtons
         }
