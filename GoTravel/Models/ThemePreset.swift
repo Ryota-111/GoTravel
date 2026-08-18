@@ -283,10 +283,11 @@ extension ThemePreset {
         let backgroundIsLight = luminance(of: background) > 0.4
         var adjusted = color
 
-        // 実際には同じ色を薄く敷いた上に載るので、無地の背景に対しては
-        // 目標より高め（5.0）まで寄せておく
+        // 4.5 まで寄せると色がかなり沈むため、色味を残すことを優先して 4.0 とする。
+        // 同じ色を薄く敷いた上に載るので、実際の比は 3.6 前後になる。
+        // 太さのある短い文言に使う前提での妥協点
         // 段階的に寄せる。色相と鮮やかさは保つので、テーマの印象は変わらない
-        for _ in 0..<14 where contrastRatio(adjusted, background) < 5.0 {
+        for _ in 0..<14 where contrastRatio(adjusted, background) < 4.0 {
             brightness = backgroundIsLight
                 ? max(brightness - 0.07, 0.05)
                 : min(brightness + 0.07, 1.0)
