@@ -50,9 +50,8 @@ struct TravelPlanDetailView: View {
     @State private var selectedTab: DetailTab = .schedule
     /// 地図タブで、地図と行程表のどちらから選んでも共有する項目
     @State private var focusedItemID: String?
-    /// 地図タブの下半分が画面に占める割合。上端をドラッグして変えられる
-    @State private var mapSheetFraction: CGFloat = 0.40
-    @GestureState private var mapSheetDrag: CGFloat = 0
+    /// 地図タブで下半分が画面に占める割合。地図を広く見せたいので控えめにする
+    private static let mapSheetFraction: CGFloat = 0.40
     /// 写真が上に隠れたかどうか。
     /// 隠れた後はスクロール中の内容がステータスバーの領域に見えてしまうので、
     /// そこを覆うかどうかの判定に使う
@@ -881,8 +880,6 @@ struct TravelPlanDetailView: View {
     private func mapTab(plan: TravelPlan) -> some View {
         GeometryReader { proxy in
             let height = proxy.size.height
-            // ドラッグ中の見た目に反映しつつ、行き過ぎないよう幅を制限する
-            let fraction = min(max(mapSheetFraction + mapSheetDrag, 0.22), 0.80)
 
             ZStack(alignment: .bottom) {
                 VStack(spacing: 0) {
@@ -894,52 +891,24 @@ struct TravelPlanDetailView: View {
                         linkedDay: $selectedDay,
                         linkedItemID: $focusedItemID
                     )
-                    // シートの丸みの下に地図が続いて見えるよう少し重ねる
-                    .frame(height: height * (1 - fraction) + 24)
+                    // 丸めた角の下に地図が続いて見えるよう少し重ねる
+                    .frame(height: height * (1 - Self.mapSheetFraction) + 24)
 
                     Spacer(minLength: 0)
                 }
 
-                mapScheduleList(plan: plan, containerHeight: height)
-                    .frame(height: height * fraction)
+                mapScheduleList(plan: plan)
+                    .frame(height: height * Self.mapSheetFraction)
             }
         }
     }
 
-    /// シートの上端をつまんで高さを変える。
-    /// 見た目がシートなので、動かせないと触れそうで動かない違和感が出る
-    private func sheetDragGesture(containerHeight: CGFloat) -> some Gesture {
-        DragGesture()
-            .updating($mapSheetDrag) { value, state, _ in
-                state = -value.translation.height / max(containerHeight, 1)
-            }
-            .onEnded { value in
-                let target = mapSheetFraction - value.translation.height / max(containerHeight, 1)
-                // 中途半端な位置で止めず、決まった3段階に寄せる
-                let snaps: [CGFloat] = [0.22, 0.45, 0.72]
-                let nearest = snaps.min { abs($0 - target) < abs($1 - target) } ?? 0.45
-
-                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
-                    mapSheetFraction = nearest
-                }
-            }
-    }
-
     /// 地図の下に置く行程表。地図側と選択を共有する
-    private func mapScheduleList(plan: TravelPlan, containerHeight: CGFloat) -> some View {
+    private func mapScheduleList(plan: TravelPlan) -> some View {
         VStack(spacing: 0) {
-            VStack(spacing: 0) {
-                Capsule()
-                    .fill(themeManager.currentTheme.secondaryText.opacity(0.3))
-                    .frame(width: 36, height: 4)
-                    .padding(.top, 8)
-
-                compactDayTabs(plan: plan)
-                    .padding(.vertical, 8)
-            }
-            // ここをつまんで高さを変える。一覧側に付けるとスクロールと取り合う
-            .contentShape(Rectangle())
-            .gesture(sheetDragGesture(containerHeight: containerHeight))
+            compactDayTabs(plan: plan)
+                .padding(.top, 14)
+                .padding(.bottom, 8)
 
             ScrollViewReader { scrollProxy in
                 ScrollView(showsIndicators: false) {
