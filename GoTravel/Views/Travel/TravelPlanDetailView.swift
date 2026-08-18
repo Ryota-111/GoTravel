@@ -9,9 +9,9 @@ struct TravelPlanDetailView: View {
     static let headerHeight: CGFloat = 240
 
     /// 写真が見えていない状態かどうか。
-    /// 地図タブは写真を出さない（地図に画面を使いたい）ので常にこの状態になる
+    /// 地図タブは写真を畳み終わってからこの状態になる
     private var isChromeCompact: Bool {
-        selectedTab == .map || isHeaderCollapsed
+        (selectedTab == .map && isMapPhotoFolded) || isHeaderCollapsed
     }
 
     /// ステータスバーの高さ。覆いを高さゼロで置くと何も描画されないため、
@@ -50,6 +50,10 @@ struct TravelPlanDetailView: View {
     @State private var selectedTab: DetailTab = .schedule
     /// 地図タブで、地図と行程表のどちらから選んでも共有する項目
     @State private var focusedItemID: String?
+    /// 地図タブで写真を畳み終えたか。
+    /// 切り替えた瞬間に写真が消えると段差に見えるので、いったん出してから畳む
+    @State private var isMapPhotoFolded = false
+
     /// 地図タブで下半分が画面に占める割合。地図を広く見せたいので控えめにする
     private static let mapSheetFraction: CGFloat = 0.33
     /// 写真が上に隠れたかどうか。
@@ -147,11 +151,23 @@ struct TravelPlanDetailView: View {
         ZStack {
             backgroundGradient
 
-            // 地図タブは写真を出さず、地図に画面を使う。
-            // 他のタブでスクロールし切った状態と同じ見た目になるので、
-            // 写真だけが残って地図が狭い、という中途半端さがなくなる
+            // 地図タブは写真を畳んで地図に画面を使う。
+            // いきなり消すと他のタブから切り替えた瞬間に段差ができるので、
+            // 一度出してから畳む
             if selectedTab == .map {
                 VStack(spacing: 0) {
+                    // 下端を残したまま高さを縮めるので、上へスクロールして
+                    // 消えていくように見える
+                    planHeaderSection(plan: plan)
+                        .frame(height: isMapPhotoFolded ? 0 : Self.headerHeight, alignment: .bottom)
+                        .clipped()
+                        .onAppear {
+                            withAnimation(.easeInOut(duration: 0.35)) {
+                                isMapPhotoFolded = true
+                            }
+                        }
+                        .onDisappear { isMapPhotoFolded = false }
+
                     detailTabBar
                     mapTab(plan: plan)
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
