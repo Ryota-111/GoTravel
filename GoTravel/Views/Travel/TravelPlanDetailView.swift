@@ -6,7 +6,7 @@ import MapKit
 struct TravelPlanDetailView: View {
 
     /// 写真の高さ。スクロール量の判定でも同じ値を使う
-    static let headerHeight: CGFloat = 200
+    static let headerHeight: CGFloat = 210
 
     /// タブバーの高さ。全タブで同じ高さ・同じ位置になるよう固定する
     static let tabBarHeight: CGFloat = 46
@@ -180,6 +180,18 @@ struct TravelPlanDetailView: View {
                         }
                     }
                 }
+                // スクロール量を直接受け取る。GeometryReader と PreferenceKey で
+                // 測る方法は、写真が画面外で破棄されると値が途切れて当てにならない。
+                // ScrollView 自体に付けないと拾えないので、この位置から動かさないこと
+                .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                    geometry.contentOffset.y + geometry.contentInsets.top
+                } action: { _, scrolled in
+                    // 写真の残りが 72pt を切ったら貼り付いた表示に切り替える
+                    let collapsed = scrolled > Self.headerHeight - 72
+                    guard collapsed != isHeaderCollapsed else { return }
+                    withAnimation(.easeInOut(duration: 0.2)) { isHeaderCollapsed = collapsed }
+                }
+                .simultaneousGesture(tabSwipeGesture)
                 // 地図でピンを押されたら、その行まで送る
                 .onChange(of: focusedItemID) { _, itemID in
                     guard selectedTab == .map, let itemID else { return }
@@ -188,17 +200,6 @@ struct TravelPlanDetailView: View {
                     }
                 }
             }
-                // スクロール量を直接受け取る。GeometryReader と PreferenceKey で
-                // 測る方法は、写真が画面外で破棄されると値が途切れて当てにならない
-            .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                geometry.contentOffset.y + geometry.contentInsets.top
-            } action: { _, scrolled in
-                // 写真(240pt)の残りが 72pt を切ったら帯に切り替える
-                let collapsed = scrolled > Self.headerHeight - 72
-                guard collapsed != isHeaderCollapsed else { return }
-                withAnimation(.easeInOut(duration: 0.2)) { isHeaderCollapsed = collapsed }
-            }
-            .simultaneousGesture(tabSwipeGesture)
         }
         // 貼り付いた帯の上（ステータスバーの領域）を、スクロール中の内容が
         // 通り抜けて見えてしまう。帯の中から ignoresSafeArea しても
@@ -508,9 +509,11 @@ struct TravelPlanDetailView: View {
 
             // グラデーションオーバーレイ（下部を暗く）
             LinearGradient(
+                // 位置は高さに対する割合なので、写真を縮めると暗くなる位置も
+                // 上がってしまう。早めに暗くして文字の背景を確保する
                 gradient: Gradient(stops: [
                     .init(color: .clear, location: 0),
-                    .init(color: Color.black.opacity(0.3), location: 0.4),
+                    .init(color: Color.black.opacity(0.35), location: 0.2),
                     .init(color: Color.black.opacity(0.85), location: 1)
                 ]),
                 startPoint: .top,
