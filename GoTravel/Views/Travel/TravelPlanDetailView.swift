@@ -736,11 +736,13 @@ struct TravelPlanDetailView: View {
     /// 横にはっきり振ったときだけタブを移す。
     /// 縦スクロールと取り合わないよう simultaneousGesture で重ねて使う
     private var tabSwipeGesture: some Gesture {
-        DragGesture(minimumDistance: 24)
+        // 内側（タブの中身）に付けると ScrollView の縦スクロール判定が
+        // 先に効いて鈍くなるため、外側に付けていた頃より条件をゆるめる
+        DragGesture(minimumDistance: 12)
             .onEnded { value in
                 let dx = value.translation.width
                 let dy = value.translation.height
-                guard abs(dx) > 60, abs(dx) > abs(dy) * 1.5 else { return }
+                guard abs(dx) > 36, abs(dx) > abs(dy) * 1.1 else { return }
                 moveTab(forward: dx < 0)
             }
     }
