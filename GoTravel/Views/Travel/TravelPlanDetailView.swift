@@ -194,18 +194,7 @@ struct TravelPlanDetailView: View {
                     guard collapsed != isHeaderCollapsed else { return }
                     withAnimation(.easeInOut(duration: 0.2)) { isHeaderCollapsed = collapsed }
                 }
-                // 縦スクロールを妨げないよう simultaneousGesture で重ね、
-                // 横方向がはっきりしているときだけタブを切り替える。
-                // 地図はドラッグが地図自身の操作と取り合うので付けない
-                .simultaneousGesture(
-                    DragGesture(minimumDistance: 24)
-                        .onEnded { value in
-                            let dx = value.translation.width
-                            let dy = value.translation.height
-                            guard abs(dx) > 60, abs(dx) > abs(dy) * 1.5 else { return }
-                            moveTab(forward: dx < 0)
-                        }
-                )
+                .simultaneousGesture(tabSwipeGesture)
             }
         }
         // 貼り付いた帯の上（ステータスバーの領域）を、スクロール中の内容が
@@ -752,6 +741,18 @@ struct TravelPlanDetailView: View {
          : themeManager.currentTheme.backgroundLight)
     }
 
+    /// 横にはっきり振ったときだけタブを移す。
+    /// 縦スクロールと取り合わないよう simultaneousGesture で重ねて使う
+    private var tabSwipeGesture: some Gesture {
+        DragGesture(minimumDistance: 24)
+            .onEnded { value in
+                let dx = value.translation.width
+                let dy = value.translation.height
+                guard abs(dx) > 60, abs(dx) > abs(dy) * 1.5 else { return }
+                moveTab(forward: dx < 0)
+            }
+    }
+
     /// 隣のタブへ移る。端では止まる（一周させると今どこにいるか分からなくなる）
     private func moveTab(forward: Bool) {
         let tabs = DetailTab.allCases
@@ -899,6 +900,9 @@ struct TravelPlanDetailView: View {
 
                 mapScheduleList(plan: plan)
                     .frame(height: height * Self.mapSheetFraction)
+                    // 地図の上ではドラッグが地図の操作になるので、
+                    // タブの移動はこの下半分で受ける
+                    .simultaneousGesture(tabSwipeGesture)
             }
         }
     }
