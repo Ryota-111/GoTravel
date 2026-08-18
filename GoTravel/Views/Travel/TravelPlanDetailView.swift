@@ -6,7 +6,7 @@ import MapKit
 struct TravelPlanDetailView: View {
 
     /// 写真の高さ。スクロール量の判定でも同じ値を使う
-    static let headerHeight: CGFloat = 210
+    static let headerHeight: CGFloat = 220
 
     /// タブバーの高さ。全タブで同じ高さ・同じ位置になるよう固定する
     static let tabBarHeight: CGFloat = 46
@@ -26,7 +26,7 @@ struct TravelPlanDetailView: View {
 
     /// 写真の下で切り替える画面。増やすときはここに1つ足す
     enum DetailTab: String, CaseIterable, Identifiable {
-        case schedule = "行程表"
+        case schedule = "日程"
         case map = "地図"
         case packing = "持ち物"
         case reservation = "予約"
@@ -682,23 +682,6 @@ struct TravelPlanDetailView: View {
                     .foregroundColor(accentColor)
                 Spacer()
 
-                if hasMappableScheduleItems(plan: plan) {
-                    Button(action: { showScheduleMap = true }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "map.fill")
-                                .font(.system(size: 12, weight: .bold))
-                            Text("地図で見る")
-                                .font(.system(size: 13, weight: .semibold))
-                        }
-                        .foregroundColor(scheduleAccentColor)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(scheduleAccentColor.opacity(0.12))
-                        .clipShape(Capsule())
-                    }
-                    .buttonStyle(PlainButtonStyle())
-                }
-
                 Button(action: { showAddScheduleItem = true }) {
                     HStack(spacing: 4) {
                         Image(systemName: "plus")
@@ -1227,15 +1210,6 @@ struct TravelPlanDetailView: View {
     }
 
     /// 地図に出せる（座標を持つ）スケジュール項目が1件でもあるか
-    private func hasMappableScheduleItems(plan: TravelPlan) -> Bool {
-        for daySchedule in plan.daySchedules {
-            for item in daySchedule.scheduleItems where item.latitude != nil && item.longitude != nil {
-                return true
-            }
-        }
-        return false
-    }
-
     private func sortedScheduleItems(_ items: [ScheduleItem]) -> [ScheduleItem] {
         let calendar = Calendar.current
 
