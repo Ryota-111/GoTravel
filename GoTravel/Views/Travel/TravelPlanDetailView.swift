@@ -48,6 +48,8 @@ struct TravelPlanDetailView: View {
     @ObservedObject var themeManager = ThemeManager.shared
     @State private var selectedDay: Int = 1
     @State private var selectedTab: DetailTab = .schedule
+    /// 地図タブで、地図と行程表のどちらから選んでも共有する項目
+    @State private var focusedItemID: String?
     /// 写真が上に隠れたかどうか。
     /// 隠れた後はスクロール中の内容がステータスバーの領域に見えてしまうので、
     /// そこを覆うかどうかの判定に使う
@@ -716,52 +718,7 @@ struct TravelPlanDetailView: View {
                 .buttonStyle(PlainButtonStyle())
             }
 
-            // Day タブ（横スクロール）
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 8) {
-                    ForEach(1...tripDuration, id: \.self) { day in
-                        let isSelected = selectedDay == day
-                        let itemCount = plan.daySchedules.first(where: { $0.dayNumber == day })?.scheduleItems.count ?? 0
-                        let dayDate: Date? = {
-                            let d = plan.daySchedules.first(where: { $0.dayNumber == day })?.date
-                            return d ?? Calendar.current.date(byAdding: .day, value: day - 1, to: plan.startDate)
-                        }()
-
-                        Button(action: {
-                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
-                                selectedDay = day
-                            }
-                        }) {
-                            VStack(spacing: 4) {
-                                Text("Day \(day)")
-                                    .font(.system(size: 13, weight: .bold))
-                                    .foregroundColor(isSelected ? .white : accentColor)
-
-                                if let d = dayDate {
-                                    Text(formatDate(d))
-                                        .font(.system(size: 10))
-                                        .foregroundColor(isSelected ? .white.opacity(0.8) : themeManager.currentTheme.secondaryText)
-                                }
-
-                                if itemCount > 0 {
-                                    Text("\(itemCount)件")
-                                        .font(.system(size: 10, weight: .medium))
-                                        .foregroundColor(isSelected ? .white.opacity(0.8) : scheduleAccentColor)
-                                }
-                            }
-                            .padding(.horizontal, 16)
-                            .padding(.vertical, 10)
-                            .background(
-                                RoundedRectangle(cornerRadius: 12)
-                                    .fill(isSelected ? scheduleAccentColor : (colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight))
-                                    .shadow(color: isSelected ? scheduleAccentColor.opacity(0.3) : themeManager.currentTheme.shadow, radius: isSelected ? 6 : 3, x: 0, y: 2)
-                            )
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                }
-                .padding(.vertical, 4)
-            }
+            dayTabs(plan: plan)
 
             // スケジュールアイテムリスト
             if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }),
@@ -866,9 +823,124 @@ struct TravelPlanDetailView: View {
         .padding(.bottom, 30)
     }
 
-    /// 地図はタブの中に敷き込む。閉じるボタンは親のタブが担うので出さない
+    /// 地図と行程表を上下に並べる。
+    /// 地図だけだと「どの時間の場所か」が分からず、行程表だけだと位置関係が
+    /// 分からない。並べると、片方を選ぶともう片方が追従する
+    /// Day の切り替え。行程表タブと地図タブの両方で使う
+    private func dayTabs(plan: TravelPlan) -> some View {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    ForEach(1...tripDuration, id: \.self) { day in
+                        let isSelected = selectedDay == day
+                        let itemCount = plan.daySchedules.first(where: { $0.dayNumber == day })?.scheduleItems.count ?? 0
+                        let dayDate: Date? = {
+                            let d = plan.daySchedules.first(where: { $0.dayNumber == day })?.date
+                            return d ?? Calendar.current.date(byAdding: .day, value: day - 1, to: plan.startDate)
+                        }()
+
+                        Button(action: {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+                                selectedDay = day
+                            }
+                        }) {
+                            VStack(spacing: 4) {
+                                Text("Day \(day)")
+                                    .font(.system(size: 13, weight: .bold))
+                                    .foregroundColor(isSelected ? .white : accentColor)
+
+                                if let d = dayDate {
+                                    Text(formatDate(d))
+                                        .font(.system(size: 10))
+                                        .foregroundColor(isSelected ? .white.opacity(0.8) : themeManager.currentTheme.secondaryText)
+                                }
+
+                                if itemCount > 0 {
+                                    Text("\(itemCount)件")
+                                        .font(.system(size: 10, weight: .medium))
+                                        .foregroundColor(isSelected ? .white.opacity(0.8) : scheduleAccentColor)
+                                }
+                            }
+                            .padding(.horizontal, 16)
+                            .padding(.vertical, 10)
+                            .background(
+                                RoundedRectangle(cornerRadius: 12)
+                                    .fill(isSelected ? scheduleAccentColor : (colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight))
+                                    .shadow(color: isSelected ? scheduleAccentColor.opacity(0.3) : themeManager.currentTheme.shadow, radius: isSelected ? 6 : 3, x: 0, y: 2)
+                            )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+                .padding(.vertical, 4)
+            }
+    }
+
     private func mapTab(plan: TravelPlan) -> some View {
-        TravelPlanMapView(plan: plan, initialDay: selectedDay, isEmbedded: true)
+        GeometryReader { proxy in
+            VStack(spacing: 0) {
+                TravelPlanMapView(
+                    plan: plan,
+                    initialDay: selectedDay,
+                    isEmbedded: true,
+                    isSplitMode: true,
+                    linkedDay: $selectedDay,
+                    linkedItemID: $focusedItemID
+                )
+                .frame(height: proxy.size.height * 0.52)
+
+                mapScheduleList(plan: plan)
+            }
+        }
+    }
+
+    /// 地図の下に置く行程表。地図側と選択を共有する
+    private func mapScheduleList(plan: TravelPlan) -> some View {
+        VStack(spacing: 0) {
+            dayTabs(plan: plan)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 8)
+
+            Divider()
+
+            ScrollViewReader { scrollProxy in
+                ScrollView(showsIndicators: false) {
+                    if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }),
+                       !daySchedule.scheduleItems.isEmpty {
+                        let sortedItems = sortedScheduleItems(daySchedule.scheduleItems)
+                        VStack(spacing: 0) {
+                            ForEach(Array(sortedItems.enumerated()), id: \.element.id) { index, item in
+                                timelineItemView(item: item, isLast: index == sortedItems.count - 1, plan: plan)
+                                    .id(item.id)
+                                    .background(
+                                        RoundedRectangle(cornerRadius: 10)
+                                            .fill(focusedItemID == item.id
+                                                  ? scheduleAccentColor.opacity(0.10)
+                                                  : Color.clear)
+                                    )
+                                    .contentShape(Rectangle())
+                                    .onTapGesture {
+                                        // 地図をこの場所へ寄せる
+                                        focusedItemID = item.id
+                                    }
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+                        .padding(.bottom, 20)
+                    } else {
+                        emptyScheduleMessage(plan: plan)
+                            .padding(16)
+                    }
+                }
+                // 地図でピンを押されたら、その行まで送る
+                .onChange(of: focusedItemID) { _, itemID in
+                    guard let itemID else { return }
+                    withAnimation(.easeInOut(duration: 0.3)) {
+                        scrollProxy.scrollTo(itemID, anchor: .center)
+                    }
+                }
+            }
+        }
     }
 
     private func packingTab(plan: TravelPlan) -> some View {

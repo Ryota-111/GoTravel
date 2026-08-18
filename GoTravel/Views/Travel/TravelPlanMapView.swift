@@ -58,6 +58,12 @@ struct TravelPlanMapView: View {
     @State private var selectedGroupID: String?
     @State private var cameraPosition: MapCameraPosition
 
+    /// 実際に使う絞り込み。行程表と並べているときは向こうの日に従う
+    private var effectiveScope: Scope {
+        if let linkedDay { return .day(linkedDay.wrappedValue) }
+        return scope
+    }
+
     /// 1点に集中した時でも地図が寄りすぎないようにする最小の表示範囲
     private static let minimumSpan: CLLocationDegrees = 0.01
 
@@ -75,9 +81,28 @@ struct TravelPlanMapView: View {
     /// タブに埋め込むときは true。閉じるボタンを出さない
     var isEmbedded: Bool = false
 
-    init(plan: TravelPlan, initialDay: Int, isEmbedded: Bool = false) {
+    /// 行程表と上下に並べるモード。
+    /// 日の選択と項目の選択は下の行程表に任せるので、
+    /// 地図側の上部バー・日の切り替え・詳細パネルは出さない
+    var isSplitMode: Bool = false
+
+    /// 下の行程表と共有する日番号
+    var linkedDay: Binding<Int>?
+
+    /// 下の行程表と共有する選択中の項目。ScheduleItem の id を入れる
+    var linkedItemID: Binding<String?>?
+
+    init(plan: TravelPlan,
+         initialDay: Int,
+         isEmbedded: Bool = false,
+         isSplitMode: Bool = false,
+         linkedDay: Binding<Int>? = nil,
+         linkedItemID: Binding<String?>? = nil) {
         self.plan = plan
         self.isEmbedded = isEmbedded
+        self.isSplitMode = isSplitMode
+        self.linkedDay = linkedDay
+        self.linkedItemID = linkedItemID
         _scope = State(initialValue: .day(initialDay))
 
         // 実際の範囲は onAppear でピンに合わせ直す
@@ -99,7 +124,7 @@ struct TravelPlanMapView: View {
 
     private var scopedDaySchedules: [DaySchedule] {
         plan.daySchedules
-            .filter { scope == .all || scope == .day($0.dayNumber) }
+            .filter { effectiveScope == .all || effectiveScope == .day($0.dayNumber) }
             .sorted { $0.dayNumber < $1.dayNumber }
     }
 
@@ -192,28 +217,36 @@ struct TravelPlanMapView: View {
         ZStack(alignment: .top) {
             mapLayer
 
-            VStack(spacing: 10) {
-                topBar
-                scopeSelector
-                if unmappableCount > 0 {
-                    unmappableNotice
+            if !isSplitMode {
+                VStack(spacing: 10) {
+                    topBar
+                    scopeSelector
+                    if unmappableCount > 0 {
+                        unmappableNotice
+                    }
                 }
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
 
             if mappedItems.isEmpty {
                 emptyOverlay
             }
         }
         .overlay(alignment: .bottom) {
-            if let selected = selectedGroup {
+            // 分割モードでは下の行程表が詳細の役目を持つので出さない
+            if !isSplitMode, let selected = selectedGroup {
                 detailPanel(selected)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        // 行程表で選ばれた項目にピンを合わせる
+        .onChange(of: linkedItemID?.wrappedValue) { _, itemID in
+            guard isSplitMode, let itemID else { return }
+            focusPin(forItemID: itemID)
+        }
         .onAppear { fitCameraToPins(animated: false) }
-        .onChange(of: scope) { _, _ in
+        .onChange(of: effectiveScope) { _, _ in
             selectedGroupID = nil
             fitCameraToPins(animated: true)
         }
@@ -248,11 +281,21 @@ struct TravelPlanMapView: View {
     /// 単独なら丸ピン、同一地点に複数あるならカプセル型に番号を並べる
     @ViewBuilder
     private func pinView(_ group: PinGroup) -> some View {
-        let isSelected = selectedGroupID == group.id
+        // 分割モードでは行程表側の選択に合わせて光らせる
+        let isSelected: Bool = {
+            if isSplitMode, let itemID = linkedItemID?.wrappedValue {
+                return group.items.contains { $0.item.id == itemID }
+            }
+            return selectedGroupID == group.id
+        }()
 
         Button {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
                 selectedGroupID = group.id
+                // 下の行程表の該当行へ知らせる
+                if isSplitMode {
+                    linkedItemID?.wrappedValue = group.items.first?.item.id
+                }
             }
         } label: {
             Group {
@@ -556,7 +599,7 @@ struct TravelPlanMapView: View {
     private func panelItemList(_ group: PinGroup) -> some View {
         VStack(spacing: 8) {
             ForEach(group.items) { mapped in
-                panelItemRow(mapped, showDayBadge: scope == .all || !group.isSameDay)
+                panelItemRow(mapped, showDayBadge: effectiveScope == .all || !group.isSameDay)
             }
         }
         .padding(.horizontal, 20)
@@ -620,6 +663,24 @@ struct TravelPlanMapView: View {
 
     // MARK: - Camera
     /// 表示中のピンがすべて収まる範囲にカメラを合わせる
+    /// 行程表で選ばれた項目のピンへ寄る
+    private func focusPin(forItemID itemID: String) {
+        guard let target = mappedItems.first(where: { $0.item.id == itemID }) else { return }
+
+        selectedGroupID = pinGroups.first { group in
+            group.items.contains { $0.item.id == itemID }
+        }?.id
+
+        withAnimation(.easeInOut(duration: 0.35)) {
+            cameraPosition = .region(
+                MKCoordinateRegion(
+                    center: target.coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: Self.minimumSpan, longitudeDelta: Self.minimumSpan)
+                )
+            )
+        }
+    }
+
     private func fitCameraToPins(animated: Bool) {
         let items = mappedItems
 
