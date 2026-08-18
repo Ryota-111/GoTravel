@@ -8,15 +8,12 @@ struct TravelPlanDetailView: View {
     /// 写真の高さ。スクロール量の判定でも同じ値を使う
     static let headerHeight: CGFloat = 240
 
-    /// タブバーの高さ。地図タブで写真を畳む間、地図の大きさを変えないために
-    /// 明示的に決めておく。全タブで同じ高さになる利点もある
+    /// タブバーの高さ。全タブで同じ高さ・同じ位置になるよう固定する
     static let tabBarHeight: CGFloat = 46
 
-    /// 写真が見えていない状態かどうか。
-    /// 地図タブは写真を畳み終わってからこの状態になる
-    private var isChromeCompact: Bool {
-        (selectedTab == .map && isMapPhotoFolded) || isHeaderCollapsed
-    }
+    /// 写真が上に隠れているかどうか。
+    /// 隠れているあいだだけ、戻るボタンをタブバーに出しステータスバーを覆う
+    private var isChromeCompact: Bool { isHeaderCollapsed }
 
     /// ステータスバーの高さ。覆いを高さゼロで置くと何も描画されないため、
     /// 実際の値を取って明示的に埋める
@@ -54,12 +51,6 @@ struct TravelPlanDetailView: View {
     @State private var selectedTab: DetailTab = .schedule
     /// 地図タブで、地図と行程表のどちらから選んでも共有する項目
     @State private var focusedItemID: String?
-    /// 地図タブで写真を畳み終えたか。
-    /// 切り替えた瞬間に写真が消えると段差に見えるので、いったん出してから畳む
-    @State private var isMapPhotoFolded = false
-
-    /// 地図タブで下半分が画面に占める割合。地図を広く見せたいので控えめにする
-    private static let mapSheetFraction: CGFloat = 0.33
     /// 写真が上に隠れたかどうか。
     /// 隠れた後はスクロール中の内容がステータスバーの領域に見えてしまうので、
     /// そこを覆うかどうかの判定に使う
@@ -155,76 +146,42 @@ struct TravelPlanDetailView: View {
         ZStack {
             backgroundGradient
 
-            // 地図タブは写真を畳んで地図に画面を使う。
-            // いきなり消すと他のタブから切り替えた瞬間に段差ができるので、
-            // 一度出してから畳む
-            if selectedTab == .map {
-                GeometryReader { proxy in
-                    ZStack(alignment: .top) {
-                        // 地図は最初から最終の大きさで置く。
-                        // 畳む間に高さが変わると地図の再レイアウトが毎フレーム
-                        // 走って、動きがはっきり重くなる
-                        VStack(spacing: 0) {
-                            Color.clear.frame(height: Self.tabBarHeight)
-                            mapTab(plan: plan)
-                        }
+            ScrollView(showsIndicators: false) {
+                // 写真は LazyVStack の外に置く。中に入れると画面外で
+                // 破棄され、位置を測る GeometryReader ごと消えてしまう
+                VStack(spacing: 0) {
+                    planHeaderSection(plan: plan)
 
-                        // 写真とタブバーだけを上へ抜けさせる。
-                        // 動かすのが位置だけなので滑らかに出る
-                        VStack(spacing: 0) {
-                            planHeaderSection(plan: plan)
+                    // タブバーを上に貼り付けたいので Section の見出しに置く
+                    LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                        Section {
+                            Group {
+                                switch selectedTab {
+                                case .schedule: scheduleTab(plan: plan)
+                                case .packing: packingTab(plan: plan)
+                                case .reservation: reservationTab(plan: plan)
+                                case .budget: budgetTab(plan: plan)
+                                case .map: mapTab(plan: plan)
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                        } header: {
                             detailTabBar
                         }
-                        .offset(y: isMapPhotoFolded ? -Self.headerHeight : 0)
-                    }
-                    .clipped()
-                    .onAppear {
-                        withAnimation(.spring(response: 0.5, dampingFraction: 0.9)) {
-                            isMapPhotoFolded = true
-                        }
-                    }
-                    .onDisappear { isMapPhotoFolded = false }
-                }
-                // 地図では中身をドラッグできないので、タブの切り替えは
-                // タブバーを押してもらう。スワイプは地図の操作を優先する
-            } else {
-                ScrollView(showsIndicators: false) {
-                    // 写真は LazyVStack の外に置く。中に入れると画面外で
-                    // 破棄され、位置を測る GeometryReader ごと消えてしまう
-                    VStack(spacing: 0) {
-                        planHeaderSection(plan: plan)
-
-                        // タブバーを上に貼り付けたいので Section の見出しに置く
-                        LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
-                            Section {
-                                Group {
-                                    switch selectedTab {
-                                    case .schedule: scheduleTab(plan: plan)
-                                    case .packing: packingTab(plan: plan)
-                                    case .reservation: reservationTab(plan: plan)
-                                    case .budget: budgetTab(plan: plan)
-                                    case .map: EmptyView()
-                                    }
-                                }
-                                .frame(maxWidth: .infinity)
-                            } header: {
-                                detailTabBar
-                            }
-                        }
                     }
                 }
+            }
                 // スクロール量を直接受け取る。GeometryReader と PreferenceKey で
                 // 測る方法は、写真が画面外で破棄されると値が途切れて当てにならない
-                .onScrollGeometryChange(for: CGFloat.self) { geometry in
-                    geometry.contentOffset.y + geometry.contentInsets.top
-                } action: { _, scrolled in
-                    // 写真(240pt)の残りが 72pt を切ったら帯に切り替える
-                    let collapsed = scrolled > Self.headerHeight - 72
-                    guard collapsed != isHeaderCollapsed else { return }
-                    withAnimation(.easeInOut(duration: 0.2)) { isHeaderCollapsed = collapsed }
-                }
-                .simultaneousGesture(tabSwipeGesture)
+            .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                geometry.contentOffset.y + geometry.contentInsets.top
+            } action: { _, scrolled in
+                // 写真(240pt)の残りが 72pt を切ったら帯に切り替える
+                let collapsed = scrolled > Self.headerHeight - 72
+                guard collapsed != isHeaderCollapsed else { return }
+                withAnimation(.easeInOut(duration: 0.2)) { isHeaderCollapsed = collapsed }
             }
+            .simultaneousGesture(tabSwipeGesture)
         }
         // 貼り付いた帯の上（ステータスバーの領域）を、スクロール中の内容が
         // 通り抜けて見えてしまう。帯の中から ignoresSafeArea しても
@@ -908,40 +865,33 @@ struct TravelPlanDetailView: View {
             }
     }
 
+    /// 地図タブ。他のタブと同じく、写真の下のスクロールに並ぶ内容として置く。
+    /// 地図は高さを決めた1つの塊にして、その下に行程表を続ける
     private func mapTab(plan: TravelPlan) -> some View {
-        GeometryReader { proxy in
-            let height = proxy.size.height
+        VStack(spacing: 0) {
+            TravelPlanMapView(
+                plan: plan,
+                initialDay: selectedDay,
+                isEmbedded: true,
+                isSplitMode: true,
+                linkedDay: $selectedDay,
+                linkedItemID: $focusedItemID
+            )
+            .frame(height: 320)
+            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .padding(.horizontal, 16)
+            .padding(.top, 12)
 
-            ZStack(alignment: .bottom) {
-                VStack(spacing: 0) {
-                    TravelPlanMapView(
-                        plan: plan,
-                        initialDay: selectedDay,
-                        isEmbedded: true,
-                        isSplitMode: true,
-                        linkedDay: $selectedDay,
-                        linkedItemID: $focusedItemID
-                    )
-                    // 丸めた角の下に地図が続いて見えるよう少し重ねる
-                    .frame(height: height * (1 - Self.mapSheetFraction) + 24)
-
-                    Spacer(minLength: 0)
-                }
-
-                mapScheduleList(plan: plan)
-                    .frame(height: height * Self.mapSheetFraction)
-                    // 地図の上ではドラッグが地図の操作になるので、
-                    // タブの移動はこの下半分で受ける
-                    .simultaneousGesture(tabSwipeGesture)
-            }
+            mapScheduleList(plan: plan)
         }
+        .padding(.bottom, 30)
     }
 
     /// 地図の下に置く行程表。地図側と選択を共有する
     private func mapScheduleList(plan: TravelPlan) -> some View {
         VStack(spacing: 0) {
             compactDayTabs(plan: plan)
-                .padding(.top, 14)
+                .padding(.top, 16)
                 .padding(.bottom, 8)
 
             ScrollViewReader { scrollProxy in
@@ -983,13 +933,6 @@ struct TravelPlanDetailView: View {
                 }
             }
         }
-        .background(
-            UnevenRoundedRectangle(topLeadingRadius: 20, topTrailingRadius: 20)
-                .fill(colorScheme == .dark
-                      ? themeManager.currentTheme.backgroundDark
-                      : themeManager.currentTheme.backgroundLight)
-                .shadow(color: .black.opacity(0.15), radius: 10, y: -3)
-        )
     }
 
     /// 地図タブ用の細い Day 切り替え。
