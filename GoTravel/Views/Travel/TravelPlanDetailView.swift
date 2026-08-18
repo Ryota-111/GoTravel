@@ -121,22 +121,37 @@ struct TravelPlanDetailView: View {
         ZStack {
             backgroundGradient
 
-            // 写真は上に固定し、その下だけを切り替える。
-            // 縦に積み続けると増やすたびに深くなるため、タブで分ける
-            VStack(spacing: 0) {
-                planHeaderSection(plan: plan)
-                detailTabBar
+            // 地図はスクロールと相性が悪い（ドラッグが取り合いになる）ので
+            // 固定の配置にする。他のタブは写真がスクロールで隠れる形にする
+            if selectedTab == .map {
+                VStack(spacing: 0) {
+                    planHeaderSection(plan: plan)
+                    detailTabBar
+                    mapTab(plan: plan)
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                }
+            } else {
+                ScrollView(showsIndicators: false) {
+                    // タブバーだけを上に貼り付けたいので Section の見出しに置く
+                    LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
+                        planHeaderSection(plan: plan)
 
-                Group {
-                    switch selectedTab {
-                    case .schedule: scheduleTab(plan: plan)
-                    case .map: mapTab(plan: plan)
-                    case .packing: packingTab(plan: plan)
-                    case .reservation: reservationTab(plan: plan)
-                    case .budget: budgetTab(plan: plan)
+                        Section {
+                            Group {
+                                switch selectedTab {
+                                case .schedule: scheduleTab(plan: plan)
+                                case .packing: packingTab(plan: plan)
+                                case .reservation: reservationTab(plan: plan)
+                                case .budget: budgetTab(plan: plan)
+                                case .map: EmptyView()
+                                }
+                            }
+                            .frame(maxWidth: .infinity)
+                        } header: {
+                            detailTabBar
+                        }
                     }
                 }
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
             }
         }
         .fullScreenCover(isPresented: $showAddScheduleItem) {
@@ -492,16 +507,6 @@ struct TravelPlanDetailView: View {
 
             // ナビゲーションボタン（上部）
             HStack {
-                Button(action: { presentationMode.wrappedValue.dismiss() }) {
-                    ZStack {
-                        Circle().fill(.ultraThinMaterial).frame(width: 40, height: 40)
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-                }
-                .padding(.leading, 16)
-
                 Spacer()
 
                 HStack(spacing: 10) {
@@ -710,6 +715,28 @@ struct TravelPlanDetailView: View {
     // MARK: - タブ
 
     private var detailTabBar: some View {
+        HStack(spacing: 0) {
+            // 写真がスクロールで隠れると、そこに置いた戻るボタンも消えてしまう。
+            // 常に押せるようここに移した
+            Button(action: { presentationMode.wrappedValue.dismiss() }) {
+                Image(systemName: "chevron.left")
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(accentColor)
+                    .frame(width: 40, height: 44)
+            }
+            .accessibilityLabel(Text("戻る"))
+
+            tabButtons
+        }
+        .background(
+            (colorScheme == .dark
+             ? themeManager.currentTheme.backgroundDark
+             : themeManager.currentTheme.backgroundLight)
+                .shadow(color: themeManager.currentTheme.shadow, radius: 4, y: 2)
+        )
+    }
+
+    private var tabButtons: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 0) {
                 ForEach(DetailTab.allCases) { tab in
@@ -734,27 +761,21 @@ struct TravelPlanDetailView: View {
             }
             .padding(.horizontal, 4)
         }
-        .background(
-            (colorScheme == .dark
-             ? themeManager.currentTheme.backgroundDark
-             : themeManager.currentTheme.backgroundLight)
-                .shadow(color: themeManager.currentTheme.shadow, radius: 4, y: 2)
-        )
     }
 
     // MARK: - 各タブの中身
 
     private func scheduleTab(plan: TravelPlan) -> some View {
-        ScrollView(showsIndicators: false) {
-            VStack(spacing: 0) {
-                planWeatherSection
-                sectionSeparator
-                dayScheduleSection(plan: plan)
-                experienceRow
-            }
-            .padding(.horizontal, 16)
-            .padding(.bottom, 30)
+        VStack(spacing: 0) {
+            dayScheduleSection(plan: plan)
+            sectionSeparator
+            // 天気は毎回見るものではないので予定より下に置く
+            planWeatherSection
+            experienceRow
         }
+        .padding(.horizontal, 16)
+        .padding(.top, 8)
+        .padding(.bottom, 30)
     }
 
     /// 地図はタブの中に敷き込む。閉じるボタンは親のタブが担うので出さない
@@ -763,23 +784,19 @@ struct TravelPlanDetailView: View {
     }
 
     private func packingTab(plan: TravelPlan) -> some View {
-        ScrollView(showsIndicators: false) {
-            PackingListView(plan: plan)
-                .environmentObject(viewModel)
-                .environmentObject(authVM)
-                .padding(16)
-                .padding(.bottom, 30)
-        }
+        PackingListView(plan: plan)
+            .environmentObject(viewModel)
+            .environmentObject(authVM)
+            .padding(16)
+            .padding(.bottom, 30)
     }
 
     private func reservationTab(plan: TravelPlan) -> some View {
-        ScrollView(showsIndicators: false) {
-            ReservationListView(plan: plan, isEmbedded: true)
-                .environmentObject(viewModel)
-                .environmentObject(authVM)
-                .padding(16)
-                .padding(.bottom, 30)
-        }
+        ReservationListView(plan: plan, isEmbedded: true)
+            .environmentObject(viewModel)
+            .environmentObject(authVM)
+            .padding(16)
+            .padding(.bottom, 30)
     }
 
     private func budgetTab(plan: TravelPlan) -> some View {

@@ -108,44 +108,56 @@ struct BudgetSummaryView: View {
 
     // MARK: - Body
     var body: some View {
-        ZStack {
-            bgGradient
+        if isEmbedded {
+            // 親がスクロールを持つので、ここでは入れ子にしない
+            cards
+                .padding(.horizontal, 16)
+                .padding(.top, 16)
+                .padding(.bottom, 30)
+        } else {
+            ZStack {
+                bgGradient
 
-            VStack(spacing: 0) {
-                if !isEmbedded { headerView }
+                VStack(spacing: 0) {
+                    headerView
 
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 16) {
-                        totalCostCard
-
-                        if hasActualCost {
-                            actualCostCard
-                        }
-
-                        // 共有していなくても同行者と割り勘したい場面があるため常に出す
-                        if splitBaseCost > 0 {
-                            costSplitCard
-                        }
-
-                        if !costByDay.isEmpty {
-                            costByDayCard
-                        }
-
-                        if !costByDayDetailed.isEmpty {
-                            costBreakdownCard
-                        }
-
-                        if totalCost == 0 {
-                            emptyStateView
-                        }
+                    ScrollView(showsIndicators: false) {
+                        cards
+                            .padding(.horizontal, 20)
+                            .padding(.top, 20)
+                            .padding(.bottom, 40)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 20)
-                    .padding(.bottom, 40)
                 }
             }
+            .navigationBarHidden(true)
         }
-        .navigationBarHidden(true)
+    }
+
+    private var cards: some View {
+        VStack(spacing: 16) {
+            totalCostCard
+
+            if hasActualCost {
+                actualCostCard
+            }
+
+            // 共有していなくても同行者と割り勘したい場面があるため常に出す
+            if splitBaseCost > 0 {
+                costSplitCard
+            }
+
+            if !costByDay.isEmpty {
+                costByDayCard
+            }
+
+            if !costByDayDetailed.isEmpty {
+                costBreakdownCard
+            }
+
+            if totalCost == 0 {
+                emptyStateView
+            }
+        }
     }
 
     // MARK: - Header
