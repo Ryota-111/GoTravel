@@ -763,7 +763,7 @@ struct TravelPlanDetailView: View {
                 }
 
                 guard !hasSwitchedTabInDrag else { return }
-                guard abs(dx) > 40, abs(dx) > abs(dy) * 1.2 else { return }
+                guard abs(dx) > 70, abs(dx) > abs(dy) * 2.0 else { return }
 
                 hasSwitchedTabInDrag = true
                 moveTab(forward: dx < 0)
