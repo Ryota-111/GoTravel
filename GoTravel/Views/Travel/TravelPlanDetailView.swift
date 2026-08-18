@@ -6,7 +6,7 @@ import MapKit
 struct TravelPlanDetailView: View {
 
     /// 写真の高さ。スクロール量の判定でも同じ値を使う
-    static let headerHeight: CGFloat = 240
+    static let headerHeight: CGFloat = 200
 
     /// タブバーの高さ。全タブで同じ高さ・同じ位置になるよう固定する
     static let tabBarHeight: CGFloat = 46
@@ -893,7 +893,7 @@ struct TravelPlanDetailView: View {
                 linkedDay: $selectedDay,
                 linkedItemID: $focusedItemID
             )
-            .frame(height: 220)
+            .frame(height: 264)
 
             compactDayTabs(plan: plan)
                 .padding(.vertical, 8)
