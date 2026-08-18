@@ -240,6 +240,13 @@ struct TravelPlanMapView: View {
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .overlay(alignment: .topTrailing) {
+            // 分割モードは上のバーを出さないので、ここだけ単独で置く
+            if isSplitMode {
+                fitAllButton
+                    .padding(12)
+            }
+        }
         // 行程表で選ばれた項目にピンを合わせる
         .onChange(of: linkedItemID?.wrappedValue) { _, itemID in
             guard isSplitMode, let itemID else { return }
@@ -374,6 +381,23 @@ struct TravelPlanMapView: View {
     }
 
     // MARK: - Top Bar
+    /// 全体が入るところまで戻す。ピンを追ってずれた後に元の見え方へ戻せる
+    private var fitAllButton: some View {
+        Button(action: {
+            selectedGroupID = nil
+            if isSplitMode { linkedItemID?.wrappedValue = nil }
+            fitCameraToPins(animated: true)
+        }) {
+            Image(systemName: "scope")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(accentColor)
+                .frame(width: 36, height: 36)
+                .background(.ultraThinMaterial, in: Circle())
+        }
+        .accessibilityLabel("全体を表示")
+        .disabled(mappedItems.isEmpty)
+    }
+
     private var topBar: some View {
         HStack(spacing: 10) {
             if !isEmbedded {
@@ -399,15 +423,7 @@ struct TravelPlanMapView: View {
 
             Spacer(minLength: 0)
 
-            Button(action: { fitCameraToPins(animated: true) }) {
-                Image(systemName: "scope")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(accentColor)
-                    .frame(width: 36, height: 36)
-                    .background(.ultraThinMaterial, in: Circle())
-            }
-            .accessibilityLabel("全体を表示")
-            .disabled(mappedItems.isEmpty)
+            fitAllButton
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
