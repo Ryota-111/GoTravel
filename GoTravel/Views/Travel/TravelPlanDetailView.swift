@@ -5,6 +5,9 @@ import MapKit
 // EnjoyWorldView -> TravelPlanの詳細画面
 struct TravelPlanDetailView: View {
 
+    /// 写真の高さ。スクロール量の判定でも同じ値を使う
+    static let headerHeight: CGFloat = 240
+
     /// 写真の下で切り替える画面。増やすときはここに1つ足す
     enum DetailTab: String, CaseIterable, Identifiable {
         case schedule = "行程表"
@@ -147,14 +150,6 @@ struct TravelPlanDetailView: View {
                     // 破棄され、位置を測る GeometryReader ごと消えてしまう
                     VStack(spacing: 0) {
                         planHeaderSection(plan: plan)
-                            .background(
-                                GeometryReader { proxy in
-                                    Color.clear.preference(
-                                        key: HeaderOffsetKey.self,
-                                        value: proxy.frame(in: .named("planScroll")).maxY
-                                    )
-                                }
-                            )
 
                         // タブバーを上に貼り付けたいので Section の見出しに置く
                         LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
@@ -175,10 +170,13 @@ struct TravelPlanDetailView: View {
                         }
                     }
                 }
-                .coordinateSpace(name: "planScroll")
-                .onPreferenceChange(HeaderOffsetKey.self) { maxY in
-                    // 写真の下端が上に抜けたら切り替える
-                    let collapsed = maxY < 72
+                // スクロール量を直接受け取る。GeometryReader と PreferenceKey で
+                // 測る方法は、写真が画面外で破棄されると値が途切れて当てにならない
+                .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                    geometry.contentOffset.y + geometry.contentInsets.top
+                } action: { _, scrolled in
+                    // 写真(240pt)の残りが 72pt を切ったら帯に切り替える
+                    let collapsed = scrolled > Self.headerHeight - 72
                     guard collapsed != isHeaderCollapsed else { return }
                     withAnimation(.easeInOut(duration: 0.2)) { isHeaderCollapsed = collapsed }
                 }
@@ -489,7 +487,7 @@ struct TravelPlanDetailView: View {
                         )
                 }
             }
-            .frame(height: 240)
+            .frame(height: Self.headerHeight)
             .clipped()
 
             // グラデーションオーバーレイ（下部を暗く）
@@ -502,7 +500,7 @@ struct TravelPlanDetailView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: 240)
+            .frame(height: Self.headerHeight)
 
             // テキスト情報（下部）
             //
@@ -597,7 +595,7 @@ struct TravelPlanDetailView: View {
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
             .padding(.top, 12)
         }
-        .frame(height: 240)
+        .frame(height: Self.headerHeight)
         .opacity(animateContent ? 1 : 0)
         .offset(y: animateContent ? 0 : -20)
         .animation(.spring(response: 0.6, dampingFraction: 0.8), value: animateContent)
@@ -1438,14 +1436,5 @@ private struct SwipeBackEnabler: UIViewControllerRepresentable {
             vc.navigationController?.interactivePopGestureRecognizer?.isEnabled = true
             vc.navigationController?.interactivePopGestureRecognizer?.delegate = nil
         }
-    }
-}
-
-
-/// 写真がどこまで上に流れたかを親へ伝えるための入れ物
-private struct HeaderOffsetKey: PreferenceKey {
-    static var defaultValue: CGFloat = .greatestFiniteMagnitude
-    static func reduce(value: inout CGFloat, nextValue: () -> CGFloat) {
-        value = nextValue()
     }
 }
