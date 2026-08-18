@@ -194,6 +194,16 @@ struct TravelPlanDetailView: View {
                 )
             }
         }
+        // 貼り付いた帯の上（ステータスバーの領域）を、スクロール中の内容が
+        // 通り抜けて見えてしまう。帯の中から ignoresSafeArea しても
+        // 安全領域まで届かないため、画面の一番上に覆いを置く
+        .overlay(alignment: .top) {
+            if isHeaderCollapsed {
+                tabBarBackground
+                    .frame(height: 0)
+                    .ignoresSafeArea(edges: .top)
+            }
+        }
         .fullScreenCover(isPresented: $showAddScheduleItem) {
             AddScheduleItemView(plan: plan, dayNumber: selectedDay)
                 .environmentObject(viewModel)
@@ -766,15 +776,7 @@ struct TravelPlanDetailView: View {
             }
             detailTabBar
         }
-        .background(
-            Group {
-                if isHeaderCollapsed {
-                    tabBarBackground.ignoresSafeArea(edges: .top)
-                } else {
-                    tabBarBackground
-                }
-            }
-        )
+        .background(tabBarBackground)
     }
 
     /// 写真が隠れたあとに残す帯。写真の中と同じ情報を細く出す
