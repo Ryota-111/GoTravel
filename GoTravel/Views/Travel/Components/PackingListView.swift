@@ -274,32 +274,45 @@ struct PackingItemRow: View {
     // MARK: - Body
     var body: some View {
         // 行全体を押せるようにする。丸だけを狙わせると小さくて押しにくい
-        Button(action: toggleCheck) {
-            HStack(spacing: 12) {
-                checkmark
+        HStack(spacing: 12) {
+            checkmark
 
-                Text(item.name)
-                    .font(.system(size: 15))
-                    .foregroundColor(item.isChecked ? themeManager.currentTheme.secondaryText : textColor)
-                    .strikethrough(item.isChecked, color: themeManager.currentTheme.secondaryText)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
+            Text(item.name)
+                .font(.system(size: 15))
+                .foregroundColor(item.isChecked ? themeManager.currentTheme.secondaryText : textColor)
+                .strikethrough(item.isChecked, color: themeManager.currentTheme.secondaryText)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
 
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(cardFill)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(item.isChecked ? themeManager.currentTheme.success.opacity(0.35) : cardStroke, lineWidth: 1)
-                    )
-            )
-            .opacity(item.isChecked ? 0.6 : 1)
+            Spacer(minLength: 0)
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(cardFill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(item.isChecked ? themeManager.currentTheme.success.opacity(0.35) : cardStroke, lineWidth: 1)
+                )
+        )
+        .opacity(item.isChecked ? 0.6 : 1)
+        // Button にすると、タブ切り替えの横スワイプでチェックが入ってしまう。
+        // 縦スクロールは ScrollView がジェスチャを奪うのでボタンは反応しないが、
+        // 横方向は誰も奪わないため、指を離した時点でボタンの action が走るため。
+        // 指の移動量を見て、動いていたらタップとみなさないようにする
+        .contentShape(Rectangle())
+        .gesture(
+            DragGesture(minimumDistance: 0)
+                .onEnded { value in
+                    let moved = max(abs(value.translation.width), abs(value.translation.height))
+                    guard moved < 10 else { return }
+                    toggleCheck()
+                }
+        )
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(item.isChecked ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction(named: "切り替える", toggleCheck)
         .contextMenu {
             Button("削除", role: .destructive, action: deleteItem)
         }
