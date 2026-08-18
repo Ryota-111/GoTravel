@@ -166,6 +166,10 @@ struct TravelPlanDetailView: View {
                                     }
                                 }
                                 .frame(maxWidth: .infinity)
+                                // 貼り付いた見出し（地図）には付けない。
+                                // スクロール全体に付けると、地図を動かした
+                                // だけでタブが変わってしまう
+                                .simultaneousGesture(tabSwipeGesture)
                             } header: {
                                 VStack(spacing: 0) {
                                     detailTabBar
@@ -191,7 +195,6 @@ struct TravelPlanDetailView: View {
                     guard collapsed != isHeaderCollapsed else { return }
                     withAnimation(.easeInOut(duration: 0.2)) { isHeaderCollapsed = collapsed }
                 }
-                .simultaneousGesture(tabSwipeGesture)
                 // 地図でピンを押されたら、その行まで送る
                 .onChange(of: focusedItemID) { _, itemID in
                     guard selectedTab == .map, let itemID else { return }
