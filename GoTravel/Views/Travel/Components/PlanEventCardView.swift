@@ -99,6 +99,7 @@ struct PlanEventCardView: View {
                                 .font(.caption2)
                             Text(formatTime(time))
                                 .font(.caption.weight(.semibold))
+                                .lineLimit(1)
                         }
                         .foregroundColor(mainColor)
                     }
