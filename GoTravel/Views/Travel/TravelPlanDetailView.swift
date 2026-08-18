@@ -989,13 +989,16 @@ struct TravelPlanDetailView: View {
 
     private func weatherSummary(_ weather: WeatherService.DayWeather) -> some View {
         HStack(spacing: 10) {
+            // font 指定だと文字枠の中に小さく描かれる。
+            // resizable で枠いっぱいに描くと、行の高さはそのままで一回り大きくなる
             Image(systemName: weather.symbolName)
-                .font(.system(size: 28))
+                .resizable()
+                .scaledToFit()
                 .foregroundColor(scheduleAccentColor)
-                .frame(width: 36)
+                .frame(width: 42, height: 34)
 
             Text(weather.condition)
-                .font(.system(size: 17, weight: .medium))
+                .font(.system(size: 20, weight: .medium))
                 .foregroundColor(accentColor)
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
