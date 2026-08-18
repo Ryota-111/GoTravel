@@ -191,7 +191,8 @@ struct ProfileView: View {
                     VStack(spacing: 12) {
                         Text(authVM.userFullName ?? "ユーザー")
                             .font(.system(size: 28, weight: .bold, design: .rounded))
-                            .foregroundColor(themeManager.currentTheme.text)
+                            // text は白0.1の固定色で、暗い背景では黒いまま消える
+                            .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
 
                         Text(authVM.userEmail ?? "")
                             .font(.system(size: 15, weight: .medium))
@@ -344,6 +345,7 @@ struct GlassMenuCard: View {
     let subtitle: String
     let gradientColors: [Color]
     @ObservedObject var themeManager = ThemeManager.shared
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         ZStack {
@@ -379,7 +381,7 @@ struct GlassMenuCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title)
                         .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundColor(themeManager.currentTheme.text)
+                        .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
 
                     Text(subtitle)
                         .font(.system(size: 14, weight: .medium))
@@ -551,7 +553,7 @@ struct ProfileEditView: View {
                     .foregroundColor(themeManager.currentTheme.xprimary)
                 Text("お知らせ")
                     .font(.caption.bold())
-                    .foregroundColor(themeManager.currentTheme.text)
+                    .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
             }
 
             Text("名前とメールアドレスはApple IDから取得されます。変更する場合は、Apple IDの設定から変更してください。")
