@@ -254,9 +254,6 @@ struct PackingItemRow: View {
     let item: PackingItem
     let planId: String
 
-    /// 横スワイプ中かどうか。スワイプでチェックが入るのを防ぐ
-    @State private var isSwiping = false
-
     private var currentPlan: TravelPlan? {
         viewModel.travelPlans.first(where: { $0.id == planId })
     }
@@ -277,51 +274,42 @@ struct PackingItemRow: View {
     // MARK: - Body
     var body: some View {
         // 行全体を押せるようにする。丸だけを狙わせると小さくて押しにくい
-        Button {
-            // タブを切り替える横スワイプでチェックが入らないようにする。
-            // 縦スクロールは ScrollView がジェスチャを奪うのでボタンは反応しないが、
-            // 横方向は奪う相手がいないため、指を離した時点で action が走ってしまう
-            guard !isSwiping else { return }
-            toggleCheck()
-        } label: {
-            HStack(spacing: 12) {
-                checkmark
+        HStack(spacing: 12) {
+            checkmark
 
-                Text(item.name)
-                    .font(.system(size: 15))
-                    .foregroundColor(item.isChecked ? themeManager.currentTheme.secondaryText : textColor)
-                    .strikethrough(item.isChecked, color: themeManager.currentTheme.secondaryText)
-                    .lineLimit(2)
-                    .multilineTextAlignment(.leading)
+            Text(item.name)
+                .font(.system(size: 15))
+                .foregroundColor(item.isChecked ? themeManager.currentTheme.secondaryText : textColor)
+                .strikethrough(item.isChecked, color: themeManager.currentTheme.secondaryText)
+                .lineLimit(2)
+                .multilineTextAlignment(.leading)
 
-                Spacer(minLength: 0)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
-            .background(
-                RoundedRectangle(cornerRadius: 12)
-                    .fill(cardFill)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 12)
-                            .stroke(item.isChecked ? themeManager.currentTheme.success.opacity(0.35) : cardStroke, lineWidth: 1)
-                    )
-            )
-            .opacity(item.isChecked ? 0.6 : 1)
+            Spacer(minLength: 0)
         }
-        .buttonStyle(.plain)
-        // 指が動いたかどうかだけを見る。
-        //
-        // **minimumDistance を0にしないこと。**
-        // 0にすると触れた瞬間にジェスチャが成立し、simultaneousGesture であっても
-        // 外側の ScrollView から縦スクロールを奪ってしまう
-        .simultaneousGesture(
-            DragGesture(minimumDistance: 12)
-                .onChanged { _ in isSwiping = true }
-                .onEnded { _ in
-                    // ボタンの action はこの直後に走るので、すぐ戻すと間に合わない
-                    DispatchQueue.main.asyncAfter(deadline: .now() + 0.15) { isSwiping = false }
-                }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(cardFill)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 12)
+                        .stroke(item.isChecked ? themeManager.currentTheme.success.opacity(0.35) : cardStroke, lineWidth: 1)
+                )
         )
+        .opacity(item.isChecked ? 0.6 : 1)
+        // **Button にしないこと。**
+        // Button はタブを切り替える横スワイプでもチェックが入ってしまう。
+        // 縦スクロールは ScrollView がジェスチャを奪うので反応しないが、
+        // 横方向は奪う相手がいないため、指を離した時点で action が走るため。
+        // onTapGesture は指が動くと成立しないので、そのまま使える。
+        //
+        // 自前の DragGesture で移動量を見る方法は、simultaneousGesture にしても
+        // 外側の ScrollView から縦スクロールを奪ってしまうので使えない
+        .contentShape(Rectangle())
+        .onTapGesture(perform: toggleCheck)
+        .accessibilityElement(children: .combine)
+        .accessibilityAddTraits(item.isChecked ? [.isButton, .isSelected] : .isButton)
+        .accessibilityAction(named: "切り替える", toggleCheck)
         .contextMenu {
             Button("削除", role: .destructive, action: deleteItem)
         }
