@@ -11,6 +11,20 @@ struct TravelPlanDetailView: View {
     /// タブバーの高さ。全タブで同じ高さ・同じ位置になるよう固定する
     static let tabBarHeight: CGFloat = 46
 
+    /// ピンを押して予定へ送るときの寄せ先。
+    ///
+    /// `.center` だと、貼り付いている地図とDayタブの高さを考えないため、
+    /// 1つ目の予定がその裏に少しだけ隠れてしまう。
+    /// anchor は「行のその割合の点」を「枠のその割合の位置」に合わせる指定なので、
+    /// 貼り付いている帯の下端より少し下を指す割合を渡す
+    private var focusedItemAnchor: UnitPoint {
+        guard scrollViewportHeight > 0 else { return .center }
+        let pinnedBottom = topSafeAreaInset + Self.tabBarHeight + pinnedHeaderHeight
+        let ratio = (pinnedBottom + 40) / scrollViewportHeight
+        // 帯が画面の大半を占める小さい端末では、下に寄せすぎないようにする
+        return UnitPoint(x: 0.5, y: min(max(ratio, 0.5), 0.85))
+    }
+
     /// 写真が上に隠れているかどうか。
     /// 隠れているあいだだけ、戻るボタンをタブバーに出しステータスバーを覆う
     private var isChromeCompact: Bool { isHeaderCollapsed }
@@ -56,6 +70,13 @@ struct TravelPlanDetailView: View {
     /// 貼り付いた地図が画面のどこにあるか。
     /// スワイプの判定から地図の上を外すために使う
     @State private var pinnedMapFrame: CGRect = .zero
+
+    /// 貼り付けている地図とDayタブを合わせた高さ。
+    /// ピンを押して予定へ送るとき、この下に来るようにするために測る
+    @State private var pinnedHeaderHeight: CGFloat = 0
+
+    /// ScrollView の見えている高さ。scrollTo の anchor は割合指定なので必要
+    @State private var scrollViewportHeight: CGFloat = 0
     /// 写真が上に隠れたかどうか。
     /// 隠れた後はスクロール中の内容がステータスバーの領域に見えてしまうので、
     /// そこを覆うかどうかの判定に使う
@@ -199,11 +220,17 @@ struct TravelPlanDetailView: View {
                 // スワイプは ScrollView に付ける。内側の要素に付けると
                 // ScrollView に取り込まれて、ほとんど反応しなくなる
                 .simultaneousGesture(tabSwipeGesture)
+                // anchor は割合で指定するので、枠の高さが要る
+                .onScrollGeometryChange(for: CGFloat.self) { geometry in
+                    geometry.containerSize.height
+                } action: { _, height in
+                    scrollViewportHeight = height
+                }
                 // 地図でピンを押されたら、その行まで送る
                 .onChange(of: focusedItemID) { _, itemID in
                     guard selectedTab == .map, let itemID else { return }
                     withAnimation(.easeInOut(duration: 0.3)) {
-                        scrollProxy.scrollTo(itemID, anchor: .center)
+                        scrollProxy.scrollTo(itemID, anchor: focusedItemAnchor)
                     }
                 }
             }
@@ -939,6 +966,12 @@ struct TravelPlanDetailView: View {
         }
         .background(tabBarBackground)
         .shadow(color: themeManager.currentTheme.shadow, radius: 4, y: 2)
+        // ピンを押して予定へ送るとき、この帯の下に出したいので高さを覚えておく
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.height
+        } action: { height in
+            pinnedHeaderHeight = height
+        }
     }
 
     /// 地図タブの中身。地図と Day タブは貼り付く側にあるので、ここは予定だけ
