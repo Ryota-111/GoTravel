@@ -958,23 +958,10 @@ struct TravelPlanDetailView: View {
                                           : Color.clear)
                             )
                             .contentShape(Rectangle())
-                            // onTapGesture だと、タブ切り替えの横スワイプでも反応してしまう。
-                            // 横方向のドラッグは ScrollView が奪わないため、
-                            // 指を離した時点でタップとして成立してしまうため。
-                            // 指の移動量を見て、動いていたらタップとみなさない。
-                            //
-                            // **必ず simultaneousGesture を使うこと。**
-                            // .gesture だと minimumDistance が0のぶん触れた瞬間に成立し、
-                            // 外側の ScrollView から縦スクロールを奪ってしまう
-                            .simultaneousGesture(
-                                DragGesture(minimumDistance: 0)
-                                    .onEnded { value in
-                                        let moved = max(abs(value.translation.width), abs(value.translation.height))
-                                        guard moved < 10 else { return }
-                                        // 上の地図をこの場所へ寄せる
-                                        focusedItemID = item.id
-                                    }
-                            )
+                            .onTapGesture {
+                                // 上の地図をこの場所へ寄せる
+                                focusedItemID = item.id
+                            }
                     }
                 }
                 .padding(.horizontal, 16)
