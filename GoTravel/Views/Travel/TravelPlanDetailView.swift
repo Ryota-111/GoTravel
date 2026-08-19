@@ -19,7 +19,7 @@ struct TravelPlanDetailView: View {
     /// 貼り付いている帯の下端より少し下を指す割合を渡す
     private var focusedItemAnchor: UnitPoint {
         guard scrollViewportHeight > 0 else { return .center }
-        let pinnedBottom = topSafeAreaInset + Self.tabBarHeight + pinnedHeaderHeight
+        let pinnedBottom = topSafeAreaInset + Self.tabBarHeight + pinnedHeaderFrame.height
         let ratio = (pinnedBottom + 40) / scrollViewportHeight
         // 帯が画面の大半を占める小さい端末では、下に寄せすぎないようにする
         return UnitPoint(x: 0.5, y: min(max(ratio, 0.5), 0.85))
@@ -67,13 +67,13 @@ struct TravelPlanDetailView: View {
     @State private var focusedItemID: String?
     /// 1回のドラッグで何度もタブが飛ばないようにする目印
     @State private var hasSwitchedTabInDrag = false
-    /// 貼り付いた地図が画面のどこにあるか。
-    /// スワイプの判定から地図の上を外すために使う
-    @State private var pinnedMapFrame: CGRect = .zero
-
-    /// 貼り付けている地図とDayタブを合わせた高さ。
-    /// ピンを押して予定へ送るとき、この下に来るようにするために測る
-    @State private var pinnedHeaderHeight: CGFloat = 0
+    /// 地図タブで貼り付いている帯（地図 + Day タブ）が画面のどこにあるか。
+    ///
+    /// 地図は縦横に動かせるし Day タブは横スクロールなので、
+    /// この中で始まったドラッグはタブ切り替えの対象から外す。
+    /// **地図だけでなく Day タブまで含めること。**
+    /// 地図だけにすると、Day を横スクロールするたびにタブが変わってしまう
+    @State private var pinnedHeaderFrame: CGRect = .zero
 
     /// ScrollView の見えている高さ。scrollTo の anchor は割合指定なので必要
     @State private var scrollViewportHeight: CGFloat = 0
@@ -246,7 +246,7 @@ struct TravelPlanDetailView: View {
             }
         }
         .onChange(of: selectedTab) { _, tab in
-            if tab != .map { pinnedMapFrame = .zero }
+            if tab != .map { pinnedHeaderFrame = .zero }
         }
         .fullScreenCover(isPresented: $showAddScheduleItem) {
             AddScheduleItemView(plan: plan, dayNumber: selectedDay)
@@ -781,8 +781,9 @@ struct TravelPlanDetailView: View {
     private var tabSwipeGesture: some Gesture {
         DragGesture(minimumDistance: 10, coordinateSpace: .global)
             .onChanged { value in
-                // 地図の上で始めたドラッグは地図の操作。タブは動かさない
-                guard !pinnedMapFrame.contains(value.startLocation) else { return }
+                // 貼り付いた帯の中で始めたドラッグは、地図の操作か
+                // Day タブの横スクロール。タブは動かさない
+                guard !pinnedHeaderFrame.contains(value.startLocation) else { return }
 
                 let dx = value.translation.width
                 let dy = value.translation.height
@@ -941,12 +942,6 @@ struct TravelPlanDetailView: View {
                 linkedItemID: $focusedItemID
             )
             .frame(height: 274)
-            // 地図の上はスワイプの対象から外したいので、位置を覚えておく
-            .onGeometryChange(for: CGRect.self) { proxy in
-                proxy.frame(in: .global)
-            } action: { frame in
-                pinnedMapFrame = frame
-            }
             // 貼り付けている地図は狭いので、じっくり見たいときは全画面へ。
             // 右上は「全体を表示」が使っているので左上に置く
             .overlay(alignment: .topLeading) {
@@ -966,11 +961,13 @@ struct TravelPlanDetailView: View {
         }
         .background(tabBarBackground)
         .shadow(color: themeManager.currentTheme.shadow, radius: 4, y: 2)
-        // ピンを押して予定へ送るとき、この帯の下に出したいので高さを覚えておく
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            proxy.size.height
-        } action: { height in
-            pinnedHeaderHeight = height
+        // 帯ぜんぶの位置と大きさを覚えておく。2つのことに使う。
+        // ・地図の操作と Day タブの横スクロールを、タブ切り替えの対象から外す
+        // ・ピンを押して予定へ送るとき、この帯の下に出す
+        .onGeometryChange(for: CGRect.self) { proxy in
+            proxy.frame(in: .global)
+        } action: { frame in
+            pinnedHeaderFrame = frame
         }
     }
 
