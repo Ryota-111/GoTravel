@@ -300,9 +300,13 @@ struct PackingItemRow: View {
         // Button にすると、タブ切り替えの横スワイプでチェックが入ってしまう。
         // 縦スクロールは ScrollView がジェスチャを奪うのでボタンは反応しないが、
         // 横方向は誰も奪わないため、指を離した時点でボタンの action が走るため。
-        // 指の移動量を見て、動いていたらタップとみなさないようにする
+        // 指の移動量を見て、動いていたらタップとみなさないようにする。
+        //
+        // **必ず simultaneousGesture を使うこと。**
+        // .gesture だと minimumDistance が0のぶん触れた瞬間に成立し、
+        // 外側の ScrollView から縦スクロールを奪ってしまう
         .contentShape(Rectangle())
-        .gesture(
+        .simultaneousGesture(
             DragGesture(minimumDistance: 0)
                 .onEnded { value in
                     let moved = max(abs(value.translation.width), abs(value.translation.height))
