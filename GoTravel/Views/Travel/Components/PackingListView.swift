@@ -60,6 +60,13 @@ struct PackingListView: View {
 
             addItemSection
 
+            // まだ足していない候補だけを常に出す。
+            // 空のときだけ出していたら、1つ選んだ時点で残りが消えてしまい
+            // 続けて選べなかった（要望をいただいて変更）
+            if !remainingPresets.isEmpty {
+                presetSection
+            }
+
             if items.isEmpty {
                 emptyStateView
             } else {
@@ -158,18 +165,6 @@ struct PackingListView: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
-            // 最初の1件を入力する手間が一番の障壁なので、よく使うものから足せるようにする
-            VStack(alignment: .leading, spacing: 8) {
-                Text("よく使う持ち物")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-
-                FlowChips(items: Self.presets) { preset in
-                    add(name: preset)
-                }
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.top, 4)
         }
         .frame(maxWidth: .infinity)
         .padding(18)
@@ -178,6 +173,28 @@ struct PackingListView: View {
                 .fill(cardFill)
                 .overlay(RoundedRectangle(cornerRadius: 14).stroke(cardStroke, lineWidth: 1))
         )
+    }
+
+    // MARK: - よく使う持ち物
+
+    /// 最初の1件を入力する手間が一番の障壁なので、よく使うものから足せるようにする。
+    /// すでにリストにあるものは出さない
+    private var remainingPresets: [String] {
+        let existing = Set(items.map { $0.name.trimmingCharacters(in: .whitespacesAndNewlines) })
+        return Self.presets.filter { !existing.contains($0) }
+    }
+
+    private var presetSection: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("よく使う持ち物")
+                .font(.caption2.weight(.semibold))
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+
+            FlowChips(items: remainingPresets) { preset in
+                add(name: preset)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private static let presets = [
