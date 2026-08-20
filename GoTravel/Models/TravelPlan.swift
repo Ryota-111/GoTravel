@@ -232,6 +232,77 @@ struct TravelPlan: Identifiable, Codable {
         }
     }
 
+    /// この計画をもとに新しい計画を作る。
+    ///
+    /// 毎年の帰省や定番の旅行で、前回の行程を土台にしたいという要望から。
+    /// 日数は元のままで出発日だけ動かし、予定は日番号ごとにそのままずらす。
+    ///
+    /// 引き継がないものが3つある。
+    /// ・実際に使った金額 … 前回の実績なので持ち込まない（予算は引き継ぐ）
+    /// ・共有の状態 … 別の旅行なので、共有し直してもらう
+    /// ・持ち物のチェック … 外した状態から始める
+    ///
+    /// カバー写真は呼び出し側でファイルごと複製すること。
+    /// ファイル名だけ引き継ぐと、片方を削除したときもう片方の写真も消える
+    func duplicated(title newTitle: String,
+                    startDate newStartDate: Date,
+                    includeSchedule: Bool,
+                    includePacking: Bool,
+                    includeReservations: Bool) -> TravelPlan {
+        var copy = self
+        copy.id = UUID().uuidString
+        copy.title = newTitle
+        copy.createdAt = Date()
+        copy.updatedAt = Date()
+
+        // 日数は変えずに、出発日だけ動かす
+        let length = Calendar.current.dateComponents([.day], from: startDate, to: endDate).day ?? 0
+        copy.startDate = newStartDate
+        copy.endDate = Calendar.current.date(byAdding: .day, value: length, to: newStartDate) ?? newStartDate
+
+        copy.isShared = false
+        copy.shareCode = nil
+        copy.sharedWith = []
+        copy.ownerId = nil
+        copy.lastEditedBy = nil
+        copy.localImageFileName = nil
+
+        copy.daySchedules = includeSchedule
+            ? daySchedulesInRange.map { day in
+                var newDay = day
+                newDay.id = UUID().uuidString
+                newDay.scheduleItems = day.scheduleItems.map { item in
+                    var newItem = item
+                    newItem.id = UUID().uuidString
+                    newItem.actualCost = nil
+                    return newItem
+                }
+                return newDay
+            }
+            : []
+
+        copy.packingItems = includePacking
+            ? packingItems.map { PackingItem(name: $0.name, isChecked: false) }
+            : []
+
+        // 予約の日時も旅行と同じ日数だけずらす。
+        // 前回の日付のまま残ると、いつの予約なのか分からなくなる
+        let shift = Calendar.current.dateComponents([.day], from: startDate, to: newStartDate).day ?? 0
+        copy.reservations = includeReservations
+            ? reservations.map { reservation in
+                var newReservation = reservation
+                newReservation.id = UUID().uuidString
+                if let date = reservation.date {
+                    newReservation.date = Calendar.current.date(byAdding: .day, value: shift, to: date)
+                }
+                return newReservation
+            }
+            : []
+
+        copy.realignDayScheduleDates()
+        return copy
+    }
+
     static func generateShareCode() -> String {
         let prefix = "TRAVEL"
         // O と I は 0・1 と見間違えて手入力で写し間違えるため含めない

@@ -3,9 +3,12 @@ import SwiftUI
 // MARK: - Travel Plan Card
 struct TravelPlanCard: View {
     @EnvironmentObject var viewModel: TravelPlanViewModel
+    @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
     let plan: TravelPlan
     let onDelete: () -> Void
+
+    @State private var showDuplicateSheet = false
 
     var body: some View {
         NavigationLink(destination: TravelPlanDetailView(plan: plan).environmentObject(viewModel)) {
@@ -30,6 +33,22 @@ struct TravelPlanCard: View {
             .shadow(color: Color.black.opacity(0.15), radius: 12, x: 0, y: 6)
         }
         .buttonStyle(PlainButtonStyle())
+        // 前回の行程を土台に次の旅行を作りたい、という要望から。
+        // カードを長押しで出す
+        .contextMenu {
+            Button {
+                showDuplicateSheet = true
+            } label: {
+                Label("この計画を複製", systemImage: "doc.on.doc")
+            }
+
+            Button("削除", systemImage: "trash", role: .destructive, action: onDelete)
+        }
+        .sheet(isPresented: $showDuplicateSheet) {
+            DuplicateTravelPlanView(plan: plan)
+                .environmentObject(viewModel)
+                .environmentObject(authVM)
+        }
     }
 
     // MARK: - Status

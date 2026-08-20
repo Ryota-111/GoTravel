@@ -83,6 +83,7 @@ struct TravelPlanDetailView: View {
     @State private var isHeaderCollapsed = false
     @State private var showAddScheduleItem = false
     @State private var showBasicInfoEditor = false
+    @State private var showDuplicateSheet = false
     @State private var showBudgetSummary = false
     @State private var showShareView = false
     @State private var showScheduleMap = false
@@ -294,6 +295,11 @@ struct TravelPlanDetailView: View {
         .sheet(isPresented: $showBasicInfoEditor) {
             EditTravelPlanBasicInfoView(plan: plan)
                 .environmentObject(viewModel)
+        }
+        .sheet(isPresented: $showDuplicateSheet) {
+            DuplicateTravelPlanView(plan: plan)
+                .environmentObject(viewModel)
+                .environmentObject(authVM)
         }
         .sheet(isPresented: $showBudgetSummary) {
             if let currentPlan = currentPlan {
@@ -635,6 +641,15 @@ struct TravelPlanDetailView: View {
                             exportCurrentDayImage(plan: plan)
                         } label: {
                             Label("画像で送る（Day \(selectedDay)）", systemImage: "photo")
+                        }
+
+                        Divider()
+
+                        // 前回の行程を土台に次の旅行を作りたい、という要望から
+                        Button {
+                            showDuplicateSheet = true
+                        } label: {
+                            Label("この計画を複製", systemImage: "doc.on.doc")
                         }
                     } label: {
                         ZStack {
