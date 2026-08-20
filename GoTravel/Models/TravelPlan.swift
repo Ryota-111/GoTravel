@@ -179,6 +179,25 @@ struct TravelPlan: Identifiable, Codable {
         return sharedWith.contains(userId) || isOwner(userId: userId)
     }
 
+    /// 何日目が何月何日か。
+    ///
+    /// `DaySchedule` も自分で日付を持っているが、そちらは信用しないこと。
+    /// 出発日を変えても古い日付が残るため、タイムスケジュールや画像の
+    /// 書き出しに変更前の日付が出てしまう（問い合わせで発覚）。
+    /// **表示・書き出しは必ずこれを使う。**
+    func date(forDay dayNumber: Int) -> Date {
+        Calendar.current.date(byAdding: .day, value: dayNumber - 1, to: startDate) ?? startDate
+    }
+
+    /// 保存してある日付を出発日に合わせ直す。
+    /// 表示は `date(forDay:)` を使うので見た目には影響しないが、
+    /// 保存された値がずれたままなのは事故のもとなので、日付を変えたら呼ぶ
+    mutating func realignDayScheduleDates() {
+        for index in daySchedules.indices {
+            daySchedules[index].date = date(forDay: daySchedules[index].dayNumber)
+        }
+    }
+
     static func generateShareCode() -> String {
         let prefix = "TRAVEL"
         // O と I は 0・1 と見間違えて手入力で写し間違えるため含めない

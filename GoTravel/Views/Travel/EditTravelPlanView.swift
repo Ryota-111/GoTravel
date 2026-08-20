@@ -232,7 +232,7 @@ struct EditTravelPlanView: View {
                         .font(.headline)
                         .foregroundColor(.white)
 
-                    Text(formatDate(daySchedule.date))
+                    Text(formatDate(plan.date(forDay: daySchedule.dayNumber)))
                         .font(.caption)
                         .foregroundColor(.white.opacity(0.7))
 

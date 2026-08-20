@@ -19,7 +19,7 @@ enum TravelPlanTextExporter {
         let days = plan.daySchedules.sorted { $0.dayNumber < $1.dayNumber }
         for day in days where !day.scheduleItems.isEmpty {
             lines.append("")
-            lines.append("◆ Day \(day.dayNumber)  \(dateString(day.date))")
+            lines.append("◆ Day \(day.dayNumber)  \(dateString(plan.date(forDay: day.dayNumber)))")
 
             for item in sortedByTime(day.scheduleItems) {
                 var row = "\(timeString(item.time))  \(item.title)"
@@ -151,7 +151,7 @@ struct TravelPlanShareCard: View {
                     .padding(.vertical, 4)
                     .background(accentColor, in: Capsule())
 
-                Text(TravelPlanTextExporter.dateString(daySchedule.date))
+                Text(TravelPlanTextExporter.dateString(plan.date(forDay: daySchedule.dayNumber)))
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.primary)
             }

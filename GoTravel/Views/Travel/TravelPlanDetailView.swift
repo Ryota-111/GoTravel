@@ -605,10 +605,7 @@ struct TravelPlanDetailView: View {
                     ForEach(1...tripDuration, id: \.self) { day in
                         let isSelected = selectedDay == day
                         let itemCount = plan.daySchedules.first(where: { $0.dayNumber == day })?.scheduleItems.count ?? 0
-                        let dayDate: Date? = {
-                            let d = plan.daySchedules.first(where: { $0.dayNumber == day })?.date
-                            return d ?? Calendar.current.date(byAdding: .day, value: day - 1, to: plan.startDate)
-                        }()
+                        let dayDate = plan.date(forDay: day)
 
                         Button(action: {
                             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -620,11 +617,9 @@ struct TravelPlanDetailView: View {
                                     .font(.system(size: 13, weight: .bold))
                                     .foregroundColor(isSelected ? .white : accentColor)
 
-                                if let d = dayDate {
-                                    Text(formatDate(d))
-                                        .font(.system(size: 10))
-                                        .foregroundColor(isSelected ? .white.opacity(0.8) : themeManager.currentTheme.secondaryText)
-                                }
+                                Text(formatDate(dayDate))
+                                    .font(.system(size: 10))
+                                    .foregroundColor(isSelected ? .white.opacity(0.8) : themeManager.currentTheme.secondaryText)
 
                                 if itemCount > 0 {
                                     Text("\(itemCount)件")

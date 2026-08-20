@@ -416,6 +416,9 @@ struct EditTravelPlanBasicInfoView: View {
         updatedPlan.startDate = startDate
         updatedPlan.endDate = normalizedEndDate
         updatedPlan.localImageFileName = fileName
+        // 日程が持っている日付も出発日に合わせる。
+        // ここを忘れると、変更前の日付が保存されたまま残る
+        updatedPlan.realignDayScheduleDates()
 
         if let userId = authVM.userId {
             viewModel.update(updatedPlan, userId: userId, image: selectedImage)

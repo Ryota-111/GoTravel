@@ -462,7 +462,7 @@ struct EditScheduleItemView: View {
     private var formattedDayDate: String {
         let formatter = DateFormatter.japanese
         formatter.dateFormat = "M月d日(E)"
-        return formatter.string(from: daySchedule.date)
+        return formatter.string(from: plan.date(forDay: daySchedule.dayNumber))
     }
 
     // MARK: - Actions
