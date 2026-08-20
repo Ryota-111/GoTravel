@@ -66,8 +66,9 @@ struct ReservationEditorView: View {
                         // 予約番号だけ控えても、便名や座席は結局メールを探すことになる
                         if reservation.kind.usesRoute {
                             routeSection
+                        } else {
+                            dateSection
                         }
-                        dateSection
                         numberField
                         optionalFields
                     }
@@ -158,10 +159,19 @@ struct ReservationEditorView: View {
         date = calendar.date(from: merged) ?? item.time
         hasDate = true
 
-        // 場所は予約の名前に含まれないことが多いのでメモへ回す。
-        // すでに書いてある内容は消さない
+        // 飛行機・新幹線は場所を出発地として扱う。
+        // 「神戸空港」をメモに入れても、空港の欄が空のままで意味がない
+        var locationForNote = item.location
+        if reservation.kind.usesRoute,
+           let location = item.location?.trimmingCharacters(in: .whitespacesAndNewlines),
+           !location.isEmpty {
+            reservation.departurePlace = location
+            locationForNote = nil
+        }
+
+        // 残りはメモへ回す。すでに書いてある内容は消さない
         let existingNote = reservation.note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let pieces = [item.location, item.notes]
+        let pieces = [locationForNote, item.notes]
             .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
             .filter { !$0.isEmpty && !existingNote.contains($0) }
         if !pieces.isEmpty {
@@ -212,23 +222,7 @@ struct ReservationEditorView: View {
                       placeholder: isFlight ? "例：那覇空港" : "例：新大阪駅")
             }
 
-            VStack(alignment: .leading, spacing: 8) {
-                Toggle(isOn: $hasArrivalDate) {
-                    Text("到着時刻を入れる")
-                        .font(.subheadline)
-                        .foregroundColor(textColor)
-                }
-                .tint(accent)
-
-                if hasArrivalDate {
-                    DatePicker("", selection: $arrivalDate)
-                        .datePickerStyle(.compact)
-                        .labelsHidden()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                }
-            }
-            .padding(14)
-            .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+            timeCard
 
             HStack(spacing: 12) {
                 field(label: "座席", text: binding(\.seat),
@@ -238,6 +232,63 @@ struct ReservationEditorView: View {
                 }
             }
         }
+    }
+
+    /// 出発と到着の時刻は1か所にまとめる。
+    /// 汎用の「日時を設定する」と「到着時刻」が離れて2か所にあると、
+    /// どちらが出発なのか分からない
+    private var timeCard: some View {
+        VStack(spacing: 10) {
+            HStack {
+                Text("出発時刻")
+                    .font(.subheadline)
+                    .foregroundColor(textColor)
+                Spacer()
+                DatePicker("", selection: $date)
+                    .datePickerStyle(.compact)
+                    .labelsHidden()
+            }
+
+            Divider()
+
+            if hasArrivalDate {
+                HStack {
+                    Text("到着時刻")
+                        .font(.subheadline)
+                        .foregroundColor(textColor)
+                    Spacer()
+                    DatePicker("", selection: $arrivalDate)
+                        .datePickerStyle(.compact)
+                        .labelsHidden()
+                    Button {
+                        hasArrivalDate = false
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("到着時刻を消す")
+                }
+            } else {
+                Button {
+                    // だいたいの目安として2時間後から始める。そのまま使う人は少ないが、
+                    // 今の日時から始めると日付から直すことになって手間
+                    arrivalDate = Calendar.current.date(byAdding: .hour, value: 2, to: date) ?? date
+                    hasArrivalDate = true
+                } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "plus.circle")
+                        Text("到着時刻を追加")
+                    }
+                    .font(.subheadline)
+                    .foregroundColor(accent)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
     }
 
     private var isFlight: Bool { reservation.kind == .flight }
@@ -327,7 +378,8 @@ struct ReservationEditorView: View {
 
         var edited = reservation
         edited.title = edited.title.trimmingCharacters(in: .whitespacesAndNewlines)
-        edited.date = hasDate ? date : nil
+        // 経路のある予約は時刻のトグルが無く、常に入力されている扱い
+        edited.date = (hasDate || edited.kind.usesRoute) ? date : nil
         edited.arrivalDate = hasArrivalDate ? arrivalDate : nil
 
         // 種類を変えたときに、前の種類の入力が残らないようにする
