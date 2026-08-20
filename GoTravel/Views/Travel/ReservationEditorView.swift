@@ -14,6 +14,8 @@ struct ReservationEditorView: View {
     /// 日時が決まっていない予約もあるので、入力するかどうかを選べるようにする
     @State private var hasDate = false
     @State private var date = Date()
+    @State private var hasArrivalDate = false
+    @State private var arrivalDate = Date()
 
     @State private var showSchedulePicker = false
 
@@ -60,6 +62,11 @@ struct ReservationEditorView: View {
                         }
                         kindPicker
                         field(label: "予約の名前", text: $reservation.title, placeholder: reservation.kind.placeholder)
+                        // 空港・駅で必要になるものを先に出す。
+                        // 予約番号だけ控えても、便名や座席は結局メールを探すことになる
+                        if reservation.kind.usesRoute {
+                            routeSection
+                        }
                         dateSection
                         numberField
                         optionalFields
@@ -85,6 +92,10 @@ struct ReservationEditorView: View {
                 if let existing = reservation.date {
                     hasDate = true
                     date = existing
+                }
+                if let existing = reservation.arrivalDate {
+                    hasArrivalDate = true
+                    arrivalDate = existing
                 }
             }
             .sheet(isPresented: $showSchedulePicker) {
@@ -187,6 +198,58 @@ struct ReservationEditorView: View {
         }
     }
 
+    /// 飛行機・新幹線の入力。空港や駅で見たいものを並べる
+    private var routeSection: some View {
+        VStack(spacing: 16) {
+            field(label: isFlight ? "便名" : "列車名",
+                  text: binding(\.transportNumber),
+                  placeholder: isFlight ? "例：ANA123" : "例：のぞみ21号")
+
+            HStack(spacing: 12) {
+                field(label: "出発", text: binding(\.departurePlace),
+                      placeholder: isFlight ? "例：羽田空港" : "例：東京駅")
+                field(label: "到着", text: binding(\.arrivalPlace),
+                      placeholder: isFlight ? "例：那覇空港" : "例：新大阪駅")
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Toggle(isOn: $hasArrivalDate) {
+                    Text("到着時刻を入れる")
+                        .font(.subheadline)
+                        .foregroundColor(textColor)
+                }
+                .tint(accent)
+
+                if hasArrivalDate {
+                    DatePicker("", selection: $arrivalDate)
+                        .datePickerStyle(.compact)
+                        .labelsHidden()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                }
+            }
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+
+            HStack(spacing: 12) {
+                field(label: "座席", text: binding(\.seat),
+                      placeholder: isFlight ? "例：12A" : "例：7号車 3D")
+                if isFlight {
+                    field(label: "ターミナル", text: binding(\.terminal), placeholder: "例：第2")
+                }
+            }
+        }
+    }
+
+    private var isFlight: Bool { reservation.kind == .flight }
+
+    /// 任意項目は nil と空文字を行き来するので、まとめて扱えるようにする
+    private func binding(_ keyPath: WritableKeyPath<Reservation, String?>) -> Binding<String> {
+        Binding(
+            get: { reservation[keyPath: keyPath] ?? "" },
+            set: { reservation[keyPath: keyPath] = $0 }
+        )
+    }
+
     private var dateSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Toggle(isOn: $hasDate) {
@@ -265,6 +328,23 @@ struct ReservationEditorView: View {
         var edited = reservation
         edited.title = edited.title.trimmingCharacters(in: .whitespacesAndNewlines)
         edited.date = hasDate ? date : nil
+        edited.arrivalDate = hasArrivalDate ? arrivalDate : nil
+
+        // 種類を変えたときに、前の種類の入力が残らないようにする
+        if !edited.kind.usesRoute {
+            edited.transportNumber = nil
+            edited.departurePlace = nil
+            edited.arrivalPlace = nil
+            edited.arrivalDate = nil
+            edited.seat = nil
+        }
+        if edited.kind != .flight { edited.terminal = nil }
+
+        // 空欄は nil に寄せる。空文字が残ると「入力あり」と判定してしまう
+        for keyPath in [\Reservation.transportNumber, \.departurePlace, \.arrivalPlace, \.seat, \.terminal] {
+            let trimmed = edited[keyPath: keyPath]?.trimmingCharacters(in: .whitespacesAndNewlines)
+            edited[keyPath: keyPath] = (trimmed?.isEmpty ?? true) ? nil : trimmed
+        }
         edited.confirmationNumber = edited.confirmationNumber?.trimmingCharacters(in: .whitespacesAndNewlines)
         edited.note = edited.note?.trimmingCharacters(in: .whitespacesAndNewlines)
         edited.linkURL = edited.linkURL?.trimmingCharacters(in: .whitespacesAndNewlines)

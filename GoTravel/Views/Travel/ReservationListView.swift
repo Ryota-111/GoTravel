@@ -191,6 +191,17 @@ struct ReservationListView: View {
                 .buttonStyle(.plain)
             }
 
+            // 空港・駅で一番見るものなので、予約番号の前に出す
+            if reservation.hasRoute {
+                routeRow(reservation)
+            }
+
+            if !detailChips(reservation).isEmpty {
+                FlowDetailChips(chips: detailChips(reservation),
+                                textColor: textColor,
+                                secondary: themeManager.currentTheme.secondaryText)
+            }
+
             if let number = reservation.confirmationNumber, !number.isEmpty {
                 confirmationNumberRow(number, id: reservation.id)
             }
@@ -217,6 +228,75 @@ struct ReservationListView: View {
             Button("編集") { editing = reservation }
             Button("削除", role: .destructive) { delete(reservation) }
         }
+    }
+
+    /// 出発地 → 到着地。時刻が入っていればその下に添える
+    private func routeRow(_ reservation: Reservation) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            endpoint(place: reservation.departurePlace, time: reservation.date, alignment: .leading)
+
+            VStack(spacing: 2) {
+                Image(systemName: reservation.kind == .flight ? "airplane" : "arrow.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(accent)
+                if let duration = durationText(reservation) {
+                    Text(duration)
+                        .font(.system(size: 10))
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                }
+            }
+            .padding(.top, 6)
+
+            endpoint(place: reservation.arrivalPlace, time: reservation.arrivalDate, alignment: .trailing)
+        }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: 10).fill(accent.opacity(0.06)))
+    }
+
+    private func endpoint(place: String?, time: Date?, alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 2) {
+            Text(place ?? "-")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(textColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            if let time {
+                Text(Self.timeFormatter.string(from: time))
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .foregroundColor(textColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
+    }
+
+    /// 出発から到着までの所要時間。両方入っているときだけ
+    private func durationText(_ reservation: Reservation) -> String? {
+        guard let start = reservation.date, let end = reservation.arrivalDate, end > start else { return nil }
+        let minutes = Int(end.timeIntervalSince(start) / 60)
+        let hours = minutes / 60
+        let rest = minutes % 60
+        if hours == 0 { return "\(rest)分" }
+        return rest == 0 ? "\(hours)時間" : "\(hours)時間\(rest)分"
+    }
+
+    /// 便名・座席・ターミナルなど、短い情報をまとめて出す
+    private func detailChips(_ reservation: Reservation) -> [(String, String)] {
+        var chips: [(String, String)] = []
+        if let number = reservation.transportNumber, !number.isEmpty {
+            chips.append((reservation.kind == .flight ? "便名" : "列車", number))
+        }
+        if let seat = reservation.seat, !seat.isEmpty {
+            chips.append(("座席", seat))
+        }
+        if let terminal = reservation.terminal, !terminal.isEmpty {
+            chips.append(("ターミナル", terminal))
+        }
+        return chips
     }
 
     /// 予約番号はこの機能の主役なので、大きく出してタップでコピーできるようにする
@@ -265,4 +345,36 @@ struct ReservationListView: View {
         formatter.dateFormat = "M月d日(E) HH:mm"
         return formatter
     }()
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter.japanese
+        formatter.dateFormat = "HH:mm"
+        return formatter
+    }()
+}
+
+/// 便名・座席などの短い情報を並べる。
+/// 文字数がまちまちなので、固定列にせず幅なりに折り返す
+private struct FlowDetailChips: View {
+    let chips: [(String, String)]
+    let textColor: Color
+    let secondary: Color
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 8)], spacing: 8) {
+            ForEach(chips, id: \.0) { label, value in
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(label)
+                        .font(.system(size: 10))
+                        .foregroundColor(secondary)
+                    Text(value)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(textColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
 }

@@ -72,12 +72,42 @@ struct Reservation: Identifiable, Codable, Equatable {
     var id: String
     var kind: Kind
     var title: String
-    /// 搭乗・チェックインなどの日時。決まっていない予約もあるので任意
+    /// 搭乗・チェックインなどの日時。決まっていない予約もあるので任意。
+    /// 飛行機では出発時刻として扱う
     var date: Date?
     /// 予約番号・確認番号。この機能の主役
     var confirmationNumber: String?
     var note: String?
     var linkURL: String?
+
+    // MARK: - 移動の予約で使う項目
+    //
+    // 空港で必要になるのは、便名・座席・予約番号・出発時刻・ターミナル。
+    // メモに書いてもらう形だと探しにくいので、独立した項目にする。
+    // 新幹線でもそのまま使えるように、飛行機だけの名前は避けている
+    // （terminal だけは飛行機用）。
+    //
+    // これらは JSON にまとめて保存されるため、増やしても
+    // CloudKit のスキーマ変更は要らない。古いデータでは nil になる。
+
+    /// 便名・列車名（例: ANA123 / のぞみ21号）
+    var transportNumber: String?
+    /// 出発地（例: 羽田空港 / 東京駅）
+    var departurePlace: String?
+    /// 到着地（例: 那覇空港 / 新大阪駅）
+    var arrivalPlace: String?
+    /// 到着時刻。出発時刻は `date` を使う
+    var arrivalDate: Date?
+    /// 座席（例: 12A / 7号車 3D）
+    var seat: String?
+    /// ターミナル（例: 第2ターミナル）。飛行機のみ
+    var terminal: String?
+
+    /// 経路を表示するかどうか。
+    /// 片方しか入っていなくても出す。入れた情報が画面に出ないほうが困る
+    var hasRoute: Bool {
+        !(departurePlace ?? "").isEmpty || !(arrivalPlace ?? "").isEmpty
+    }
 
     init(id: String = UUID().uuidString,
          kind: Kind = .hotel,
@@ -85,7 +115,13 @@ struct Reservation: Identifiable, Codable, Equatable {
          date: Date? = nil,
          confirmationNumber: String? = nil,
          note: String? = nil,
-         linkURL: String? = nil) {
+         linkURL: String? = nil,
+         transportNumber: String? = nil,
+         departurePlace: String? = nil,
+         arrivalPlace: String? = nil,
+         arrivalDate: Date? = nil,
+         seat: String? = nil,
+         terminal: String? = nil) {
         self.id = id
         self.kind = kind
         self.title = title
@@ -93,5 +129,18 @@ struct Reservation: Identifiable, Codable, Equatable {
         self.confirmationNumber = confirmationNumber
         self.note = note
         self.linkURL = linkURL
+        self.transportNumber = transportNumber
+        self.departurePlace = departurePlace
+        self.arrivalPlace = arrivalPlace
+        self.arrivalDate = arrivalDate
+        self.seat = seat
+        self.terminal = terminal
+    }
+}
+
+extension Reservation.Kind {
+    /// 出発地・到着地・座席を入力させる種類かどうか
+    var usesRoute: Bool {
+        self == .flight || self == .train
     }
 }
