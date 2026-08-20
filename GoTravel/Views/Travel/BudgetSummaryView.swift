@@ -11,6 +11,9 @@ struct BudgetSummaryView: View {
     /// タブに埋め込むときは true。独自のヘッダーを出さない
     var isEmbedded: Bool = false
 
+    /// 明細を開いている日。閉じた状態から始める
+    @State private var expandedDays: Set<Int> = []
+
     /// ViewModelから最新のプランを見る。人数を変えた結果を即座に反映するため
     private var currentPlan: TravelPlan {
         travelPlanViewModel.travelPlans.first(where: { $0.id == plan.id }) ?? plan
@@ -53,22 +56,45 @@ struct BudgetSummaryView: View {
         return splitBaseCost / Double(memberCount)
     }
 
-    private var costByDay: [(dayNumber: Int, date: Date, cost: Double)] {
-        currentPlan.daySchedulesInRange.map { day in
-            let cost = day.scheduleItems.compactMap { $0.cost }.reduce(0, +)
-            return (day.dayNumber, currentPlan.date(forDay: day.dayNumber), cost)
-        }.filter { $0.cost > 0 }
-    }
-
-    private var costByDayDetailed: [(dayNumber: Int, date: Date, items: [(title: String, cost: Double)])] {
+    /// 日ごとの金額。
+    ///
+    /// 予算と実績の両方を持たせる。以前は予算しか見ていなかったため、
+    /// 実績だけ入れた項目が日別にも内訳にも出ず、合計と食い違って見えていた
+    private var costByDay: [DayCost] {
         currentPlan.daySchedulesInRange.compactMap { day in
             let items = day.scheduleItems
-                .filter { ($0.cost ?? 0) > 0 }
-                .map { ($0.title, $0.cost!) }
+                .filter { ($0.cost ?? 0) > 0 || ($0.actualCost ?? 0) > 0 }
+                .map { ItemCost(id: $0.id, title: $0.title, budget: $0.cost, actual: $0.actualCost) }
             guard !items.isEmpty else { return nil }
-            return (day.dayNumber, currentPlan.date(forDay: day.dayNumber), items)
+
+            return DayCost(
+                dayNumber: day.dayNumber,
+                date: currentPlan.date(forDay: day.dayNumber),
+                budget: items.compactMap(\.budget).reduce(0, +),
+                actual: items.compactMap(\.actual).reduce(0, +),
+                hasActual: items.contains { $0.actual != nil },
+                items: items
+            )
         }
     }
+
+    struct DayCost: Identifiable {
+        let dayNumber: Int
+        let date: Date
+        let budget: Double
+        let actual: Double
+        let hasActual: Bool
+        let items: [ItemCost]
+        var id: Int { dayNumber }
+    }
+
+    struct ItemCost: Identifiable {
+        let id: String
+        let title: String
+        let budget: Double?
+        let actual: Double?
+    }
+
 
     private var tripDays: Int {
         (Calendar.current.dateComponents([.day], from: currentPlan.startDate, to: currentPlan.endDate).day ?? 0) + 1
@@ -134,12 +160,10 @@ struct BudgetSummaryView: View {
     }
 
     private var cards: some View {
+        // カードは3枚まで。以前は5枚あり、予算と実績を見比べるのに
+        // スクロールが要り、日別と内訳も同じことを2度書いていた
         VStack(spacing: 16) {
-            totalCostCard
-
-            if hasActualCost {
-                actualCostCard
-            }
+            summaryCard
 
             // 共有していなくても同行者と割り勘したい場面があるため常に出す
             if splitBaseCost > 0 {
@@ -147,14 +171,10 @@ struct BudgetSummaryView: View {
             }
 
             if !costByDay.isEmpty {
-                costByDayCard
+                dailyCard
             }
 
-            if !costByDayDetailed.isEmpty {
-                costBreakdownCard
-            }
-
-            if totalCost == 0 {
+            if totalCost == 0 && !hasActualCost {
                 emptyStateView
             }
         }
@@ -193,8 +213,12 @@ struct BudgetSummaryView: View {
         .background(budgetColor.opacity(0.12))
     }
 
-    // MARK: - Total Cost Hero Card
-    private var totalCostCard: some View {
+    // MARK: - 1枚目：使った金額と予算
+
+    /// 実績を主役にし、予算はバーの背景と残額で見せる。
+    /// 「予算に対して今いくらか」が一番知りたい情報なので、
+    /// 予算と実績を別のカードに分けない
+    private var summaryCard: some View {
         ZStack(alignment: .bottomLeading) {
             LinearGradient(
                 gradient: Gradient(colors: [budgetColor.opacity(0.85), budgetColor.opacity(0.5)]),
@@ -203,111 +227,81 @@ struct BudgetSummaryView: View {
             )
             .cornerRadius(20)
 
-            VStack(alignment: .leading, spacing: 8) {
+            // 目的地は上の写真に出ているので、ここでは繰り返さない
+            VStack(alignment: .leading, spacing: 6) {
                 HStack {
-                    HStack(spacing: 6) {
+                    HStack(spacing: 5) {
                         Image(systemName: "yensign.circle.fill")
-                            .font(.system(size: 16))
-                            .foregroundColor(.white.opacity(0.8))
-                        Text("合計予算")
-                            .font(.subheadline.weight(.medium))
-                            .foregroundColor(.white.opacity(0.8))
+                            .font(.system(size: 13))
+                        Text(hasActualCost ? "使った金額" : "合計予算")
+                            .font(.caption.weight(.medium))
                     }
+                    .foregroundColor(.white.opacity(0.85))
 
                     Spacer()
 
                     Text("\(tripDays)日間")
-                        .font(.caption.weight(.semibold))
+                        .font(.caption2.weight(.semibold))
                         .foregroundColor(.white.opacity(0.85))
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 4)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
                         .background(.white.opacity(0.2))
                         .clipShape(Capsule())
                 }
 
-                Text(formatCurrency(totalCost))
-                    .font(.system(size: 44, weight: .bold, design: .rounded))
+                Text(formatCurrency(hasActualCost ? totalActualCost : totalCost))
+                    .font(.system(size: 30, weight: .bold, design: .rounded))
                     .foregroundColor(.white)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
 
-                HStack(spacing: 4) {
-                    Image(systemName: "mappin.circle.fill")
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.7))
-                    Text(currentPlan.destination)
-                        .font(.caption)
-                        .foregroundColor(.white.opacity(0.7))
+                if hasActualCost && totalCost > 0 {
+                    budgetBar
+                    HStack {
+                        Text("予算 \(formatCurrency(totalCost))")
+                        Spacer()
+                        Text(remainingText)
+                            .fontWeight(.semibold)
+                    }
+                    .font(.caption2)
+                    .foregroundColor(.white.opacity(0.9))
+                } else if !hasActualCost && totalCost > 0 {
+                    // 実績を記録できること自体が知られていないので、ここで伝える
+                    Text("予定をタップして「実際に使った金額」を入れると、差額が分かります")
+                        .font(.caption2)
+                        .foregroundColor(.white.opacity(0.8))
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
-            .padding(20)
+            .padding(.horizontal, 16)
+            .padding(.vertical, 14)
         }
-        .frame(height: 160)
-        .shadow(color: budgetColor.opacity(0.35), radius: 12, x: 0, y: 6)
+        .shadow(color: budgetColor.opacity(0.25), radius: 8, x: 0, y: 4)
     }
 
-    // MARK: - Actual Cost Card
-    /// 予算と実績の比較。実績が1件でも入っているときだけ出す
-    private var actualCostCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 6) {
-                Image(systemName: "checkmark.seal.fill")
-                    .foregroundColor(budgetColor)
-                    .font(.subheadline)
-                Text("実際に使った金額")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(accentColor)
+    /// 予算に対して実績がどこまで来たか。超えた分は色を変える
+    private var budgetBar: some View {
+        GeometryReader { geo in
+            let ratio = min(totalActualCost / max(totalCost, 1), 1)
+            ZStack(alignment: .leading) {
+                Capsule()
+                    .fill(.white.opacity(0.25))
+                Capsule()
+                    .fill(costDifference > 0 ? Color.white : Color.white.opacity(0.9))
+                    .frame(width: max(geo.size.width * CGFloat(ratio), 4))
             }
-
-            HStack(spacing: 12) {
-                amountColumn(label: "予算", amount: totalCost, color: themeManager.currentTheme.secondaryText)
-
-                Spacer()
-
-                amountColumn(label: "実績", amount: totalActualCost, color: budgetColor)
-
-                Spacer()
-
-                amountColumn(
-                    label: costDifference > 0 ? "超過" : "節約",
-                    amount: abs(costDifference),
-                    color: costDifference > 0 ? themeManager.currentTheme.error : themeManager.currentTheme.success
-                )
-            }
-            .padding(14)
-            .background(budgetColor.opacity(0.06))
-            .cornerRadius(12)
-
-            Text(differenceMessage)
-                .font(.caption)
-                .foregroundColor(themeManager.currentTheme.secondaryText)
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(cardBg)
-                .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
-        )
+        .frame(height: 6)
+        .padding(.top, 2)
     }
 
-    private func amountColumn(label: String, amount: Double, color: Color) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label)
-                .font(.caption)
-                .foregroundColor(themeManager.currentTheme.secondaryText)
-            Text(formatCurrency(amount))
-                .font(.subheadline.weight(.bold))
-                .foregroundColor(color)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-        }
-    }
-
-    private var differenceMessage: String {
+    private var remainingText: String {
         if costDifference > 0 {
-            return "予算より \(formatCurrency(costDifference)) 多く使いました"
+            return "\(formatCurrency(costDifference)) 超過"
         } else if costDifference < 0 {
-            return "予算より \(formatCurrency(abs(costDifference))) 少なく済みました"
+            return "あと \(formatCurrency(abs(costDifference)))"
         }
-        return "予算どおりに収まりました"
+        return "予算どおり"
     }
 
     // MARK: - Cost Split Card
@@ -401,54 +395,44 @@ struct BudgetSummaryView: View {
         travelPlanViewModel.update(updated, userId: userId)
     }
 
-    // MARK: - Cost By Day Card (progress bars)
-    private var costByDayCard: some View {
-        let maxCost = costByDay.map { $0.cost }.max() ?? 1
+    // MARK: - 3枚目：日ごと
 
-        return VStack(alignment: .leading, spacing: 14) {
+    /// 日別の合計と、その日の明細を1枚にまとめる。
+    /// 以前は「日別の支出」と「支出の内訳」の2枚に分かれていて、
+    /// 同じことを違う見せ方で2度書いていた
+    private var dailyCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 6) {
                 Image(systemName: "calendar.badge.clock")
                     .foregroundColor(budgetColor)
                     .font(.subheadline)
-                Text("日別の支出")
+                Text("日ごと")
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(accentColor)
+
+                Spacer()
+
+                Text("実績 / 予算")
+                    .font(.caption2)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
             }
 
-            VStack(spacing: 12) {
-                ForEach(costByDay, id: \.dayNumber) { day in
-                    VStack(spacing: 5) {
-                        HStack {
-                            Text("Day \(day.dayNumber)")
-                                .font(.caption.weight(.bold))
-                                .foregroundColor(accentColor)
-                                .frame(width: 44, alignment: .leading)
-                            Text(formatDate(day.date))
-                                .font(.caption)
-                                .foregroundColor(themeManager.currentTheme.secondaryText)
-                            Spacer()
-                            Text(formatCurrency(day.cost))
-                                .font(.caption.weight(.semibold))
-                                .foregroundColor(budgetColor)
-                        }
+            VStack(spacing: 0) {
+                ForEach(costByDay) { day in
+                    dayRow(day)
 
-                        GeometryReader { geo in
-                            ZStack(alignment: .leading) {
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(budgetColor.opacity(0.1))
-                                    .frame(height: 6)
-                                RoundedRectangle(cornerRadius: 4)
-                                    .fill(
-                                        LinearGradient(
-                                            colors: [budgetColor, budgetColor.opacity(0.6)],
-                                            startPoint: .leading,
-                                            endPoint: .trailing
-                                        )
-                                    )
-                                    .frame(width: geo.size.width * CGFloat(day.cost / maxCost), height: 6)
+                    if expandedDays.contains(day.dayNumber) {
+                        VStack(spacing: 0) {
+                            ForEach(day.items) { item in
+                                itemRow(item)
                             }
                         }
-                        .frame(height: 6)
+                        .padding(.leading, 8)
+                        .padding(.bottom, 6)
+                    }
+
+                    if day.dayNumber != costByDay.last?.dayNumber {
+                        Divider()
                     }
                 }
             }
@@ -461,68 +445,75 @@ struct BudgetSummaryView: View {
         )
     }
 
-    // MARK: - Cost Breakdown Card (grouped by day)
-    private var costBreakdownCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 6) {
-                Image(systemName: "list.bullet.rectangle")
-                    .foregroundColor(budgetColor)
-                    .font(.subheadline)
-                Text("支出の内訳")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(accentColor)
-            }
+    private func dayRow(_ day: DayCost) -> some View {
+        HStack(spacing: 8) {
+            Text("Day \(day.dayNumber)")
+                .font(.caption.weight(.bold))
+                .foregroundColor(accentColor)
 
-            VStack(spacing: 12) {
-                ForEach(costByDayDetailed, id: \.dayNumber) { day in
-                    VStack(alignment: .leading, spacing: 8) {
-                        HStack(spacing: 6) {
-                            Text("Day \(day.dayNumber)")
-                                .font(.caption.weight(.bold))
-                                .foregroundColor(.white)
-                                .padding(.horizontal, 8)
-                                .padding(.vertical, 3)
-                                .background(budgetColor.opacity(0.8))
-                                .clipShape(Capsule())
-                            Text(formatDate(day.date))
-                                .font(.caption)
-                                .foregroundColor(themeManager.currentTheme.secondaryText)
-                        }
+            Text(formatDate(day.date))
+                .font(.caption)
+                .foregroundColor(themeManager.currentTheme.secondaryText)
 
-                        VStack(spacing: 0) {
-                            ForEach(day.items.indices, id: \.self) { idx in
-                                let item = day.items[idx]
-                                HStack {
-                                    Text(item.title)
-                                        .font(.subheadline)
-                                        .foregroundColor(accentColor)
-                                        .lineLimit(1)
-                                    Spacer()
-                                    Text(formatCurrency(item.cost))
-                                        .font(.subheadline.weight(.medium))
-                                        .foregroundColor(budgetColor)
-                                }
-                                .padding(.vertical, 10)
-                                .padding(.horizontal, 12)
+            Spacer(minLength: 4)
 
-                                if idx < day.items.count - 1 {
-                                    Divider()
-                                        .padding(.horizontal, 12)
-                                }
-                            }
-                        }
-                        .background(budgetColor.opacity(0.04))
-                        .cornerRadius(10)
-                    }
+            Text(day.hasActual ? formatCurrency(day.actual) : "－")
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(day.hasActual ? budgetColor : themeManager.currentTheme.secondaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            Text("/ \(formatCurrency(day.budget))")
+                .font(.caption)
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            Image(systemName: expandedDays.contains(day.dayNumber) ? "chevron.down" : "chevron.right")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+        }
+        .padding(.vertical, 10)
+        // Button にすると横スワイプでも反応してしまうため onTapGesture を使う
+        .contentShape(Rectangle())
+        .onTapGesture {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                if expandedDays.contains(day.dayNumber) {
+                    expandedDays.remove(day.dayNumber)
+                } else {
+                    expandedDays.insert(day.dayNumber)
                 }
             }
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(cardBg)
-                .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
-        )
+    }
+
+    private func itemRow(_ item: ItemCost) -> some View {
+        HStack(spacing: 8) {
+            Text("・\(item.title)")
+                .font(.caption)
+                .foregroundColor(accentColor)
+                .lineLimit(1)
+
+            Spacer(minLength: 4)
+
+            // 実績が入っていればそれを出し、予算しか無ければ予算を出す
+            if let actual = item.actual {
+                Text(formatCurrency(actual))
+                    .font(.caption.weight(.medium))
+                    .foregroundColor(budgetColor)
+                if let budget = item.budget, budget != actual {
+                    Text("/ \(formatCurrency(budget))")
+                        .font(.caption2)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                }
+            } else if let budget = item.budget {
+                Text(formatCurrency(budget))
+                    .font(.caption.weight(.medium))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+        }
+        .padding(.vertical, 6)
+        .padding(.horizontal, 10)
     }
 
     // MARK: - Empty State
