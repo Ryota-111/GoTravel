@@ -12,25 +12,8 @@ struct TravelPlanCard: View {
 
     var body: some View {
         NavigationLink(destination: TravelPlanDetailView(plan: plan).environmentObject(viewModel)) {
-            ZStack {
-                cardBackground
-                cardOverlay
-                cardContent
-            }
-            .frame(width: 200, height: 200)
-            .overlay(
-                // ガラス風のハイライト縁取り
-                RoundedRectangle(cornerRadius: 25)
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.45), Color.white.opacity(0.05)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
-            )
-            .shadow(color: Color.black.opacity(0.15), radius: 12, x: 0, y: 6)
+            cardBody
+                .shadow(color: Color.black.opacity(0.15), radius: 12, x: 0, y: 6)
         }
         .buttonStyle(PlainButtonStyle())
         // 前回の行程を土台に次の旅行を作りたい、という要望から。
@@ -43,12 +26,41 @@ struct TravelPlanCard: View {
             }
 
             Button("削除", systemImage: "trash", role: .destructive, action: onDelete)
+        } preview: {
+            // **preview を省略しないこと。**
+            // 省略するとカードがその場で持ち上がるが、このカードは
+            // 縦横2重の ScrollView の中にあり、はみ出した分が切り取られて
+            // タイトルやタブバーの下に潜り込んで見える。
+            // 別に描いたものを渡すと、切り取りの外に出せる
+            cardBody
         }
         .sheet(isPresented: $showDuplicateSheet) {
             DuplicateTravelPlanView(plan: plan)
                 .environmentObject(viewModel)
                 .environmentObject(authVM)
         }
+    }
+
+    /// カードの見た目。長押しのプレビューでも同じものを使う
+    private var cardBody: some View {
+        ZStack {
+            cardBackground
+            cardOverlay
+            cardContent
+        }
+        .frame(width: 200, height: 200)
+        .overlay(
+            // ガラス風のハイライト縁取り
+            RoundedRectangle(cornerRadius: 25)
+                .stroke(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.45), Color.white.opacity(0.05)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        )
     }
 
     // MARK: - Status
