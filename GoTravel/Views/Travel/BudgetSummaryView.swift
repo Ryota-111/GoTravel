@@ -56,7 +56,7 @@ struct BudgetSummaryView: View {
     private var costByDay: [(dayNumber: Int, date: Date, cost: Double)] {
         currentPlan.daySchedules.map { day in
             let cost = day.scheduleItems.compactMap { $0.cost }.reduce(0, +)
-            return (day.dayNumber, day.date, cost)
+            return (day.dayNumber, currentPlan.date(forDay: day.dayNumber), cost)
         }.filter { $0.cost > 0 }
     }
 
@@ -66,7 +66,7 @@ struct BudgetSummaryView: View {
                 .filter { ($0.cost ?? 0) > 0 }
                 .map { ($0.title, $0.cost!) }
             guard !items.isEmpty else { return nil }
-            return (day.dayNumber, day.date, items)
+            return (day.dayNumber, currentPlan.date(forDay: day.dayNumber), items)
         }
     }
 

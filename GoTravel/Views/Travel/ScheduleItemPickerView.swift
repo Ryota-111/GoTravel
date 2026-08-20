@@ -63,12 +63,12 @@ struct ScheduleItemPickerView: View {
 
     private func daySection(_ day: DaySchedule) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("Day \(day.dayNumber)　\(dayLabel(day.date))")
+            Text("Day \(day.dayNumber)　\(dayLabel(plan.date(forDay: day.dayNumber)))")
                 .font(.caption.weight(.semibold))
                 .foregroundColor(themeManager.currentTheme.secondaryText)
 
             ForEach(day.scheduleItems.sorted { $0.time < $1.time }) { item in
-                row(item: item, dayDate: day.date)
+                row(item: item, dayDate: plan.date(forDay: day.dayNumber))
             }
         }
     }
