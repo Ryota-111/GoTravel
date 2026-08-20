@@ -12,55 +12,32 @@ struct TravelPlanCard: View {
 
     var body: some View {
         NavigationLink(destination: TravelPlanDetailView(plan: plan).environmentObject(viewModel)) {
-            cardBody
-                .shadow(color: Color.black.opacity(0.15), radius: 12, x: 0, y: 6)
+            ZStack {
+                cardBackground
+                cardOverlay
+                cardContent
+            }
+            .frame(width: 200, height: 200)
+            .overlay(
+                // ガラス風のハイライト縁取り
+                RoundedRectangle(cornerRadius: 25)
+                    .stroke(
+                        LinearGradient(
+                            colors: [Color.white.opacity(0.45), Color.white.opacity(0.05)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1
+                    )
+            )
+            .shadow(color: Color.black.opacity(0.15), radius: 12, x: 0, y: 6)
         }
         .buttonStyle(PlainButtonStyle())
-        // 前回の行程を土台に次の旅行を作りたい、という要望から。
-        // カードを長押しで出す
-        .contextMenu {
-            Button {
-                showDuplicateSheet = true
-            } label: {
-                Label("この計画を複製", systemImage: "doc.on.doc")
-            }
-
-            Button("削除", systemImage: "trash", role: .destructive, action: onDelete)
-        } preview: {
-            // **preview を省略しないこと。**
-            // 省略するとカードがその場で持ち上がるが、このカードは
-            // 縦横2重の ScrollView の中にあり、はみ出した分が切り取られて
-            // タイトルやタブバーの下に潜り込んで見える。
-            // 別に描いたものを渡すと、切り取りの外に出せる
-            cardBody
-        }
         .sheet(isPresented: $showDuplicateSheet) {
             DuplicateTravelPlanView(plan: plan)
                 .environmentObject(viewModel)
                 .environmentObject(authVM)
         }
-    }
-
-    /// カードの見た目。長押しのプレビューでも同じものを使う
-    private var cardBody: some View {
-        ZStack {
-            cardBackground
-            cardOverlay
-            cardContent
-        }
-        .frame(width: 200, height: 200)
-        .overlay(
-            // ガラス風のハイライト縁取り
-            RoundedRectangle(cornerRadius: 25)
-                .stroke(
-                    LinearGradient(
-                        colors: [Color.white.opacity(0.45), Color.white.opacity(0.05)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    ),
-                    lineWidth: 1
-                )
-        )
     }
 
     // MARK: - Status
@@ -168,7 +145,7 @@ struct TravelPlanCard: View {
     private var cardOverlay: some View {
         VStack(alignment: .leading) {
             HStack(spacing: 6) {
-                deleteButton
+                menuButton
                 Spacer()
                 statusBadge
             }
@@ -197,16 +174,29 @@ struct TravelPlanCard: View {
         .background(.ultraThinMaterial, in: Capsule())
     }
 
-    private var deleteButton: some View {
-        Button(action: onDelete) {
-            Image(systemName: "trash")
-                .font(.system(size: 14, weight: .semibold))
+    /// **contextMenu（長押し）は使わないこと。**
+    /// このカードは縦横2重の ScrollView の中にあり、帯の高さがカードと
+    /// ほぼ同じで上下左右に逃げ場がない。長押しで持ち上がったカードが
+    /// 切り取られ、見出しやタブバーの下に潜り込んで見える。
+    /// preview を渡しても直らなかったため、Menu に置き換えた
+    private var menuButton: some View {
+        Menu {
+            Button {
+                showDuplicateSheet = true
+            } label: {
+                Label("この計画を複製", systemImage: "doc.on.doc")
+            }
+
+            Button("削除", systemImage: "trash", role: .destructive, action: onDelete)
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 14, weight: .bold))
                 .foregroundColor(.white)
                 .frame(width: 30, height: 30)
                 .background(.ultraThinMaterial, in: Circle())
         }
         .buttonStyle(BorderlessButtonStyle())
-        .accessibilityLabel("旅行計画を削除")
+        .accessibilityLabel("旅行計画のメニュー")
         .zIndex(1)
     }
 
