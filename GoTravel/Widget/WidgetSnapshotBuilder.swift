@@ -66,7 +66,7 @@ enum WidgetSnapshotBuilder {
         let calendar = Calendar.current
         var result: [WidgetSnapshot.Item] = []
 
-        for daySchedule in travel.daySchedules.sorted(by: { $0.dayNumber < $1.dayNumber }) {
+        for daySchedule in travel.daySchedulesInRange {
             // daySchedule.date が未設定の場合に備えて開始日から算出する
             let dayDate = calendar.date(
                 byAdding: .day,

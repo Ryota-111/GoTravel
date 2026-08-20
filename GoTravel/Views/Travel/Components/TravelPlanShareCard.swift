@@ -16,7 +16,7 @@ enum TravelPlanTextExporter {
             lines.append("目的地: \(plan.destination)")
         }
 
-        let days = plan.daySchedules.sorted { $0.dayNumber < $1.dayNumber }
+        let days = plan.daySchedulesInRange
         for day in days where !day.scheduleItems.isEmpty {
             lines.append("")
             lines.append("◆ Day \(day.dayNumber)  \(dateString(plan.date(forDay: day.dayNumber)))")

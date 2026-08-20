@@ -195,6 +195,34 @@ struct TravelPlan: Identifiable, Codable {
         Calendar.current.date(byAdding: .day, value: dayNumber - 1, to: startDate) ?? startDate
     }
 
+    /// 旅行の日数（出発日と帰宅日を含む）
+    var dayCount: Int {
+        let days = Calendar.current.dateComponents([.day], from: startDate, to: endDate).day ?? 0
+        return max(days + 1, 1)
+    }
+
+    /// 旅行期間の中に収まっている日程だけ。
+    ///
+    /// 日数を縮めると、範囲外になった日の予定が画面から消える一方で
+    /// 書き出しやウィジェットには出てしまい、食い違っていた。
+    /// **予定を集計・表示・書き出しするときは必ずこれを使う。**
+    ///
+    /// 範囲外の日を消さないのは、期間を戻せばそのまま復活させるため。
+    /// 日数を縮めただけで予定が消えるほうが怖い
+    var daySchedulesInRange: [DaySchedule] {
+        daySchedules
+            .filter { $0.dayNumber >= 1 && $0.dayNumber <= dayCount }
+            .sorted { $0.dayNumber < $1.dayNumber }
+    }
+
+    /// 旅行期間から外れてしまう日程（予定が入っているものだけ）。
+    /// 日数を縮める前の確認に使う
+    func daySchedulesOutOfRange(forDayCount newDayCount: Int) -> [DaySchedule] {
+        daySchedules
+            .filter { $0.dayNumber > newDayCount && !$0.scheduleItems.isEmpty }
+            .sorted { $0.dayNumber < $1.dayNumber }
+    }
+
     /// 保存してある日付を出発日に合わせ直す。
     /// 表示は `date(forDay:)` を使うので見た目には影響しないが、
     /// 保存された値がずれたままなのは事故のもとなので、日付を変えたら呼ぶ

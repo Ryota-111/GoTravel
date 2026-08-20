@@ -17,6 +17,7 @@ struct EditTravelPlanBasicInfoView: View {
     @State private var selectedImage: UIImage?
     @State private var showImagePicker = false
     @State private var isUploading = false
+    @State private var showShortenWarning = false
     @State private var destinationCoordinate: (latitude: Double, longitude: Double)?
 
     // MARK: - Initialization
@@ -104,6 +105,12 @@ struct EditTravelPlanBasicInfoView: View {
         .navigationBarHidden(true)
         .sheet(isPresented: $showImagePicker) {
             ImageCropPickerView(image: $selectedImage, aspectRatio: 1.0)
+        }
+        .alert("旅行の日数が減ります", isPresented: $showShortenWarning) {
+            Button("キャンセル", role: .cancel) { }
+            Button("このまま保存") { performSave() }
+        } message: {
+            Text(leavingRangeMessage)
         }
     }
 
@@ -360,7 +367,34 @@ struct EditTravelPlanBasicInfoView: View {
     }
 
     // MARK: - Actions
+
+    /// 縮めたことで旅行期間から外れる日程（予定が入っているものだけ）
+    private var daysLeavingRange: [DaySchedule] {
+        let days = Calendar.current.dateComponents([.day], from: startDate, to: normalizedEndDate).day ?? 0
+        return plan.daySchedulesOutOfRange(forDayCount: max(days + 1, 1))
+    }
+
+    private var leavingRangeMessage: String {
+        let dayList = daysLeavingRange.map { "Day \($0.dayNumber)" }.joined(separator: "・")
+        let count = daySLeavingItemCount
+        return "\(dayList) に入れた予定\(count)件が旅行期間の外になるため、表示されなくなります。\n\n予定は消えません。日数を元に戻せばまた表示されます。"
+    }
+
+    private var daySLeavingItemCount: Int {
+        daysLeavingRange.reduce(0) { $0 + $1.scheduleItems.count }
+    }
+
+    /// 日数を縮めると、範囲外の日の予定が画面から消える。
+    /// 黙って消えると気付けないので、保存前に知らせる
     private func saveTravelPlan() {
+        if daysLeavingRange.isEmpty {
+            performSave()
+        } else {
+            showShortenWarning = true
+        }
+    }
+
+    private func performSave() {
         isUploading = true
 
         if let image = selectedImage {

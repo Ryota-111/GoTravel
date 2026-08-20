@@ -17,7 +17,7 @@ struct BudgetSummaryView: View {
     }
 
     private var allItems: [ScheduleItem] {
-        currentPlan.daySchedules.flatMap { $0.scheduleItems }
+        currentPlan.daySchedulesInRange.flatMap { $0.scheduleItems }
     }
 
     // MARK: - Computed Properties
@@ -54,14 +54,14 @@ struct BudgetSummaryView: View {
     }
 
     private var costByDay: [(dayNumber: Int, date: Date, cost: Double)] {
-        currentPlan.daySchedules.map { day in
+        currentPlan.daySchedulesInRange.map { day in
             let cost = day.scheduleItems.compactMap { $0.cost }.reduce(0, +)
             return (day.dayNumber, currentPlan.date(forDay: day.dayNumber), cost)
         }.filter { $0.cost > 0 }
     }
 
     private var costByDayDetailed: [(dayNumber: Int, date: Date, items: [(title: String, cost: Double)])] {
-        currentPlan.daySchedules.compactMap { day in
+        currentPlan.daySchedulesInRange.compactMap { day in
             let items = day.scheduleItems
                 .filter { ($0.cost ?? 0) > 0 }
                 .map { ($0.title, $0.cost!) }
