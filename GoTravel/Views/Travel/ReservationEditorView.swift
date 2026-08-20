@@ -44,7 +44,27 @@ struct ReservationEditorView: View {
     private var accent: Color { themeManager.currentTheme.actionFill }
 
     private var canSave: Bool {
-        !reservation.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        if reservation.kind.usesRoute {
+            // 名前の欄が無いので、便名か区間のどちらかが入っていればよい
+            return !composedRouteTitle.isEmpty
+        }
+        return !reservation.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    /// 経路のある予約の表示名。
+    /// カードには区間が別に出るので、便名があればそれだけにして重複を避ける
+    private var composedRouteTitle: String {
+        let number = reservation.transportNumber?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        if !number.isEmpty { return number }
+
+        let from = reservation.departurePlace?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let to = reservation.arrivalPlace?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        switch (from.isEmpty, to.isEmpty) {
+        case (false, false): return "\(from) → \(to)"
+        case (false, true): return from
+        case (true, false): return to
+        case (true, true): return ""
+        }
     }
 
     var body: some View {
@@ -61,12 +81,12 @@ struct ReservationEditorView: View {
                             importFromScheduleButton
                         }
                         kindPicker
-                        field(label: "予約の名前", text: $reservation.title, placeholder: reservation.kind.placeholder)
-                        // 空港・駅で必要になるものを先に出す。
-                        // 予約番号だけ控えても、便名や座席は結局メールを探すことになる
+                        // 経路のある予約は便名と区間が名前の代わりになる。
+                        // 「ANA123」と「ANA123便 羽田→那覇」を二重に書かせない
                         if reservation.kind.usesRoute {
                             routeSection
                         } else {
+                            field(label: "予約の名前", text: $reservation.title, placeholder: reservation.kind.placeholder)
                             dateSection
                         }
                         numberField
@@ -75,7 +95,7 @@ struct ReservationEditorView: View {
                     .padding(20)
                 }
             }
-            .navigationTitle(reservation.title.isEmpty ? "予約を追加" : "予約を編集")
+            .navigationTitle(isNewReservation ? "予約を追加" : "予約を編集")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -377,7 +397,9 @@ struct ReservationEditorView: View {
               var plan = viewModel.travelPlans.first(where: { $0.id == planId }) else { return }
 
         var edited = reservation
-        edited.title = edited.title.trimmingCharacters(in: .whitespacesAndNewlines)
+        edited.title = edited.kind.usesRoute
+            ? composedRouteTitle
+            : edited.title.trimmingCharacters(in: .whitespacesAndNewlines)
         // 経路のある予約は時刻のトグルが無く、常に入力されている扱い
         edited.date = (hasDate || edited.kind.usesRoute) ? date : nil
         edited.arrivalDate = hasArrivalDate ? arrivalDate : nil
