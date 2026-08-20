@@ -181,14 +181,27 @@ struct ReservationListView: View {
 
                 Spacer(minLength: 0)
 
-                Button {
-                    editing = reservation
+                // 長押しの contextMenu だけだと削除に気づけない。
+                // 旅行計画のカードと同じ「…」に揃え、1度覚えれば他でも使えるようにする
+                Menu {
+                    Button {
+                        editing = reservation
+                    } label: {
+                        Label("編集", systemImage: "pencil")
+                    }
+
+                    Button("削除", systemImage: "trash", role: .destructive) {
+                        delete(reservation)
+                    }
                 } label: {
-                    Image(systemName: "pencil")
-                        .font(.caption)
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .frame(width: 30, height: 30)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("予約のメニュー")
             }
 
             // 空港・駅で一番見るものなので、予約番号の前に出す
@@ -224,10 +237,7 @@ struct ReservationListView: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 14).fill(cardFill))
-        .contextMenu {
-            Button("編集") { editing = reservation }
-            Button("削除", role: .destructive) { delete(reservation) }
-        }
+
     }
 
     /// 出発地 → 到着地。時刻が入っていればその下に添える

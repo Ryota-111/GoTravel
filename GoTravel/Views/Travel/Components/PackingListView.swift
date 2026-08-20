@@ -342,8 +342,21 @@ struct PackingItemRow: View {
                 .multilineTextAlignment(.leading)
 
             Spacer(minLength: 0)
+
+            // 長押しの contextMenu だけだと削除に気づけないので常に出す。
+            // チェックの丸は左端なので、右端なら間違って押しにくい
+            Button(action: deleteItem) {
+                Image(systemName: "xmark")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.7))
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("\(item.name)を削除"))
         }
-        .padding(.horizontal, 14)
+        .padding(.leading, 14)
+        .padding(.trailing, 6)
         .padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: 12)
