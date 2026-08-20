@@ -43,7 +43,7 @@ struct TravelPlanDetailView: View {
         case schedule = "日程"
         case map = "地図"
         case packing = "持ち物"
-        case reservation = "予約"
+        case reservation = "予約確認"
         case budget = "費用"
 
         var id: String { rawValue }

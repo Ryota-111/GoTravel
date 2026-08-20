@@ -54,6 +54,21 @@ struct Reservation: Identifiable, Codable, Equatable {
         }
     }
 
+    /// タイムスケジュールから取り込むとき、予定の名前と場所から種類を当てる。
+    /// 外れても選び直せるので、迷ったら other にせず素直に寄せる
+    static func guessedKind(title: String, location: String?) -> Kind {
+        let text = (title + " " + (location ?? "")).lowercased()
+        func has(_ words: [String]) -> Bool { words.contains { text.contains($0) } }
+
+        if has(["空港", "飛行機", "フライト", "搭乗", "便", "ana", "jal", "peach", "スカイマーク"]) { return .flight }
+        if has(["新幹線", "電車", "列車", "のぞみ", "ひかり", "こだま", "はやぶさ", "特急", "駅"]) { return .train }
+        if has(["ホテル", "宿", "旅館", "チェックイン", "泊", "ゲストハウス", "リゾート", "イン"]) { return .hotel }
+        if has(["レンタカー", "レンタル", "車の受け取り", "car"]) { return .rentalCar }
+        if has(["レストラン", "ランチ", "ディナー", "昼食", "夕食", "朝食", "食事", "居酒屋", "カフェ", "寿司", "焼肉", "ラーメン"]) { return .restaurant }
+        if has(["チケット", "入場", "水族館", "美術館", "博物館", "動物園", "遊園地", "テーマパーク", "ツアー", "体験"]) { return .ticket }
+        return .other
+    }
+
     var id: String
     var kind: Kind
     var title: String

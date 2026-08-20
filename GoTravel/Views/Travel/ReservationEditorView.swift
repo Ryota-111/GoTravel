@@ -15,6 +15,23 @@ struct ReservationEditorView: View {
     @State private var hasDate = false
     @State private var date = Date()
 
+    @State private var showSchedulePicker = false
+
+    private var plan: TravelPlan? {
+        viewModel.travelPlans.first(where: { $0.id == planId })
+    }
+
+    /// 追加のときだけ取り込みを出す。
+    /// 編集中に出すと、入力済みの内容を上書きすることになって危ない
+    private var isNewReservation: Bool {
+        guard let plan else { return true }
+        return !plan.reservations.contains { $0.id == reservation.id }
+    }
+
+    private var hasScheduleItems: Bool {
+        plan?.daySchedules.contains { !$0.scheduleItems.isEmpty } ?? false
+    }
+
     private var cardFill: Color {
         colorScheme == .dark
             ? themeManager.currentTheme.secondaryBackgroundDark
@@ -38,6 +55,9 @@ struct ReservationEditorView: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 16) {
+                        if isNewReservation && hasScheduleItems {
+                            importFromScheduleButton
+                        }
                         kindPicker
                         field(label: "予約の名前", text: $reservation.title, placeholder: reservation.kind.placeholder)
                         dateSection
@@ -67,6 +87,81 @@ struct ReservationEditorView: View {
                     date = existing
                 }
             }
+            .sheet(isPresented: $showSchedulePicker) {
+                if let plan {
+                    ScheduleItemPickerView(plan: plan) { item, dayDate in
+                        apply(item: item, dayDate: dayDate)
+                    }
+                }
+            }
+        }
+    }
+
+    /// 行程に書いた飛行機や宿を、予約としても登録したい場面が多い。
+    /// 打ち直さずに名前・日時・場所を持ってこられるようにする
+    private var importFromScheduleButton: some View {
+        Button {
+            showSchedulePicker = true
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "calendar.badge.plus")
+                    .font(.system(size: 16))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("日程から取り込む")
+                        .font(.system(size: 15, weight: .semibold))
+                    Text("タイムスケジュールに書いた予定から選べます")
+                        .font(.caption2)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+            .foregroundColor(accent)
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 12).fill(accent.opacity(0.12)))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// 予約番号だけは行程に無いので、そこへ入力を促す形で残す
+    private func apply(item: ScheduleItem, dayDate: Date) {
+        reservation.title = item.title
+        reservation.kind = Reservation.guessedKind(title: item.title, location: item.location)
+
+        // 予定の時刻はその日のものとして扱う。
+        // 日付だけを日程側に合わせ、時刻は予定のものを使う
+        let calendar = Calendar.current
+        let day = calendar.dateComponents([.year, .month, .day], from: dayDate)
+        let time = calendar.dateComponents([.hour, .minute], from: item.time)
+        var merged = DateComponents()
+        merged.year = day.year
+        merged.month = day.month
+        merged.day = day.day
+        merged.hour = time.hour
+        merged.minute = time.minute
+        date = calendar.date(from: merged) ?? item.time
+        hasDate = true
+
+        // 場所は予約の名前に含まれないことが多いのでメモへ回す。
+        // すでに書いてある内容は消さない
+        let existingNote = reservation.note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let pieces = [item.location, item.notes]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty && !existingNote.contains($0) }
+        if !pieces.isEmpty {
+            reservation.note = ([existingNote] + pieces)
+                .filter { !$0.isEmpty }
+                .joined(separator: "\n")
+        }
+
+        if let link = item.linkURL, !link.isEmpty,
+           (reservation.linkURL ?? "").isEmpty {
+            reservation.linkURL = link
         }
     }
 
