@@ -11,6 +11,8 @@ struct PackingListView: View {
     let plan: TravelPlan
 
     @State private var newItemName: String = ""
+    /// 「よく使う持ち物」で選択中のもの。まとめて追加するまで保持する
+    @State private var selectedPresets: Set<String> = []
     @FocusState private var isInputFocused: Bool
 
     private var currentPlan: TravelPlan? {
@@ -59,13 +61,6 @@ struct PackingListView: View {
             }
 
             addItemSection
-
-            // まだ足していない候補だけを常に出す。
-            // 空のときだけ出していたら、1つ選んだ時点で残りが消えてしまい
-            // 続けて選べなかった（要望をいただいて変更）
-            if !remainingPresets.isEmpty {
-                presetSection
-            }
 
             if items.isEmpty {
                 emptyStateView
@@ -165,6 +160,7 @@ struct PackingListView: View {
                 .multilineTextAlignment(.center)
                 .fixedSize(horizontal: false, vertical: true)
 
+            presetSection
         }
         .frame(maxWidth: .infinity)
         .padding(18)
@@ -178,23 +174,62 @@ struct PackingListView: View {
     // MARK: - よく使う持ち物
 
     /// 最初の1件を入力する手間が一番の障壁なので、よく使うものから足せるようにする。
-    /// すでにリストにあるものは出さない
-    private var remainingPresets: [String] {
-        let existing = Set(items.map { $0.name.trimmingCharacters(in: .whitespacesAndNewlines) })
-        return Self.presets.filter { !existing.contains($0) }
-    }
-
+    ///
+    /// 1つ押すたびに追加していた頃は、押した時点でリストが空でなくなり
+    /// 候補ごと消えてしまって続けて選べなかった。
+    /// まとめて選んでから確定する形にしている
     private var presetSection: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 10) {
             Text("よく使う持ち物")
                 .font(.caption2.weight(.semibold))
                 .foregroundColor(themeManager.currentTheme.secondaryText)
+                .frame(maxWidth: .infinity, alignment: .leading)
 
-            FlowChips(items: remainingPresets) { preset in
-                add(name: preset)
+            FlowChips(items: Self.presets, selected: selectedPresets) { preset in
+                if selectedPresets.contains(preset) {
+                    selectedPresets.remove(preset)
+                } else {
+                    selectedPresets.insert(preset)
+                }
             }
+
+            Button(action: addSelectedPresets) {
+                Text(selectedPresets.isEmpty ? "追加するものを選んでください" : "\(selectedPresets.count)件を追加")
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(selectedPresets.isEmpty
+                                     ? themeManager.currentTheme.secondaryText
+                                     : ThemePreset.readableText(on: accent))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(selectedPresets.isEmpty ? accent.opacity(0.10) : accent)
+                    )
+            }
+            .buttonStyle(.plain)
+            .disabled(selectedPresets.isEmpty)
+            .animation(.easeInOut(duration: 0.15), value: selectedPresets.isEmpty)
         }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.top, 4)
+    }
+
+    /// 選んだものをまとめて追加する。
+    /// 1件ずつ保存すると、そのたびに CloudKit へ書き込みが走る
+    private func addSelectedPresets() {
+        guard !selectedPresets.isEmpty,
+              let userId = authVM.userId,
+              var updatedPlan = currentPlan ?? Optional(plan) else { return }
+
+        // Set は順番を持たないので、候補に並んでいる順で足す
+        for name in Self.presets where selectedPresets.contains(name) {
+            updatedPlan.packingItems.append(PackingItem(name: name))
+        }
+
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            viewModel.update(updatedPlan, userId: userId)
+            selectedPresets.removeAll()
+        }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     private static let presets = [
@@ -229,32 +264,37 @@ struct PackingListView: View {
 /// 幅に応じて折り返す横並び。プリセットの数だけ行が伸びる
 private struct FlowChips: View {
     let items: [String]
+    let selected: Set<String>
     let onTap: (String) -> Void
 
     @ObservedObject var themeManager = ThemeManager.shared
+
+    private var accent: Color { themeManager.currentTheme.actionFill }
 
     var body: some View {
         // 3列に固定すると文字数で崩れるため、可変幅のグリッドで折り返す
         LazyVGrid(columns: [GridItem(.adaptive(minimum: 88), spacing: 8)], spacing: 8) {
             ForEach(items, id: \.self) { item in
+                let isSelected = selected.contains(item)
                 Button {
                     onTap(item)
                 } label: {
                     HStack(spacing: 3) {
-                        Image(systemName: "plus")
+                        Image(systemName: isSelected ? "checkmark" : "plus")
                             .font(.system(size: 9, weight: .bold))
                         Text(item)
                             .font(.caption)
                             .lineLimit(1)
                             .minimumScaleFactor(0.8)
                     }
-                    .foregroundColor(themeManager.currentTheme.actionFill)
+                    .foregroundColor(isSelected ? ThemePreset.readableText(on: accent) : accent)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 7)
                     .frame(maxWidth: .infinity)
-                    .background(Capsule().fill(themeManager.currentTheme.actionFill.opacity(0.12)))
+                    .background(Capsule().fill(isSelected ? accent : accent.opacity(0.12)))
                 }
                 .buttonStyle(.plain)
+                .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
             }
         }
     }
