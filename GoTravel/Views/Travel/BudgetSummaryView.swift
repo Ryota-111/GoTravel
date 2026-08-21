@@ -11,8 +11,9 @@ struct BudgetSummaryView: View {
     /// タブに埋め込むときは true。独自のヘッダーを出さない
     var isEmbedded: Bool = false
 
-    /// 明細を開いている日。閉じた状態から始める
-    @State private var expandedDays: Set<Int> = []
+    /// 明細を閉じている日。
+    /// 開いた状態から始める（何に使ったかは開かなくても見えていてほしい）
+    @State private var collapsedDays: Set<Int> = []
 
     /// ViewModelから最新のプランを見る。人数を変えた結果を即座に反映するため
     private var currentPlan: TravelPlan {
@@ -421,7 +422,7 @@ struct BudgetSummaryView: View {
                 ForEach(costByDay) { day in
                     dayRow(day)
 
-                    if expandedDays.contains(day.dayNumber) {
+                    if !collapsedDays.contains(day.dayNumber) {
                         VStack(spacing: 0) {
                             ForEach(day.items) { item in
                                 itemRow(item)
@@ -469,7 +470,7 @@ struct BudgetSummaryView: View {
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
 
-            Image(systemName: expandedDays.contains(day.dayNumber) ? "chevron.down" : "chevron.right")
+            Image(systemName: collapsedDays.contains(day.dayNumber) ? "chevron.right" : "chevron.down")
                 .font(.system(size: 11, weight: .semibold))
                 .foregroundColor(themeManager.currentTheme.secondaryText)
         }
@@ -478,10 +479,10 @@ struct BudgetSummaryView: View {
         .contentShape(Rectangle())
         .onTapGesture {
             withAnimation(.easeInOut(duration: 0.2)) {
-                if expandedDays.contains(day.dayNumber) {
-                    expandedDays.remove(day.dayNumber)
+                if collapsedDays.contains(day.dayNumber) {
+                    collapsedDays.remove(day.dayNumber)
                 } else {
-                    expandedDays.insert(day.dayNumber)
+                    collapsedDays.insert(day.dayNumber)
                 }
             }
         }
