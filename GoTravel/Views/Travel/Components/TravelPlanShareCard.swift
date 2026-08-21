@@ -7,7 +7,13 @@ import SwiftUI
 /// アプリを持っていない同行者に渡す手段としてこちらを用意した
 enum TravelPlanTextExporter {
 
-    static func fullItinerary(for plan: TravelPlan) -> String {
+    /// 何を書き出すかは呼び出し側が選ぶ。
+    /// 予約番号は渡す相手を選ぶ情報なので、既定では入れない
+    static func fullItinerary(for plan: TravelPlan,
+                              includesSchedule: Bool = true,
+                              includesReservations: Bool = true,
+                              includesPacking: Bool = true,
+                              includesConfirmationNumbers: Bool = false) -> String {
         var lines: [String] = []
 
         lines.append("【\(plan.title)】")
@@ -16,41 +22,51 @@ enum TravelPlanTextExporter {
             lines.append("目的地: \(plan.destination)")
         }
 
-        let days = plan.daySchedulesInRange
-        for day in days where !day.scheduleItems.isEmpty {
-            lines.append("")
-            lines.append("◆ Day \(day.dayNumber)  \(dateString(plan.date(forDay: day.dayNumber)))")
+        if includesSchedule {
+            for day in plan.daySchedulesInRange where !day.scheduleItems.isEmpty {
+                lines.append("")
+                lines.append("◆ Day \(day.dayNumber)  \(dateString(plan.date(forDay: day.dayNumber)))")
 
-            for item in sortedByTime(day.scheduleItems) {
-                var row = "\(timeString(item.time))  \(item.title)"
-                if let location = item.location, !location.isEmpty {
-                    row += "  @\(location)"
-                }
-                if let cost = item.cost, cost > 0 {
-                    row += "  \(currency(cost))"
-                }
-                lines.append(row)
+                for item in sortedByTime(day.scheduleItems) {
+                    var row = "\(timeString(item.time))  \(item.title)"
+                    if let location = item.location, !location.isEmpty {
+                        row += "  @\(location)"
+                    }
+                    if let cost = item.cost, cost > 0 {
+                        row += "  \(currency(cost))"
+                    }
+                    lines.append(row)
 
-                if let notes = item.notes, !notes.isEmpty {
-                    lines.append("　　\(notes)")
+                    if let notes = item.notes, !notes.isEmpty {
+                        lines.append("　　\(notes)")
+                    }
+                    if let link = item.linkURL, !link.isEmpty {
+                        lines.append("　　\(link)")
+                    }
                 }
-                if let link = item.linkURL, !link.isEmpty {
-                    lines.append("　　\(link)")
-                }
+            }
+
+            let total = plan.daySchedulesInRange
+                .flatMap(\.scheduleItems)
+                .compactMap(\.cost)
+                .reduce(0, +)
+
+            if total > 0 {
+                lines.append("")
+                lines.append("合計: \(currency(total))")
             }
         }
 
-        let total = plan.daySchedules
-            .flatMap(\.scheduleItems)
-            .compactMap(\.cost)
-            .reduce(0, +)
-
-        if total > 0 {
+        if includesReservations && !plan.reservations.isEmpty {
             lines.append("")
-            lines.append("合計: \(currency(total))")
+            lines.append("◆ 予約")
+            for reservation in plan.reservations {
+                lines.append(contentsOf: reservationLines(reservation,
+                                                          includesConfirmationNumber: includesConfirmationNumbers))
+            }
         }
 
-        if !plan.packingItems.isEmpty {
+        if includesPacking && !plan.packingItems.isEmpty {
             lines.append("")
             lines.append("◆ 持ち物")
             for packing in plan.packingItems {
@@ -62,6 +78,45 @@ enum TravelPlanTextExporter {
         lines.append("Travory で作成")
 
         return lines.joined(separator: "\n")
+    }
+
+    private static func reservationLines(_ reservation: Reservation,
+                                         includesConfirmationNumber: Bool) -> [String] {
+        var lines: [String] = []
+        let name = reservation.title.isEmpty ? reservation.kind.label : reservation.title
+        lines.append("[\(reservation.kind.label)] \(name)")
+
+        if let date = reservation.date {
+            lines.append("　　\(dateString(date)) \(timeString(date))")
+        }
+
+        if reservation.hasRoute {
+            var route = [reservation.departurePlace, reservation.arrivalPlace]
+                .compactMap { $0 }
+                .joined(separator: " → ")
+            if let arrival = reservation.arrivalDate {
+                route += "（到着 \(timeString(arrival))）"
+            }
+            lines.append("　　\(route)")
+        }
+
+        if let seat = reservation.seat, !seat.isEmpty {
+            lines.append("　　座席 \(seat)")
+        }
+        if let terminal = reservation.terminal, !terminal.isEmpty {
+            lines.append("　　ターミナル \(terminal)")
+        }
+
+        if includesConfirmationNumber,
+           let number = reservation.confirmationNumber, !number.isEmpty {
+            lines.append("　　予約番号 \(number)")
+        }
+
+        if let note = reservation.note, !note.isEmpty {
+            lines.append("　　\(note)")
+        }
+
+        return lines
     }
 
     // MARK: Helpers

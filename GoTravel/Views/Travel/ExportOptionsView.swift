@@ -1,14 +1,41 @@
 import SwiftUI
 
-/// 画像で書き出す前に、何を入れるかを選ぶ。
+/// 書き出す前に、何を入れるかを選ぶ。画像とテキストで共通。
 ///
-/// 日程・予約・持ち物をいつも全部出すと、渡したくないものまで画像になる。
-/// とくに予約番号は、画像だとSNSに上げられて出回りうるので既定で入れない。
-struct ExportImageOptionsView: View {
+/// 日程・予約・持ち物をいつも全部出すと、渡したくないものまで含まれる。
+/// とくに予約番号は扱いが違うので、形式ごとに既定を変えている。
+struct ExportOptionsView: View {
+
+    enum Format {
+        case image
+        case text
+
+        var title: String {
+            switch self {
+            case .image: return "画像で送る"
+            case .text: return "テキストで送る"
+            }
+        }
+
+        /// 画像はSNSに上げられて出回りうるので、予約番号は既定で入れない。
+        /// テキストは渡す相手を選んで送るものなので、既定で入れる
+        var includesConfirmationNumbersByDefault: Bool {
+            self == .text
+        }
+
+        var confirmationCaution: String {
+            switch self {
+            case .image: return "画像に残るので、渡す相手にご注意ください"
+            case .text: return "渡す相手にご注意ください"
+            }
+        }
+    }
+
     let plan: TravelPlan
+    let format: Format
     let accentColor: Color
-    /// 選んだ内容で作った画像を返す
-    let onExport: ([UIImage]) -> Void
+    /// 選んだ内容で作ったもの（画像またはテキスト）を返す
+    let onExport: ([Any]) -> Void
 
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
@@ -43,6 +70,16 @@ struct ExportImageOptionsView: View {
         (includesSchedule ? 1 : 0) + (hasExtrasPage ? 1 : 0)
     }
 
+    /// テキストは1つにまとまるので、枚数ではなく有無だけ見る
+    private var canExport: Bool {
+        format == .text ? (includesSchedule || hasExtrasPage) : pageCount > 0
+    }
+
+    private var exportButtonTitle: String {
+        guard canExport else { return "入れるものを選んでください" }
+        return format == .text ? "テキストを書き出す" : "\(pageCount)枚を書き出す"
+    }
+
     var body: some View {
         NavigationStack {
             ZStack {
@@ -60,8 +97,11 @@ struct ExportImageOptionsView: View {
                     .padding(20)
                 }
             }
-            .navigationTitle("画像で送る")
+            .navigationTitle(format.title)
             .navigationBarTitleDisplayMode(.inline)
+            .onAppear {
+                includesConfirmationNumbers = format.includesConfirmationNumbersByDefault
+            }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
                     Button("キャンセル") { dismiss() }
@@ -89,7 +129,7 @@ struct ExportImageOptionsView: View {
                         Text("予約番号も入れる")
                             .font(.subheadline)
                             .foregroundColor(textColor)
-                        Text("画像に残るので、渡す相手にご注意ください")
+                        Text(format.confirmationCaution)
                             .font(.caption2)
                             .foregroundColor(themeManager.currentTheme.secondaryText)
                     }
@@ -124,34 +164,51 @@ struct ExportImageOptionsView: View {
         .padding(14)
     }
 
+    @ViewBuilder
     private var noticeText: some View {
-        Label("予約と持ち物は1枚にまとまります", systemImage: "info.circle")
-            .font(.caption2)
-            .foregroundColor(themeManager.currentTheme.secondaryText)
-            .frame(maxWidth: .infinity, alignment: .leading)
+        if format == .image {
+            Label("予約と持ち物は1枚にまとまります", systemImage: "info.circle")
+                .font(.caption2)
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
     }
 
     private var exportButton: some View {
         Button(action: export) {
-            Text(pageCount == 0 ? "入れるものを選んでください" : "\(pageCount)枚を書き出す")
+            Text(exportButtonTitle)
                 .font(.system(size: 16, weight: .semibold))
-                .foregroundColor(pageCount == 0
-                                 ? themeManager.currentTheme.secondaryText
-                                 : ThemePreset.readableText(on: accent))
+                .foregroundColor(canExport
+                                 ? ThemePreset.readableText(on: accent)
+                                 : themeManager.currentTheme.secondaryText)
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
                 .background(
                     RoundedRectangle(cornerRadius: 12)
-                        .fill(pageCount == 0 ? accent.opacity(0.10) : accent)
+                        .fill(canExport ? accent : accent.opacity(0.10))
                 )
         }
         .buttonStyle(.plain)
-        .disabled(pageCount == 0 || isRendering)
+        .disabled(!canExport || isRendering)
     }
 
     @MainActor
     private func export() {
-        guard pageCount > 0 else { return }
+        guard canExport else { return }
+
+        if format == .text {
+            let text = TravelPlanTextExporter.fullItinerary(
+                for: plan,
+                includesSchedule: includesSchedule,
+                includesReservations: includesReservations,
+                includesPacking: includesPacking,
+                includesConfirmationNumbers: includesConfirmationNumbers
+            )
+            onExport([text])
+            dismiss()
+            return
+        }
+
         isRendering = true
 
         var images: [UIImage] = []

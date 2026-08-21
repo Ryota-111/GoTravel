@@ -85,8 +85,9 @@ struct TravelPlanDetailView: View {
     @State private var showBasicInfoEditor = false
     @State private var showDuplicateSheet = false
     @State private var showExportOptions = false
-    /// 選択シートが閉じるまで画像を持っておく置き場
-    @State private var pendingExportImages: [UIImage]?
+    @State private var exportFormat: ExportOptionsView.Format = .image
+    /// 選択シートが閉じるまで書き出したものを持っておく置き場
+    @State private var pendingExportItems: [Any]?
     @State private var showBudgetSummary = false
     @State private var showShareView = false
     @State private var showScheduleMap = false
@@ -303,12 +304,12 @@ struct TravelPlanDetailView: View {
         // 閉じる前に exportItems を入れると、2枚目のシートが無視されて
         // 何も起きないことがある
         .sheet(isPresented: $showExportOptions, onDismiss: {
-            guard let images = pendingExportImages else { return }
-            pendingExportImages = nil
-            exportItems = images
+            guard let items = pendingExportItems else { return }
+            pendingExportItems = nil
+            exportItems = items
         }) {
-            ExportImageOptionsView(plan: plan, accentColor: scheduleAccentColor) { images in
-                pendingExportImages = images
+            ExportOptionsView(plan: plan, format: exportFormat, accentColor: scheduleAccentColor) { items in
+                pendingExportItems = items
             }
         }
         .sheet(isPresented: $showDuplicateSheet) {
@@ -647,12 +648,14 @@ struct TravelPlanDetailView: View {
                     // アプリを持っていない相手にも旅程を渡せるようにする
                     Menu {
                         Button {
-                            exportItems = [TravelPlanTextExporter.fullItinerary(for: plan)]
+                            exportFormat = .text
+                            showExportOptions = true
                         } label: {
-                            Label("テキストで送る（全日程）", systemImage: "doc.plaintext")
+                            Label("テキストで送る", systemImage: "doc.plaintext")
                         }
 
                         Button {
+                            exportFormat = .image
                             showExportOptions = true
                         } label: {
                             Label("画像で送る", systemImage: "photo")
