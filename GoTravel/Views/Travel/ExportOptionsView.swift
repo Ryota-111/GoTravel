@@ -42,6 +42,9 @@ struct ExportOptionsView: View {
     @Environment(\.dismiss) private var dismiss
 
     @State private var includesSchedule = true
+    /// 日程を1枚にまとめるか、Dayごとに分けるか。
+    /// 長い旅行だと1枚が縦に伸びすぎるので選べるようにした
+    @State private var splitsByDay = false
     @State private var includesReservations = true
     @State private var includesPacking = true
     @State private var includesConfirmationNumbers = false
@@ -66,8 +69,18 @@ struct ExportOptionsView: View {
             || (includesPacking && !plan.packingItems.isEmpty)
     }
 
+    /// 予定が入っている日だけ書き出す。空の日を1枚にしても意味がない
+    private var daysWithItems: [DaySchedule] {
+        plan.daySchedulesInRange.filter { !$0.scheduleItems.isEmpty }
+    }
+
+    private var schedulePageCount: Int {
+        guard includesSchedule else { return 0 }
+        return splitsByDay ? daysWithItems.count : 1
+    }
+
     private var pageCount: Int {
-        (includesSchedule ? 1 : 0) + (hasExtrasPage ? 1 : 0)
+        schedulePageCount + (hasExtrasPage ? 1 : 0)
     }
 
     /// テキストは1つにまとまるので、枚数ではなく有無だけ見る
@@ -114,6 +127,26 @@ struct ExportOptionsView: View {
     private var options: some View {
         VStack(spacing: 0) {
             toggleRow("日程", detail: "\(plan.dayCount)日間・\(scheduleItemCount)件", isOn: $includesSchedule)
+
+            // 分け方は画像だけの話。テキストは1つにまとまる
+            if format == .image && includesSchedule && daysWithItems.count > 1 {
+                Divider().padding(.leading, 32)
+
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("分け方")
+                        .font(.caption)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+
+                    Picker("", selection: $splitsByDay) {
+                        Text("全日程を1枚に").tag(false)
+                        Text("Dayごと（\(daysWithItems.count)枚）").tag(true)
+                    }
+                    .pickerStyle(.segmented)
+                }
+                .padding(.vertical, 12)
+                .padding(.leading, 32)
+                .padding(.trailing, 14)
+            }
 
             Divider().padding(.leading, 14)
 
@@ -166,7 +199,7 @@ struct ExportOptionsView: View {
 
     @ViewBuilder
     private var noticeText: some View {
-        if format == .image {
+        if format == .image && hasExtrasPage {
             Label("予約と持ち物は1枚にまとまります", systemImage: "info.circle")
                 .font(.caption2)
                 .foregroundColor(themeManager.currentTheme.secondaryText)
@@ -214,8 +247,15 @@ struct ExportOptionsView: View {
         var images: [UIImage] = []
 
         if includesSchedule {
-            let card = TravelPlanFullShareCard(plan: plan, accentColor: accentColor)
-            if let image = render(card) { images.append(image) }
+            if splitsByDay {
+                for day in daysWithItems {
+                    let card = TravelPlanShareCard(plan: plan, daySchedule: day, accentColor: accentColor)
+                    if let image = render(card) { images.append(image) }
+                }
+            } else {
+                let card = TravelPlanFullShareCard(plan: plan, accentColor: accentColor)
+                if let image = render(card) { images.append(image) }
+            }
         }
 
         if hasExtrasPage {
