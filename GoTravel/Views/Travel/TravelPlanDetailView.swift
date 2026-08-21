@@ -88,6 +88,8 @@ struct TravelPlanDetailView: View {
     @State private var exportFormat: ExportOptionsView.Format = .image
     /// 選択シートが閉じるまで書き出したものを持っておく置き場
     @State private var pendingExportItems: [Any]?
+    /// 画面の下に短く出す知らせ
+    @State private var toastMessage: String?
     @State private var showBudgetSummary = false
     @State private var showShareView = false
     @State private var showScheduleMap = false
@@ -243,6 +245,19 @@ struct TravelPlanDetailView: View {
         // 貼り付いた帯の上（ステータスバーの領域）を、スクロール中の内容が
         // 通り抜けて見えてしまう。帯の中から ignoresSafeArea しても
         // 安全領域まで届かないため、画面の一番上に覆いを置く
+        .overlay(alignment: .bottom) {
+            if let toastMessage {
+                Text(toastMessage)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(ThemePreset.readableText(on: scheduleAccentColor))
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                    .background(Capsule().fill(scheduleAccentColor))
+                    .shadow(color: .black.opacity(0.2), radius: 8, y: 4)
+                    .padding(.bottom, 40)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
+            }
+        }
         .overlay(alignment: .top) {
             if isChromeCompact {
                 tabBarBackground
@@ -266,7 +281,20 @@ struct TravelPlanDetailView: View {
             set: { if !$0 { exportItems = nil } }
         )) {
             if let exportItems {
-                ShareSheet(items: exportItems)
+                ShareSheet(items: exportItems) { activityType, completed in
+                    guard completed else { return }
+                    // 「写真に保存」と「コピー」は共有シートが黙って閉じるだけで
+                    // うまくいったのか分からない。ここだけ結果を知らせる。
+                    // 他のアプリへ送った場合は送り先が反応を返すので何も出さない
+                    switch activityType {
+                    case .saveToCameraRoll:
+                        showToast("写真に保存しました")
+                    case .copyToPasteboard:
+                        showToast("コピーしました")
+                    default:
+                        break
+                    }
+                }
             }
         }
         .fullScreenCover(item: $editingItem) { item in
@@ -1282,6 +1310,21 @@ struct TravelPlanDetailView: View {
     }
 
     // MARK: - Helper Methods
+
+    /// 画面の下に短く出して自動で消す。
+    /// 保存できたことを伝えるだけなので、閉じる操作は要らない
+    private func showToast(_ message: String) {
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            toastMessage = message
+        }
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                if toastMessage == message { toastMessage = nil }
+            }
+        }
+    }
     /// 地図に出せる（座標を持つ）スケジュール項目が1件でもあるか
     private func sortedScheduleItems(_ items: [ScheduleItem]) -> [ScheduleItem] {
         let calendar = Calendar.current

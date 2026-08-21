@@ -694,9 +694,17 @@ struct ShareImageItem: Identifiable {
 
 struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]
+    /// 何をして終わったかを呼び出し側に伝える。
+    /// 写真に保存したときは共有シートが黙って閉じるだけで、
+    /// 保存できたのか分からないため
+    var onComplete: ((UIActivity.ActivityType?, Bool) -> Void)? = nil
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
+        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        controller.completionWithItemsHandler = { activityType, completed, _, _ in
+            onComplete?(activityType, completed)
+        }
+        return controller
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}
