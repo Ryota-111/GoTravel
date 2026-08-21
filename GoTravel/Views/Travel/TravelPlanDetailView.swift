@@ -84,6 +84,9 @@ struct TravelPlanDetailView: View {
     @State private var showAddScheduleItem = false
     @State private var showBasicInfoEditor = false
     @State private var showDuplicateSheet = false
+    @State private var showExportOptions = false
+    /// 選択シートが閉じるまで画像を持っておく置き場
+    @State private var pendingExportImages: [UIImage]?
     @State private var showBudgetSummary = false
     @State private var showShareView = false
     @State private var showScheduleMap = false
@@ -295,6 +298,18 @@ struct TravelPlanDetailView: View {
         .sheet(isPresented: $showBasicInfoEditor) {
             EditTravelPlanBasicInfoView(plan: plan)
                 .environmentObject(viewModel)
+        }
+        // 選択シートが閉じきってから共有シートを出す。
+        // 閉じる前に exportItems を入れると、2枚目のシートが無視されて
+        // 何も起きないことがある
+        .sheet(isPresented: $showExportOptions, onDismiss: {
+            guard let images = pendingExportImages else { return }
+            pendingExportImages = nil
+            exportItems = images
+        }) {
+            ExportImageOptionsView(plan: plan, accentColor: scheduleAccentColor) { images in
+                pendingExportImages = images
+            }
         }
         .sheet(isPresented: $showDuplicateSheet) {
             DuplicateTravelPlanView(plan: plan)
@@ -638,9 +653,9 @@ struct TravelPlanDetailView: View {
                         }
 
                         Button {
-                            exportCurrentDayImage(plan: plan)
+                            showExportOptions = true
                         } label: {
-                            Label("画像で送る（Day \(selectedDay)）", systemImage: "photo")
+                            Label("画像で送る", systemImage: "photo")
                         }
 
                         Divider()
@@ -1264,28 +1279,6 @@ struct TravelPlanDetailView: View {
     }
 
     // MARK: - Helper Methods
-    /// 表示中の日の旅程を画像にして共有する
-    @MainActor
-    private func exportCurrentDayImage(plan: TravelPlan) {
-        let daySchedule = plan.daySchedules.first { $0.dayNumber == selectedDay }
-            ?? DaySchedule(
-                dayNumber: selectedDay,
-                date: Calendar.current.date(byAdding: .day, value: selectedDay - 1, to: plan.startDate) ?? plan.startDate
-            )
-
-        let card = TravelPlanShareCard(
-            plan: plan,
-            daySchedule: daySchedule,
-            accentColor: scheduleAccentColor
-        )
-
-        let renderer = ImageRenderer(content: card)
-        renderer.scale = 3
-
-        guard let image = renderer.uiImage else { return }
-        exportItems = [image]
-    }
-
     /// 地図に出せる（座標を持つ）スケジュール項目が1件でもあるか
     private func sortedScheduleItems(_ items: [ScheduleItem]) -> [ScheduleItem] {
         let calendar = Calendar.current
