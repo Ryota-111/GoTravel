@@ -113,6 +113,11 @@ struct BudgetSummaryView: View {
         }
     }
 
+    /// 白黒テーマで背景に溶けないよう、どのカードにも引く薄い枠
+    private var cardStroke: Color {
+        ThemePreset.readableText(on: cardBg).opacity(0.12)
+    }
+
     private var cardBg: Color {
         colorScheme == .dark
             ? themeManager.currentTheme.secondaryBackgroundDark
@@ -373,6 +378,9 @@ struct BudgetSummaryView: View {
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(cardBg)
+                // 白黒テーマは背景(0.96)とカード(0.95)がほぼ同じ明るさで、
+                // 塗りだけだと境界が見えない。どのテーマでも薄い枠を引く
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(cardStroke, lineWidth: 1))
                 .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
         )
     }
@@ -442,6 +450,9 @@ struct BudgetSummaryView: View {
         .background(
             RoundedRectangle(cornerRadius: 16)
                 .fill(cardBg)
+                // 白黒テーマは背景(0.96)とカード(0.95)がほぼ同じ明るさで、
+                // 塗りだけだと境界が見えない。どのテーマでも薄い枠を引く
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(cardStroke, lineWidth: 1))
                 .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
         )
     }

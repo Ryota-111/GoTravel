@@ -236,7 +236,12 @@ struct ReservationListView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 14).fill(cardFill))
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(cardFill)
+                // 白黒テーマは背景とカードの明るさがほぼ同じなので必ず枠を引く
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(textColor.opacity(0.12), lineWidth: 1))
+        )
 
     }
 
