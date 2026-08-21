@@ -30,7 +30,10 @@ struct TravelPlanCard: View {
                         lineWidth: 1
                     )
             )
-            .shadow(color: Color.black.opacity(0.15), radius: 12, x: 0, y: 6)
+            // 影は付けない。カードは横スクロールの帯とほぼ同じ高さで、
+            // 帯からはみ出した影が上下で切り取られ、black な帯として見えてしまう。
+            // 帯を高くすれば収まるが、今の高さを変えたくないので影ごと外した。
+            // 写真と白い縁取りがあるので、影が無くても浮いて見える
         }
         .buttonStyle(PlainButtonStyle())
         .sheet(isPresented: $showDuplicateSheet) {

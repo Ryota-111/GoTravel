@@ -470,7 +470,7 @@ struct EnjoyWorldView: View {
                 .frame(width: 200, height: 200)
                 .background(themeManager.currentTheme.tertiary)
                 .cornerRadius(25)
-                .shadow(color: themeManager.currentTheme.accent1.opacity(0.1), radius: 10, x: 0, y: 5)
+                // 実際のカードと同じ理由で影は付けない（TravelPlanCard を参照）
                 .padding(.horizontal, 20)
                 // ScrollView直下は中央揃えになるため、実際のカードと同じ左端に寄せる
                 .frame(maxWidth: .infinity, alignment: .leading)
