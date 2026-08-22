@@ -410,8 +410,13 @@ struct EnjoyWorldView: View {
                         .font(.subheadline.weight(.medium))
                 }
                 // テーマ色をそのまま載せると、明るい色（オレンジなど）で
-                // 読めなくなる。背景に対して差が出る濃さに調整して使う
-                .foregroundColor(tintOnBackground(themeManager.currentTheme.secondary))
+                // 読めなくなる。背景に対して差が出る濃さに調整して使う。
+                //
+                // 判定にグラデーションを渡してはいけない。`readableTint` は
+                // 不透明度を見ないため、青の60%を「暗い背景」と誤って読み、
+                // オレンジを明るくして薄い水色の上でさらに薄くしてしまう。
+                // ここは実際には白に近い場所なので、白を基準に濃くする
+                .foregroundColor(joinTintColor)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
                 .background(
@@ -420,7 +425,7 @@ struct EnjoyWorldView: View {
                 )
                 .overlay(
                     Capsule()
-                        .strokeBorder(tintOnBackground(themeManager.currentTheme.secondary).opacity(0.5), lineWidth: 1)
+                        .strokeBorder(joinTintColor.opacity(0.5), lineWidth: 1)
                 )
             }
 
@@ -712,6 +717,15 @@ struct EnjoyWorldView: View {
 
     private var addTravelTintColor: Color {
         tintOnBackground(themeManager.currentTheme.xprimary)
+    }
+
+    private var joinTintColor: Color {
+        ThemePreset.readableTint(
+            themeManager.currentTheme.secondary,
+            on: colorScheme == .dark
+                ? themeManager.currentTheme.backgroundDark
+                : themeManager.currentTheme.backgroundLight
+        )
     }
 
     /// 背景のグラデーションの上に直接置く色。
