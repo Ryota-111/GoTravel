@@ -411,19 +411,16 @@ struct EnjoyWorldView: View {
                 }
                 // テーマ色をそのまま載せると、明るい色（オレンジなど）で
                 // 読めなくなる。背景に対して差が出る濃さに調整して使う
-                .foregroundColor(
-                    ThemePreset.readableTint(
-                        themeManager.currentTheme.secondary,
-                        on: colorScheme == .dark
-                            ? themeManager.currentTheme.backgroundDark
-                            : themeManager.currentTheme.backgroundLight
-                    )
-                )
+                .foregroundColor(tintOnBackground(themeManager.currentTheme.secondary))
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
                 .background(
                     Capsule()
                         .fill(themeManager.currentTheme.secondary.opacity(0.15))
+                )
+                .overlay(
+                    Capsule()
+                        .strokeBorder(tintOnBackground(themeManager.currentTheme.secondary).opacity(0.5), lineWidth: 1)
                 )
             }
 
@@ -446,14 +443,18 @@ struct EnjoyWorldView: View {
         .accessibilityLabel(Text(label))
     }
 
+    /// 4つ並べると幅の狭い機種や文字サイズを上げた設定で入りきらず、
+    /// 「今後の旅行」が2行に折り返してタブの高さが揃わなくなる。
+    /// 折り返しを禁止して、入らない分は横スクロールで逃がす
     private var tabSelectionSection: some View {
-        HStack(spacing: 8) {
-            ForEach(TabType.allCases) { tab in
-                tabButton(for: tab)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(TabType.allCases) { tab in
+                    tabButton(for: tab)
+                }
             }
-            Spacer()
+            .padding(.horizontal, 20)
         }
-        .padding(.horizontal, 20)
     }
 
     private var travelPlansSection: some View {
@@ -495,14 +496,16 @@ struct EnjoyWorldView: View {
         .padding(.top, 10)
     }
 
+    /// 旅行計画のタブと同じ理由で横スクロールにする（`tabSelectionSection` を参照）
     private var planTabSelectionSection: some View {
-        HStack(spacing: 8) {
-            ForEach(PlanTabType.allCases) { tab in
-                planTabButton(for: tab)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(PlanTabType.allCases) { tab in
+                    planTabButton(for: tab)
+                }
             }
-            Spacer()
+            .padding(.horizontal, 20)
         }
-        .padding(.horizontal, 20)
     }
 
     private var planEventsListSection: some View {
@@ -539,6 +542,8 @@ struct EnjoyWorldView: View {
                 .font(.callout)
                 .fontWeight(selectedTab == tab ? .semibold : .regular)
                 .foregroundColor(selectedTab == tab ? themeManager.currentTheme.light : themeManager.currentTheme.secondaryText)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
                 .background {
@@ -561,6 +566,8 @@ struct EnjoyWorldView: View {
                 .font(.callout)
                 .fontWeight(selectedPlanTab == tab ? .semibold : .regular)
                 .foregroundColor(selectedPlanTab == tab ? themeManager.currentTheme.light : themeManager.currentTheme.secondaryText)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
                 .background {
@@ -574,31 +581,67 @@ struct EnjoyWorldView: View {
     }
 
     private var emptyTravelPlansView: some View {
-        Button(action: {
+        emptyAddCard(
+            title: "旅行計画を作成",
+            subtitle: "日程・費用・持ち物をまとめて残せます"
+        ) {
             showAddTravelPlan = true
-        }) {
-            VStack(spacing: 15) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 60))
-                    .foregroundColor(themeManager.currentTheme.secondary)
-
-                Text("旅行計画を作成")
-                    .font(.headline)
-                    .foregroundColor(themeManager.currentTheme.text)
-
-                Text("新しい旅行計画を追加してください")
-                    .font(.subheadline)
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(width: 200, height: 200)
-            .background(themeManager.currentTheme.tertiary)
-            .cornerRadius(25)
-            .shadow(color: themeManager.currentTheme.accent1.opacity(0.1), radius: 10, x: 0, y: 5)
         }
         .padding(.horizontal, 20)
-        // ScrollView直下は中央揃えになるため、実際のカードと同じ左端に寄せる
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 1件も無いときの追加口。
+    ///
+    /// アプリを入れて最初に見る画面がこれなので、旅行計画・予定計画で
+    /// 形が違うと別の機能に見える。両方ともこのカードに統一する。
+    /// 点線なのは、1件作った後に出る追加口（`addTravelPlanButton` /
+    /// `addPlanButton`）と同じ「これから増える場所」の見た目に揃えるため。
+    /// 中身が透けると＋の抜きが背景を拾って濁るので、チップは丸と記号で組む
+    private func emptyAddCard(title: String, subtitle: String? = nil, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(themeManager.currentTheme.secondary)
+                        .frame(width: 56, height: 56)
+                        .shadow(color: themeManager.currentTheme.secondary.opacity(0.35), radius: 6, x: 0, y: 3)
+
+                    Image(systemName: "plus")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundColor(themeManager.currentTheme.light)
+                }
+
+                VStack(spacing: 6) {
+                    Text(title)
+                        .font(.system(.headline, design: .rounded).weight(.bold))
+                        .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
+
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.subheadline)
+                            .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme).opacity(0.6))
+                            .multilineTextAlignment(.center)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 30)
+            .padding(.horizontal, 20)
+            .background(
+                // 背景のグラデーションは上が濃く下は白に近い。
+                // 単色を敷くとどちらかで沈むため、下地の明るさに追従する材質にする
+                RoundedRectangle(cornerRadius: 25)
+                    .fill(.ultraThinMaterial)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 25)
+                    .strokeBorder(
+                        addTravelTintColor.opacity(0.45),
+                        style: StrokeStyle(lineWidth: 1.5, dash: [8, 6])
+                    )
+            )
+        }
+        .buttonStyle(ScaleButtonStyle())
     }
 
     private func travelPlansListView(plans: [TravelPlan]) -> some View {
@@ -667,11 +710,17 @@ struct EnjoyWorldView: View {
         .buttonStyle(ScaleButtonStyle())
     }
 
-    /// 背景のグラデーションの上に直接置くため、テーマ色をそのまま使うと
-    /// デフォルトカラーでは青い背景に青が沈む。背景と差がつくまで寄せた色を使う
     private var addTravelTintColor: Color {
+        tintOnBackground(themeManager.currentTheme.xprimary)
+    }
+
+    /// 背景のグラデーションの上に直接置く色。
+    /// テーマ色をそのまま使うと、デフォルトカラーでは青い背景に青が沈み、
+    /// オレンジは明るすぎて読めない。カードの上に載る前提の
+    /// `backgroundLight` ではなく、実際に敷かれているグラデーションで判定する
+    private func tintOnBackground(_ color: Color) -> Color {
         ThemePreset.readableTint(
-            themeManager.currentTheme.xprimary,
+            color,
             on: colorScheme == .dark
                 ? themeManager.currentTheme.gradientDark
                 : themeManager.currentTheme.gradientLight
@@ -679,29 +728,9 @@ struct EnjoyWorldView: View {
     }
 
     private var emptyPlanEventsView: some View {
-        VStack(spacing: 15) {
-            Image(systemName: "calendar.badge.plus")
-                .font(.system(size: 50))
-                .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
-
-            Text("まだ予定がありません")
-                .font(.body)
-                .foregroundColor(themeManager.currentTheme.secondaryText)
-
-            Button(action: {
-                showAddPlan = true
-            }) {
-                Text("予定を追加")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 30)
-                    .padding(.vertical, 12)
-                    .background(themeManager.currentTheme.secondary)
-                    .cornerRadius(25)
-            }
+        emptyAddCard(title: "まだ予定がありません") {
+            showAddPlan = true
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
     }
 
     private func planEventsListView(plans: [Plan]) -> some View {
