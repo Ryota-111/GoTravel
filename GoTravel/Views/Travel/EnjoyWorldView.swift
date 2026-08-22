@@ -704,23 +704,63 @@ struct EnjoyWorldView: View {
         .animation(.spring(response: 0.7, dampingFraction: 0.6), value: plans.count)
     }
 
+    /// 一覧の末尾に置く追加口。予定カードと同じ形・同じ左端のまま、
+    /// 点線と薄い塗りで「まだ中身が無い次の1枚」に見せる。
+    /// 面で塗りつぶすと iOS では無効状態の色に見えてしまうため
     private var addPlanButton: some View {
         Button(action: {
             showAddPlan = true
         }) {
-            HStack {
-                Image(systemName: "plus.circle.fill")
-                    .foregroundColor(themeManager.currentTheme.secondary)
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 11)
+                        .fill(
+                            LinearGradient(
+                                colors: [addAccentColor, addAccentColor.opacity(0.65)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 34, height: 34)
+                        .shadow(color: addAccentColor.opacity(0.3), radius: 4, x: 0, y: 2)
+
+                    Image(systemName: "plus")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(themeManager.currentTheme.light)
+                }
+
                 Text("予定を追加")
-                    .font(.headline)
-                    .foregroundColor(themeManager.currentTheme.secondary)
+                    .font(.system(.subheadline, design: .rounded).weight(.bold))
+                    .foregroundColor(addLabelColor)
+
+                Spacer(minLength: 0)
             }
-            .padding(.vertical, 15)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
             .frame(maxWidth: .infinity)
-            .background(themeManager.currentTheme.accent2.opacity(0.2))
-            .cornerRadius(15)
-            .shadow(color: themeManager.currentTheme.accent1.opacity(0.05), radius: 5, x: 0, y: 2)
+            .background(
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(addAccentColor.opacity(colorScheme == .dark ? 0.12 : 0.06))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18)
+                    .strokeBorder(
+                        addAccentColor.opacity(0.35),
+                        style: StrokeStyle(lineWidth: 1.5, dash: [7, 5])
+                    )
+            )
         }
+        .buttonStyle(ScaleButtonStyle())
+    }
+
+    /// 予定カード（`PlanEventCardView`）の主役色と揃える。
+    /// accent2 はテーマごとに白にも黒にもなり、薄く敷くと消えるテーマがある
+    private var addAccentColor: Color {
+        themeManager.currentTheme.xprimary
+    }
+
+    private var addLabelColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
     }
 
 
