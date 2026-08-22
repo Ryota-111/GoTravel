@@ -35,10 +35,28 @@ struct AddScheduleItemView: View {
     ))
     @State private var selectedMapResult: MKMapItem?
     @State private var mapVisibleRegion: MKCoordinateRegion?
+    @State private var hasCenteredOnDestination = false
 
     // MARK: - Computed
     var dayDate: Date {
         Calendar.current.date(byAdding: .day, value: dayNumber - 1, to: plan.startDate) ?? plan.startDate
+    }
+
+    /// 地図と検索の起点。
+    /// 日本の中心から始めると、沖縄でもハワイでも長野周辺の候補が上位に来て、
+    /// 毎回地図を現地まで動かす手間がかかる。この旅行の目的地から始める。
+    /// 目的地の座標が無い計画（取得に失敗した・古いデータ）だけ日本全体にする
+    private var searchStartRegion: MKCoordinateRegion {
+        guard let latitude = plan.latitude, let longitude = plan.longitude else {
+            return MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
+                span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
+            )
+        }
+        return MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
+            span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+        )
     }
 
     private var canAdd: Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -670,6 +688,13 @@ struct AddScheduleItemView: View {
                 }
             }
             .onMapCameraChange { context in mapVisibleRegion = context.region }
+            // 初回だけ目的地へ寄せる。2回目以降は前に見ていた場所のままにする
+            .onAppear {
+                guard !hasCenteredOnDestination else { return }
+                hasCenteredOnDestination = true
+                mapPosition = .region(searchStartRegion)
+                mapVisibleRegion = searchStartRegion
+            }
 
             VStack(spacing: 0) {
                 // ヘッダー
@@ -784,10 +809,7 @@ struct AddScheduleItemView: View {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = searchText
         request.resultTypes = [.pointOfInterest, .address]
-        request.region = mapVisibleRegion ?? MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
-            span: MKCoordinateSpan(latitudeDelta: 5, longitudeDelta: 5)
-        )
+        request.region = mapVisibleRegion ?? searchStartRegion
         do {
             let response = try await MKLocalSearch(request: request).start()
             searchResults = response.mapItems

@@ -41,6 +41,7 @@ struct EditScheduleItemView: View {
     ))
     @State private var selectedMapResult: MKMapItem?
     @State private var mapVisibleRegion: MKCoordinateRegion?
+    @State private var hasCenteredOnDestination = false
 
     // MARK: - Initialization
     init(plan: TravelPlan, daySchedule: DaySchedule, item: ScheduleItem) {
@@ -69,6 +70,20 @@ struct EditScheduleItemView: View {
 
     // MARK: - Computed
     private var canSave: Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    /// 地図と検索の起点（`AddScheduleItemView` と同じ理由・同じ内容）
+    private var searchStartRegion: MKCoordinateRegion {
+        guard let latitude = plan.latitude, let longitude = plan.longitude else {
+            return MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
+                span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
+            )
+        }
+        return MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
+            span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+        )
+    }
 
     private var travelColor: Color {
         switch themeManager.currentTheme.type {
@@ -741,6 +756,25 @@ struct EditScheduleItemView: View {
                 }
             }
             .onMapCameraChange { context in mapVisibleRegion = context.region }
+            // 初回だけ寄せる。すでに場所が入っている予定はその場所、
+            // 入っていなければ旅行の目的地。2回目以降は前に見ていた場所のまま
+            .onAppear {
+                guard !hasCenteredOnDestination else { return }
+                hasCenteredOnDestination = true
+
+                let region: MKCoordinateRegion
+                if let coordinate = selectedCoordinate {
+                    region = MKCoordinateRegion(
+                        center: coordinate,
+                        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
+                    )
+                } else {
+                    region = searchStartRegion
+                }
+
+                mapPosition = .region(region)
+                mapVisibleRegion = region
+            }
 
             VStack(spacing: 0) {
                 // ヘッダー
@@ -855,10 +889,7 @@ struct EditScheduleItemView: View {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = searchText
         request.resultTypes = [.pointOfInterest, .address]
-        request.region = mapVisibleRegion ?? MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
-            span: MKCoordinateSpan(latitudeDelta: 5, longitudeDelta: 5)
-        )
+        request.region = mapVisibleRegion ?? searchStartRegion
         do {
             let response = try await MKLocalSearch(request: request).start()
             searchResults = response.mapItems
