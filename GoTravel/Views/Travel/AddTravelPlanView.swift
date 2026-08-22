@@ -21,6 +21,7 @@ struct AddTravelPlanView: View {
     @State private var showImagePicker = false
     @State private var isUploading = false
     @State private var destinationCoordinate: (latitude: Double, longitude: Double)?
+    @State private var destinationSearchTask: Task<Void, Never>?
 
     private let totalSteps = 4
     private var isLastStep: Bool { currentStep == totalSteps - 1 }
@@ -489,19 +490,18 @@ struct AddTravelPlanView: View {
 
     // MARK: - Location Search
     private func searchLocationCoordinate(for query: String) {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
+        // 打っている途中の検索は捨てる。残すと古い結果が後から上書きする
+        destinationSearchTask?.cancel()
+
+        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             destinationCoordinate = nil
             return
         }
-        let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = trimmed
-        MKLocalSearch(request: request).start { response, _ in
-            guard let item = response?.mapItems.first else { return }
-            let coord = item.placemark.coordinate
-            DispatchQueue.main.async {
-                destinationCoordinate = (coord.latitude, coord.longitude)
-            }
+
+        destinationSearchTask = Task { @MainActor in
+            let coordinate = await DestinationGeocoder.coordinate(for: query)
+            guard !Task.isCancelled else { return }
+            destinationCoordinate = coordinate.map { ($0.latitude, $0.longitude) }
         }
     }
 }
