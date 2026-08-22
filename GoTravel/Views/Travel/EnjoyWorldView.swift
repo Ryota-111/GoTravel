@@ -626,24 +626,56 @@ struct EnjoyWorldView: View {
         .animation(.spring(response: 0.7, dampingFraction: 0.6), value: plans.count)
     }
 
+    /// 横並びの末尾に置く追加口。写真の入ったカードと張り合わないよう、
+    /// 同じ角丸のまま点線の枠だけにして「これから埋める1枚」に見せる。
+    /// 影は付けない（`TravelPlanCard` と同じ理由で、帯からはみ出した分が切り取られる）
     private var addTravelPlanButton: some View {
         Button(action: {
             showAddTravelPlan = true
         }) {
-            VStack {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 50))
-                    .foregroundColor(themeManager.currentTheme.secondary)
+            VStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(addTravelTintColor.opacity(0.16))
+                        .frame(width: 52, height: 52)
+                    Circle()
+                        .strokeBorder(addTravelTintColor.opacity(0.5), lineWidth: 1.5)
+                        .frame(width: 52, height: 52)
 
-                Text("予定を追加")
-                    .font(.headline)
-                    .foregroundColor(themeManager.currentTheme.secondary)
+                    Image(systemName: "plus")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(addTravelTintColor)
+                }
+
+                Text("旅行計画を追加")
+                    .font(.system(.subheadline, design: .rounded).weight(.bold))
+                    .foregroundColor(addTravelTintColor)
             }
             .frame(width: 150, height: 200)
-            .background(themeManager.currentTheme.accent2.opacity(0.2))
-            .cornerRadius(25)
-            .shadow(color: themeManager.currentTheme.accent1.opacity(0.1), radius: 10, x: 0, y: 5)
+            .background(
+                RoundedRectangle(cornerRadius: 25)
+                    .fill(addTravelTintColor.opacity(0.10))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 25)
+                    .strokeBorder(
+                        addTravelTintColor.opacity(0.45),
+                        style: StrokeStyle(lineWidth: 1.5, dash: [8, 6])
+                    )
+            )
         }
+        .buttonStyle(ScaleButtonStyle())
+    }
+
+    /// 背景のグラデーションの上に直接置くため、テーマ色をそのまま使うと
+    /// デフォルトカラーでは青い背景に青が沈む。背景と差がつくまで寄せた色を使う
+    private var addTravelTintColor: Color {
+        ThemePreset.readableTint(
+            themeManager.currentTheme.xprimary,
+            on: colorScheme == .dark
+                ? themeManager.currentTheme.gradientDark
+                : themeManager.currentTheme.gradientLight
+        )
     }
 
     private var emptyPlanEventsView: some View {
