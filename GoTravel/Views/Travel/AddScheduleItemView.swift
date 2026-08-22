@@ -53,9 +53,11 @@ struct AddScheduleItemView: View {
                 span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
             )
         }
+        // 0.3度＝約33km。目的地の座標は「沖縄」「東京」のような広い言葉から
+        // 引いた1点なので、寄りすぎると隣町が画面の外に出てしまう
         return MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
-            span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+            span: MKCoordinateSpan(latitudeDelta: 0.3, longitudeDelta: 0.3)
         )
     }
 

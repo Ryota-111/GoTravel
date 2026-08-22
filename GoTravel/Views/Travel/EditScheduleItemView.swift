@@ -81,7 +81,7 @@ struct EditScheduleItemView: View {
         }
         return MKCoordinateRegion(
             center: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
-            span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
+            span: MKCoordinateSpan(latitudeDelta: 0.3, longitudeDelta: 0.3)
         )
     }
 
