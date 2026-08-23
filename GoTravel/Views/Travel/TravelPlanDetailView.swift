@@ -631,30 +631,21 @@ struct TravelPlanDetailView: View {
                     .lineLimit(2)
                     .minimumScaleFactor(0.8)
 
-                HStack(alignment: .firstTextBaseline, spacing: 10) {
-                    Text(tripDateRange(plan: plan))
-                        .font(.system(size: 15, weight: .medium))
-                        .foregroundColor(.white.opacity(0.9))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.8)
-
-                    Spacer(minLength: 0)
-
-                    // 開くたびに「いま知りたいこと」が出るようにする
-                    if let status = tripStatusText(plan: plan) {
-                        Text(status)
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 4)
-                            .background(Capsule().fill(.ultraThinMaterial))
-                    }
-                }
+                Text(tripDateRange(plan: plan))
+                    .font(.system(size: 15, weight: .medium))
+                    .foregroundColor(.white.opacity(0.9))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
             }
             .shadow(color: .black.opacity(0.45), radius: 4, x: 0, y: 1)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
+            // 右下の円と重ならないところで折り返す
+            .padding(.trailing, tripCountdown(plan: plan) == nil ? 0 : 112)
+
+            // 開くたびに「いま知りたいこと」が目に入るようにする
+            countdownRing(plan: plan)
 
             // ナビゲーションボタン（上部）
             HStack {
@@ -1442,7 +1433,7 @@ struct TravelPlanDetailView: View {
     }
 
     /// 出発前は残り日数、旅行中は何日目か。終わった旅行では出さない
-    private func tripStatusText(plan: TravelPlan) -> String? {
+    private func tripCountdown(plan: TravelPlan) -> (caption: String, value: String)? {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
         let start = calendar.startOfDay(for: plan.startDate)
@@ -1450,13 +1441,43 @@ struct TravelPlanDetailView: View {
 
         if today < start {
             let days = calendar.dateComponents([.day], from: today, to: start).day ?? 0
-            return days == 1 ? "明日から" : "あと\(days)日"
+            return ("出発まで", days == 1 ? "明日" : "\(days)日")
         }
         if today <= end {
             let elapsed = calendar.dateComponents([.day], from: start, to: today).day ?? 0
-            return "Day \(elapsed + 1)"
+            return ("旅行中", "Day \(elapsed + 1)")
         }
         return nil
+    }
+
+    /// 写真の右下に置く残り日数の円。
+    /// 数字を主役にしたいので、線は細く・塗りは無しにしている
+    @ViewBuilder
+    private func countdownRing(plan: TravelPlan) -> some View {
+        if let countdown = tripCountdown(plan: plan) {
+            ZStack {
+                Circle()
+                    .strokeBorder(Color.white.opacity(0.9), lineWidth: 1.5)
+
+                VStack(spacing: 1) {
+                    Text(countdown.caption)
+                        .font(.system(size: 11, weight: .medium))
+                        .foregroundColor(.white.opacity(0.85))
+
+                    Text(countdown.value)
+                        .font(.system(size: 26, weight: .bold))
+                        .foregroundColor(.white)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.5)
+                }
+                .padding(.horizontal, 10)
+            }
+            .frame(width: 92, height: 92)
+            .shadow(color: .black.opacity(0.4), radius: 6, x: 0, y: 2)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
+            .padding(.trailing, 20)
+            .padding(.bottom, 20)
+        }
     }
 
     private func formatTripDuration() -> String {
