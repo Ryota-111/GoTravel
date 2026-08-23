@@ -642,7 +642,7 @@ struct TravelPlanDetailView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
             // 右下の円と重ならないところで折り返す
-            .padding(.trailing, tripCountdown(plan: plan) == nil ? 0 : 112)
+            .padding(.trailing, tripCountdown(plan: plan) == nil ? 0 : 98)
 
             // 開くたびに「いま知りたいこと」が目に入るようにする
             countdownRing(plan: plan)
@@ -1461,18 +1461,18 @@ struct TravelPlanDetailView: View {
 
                 VStack(spacing: 1) {
                     Text(countdown.caption)
-                        .font(.system(size: 11, weight: .medium))
+                        .font(.system(size: 10, weight: .medium))
                         .foregroundColor(.white.opacity(0.85))
 
                     Text(countdown.value)
-                        .font(.system(size: 26, weight: .bold))
+                        .font(.system(size: 22, weight: .bold))
                         .foregroundColor(.white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
                 }
-                .padding(.horizontal, 10)
+                .padding(.horizontal, 8)
             }
-            .frame(width: 92, height: 92)
+            .frame(width: 78, height: 78)
             .shadow(color: .black.opacity(0.4), radius: 6, x: 0, y: 2)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             .padding(.trailing, 20)
