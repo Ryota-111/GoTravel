@@ -213,100 +213,126 @@ struct PlacesListView: View {
         }
     }
 
+    /// 予定カードと同じ言語で組む。面には色を敷かず、色はサムネイルとタグへ。
+    /// 全カードにテーマ色を敷いていたときは、並べると一覧が騒がしかった
     private func placeCardView(_ place: VisitedPlace) -> some View {
         let category = categoryManager.category(for: place.categoryId)
-        let baseColor: Color = colorScheme == .dark
+        let accent = categoryColor(category)
+        let surface: Color = colorScheme == .dark
             ? themeManager.currentTheme.secondaryBackgroundDark
             : themeManager.currentTheme.backgroundLight
-        let tintOpacity: Double = colorScheme == .dark ? 0.16 : 0.10
 
         return NavigationLink(destination: PlaceDetailView(place: place)) {
-            HStack(alignment: .top, spacing: 14) {
-                // カテゴリーアイコンチップ（テーマ色主体）
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(
-                            LinearGradient(
-                                colors: [mainColor, mainColor.opacity(0.65)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 46, height: 46)
-                        .shadow(color: mainColor.opacity(0.35), radius: 5, x: 0, y: 3)
+            HStack(spacing: 12) {
+                placeThumbnail(place, category: category, accent: accent)
 
-                    Image(systemName: category.icon)
-                        .font(.system(size: 19, weight: .semibold))
-                        .foregroundColor(.white)
-                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(place.title)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(textColor)
+                        .lineLimit(1)
 
-                VStack(alignment: .leading, spacing: 7) {
-                    HStack(spacing: 8) {
-                        Text(place.title)
-                            .font(.system(.headline, design: .rounded).weight(.bold))
-                            .foregroundColor(textColor)
+                    // 同じ名前の店が複数あっても見分けられるように住所を出す
+                    if let address = place.address, !address.isEmpty {
+                        Text(address)
+                            .font(.system(size: 12))
+                            .foregroundColor(secondaryTextColor)
                             .lineLimit(1)
+                    }
 
+                    HStack(spacing: 7) {
                         Text(category.name)
-                            .font(.caption2.weight(.bold))
-                            .foregroundColor(mainColor)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(accent)
                             .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
-                            .background(mainColor.opacity(0.14), in: Capsule())
-                    }
+                            .padding(.vertical, 2)
+                            .background(accent.opacity(colorScheme == .dark ? 0.24 : 0.14), in: RoundedRectangle(cornerRadius: 6))
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "calendar")
-                                .font(.caption2)
-                            Text(formattedDate(place))
-                                .font(.caption.weight(.medium))
-                        }
-
-                        if let address = place.address, !address.isEmpty {
-                            HStack(spacing: 4) {
-                                Image(systemName: "mappin.and.ellipse")
-                                    .font(.caption2)
-                                Text(address)
-                                    .font(.caption.weight(.medium))
-                                    .lineLimit(1)
-                            }
-                        }
+                        Text(formattedDate(place))
+                            .font(.system(size: 12))
+                            .foregroundColor(secondaryTextColor)
+                            .lineLimit(1)
                     }
-                    .foregroundColor(secondaryTextColor)
                 }
 
                 Spacer(minLength: 0)
 
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(secondaryTextColor.opacity(0.6))
-                    .padding(.top, 4)
+                placeMenuButton(place: place)
             }
-            .padding(14)
+            .padding(.leading, 9)
+            .padding(.vertical, 9)
+            .padding(.trailing, 4)
             .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(baseColor)
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(
-                            LinearGradient(
-                                colors: [mainColor.opacity(tintOpacity), mainColor.opacity(0.02)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                }
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(surface)
             )
+            // ダークでは影が沈んで効かないので、細い輪郭に置き換える
             .overlay(
-                RoundedRectangle(cornerRadius: 18)
-                    .stroke(mainColor.opacity(0.28), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(colorScheme == .dark ? mainColor.opacity(0.10) : .clear, lineWidth: 1)
             )
-            .shadow(color: Color.black.opacity(0.06), radius: 7, x: 0, y: 3)
+            .shadow(
+                color: colorScheme == .dark ? .clear : Color.black.opacity(0.07),
+                radius: 13,
+                x: 0,
+                y: 5
+            )
         }
         .buttonStyle(PlainButtonStyle())
-        .contextMenu {
+    }
+
+    /// 保存した写真は詳細でしか見えていなかった。一覧でも出すと、
+    /// 名前を読まなくてもどの場所か分かる
+    private func placeThumbnail(_ place: VisitedPlace, category: CustomPlaceCategory, accent: Color) -> some View {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(accent.opacity(colorScheme == .dark ? 0.24 : 0.14))
+            .frame(width: 56, height: 56)
+            .overlay {
+                if let fileName = place.localPhotoFileName,
+                   let image = FileManager.documentsImage(named: fileName) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Image(systemName: category.icon)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(accent)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    /// 長押しの contextMenu だけでは削除できることに気づけない。
+    /// 予定カードと同じ44ptの「⋯」に揃える
+    private func placeMenuButton(place: VisitedPlace) -> some View {
+        Menu {
             deleteButton(place: place)
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(secondaryTextColor)
+                .frame(width: 44, height: 40)
+                .contentShape(Rectangle())
+        }
+        .accessibilityLabel("この場所の操作")
+    }
+
+    /// カテゴリの色。`CustomPlaceCategory` は色を持たないので、
+    /// 既定の3つは決め打ち、ユーザーが足した分はテーマのカテゴリ色から配る。
+    /// モデルに色を足すと CloudKit と同期するスキーマを変えることになるため、
+    /// ここで決める。並び順ではなくIDから決めるので、追加や削除でも色が動かない
+    private func categoryColor(_ category: CustomPlaceCategory) -> Color {
+        let theme = themeManager.currentTheme
+
+        switch category.id {
+        case "hotel":       return theme.outingPlanColor
+        case "restaurant":  return theme.dailyPlanColor
+        case "sightseeing": return theme.travelColor
+        default:
+            let palette = [theme.japan, theme.family, theme.landscape, theme.food, theme.custom]
+            // String の hashValue は起動ごとに変わるため使わない
+            let stable = category.id.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF }
+            return palette[stable % palette.count]
         }
     }
 
