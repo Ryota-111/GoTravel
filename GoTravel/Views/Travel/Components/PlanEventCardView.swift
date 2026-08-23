@@ -82,7 +82,7 @@ struct PlanEventCardView: View {
             menuButton
         }
         .padding(.leading, 12)
-        .padding(.vertical, 11)
+        .padding(.vertical, 9)
         .padding(.trailing, 4)
         .background(
             ZStack {
@@ -128,7 +128,8 @@ struct PlanEventCardView: View {
     // アイコンだけの目印では日付が本文に埋もれ、一覧を流し読みできなかった。
     // 数字を大きく置いて、日付でたどれるようにする
     private var dateTile: some View {
-        VStack(spacing: 2) {
+        // 曜日は本文の頭へ回した。3行にすると、この列がカードの高さを決めてしまう
+        VStack(spacing: 1) {
             Text(isToday ? "今日" : monthText)
                 .font(.system(size: 10, weight: .bold))
                 .opacity(isToday ? 0.86 : 0.78)
@@ -136,14 +137,10 @@ struct PlanEventCardView: View {
             Text(dayText)
                 .font(.system(size: 21, weight: .heavy))
                 .monospacedDigit()
-
-            Text(weekdayText)
-                .font(.system(size: 9, weight: .bold))
-                .opacity(isToday ? 0.86 : 0.72)
         }
         .foregroundColor(isToday ? ThemePreset.readableText(on: mainColor) : mainColor)
-        .padding(.vertical, 7)
-        .frame(width: 50)
+        .padding(.vertical, 6)
+        .frame(width: 46)
         .background(
             RoundedRectangle(cornerRadius: 13, style: .continuous)
                 .fill(isToday ? AnyShapeStyle(mainColor) : AnyShapeStyle(mainColor.opacity(colorScheme == .dark ? 0.22 : 0.12)))
@@ -161,7 +158,8 @@ struct PlanEventCardView: View {
                 Image(systemName: "ellipsis")
                     .font(.system(size: 15, weight: .bold))
                     .foregroundColor(subTextColor)
-                    .frame(width: 44, height: 44)
+                    // 幅は44のまま。高さで詰めると、この列がカードを押し広げる
+                    .frame(width: 44, height: 40)
                     .contentShape(Rectangle())
             }
             .accessibilityLabel("この予定の操作")
@@ -173,7 +171,7 @@ struct PlanEventCardView: View {
     // 単日でも「8月23日 〜 8月23日」と出していたのをやめる。
     // 日付はタイルが持つので、本文には期間と中身だけを残す
     private var subtitle: String {
-        var parts: [String] = []
+        var parts: [String] = [weekdayText]
 
         if !isSingleDay {
             parts.append("\(DateFormatter.japaneseDate.string(from: plan.endDate))まで")
