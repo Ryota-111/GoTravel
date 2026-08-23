@@ -434,7 +434,8 @@ struct TravelPlanMapView: View {
     private var scopeSelector: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                scopeChip(title: "全日程", scopeValue: .all, color: themeManager.currentTheme.primary)
+                // primary は白黒テーマだと白。選択すると白い丸に白い文字になって消える
+                scopeChip(title: "全日程", scopeValue: .all, color: themeManager.currentTheme.actionFill)
 
                 ForEach(1...tripDuration, id: \.self) { day in
                     scopeChip(title: "Day \(day)", scopeValue: .day(day), color: Self.dayColor(for: day))
@@ -454,8 +455,9 @@ struct TravelPlanMapView: View {
             }
         } label: {
             HStack(spacing: 5) {
+                // 選択中は同じ色で塗った丸の上に乗るため、色分けの丸が消える
                 Circle()
-                    .fill(color)
+                    .fill(isSelected ? Color.white : color)
                     .frame(width: 7, height: 7)
                 Text(title)
                     .font(.caption.weight(.semibold))
