@@ -642,7 +642,7 @@ struct TravelPlanDetailView: View {
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
             // 右下の円と重ならないところで折り返す
-            .padding(.trailing, tripCountdown(plan: plan) == nil ? 0 : 136)
+            .padding(.trailing, tripCountdown(plan: plan) == nil ? 0 : 120)
 
             // 開くたびに「いま知りたいこと」が目に入るようにする
             countdownTicket(plan: plan)
@@ -1456,13 +1456,13 @@ struct TravelPlanDetailView: View {
     private func countdownTicket(plan: TravelPlan) -> some View {
         if let countdown = tripCountdown(plan: plan) {
             HStack(spacing: 0) {
-                VStack(spacing: 1) {
+                VStack(spacing: 0) {
                     Text(countdown.caption)
-                        .font(.system(size: 10, weight: .medium))
+                        .font(.system(size: 9, weight: .medium))
                         .foregroundColor(.white.opacity(0.85))
 
                     Text(countdown.value)
-                        .font(.system(size: 22, weight: .bold))
+                        .font(.system(size: 19, weight: .bold))
                         .foregroundColor(.white)
                         .lineLimit(1)
                         .minimumScaleFactor(0.5)
@@ -1470,25 +1470,27 @@ struct TravelPlanDetailView: View {
                 .frame(maxWidth: .infinity)
 
                 Image(systemName: "airplane")
-                    .font(.system(size: 12, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundColor(.white.opacity(0.8))
                     .rotationEffect(.degrees(-45))
                     .frame(width: Self.ticketStubWidth)
             }
-            .padding(.vertical, 9)
-            .frame(width: 116, height: 60)
+            .padding(.vertical, 7)
+            .frame(width: 100, height: 52)
             .background(
-                TicketShape(stubWidth: Self.ticketStubWidth, notchRadius: 5)
-                    .fill(.ultraThinMaterial, style: FillStyle(eoFill: true))
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .fill(.ultraThinMaterial)
+                    // 曇りを弱めて写真を透かす。材質そのものには濃さの指定が無い
+                    .opacity(0.55)
             )
             .overlay(
-                TicketShape(stubWidth: Self.ticketStubWidth, notchRadius: 5)
-                    .stroke(Color.white.opacity(0.35), style: StrokeStyle(lineWidth: 1), antialiased: true)
+                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                    .strokeBorder(Color.white.opacity(0.35), lineWidth: 1)
             )
             // ミシン目。破線を引くより、粒を並べたほうが端の切れ方が揃う
             .overlay(alignment: .trailing) {
                 VStack(spacing: 3) {
-                    ForEach(0..<6, id: \.self) { _ in
+                    ForEach(0..<5, id: \.self) { _ in
                         Capsule()
                             .fill(Color.white.opacity(0.5))
                             .frame(width: 1, height: 4)
@@ -1503,7 +1505,7 @@ struct TravelPlanDetailView: View {
         }
     }
 
-    private static let ticketStubWidth: CGFloat = 26
+    private static let ticketStubWidth: CGFloat = 22
 
     private func formatTripDuration() -> String {
         if tripDuration == 1 {
@@ -1678,36 +1680,5 @@ private struct SwipeBackEnabler: UIViewControllerRepresentable {
             vc.navigationController?.interactivePopGestureRecognizer?.isEnabled = true
             vc.navigationController?.interactivePopGestureRecognizer?.delegate = nil
         }
-    }
-}
-
-// MARK: - Ticket Shape
-
-/// 半券の形。右寄りの上下に切り欠きを入れる。
-///
-/// 背景色の丸を重ねて隠す手も使えるが、写真の上ではその色を合わせられない。
-/// 実際に穴として抜くため、丸を足したパスを `eoFill` で塗ること
-private struct TicketShape: Shape {
-    let stubWidth: CGFloat
-    let notchRadius: CGFloat
-
-    func path(in rect: CGRect) -> Path {
-        var path = Path(roundedRect: rect, cornerRadius: 12, style: .continuous)
-
-        let centerX = rect.maxX - stubWidth
-        path.addEllipse(in: CGRect(
-            x: centerX - notchRadius,
-            y: rect.minY - notchRadius,
-            width: notchRadius * 2,
-            height: notchRadius * 2
-        ))
-        path.addEllipse(in: CGRect(
-            x: centerX - notchRadius,
-            y: rect.maxY - notchRadius,
-            width: notchRadius * 2,
-            height: notchRadius * 2
-        ))
-
-        return path
     }
 }
