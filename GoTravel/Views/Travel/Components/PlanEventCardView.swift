@@ -52,26 +52,26 @@ struct PlanEventCardView: View {
     }
 
     var body: some View {
-        HStack(spacing: 14) {
+        HStack(spacing: 12) {
             dateTile
 
-            VStack(alignment: .leading, spacing: 8) {
+            VStack(alignment: .leading, spacing: 6) {
                 Text(plan.title)
-                    .font(.system(size: isToday ? 18 : 17, weight: isToday ? .bold : .semibold))
+                    .font(.system(size: isToday ? 17 : 16, weight: isToday ? .bold : .semibold))
                     .foregroundColor(titleColor)
                     .lineLimit(1)
 
-                HStack(spacing: 8) {
+                HStack(spacing: 7) {
                     // 種別色を使うのはここだけ
                     Text(typeName)
-                        .font(.system(size: 11, weight: .bold))
+                        .font(.system(size: 10, weight: .bold))
                         .foregroundColor(typeColor)
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(typeColor.opacity(colorScheme == .dark ? 0.24 : 0.14), in: RoundedRectangle(cornerRadius: 7))
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(typeColor.opacity(colorScheme == .dark ? 0.24 : 0.14), in: RoundedRectangle(cornerRadius: 6))
 
                     Text(subtitle)
-                        .font(.system(size: 13))
+                        .font(.system(size: 12))
                         .foregroundColor(subTextColor)
                         .lineLimit(1)
                 }
@@ -81,9 +81,9 @@ struct PlanEventCardView: View {
 
             menuButton
         }
-        .padding(.leading, 15)
-        .padding(.vertical, 15)
-        .padding(.trailing, 6)
+        .padding(.leading, 12)
+        .padding(.vertical, 11)
+        .padding(.trailing, 4)
         .background(
             ZStack {
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -128,24 +128,24 @@ struct PlanEventCardView: View {
     // アイコンだけの目印では日付が本文に埋もれ、一覧を流し読みできなかった。
     // 数字を大きく置いて、日付でたどれるようにする
     private var dateTile: some View {
-        VStack(spacing: 3) {
+        VStack(spacing: 2) {
             Text(isToday ? "今日" : monthText)
-                .font(.system(size: 11, weight: .bold))
+                .font(.system(size: 10, weight: .bold))
                 .opacity(isToday ? 0.86 : 0.78)
 
             Text(dayText)
-                .font(.system(size: 25, weight: .heavy))
+                .font(.system(size: 21, weight: .heavy))
                 .monospacedDigit()
 
             Text(weekdayText)
-                .font(.system(size: 10, weight: .bold))
+                .font(.system(size: 9, weight: .bold))
                 .opacity(isToday ? 0.86 : 0.72)
         }
         .foregroundColor(isToday ? ThemePreset.readableText(on: mainColor) : mainColor)
-        .padding(.vertical, 9)
-        .frame(width: 56)
+        .padding(.vertical, 7)
+        .frame(width: 50)
         .background(
-            RoundedRectangle(cornerRadius: 15, style: .continuous)
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
                 .fill(isToday ? AnyShapeStyle(mainColor) : AnyShapeStyle(mainColor.opacity(colorScheme == .dark ? 0.22 : 0.12)))
         )
     }
