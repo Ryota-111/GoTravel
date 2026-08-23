@@ -1477,15 +1477,11 @@ struct TravelPlanDetailView: View {
             }
             .padding(.vertical, 7)
             .frame(width: 100, height: 52)
-            .background(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(.ultraThinMaterial)
-                    // 曇りを弱めて写真を透かす。材質そのものには濃さの指定が無い
-                    .opacity(0.55)
-            )
+            // 塗りは置かない。写真をそのまま見せる代わりに、
+            // 枠と文字の影だけで明るい写真から浮かせる
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .strokeBorder(Color.white.opacity(0.35), lineWidth: 1)
+                    .strokeBorder(Color.white.opacity(0.5), lineWidth: 1)
             )
             // ミシン目。破線を引くより、粒を並べたほうが端の切れ方が揃う
             .overlay(alignment: .trailing) {
