@@ -1441,7 +1441,7 @@ struct TravelPlanDetailView: View {
 
         if today < start {
             let days = calendar.dateComponents([.day], from: today, to: start).day ?? 0
-            return ("出発まで", days == 1 ? "明日" : "\(days)日")
+            return ("旅行まで", days == 1 ? "明日" : "\(days)日")
         }
         if today <= end {
             let elapsed = calendar.dateComponents([.day], from: start, to: today).day ?? 0
