@@ -417,6 +417,10 @@ struct PlacesListView: View {
             droppedPinContent(at: placePicker.coordinate, color: themeManager.currentTheme.success)
 
             ForEach(vm.places) { place in
+                let category = categoryManager.category(for: place.categoryId)
+                let accent = categoryColor(category)
+                let isSelected = selectedPlace?.id == place.id
+
                 Annotation(place.title, coordinate: place.coordinate) {
                         Button(action: {
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
@@ -424,17 +428,23 @@ struct PlacesListView: View {
                             }
                         }) {
                             ZStack {
+                                // 色はカテゴリを表す。全部が同じ赤だと、
+                                // 地図の上でホテルと風景の区別がつかない
                                 Circle()
-                                    .fill(selectedPlace?.id == place.id
-                                          ? themeManager.currentTheme.xprimary
-                                          : themeManager.currentTheme.error.opacity(0.9))
+                                    .fill(accent)
                                     .frame(width: 38, height: 38)
-                                    .shadow(color: themeManager.currentTheme.error.opacity(0.4), radius: 4, x: 0, y: 2)
-                                    .scaleEffect(selectedPlace?.id == place.id ? 1.15 : 1.0)
-                                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedPlace?.id == place.id)
-                                Image(systemName: categoryManager.category(for: place.categoryId).icon)
+                                    // 選んだピンは色ではなく白い縁と大きさで示す
+                                    .overlay(
+                                        Circle()
+                                            .strokeBorder(Color.white.opacity(isSelected ? 0.95 : 0), lineWidth: 2.5)
+                                    )
+                                    .shadow(color: accent.opacity(0.45), radius: isSelected ? 7 : 4, x: 0, y: 2)
+                                    .scaleEffect(isSelected ? 1.15 : 1.0)
+                                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+
+                                Image(systemName: category.icon)
                                     .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(ThemePreset.readableText(on: accent))
                             }
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -455,14 +465,17 @@ struct PlacesListView: View {
                 .padding(.bottom, 14)
 
             HStack(alignment: .top, spacing: 12) {
-                // カテゴリーアイコン
+                // カテゴリーアイコン。ピンと同じ色にして、
+                // どのピンを開いているのか下のパネルでも分かるようにする
                 ZStack {
+                    let accent = categoryColor(categoryManager.category(for: place.categoryId))
+
                     Circle()
-                        .fill(themeManager.currentTheme.error.opacity(0.12))
+                        .fill(accent.opacity(colorScheme == .dark ? 0.24 : 0.14))
                         .frame(width: 44, height: 44)
                     Image(systemName: categoryManager.category(for: place.categoryId).icon)
                         .font(.system(size: 18))
-                        .foregroundColor(themeManager.currentTheme.error)
+                        .foregroundColor(accent)
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
