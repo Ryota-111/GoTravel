@@ -409,28 +409,29 @@ struct PlaceDetailView: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
+                    // カテゴリーの色は一覧・地図と揃える
                     ZStack {
                         RoundedRectangle(cornerRadius: 12)
                             .fill(
                                 LinearGradient(
-                                    colors: [mainColor, mainColor.opacity(0.65)],
+                                    colors: [category.color, category.color.opacity(0.65)],
                                     startPoint: .topLeading,
                                     endPoint: .bottomTrailing
                                 )
                             )
                             .frame(width: 40, height: 40)
-                            .shadow(color: mainColor.opacity(0.35), radius: 5, x: 0, y: 3)
+                            .shadow(color: category.color.opacity(0.35), radius: 5, x: 0, y: 3)
                         Image(systemName: category.icon)
                             .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white)
+                            .foregroundColor(ThemePreset.readableText(on: category.color))
                     }
 
                     Text(category.name)
                         .font(.caption.weight(.bold))
-                        .foregroundColor(mainColor)
+                        .foregroundColor(category.color)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .background(mainColor.opacity(0.14), in: Capsule())
+                        .background(category.color.opacity(0.14), in: Capsule())
                 }
 
                 VStack(alignment: .leading, spacing: 6) {

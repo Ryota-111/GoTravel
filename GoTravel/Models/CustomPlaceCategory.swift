@@ -1,12 +1,24 @@
 import Foundation
 import Combine
 import CoreData
+import SwiftUI
 
 struct CustomPlaceCategory: Identifiable, Codable, Equatable {
     var id: String
     var name: String
     var icon: String
     var isDefault: Bool = false
+    /// ユーザーが選んだ色。既定カテゴリーと、色を選ばずに作られた分は nil
+    var colorHex: String? = nil
+
+    /// 一覧のタイル・タグ・地図のピンに使う色。
+    /// 既定カテゴリーは決め打ち、選んでいなければIDから固定で決める
+    var color: Color {
+        let hex = colorHex
+            ?? PlaceCategoryPalette.defaultHex(forCategoryId: id)
+            ?? PlaceCategoryPalette.fallbackHex(forCategoryId: id)
+        return Color(hex: hex) ?? .gray
+    }
 
     static let defaults: [CustomPlaceCategory] = [
         CustomPlaceCategory(id: "hotel",       name: "ホテル",     icon: "bed.double.fill",  isDefault: true),
@@ -118,6 +130,15 @@ final class PlaceCategoryManager: NSObject, ObservableObject {
         guard (try? PlaceCategoryEntity.fetchById(id: category.id, context: context)) == nil else { return }
 
         _ = PlaceCategoryEntity.create(from: category, userId: userId, context: context)
+        CoreDataManager.shared.saveContext()
+    }
+
+    /// 名前・アイコン・色の変更。既定カテゴリーは変えられない
+    func update(_ category: CustomPlaceCategory) {
+        guard !category.isDefault, let userId = currentUserId else { return }
+        guard let entity = try? PlaceCategoryEntity.fetchById(id: category.id, context: context) else { return }
+
+        entity.update(from: category, userId: userId)
         CoreDataManager.shared.saveContext()
     }
 

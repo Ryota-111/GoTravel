@@ -53,6 +53,7 @@
         <attribute name="userId" optional="YES" attributeType="String"/>
     </entity>
     <entity name="PlaceCategoryEntity" representedClassName="PlaceCategoryEntity" syncable="YES">
+        <attribute name="colorHex" optional="YES" attributeType="String"/>
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="icon" optional="YES" attributeType="String"/>
         <attribute name="id" optional="YES" attributeType="String"/>

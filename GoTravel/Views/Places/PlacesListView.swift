@@ -217,7 +217,7 @@ struct PlacesListView: View {
     /// 全カードにテーマ色を敷いていたときは、並べると一覧が騒がしかった
     private func placeCardView(_ place: VisitedPlace) -> some View {
         let category = categoryManager.category(for: place.categoryId)
-        let accent = categoryColor(category)
+        let accent = category.color
         let surface: Color = colorScheme == .dark
             ? themeManager.currentTheme.secondaryBackgroundDark
             : themeManager.currentTheme.backgroundLight
@@ -317,25 +317,6 @@ struct PlacesListView: View {
         .accessibilityLabel("この場所の操作")
     }
 
-    /// カテゴリの色。`CustomPlaceCategory` は色を持たないので、
-    /// 既定の3つは決め打ち、ユーザーが足した分はテーマのカテゴリ色から配る。
-    /// モデルに色を足すと CloudKit と同期するスキーマを変えることになるため、
-    /// ここで決める。並び順ではなくIDから決めるので、追加や削除でも色が動かない
-    private func categoryColor(_ category: CustomPlaceCategory) -> Color {
-        let theme = themeManager.currentTheme
-
-        switch category.id {
-        case "hotel":       return theme.outingPlanColor
-        case "restaurant":  return theme.dailyPlanColor
-        case "sightseeing": return theme.travelColor
-        default:
-            let palette = [theme.japan, theme.family, theme.landscape, theme.food, theme.custom]
-            // String の hashValue は起動ごとに変わるため使わない
-            let stable = category.id.unicodeScalars.reduce(0) { ($0 &* 31 &+ Int($1.value)) & 0xFFFF }
-            return palette[stable % palette.count]
-        }
-    }
-
     private func deleteButton(place: VisitedPlace) -> some View {
         Button(role: .destructive) {
             deletePlace(place)
@@ -418,7 +399,7 @@ struct PlacesListView: View {
 
             ForEach(vm.places) { place in
                 let category = categoryManager.category(for: place.categoryId)
-                let accent = categoryColor(category)
+                let accent = category.color
                 let isSelected = selectedPlace?.id == place.id
 
                 Annotation(place.title, coordinate: place.coordinate) {
@@ -468,7 +449,7 @@ struct PlacesListView: View {
                 // カテゴリーアイコン。ピンと同じ色にして、
                 // どのピンを開いているのか下のパネルでも分かるようにする
                 ZStack {
-                    let accent = categoryColor(categoryManager.category(for: place.categoryId))
+                    let accent = categoryManager.category(for: place.categoryId).color
 
                     Circle()
                         .fill(accent.opacity(colorScheme == .dark ? 0.24 : 0.14))
@@ -528,39 +509,89 @@ struct PlacesListView: View {
         .padding(.bottom, 8)
     }
     
+    /// カテゴリーの絞り込み。
+    ///
+    /// 60×60のタイルを横に並べていたため、1画面に3つしか入らず、
+    /// 4つ目からは存在に気づけなかった。44ptのチップにして件数も出す
     private var eventTypeSelectionSection: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 20) {
-                horizontalEventsCard(
-                    menuName: "すべて",
-                    menuImage: "square.grid.2x2.fill",
-                    rectColor: selectedCategoryId == Self.allCategoryId ? themeManager.currentTheme.xsecondary : themeManager.currentTheme.light,
-                    imageColors: selectedCategoryId == Self.allCategoryId ? themeManager.currentTheme.light : themeManager.currentTheme.xsecondary,
-                    textColor: selectedCategoryId == Self.allCategoryId ? themeManager.currentTheme.xsecondary : themeManager.currentTheme.secondaryText
-                )
-                .onTapGesture {
-                    withAnimation(.spring()) {
-                        selectedCategoryId = Self.allCategoryId
-                    }
+            HStack(spacing: 8) {
+                categoryChip(
+                    title: "すべて",
+                    icon: "square.grid.2x2.fill",
+                    color: themeManager.currentTheme.actionFill,
+                    count: vm.places.count,
+                    isSelected: selectedCategoryId == Self.allCategoryId
+                ) {
+                    selectedCategoryId = Self.allCategoryId
                 }
 
                 ForEach(categoryManager.categories) { category in
-                    horizontalEventsCard(
-                        menuName: category.name,
-                        menuImage: category.icon,
-                        rectColor: selectedCategoryId == category.id ? themeManager.currentTheme.xsecondary : themeManager.currentTheme.light,
-                        imageColors: selectedCategoryId == category.id ? themeManager.currentTheme.light : themeManager.currentTheme.xsecondary,
-                        textColor: selectedCategoryId == category.id ? themeManager.currentTheme.xsecondary : themeManager.currentTheme.secondaryText
-                    )
-                    .onTapGesture {
-                        withAnimation(.spring()) {
-                            selectedCategoryId = category.id
-                        }
+                    categoryChip(
+                        title: category.name,
+                        icon: category.icon,
+                        color: category.color,
+                        count: vm.places.filter { $0.categoryId == category.id }.count,
+                        isSelected: selectedCategoryId == category.id
+                    ) {
+                        selectedCategoryId = category.id
                     }
                 }
             }
             .padding(.horizontal, 20)
         }
+    }
+
+    /// 選ぶと色で塗り、選んでいないときは色をアイコンだけに置く。
+    /// 全部を色で塗ると、カテゴリーが増えるほど帯が虹色になる
+    private func categoryChip(
+        title: String,
+        icon: String,
+        color: Color,
+        count: Int,
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                action()
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(isSelected ? ThemePreset.readableText(on: color) : color)
+
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(isSelected ? ThemePreset.readableText(on: color) : textColor)
+                    .lineLimit(1)
+
+                Text("\(count)")
+                    .font(.system(size: 11, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundColor(isSelected
+                                     ? ThemePreset.readableText(on: color).opacity(0.85)
+                                     : themeManager.currentTheme.secondaryText)
+            }
+            .padding(.horizontal, 13)
+            .frame(height: 44)
+            .background(
+                Capsule()
+                    .fill(isSelected
+                          ? AnyShapeStyle(color)
+                          : AnyShapeStyle(colorScheme == .dark
+                                          ? themeManager.currentTheme.secondaryBackgroundDark
+                                          : themeManager.currentTheme.backgroundLight))
+            )
+            .shadow(
+                color: colorScheme == .dark ? .clear : Color.black.opacity(isSelected ? 0.12 : 0.05),
+                radius: isSelected ? 8 : 4,
+                x: 0,
+                y: 2
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 
     // MARK: - Helper Methods
