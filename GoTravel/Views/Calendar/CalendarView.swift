@@ -76,7 +76,8 @@ struct CalendarView: View {
                 BottomTimelineCard(
                     selectedDate: selectedDate,
                     timelineItems: dailyTimeline,
-                    isExpanded: $isTimelineExpanded
+                    isExpanded: $isTimelineExpanded,
+                    onAddPlan: { showAddSheet = true }
                 )
                 .environmentObject(viewModel)
                 .environmentObject(travelViewModel)
@@ -118,7 +119,9 @@ struct CalendarView: View {
                 }
             }
             .sheet(isPresented: $showAddSheet) {
-                AddPlanView(historyPlans: viewModel.plans) { newPlan in
+                // 選んでいる日で始める。今日の日付で始まると、
+                // 8月30日を見ていても8月30日の予定は作れない
+                AddPlanView(historyPlans: viewModel.plans, initialDate: selectedDate) { newPlan in
                     if let userId = authVM.userId {
                         viewModel.add(newPlan, userId: userId)
                     } else {

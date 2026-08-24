@@ -10,6 +10,8 @@ struct AddPlanView: View {
 
     /// 履歴の元データ。既存の予定をそのままテンプレートとして再利用する
     var historyPlans: [Plan] = []
+    /// 開始日の初期値。カレンダーで選んでいる日から作るときに渡す
+    var initialDate: Date? = nil
     var onSave: (Plan) -> Void
 
     // Wizard state
@@ -18,6 +20,7 @@ struct AddPlanView: View {
     @State private var showDiscardConfirm: Bool = false
     @State private var showHistoryPicker: Bool = false
     @State private var expandedField: DateField?
+    @State private var hasAppliedInitialDate = false
     @FocusState private var isTitleFocused: Bool
     @FocusState private var isDescriptionFocused: Bool
 
@@ -178,6 +181,14 @@ struct AddPlanView: View {
             Button("編集を続ける", role: .cancel) {}
         } message: {
             Text("作成途中のプランは保存されません")
+        }
+        .onAppear {
+            // 渡された日で始める。時刻は今のままにして、日付だけ合わせる
+            guard !hasAppliedInitialDate, let initialDate else { return }
+            hasAppliedInitialDate = true
+            startDate = initialDate
+            endDate = initialDate
+            dailyDate = initialDate
         }
         .onChange(of: startDate) { _, newValue in
             // 開始日を終了日より後にした場合は終了日を自動で追従させる

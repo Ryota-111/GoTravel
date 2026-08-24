@@ -4,6 +4,7 @@ struct BottomTimelineCard: View {
     let selectedDate: Date
     let timelineItems: [CalendarTimelineItem]
     @Binding var isExpanded: Bool
+    var onAddPlan: () -> Void = {}
 
     @EnvironmentObject var plansViewModel: PlansViewModel
     @EnvironmentObject var travelViewModel: TravelPlanViewModel
@@ -102,27 +103,79 @@ struct BottomTimelineCard: View {
         ScrollView(showsIndicators: false) {
             VStack(alignment: .leading, spacing: 0) {
                 ForEach(Array(timelineItems.enumerated()), id: \.element.id) { index, item in
-                    TimelineItemCard(item: item, isLast: index == timelineItems.count - 1)
-                        .padding(.bottom, index == timelineItems.count - 1 ? 0 : 24)
+                    TimelineItemCard(
+                        item: item,
+                        isLast: index == timelineItems.count - 1,
+                        state: rowState(index: index)
+                    )
                 }
+
+                addOnThisDayButton
+                    .padding(.top, 6)
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
         }
     }
 
+    /// 選んだ日に予定を足す導線。
+    ///
+    /// 右上の＋は今日の日付で始まるため、8月30日を見ていても
+    /// 8月30日の予定は作れなかった
+    private var addOnThisDayButton: some View {
+        Button(action: onAddPlan) {
+            HStack(spacing: 6) {
+                Image(systemName: "plus")
+                    .font(.system(size: 12, weight: .bold))
+                Text("この日に追加")
+                    .font(.system(size: 14, weight: .semibold))
+            }
+            .foregroundColor(themeManager.currentTheme.secondaryText)
+            .frame(maxWidth: .infinity)
+            .frame(height: 46)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .strokeBorder(
+                        themeManager.currentTheme.secondaryText.opacity(0.35),
+                        style: StrokeStyle(lineWidth: 1.5, dash: [7, 5])
+                    )
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    /// 今日を選んでいるときだけ、過ぎた分と次の1件を出し分ける
+    private func rowState(index: Int) -> CalendarRowState {
+        guard Calendar.current.isDateInToday(selectedDate) else { return .flat }
+
+        let calendar = Calendar.current
+        func minutes(of date: Date) -> Int {
+            let parts = calendar.dateComponents([.hour, .minute], from: date)
+            return (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+        }
+
+        let nowMinutes = minutes(of: Date())
+        guard let nowIndex = timelineItems.firstIndex(where: { minutes(of: $0.time) >= nowMinutes }) else {
+            return .past
+        }
+
+        if index < nowIndex { return .past }
+        if index == nowIndex { return .now }
+        return .future
+    }
+
     // MARK: - Empty State
     private var emptyStateView: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "calendar.badge.clock")
-                .font(.system(size: 40))
-                .foregroundColor(themeManager.currentTheme.secondary.opacity(0.4))
-
+        VStack(spacing: 14) {
             Text("予定がありません")
                 .font(.subheadline)
                 .foregroundColor(themeManager.currentTheme.accent3)
+
+            addOnThisDayButton
+                .padding(.horizontal, 20)
         }
         .frame(maxWidth: .infinity)
+        .padding(.top, 20)
     }
 
     // MARK: - Drag Gesture
@@ -170,10 +223,17 @@ struct BottomTimelineCard: View {
     }
 }
 
+/// タイムラインの1行の状態。
+/// 過ぎた・次の1件・これからは、選んだ日が今日のときだけ意味を持つ
+enum CalendarRowState {
+    case past, now, future, flat
+}
+
 // MARK: - Timeline Item Card
 struct TimelineItemCard: View {
     let item: CalendarTimelineItem
     let isLast: Bool
+    var state: CalendarRowState = .flat
 
     @EnvironmentObject var plansViewModel: PlansViewModel
     @EnvironmentObject var travelViewModel: TravelPlanViewModel
@@ -187,92 +247,97 @@ struct TimelineItemCard: View {
         .buttonStyle(PlainButtonStyle())
     }
 
+    /// 旅行計画・予定計画と同じ時刻レール。
+    ///
+    /// 以前は1件ごとに50ptの丸と影付きカードを積んでいたため、
+    /// 閉じた高さでは2件しか見えず、時刻もカードの中に埋もれていた
     private var cardContent: some View {
-        HStack(alignment: .top, spacing: 16) {
-            // Timeline indicator (vertical line with icon)
+        HStack(alignment: .top, spacing: 0) {
+            Text(formatTimeOrDate(item.time, type: item.type))
+                .font(.system(size: 13, weight: .bold))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .foregroundColor(state == .past
+                                 ? themeManager.currentTheme.secondaryText.opacity(0.6)
+                                 : themeManager.currentTheme.secondaryText)
+                .frame(width: 52, alignment: .trailing)
+                .padding(.top, 1)
+
+            // レール
             VStack(spacing: 0) {
-                // Icon circle
-                ZStack {
-                    Circle()
-                        .fill(itemColor)
-                        .frame(width: 50, height: 50)
-                        .shadow(color: itemColor.opacity(0.3), radius: 4, x: 0, y: 2)
+                dot
 
-                    Image(systemName: iconName)
-                        .font(.title3)
-                        .foregroundColor(themeManager.currentTheme.light)
-                }
-
-                // Connecting line
                 if !isLast {
                     Rectangle()
-                        .fill(
-                            LinearGradient(
-                                gradient: Gradient(colors: [
-                                    itemColor.opacity(0.5),
-                                    themeManager.currentTheme.cardBorder.opacity(0.2)
-                                ]),
-                                startPoint: .top,
-                                endPoint: .bottom
-                            )
-                        )
+                        .fill(state == .past
+                              ? itemColor.opacity(0.4)
+                              : themeManager.currentTheme.secondaryText.opacity(0.18))
                         .frame(width: 2)
-                        .padding(.vertical, 4)
+                        .frame(maxHeight: .infinity)
                 }
             }
+            .frame(width: 12)
+            .padding(.leading, 10)
+            .padding(.trailing, 14)
+            .padding(.top, 3)
 
-            // Card content
-            VStack(alignment: .leading, spacing: 12) {
-                // Time badge
-                Text(formatTimeOrDate(item.time, type: item.type))
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(
-                        Capsule()
-                            .fill(itemColor.opacity(0.15))
-                    )
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(spacing: 6) {
+                    // 種別は色と小さなアイコンで示す。50ptの丸は要らない
+                    Image(systemName: iconName)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(itemColor)
 
-                // Title
-                Text(item.title)
-                    .font(.headline.bold())
-                    .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-                    .lineLimit(2)
+                    Text(item.title)
+                        .font(.system(size: 15, weight: state == .now ? .bold : .semibold))
+                        .foregroundColor(state == .past
+                                         ? themeManager.currentTheme.secondaryText
+                                         : (colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1))
+                        .lineLimit(1)
+                }
 
-                // Subtitle
                 if let subtitle = item.subtitle, !subtitle.isEmpty {
                     Text(subtitle)
-                        .font(.subheadline)
+                        .font(.system(size: 12))
                         .foregroundColor(themeManager.currentTheme.secondaryText)
                         .lineLimit(2)
                 }
             }
-            .padding(16)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(
-                        colorScheme == .dark ?
-                        themeManager.currentTheme.cardBackground1:
-                            themeManager.currentTheme.cardBackground2
+            .padding(.bottom, 14)
+
+            Spacer(minLength: 0)
+
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.4))
+                .padding(.top, 2)
+        }
+    }
+
+    /// レールの点。過ぎた分は塗り、次の1件は光らせ、これからは中を抜く
+    @ViewBuilder
+    private var dot: some View {
+        switch state {
+        case .now:
+            Circle()
+                .fill(itemColor)
+                .frame(width: 12, height: 12)
+                .overlay(Circle().stroke(itemColor.opacity(0.16), lineWidth: 5))
+        case .past:
+            Circle()
+                .fill(itemColor.opacity(0.55))
+                .frame(width: 12, height: 12)
+        case .future, .flat:
+            Circle()
+                .fill(colorScheme == .dark ? themeManager.currentTheme.dark : themeManager.currentTheme.light)
+                .frame(width: 12, height: 12)
+                .overlay(
+                    Circle().strokeBorder(
+                        state == .flat ? itemColor.opacity(0.6) : themeManager.currentTheme.secondaryText.opacity(0.65),
+                        lineWidth: 2.5
                     )
-                    .shadow(color: Color.black.opacity(0.06), radius: 8, x: 0, y: 4)
-            )
-            .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(
-                        LinearGradient(
-                            gradient: Gradient(colors: [
-                                itemColor.opacity(0.2),
-                                Color.clear
-                            ]),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
-            )
+                )
         }
     }
 
@@ -347,7 +412,8 @@ struct TimelineItemCard: View {
             BottomTimelineCard(
                 selectedDate: Date(),
                 timelineItems: [],
-                isExpanded: .constant(false)
+                isExpanded: .constant(false),
+                onAddPlan: {}
             )
         }
         .ignoresSafeArea(edges: .bottom)
