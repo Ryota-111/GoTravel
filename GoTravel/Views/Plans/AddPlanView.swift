@@ -17,6 +17,7 @@ struct AddPlanView: View {
     @State private var isGoingForward: Bool = true
     @State private var showDiscardConfirm: Bool = false
     @State private var showHistoryPicker: Bool = false
+    @State private var expandedField: DateField?
     @FocusState private var isTitleFocused: Bool
     @FocusState private var isDescriptionFocused: Bool
 
@@ -517,13 +518,13 @@ struct AddPlanView: View {
             // 同じ体裁の行を2本置くと、開始と終了のつながりが読めない。
             // 1枚にまとめて、間に矢印を置く
             VStack(spacing: 0) {
-                dateField(label: "開始", date: $startDate)
+                dateField(.start, label: "開始", date: $startDate)
 
                 Divider()
                     .background(uiAccentColor.opacity(0.08))
                     .padding(.leading, 16)
 
-                dateField(label: "終了", date: $endDate, range: startDate...)
+                dateField(.end, label: "終了", date: $endDate, range: startDate...)
             }
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -561,13 +562,13 @@ struct AddPlanView: View {
             stepHeading("日時", question: "いつですか？")
 
             VStack(spacing: 0) {
-                dateField(label: "日付", date: $dailyDate)
+                dateField(.dailyDate, label: "日付", date: $dailyDate)
 
                 Divider()
                     .background(uiAccentColor.opacity(0.08))
                     .padding(.leading, 16)
 
-                dateField(label: "時間", date: $dailyTime, components: .hourAndMinute)
+                dateField(.dailyTime, label: "時間", date: $dailyTime, components: .hourAndMinute)
             }
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -586,48 +587,80 @@ struct AddPlanView: View {
             : themeManager.currentTheme.backgroundLight
     }
 
-    /// 日付そのものを大きく出す。ラベルは小さく上に添える
+    /// 日付そのものを大きく出す。ラベルは小さく上に添える。
+    ///
+    /// 標準の compact ピッカーは自前の表示と二重になるため置いていない
+    /// （隠そうとすると、灰色の日付ボタンがそのまま残る）。
+    /// 行を押したらカレンダーがその場で開く形にする
     private func dateField(
+        _ field: DateField,
         label: String,
         date: Binding<Date>,
         range: PartialRangeFrom<Date>? = nil,
         components: DatePickerComponents = .date
     ) -> some View {
-        HStack {
-            VStack(alignment: .leading, spacing: 5) {
-                Text(label)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(uiAccentColor.opacity(0.5))
+        let isExpanded = expandedField == field
 
-                Text(fieldValueText(date.wrappedValue, components: components))
-                    .font(.system(size: 24, weight: .heavy))
-                    .foregroundColor(uiAccentColor)
-
-                if components == .date {
-                    Text(Self.weekdayFormatter.string(from: date.wrappedValue))
-                        .font(.system(size: 12))
-                        .foregroundColor(uiAccentColor.opacity(0.5))
+        return VStack(spacing: 0) {
+            Button {
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                    expandedField = isExpanded ? nil : field
                 }
-            }
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(label)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(uiAccentColor.opacity(0.5))
 
-            Spacer()
+                        Text(fieldValueText(date.wrappedValue, components: components))
+                            .font(.system(size: 24, weight: .heavy))
+                            .foregroundColor(uiAccentColor)
 
-            // 値は自前で描いているので、標準のピッカーは押す口だけ残す
-            Group {
-                if let range {
-                    DatePicker("", selection: date, in: range, displayedComponents: components)
-                } else {
-                    DatePicker("", selection: date, displayedComponents: components)
+                        if components == .date {
+                            Text(Self.weekdayFormatter.string(from: date.wrappedValue))
+                                .font(.system(size: 12))
+                                .foregroundColor(uiAccentColor.opacity(0.5))
+                        }
+                    }
+
+                    Spacer()
+
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(isExpanded ? effectivePlanColor : uiAccentColor.opacity(0.35))
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
                 }
+                .padding(16)
+                .contentShape(Rectangle())
             }
-            .datePickerStyle(.compact)
-            .labelsHidden()
-            .tint(effectivePlanColor)
-            .blendMode(.destinationOver)
-            .frame(width: 34)
+            .buttonStyle(PlainButtonStyle())
+
+            if isExpanded {
+                Group {
+                    if components == .hourAndMinute {
+                        DatePicker("", selection: date, displayedComponents: .hourAndMinute)
+                            .datePickerStyle(.wheel)
+                    } else if let range {
+                        DatePicker("", selection: date, in: range, displayedComponents: .date)
+                            .datePickerStyle(.graphical)
+                    } else {
+                        DatePicker("", selection: date, displayedComponents: .date)
+                            .datePickerStyle(.graphical)
+                    }
+                }
+                .labelsHidden()
+                .tint(effectivePlanColor)
+                .padding(.horizontal, 10)
+                .padding(.bottom, 10)
+                .transition(.opacity)
+            }
         }
-        .padding(16)
-        .contentShape(Rectangle())
+    }
+
+    /// 開いているカレンダーは常に1つだけにする
+    private enum DateField {
+        case start, end, dailyDate, dailyTime
     }
 
     private func fieldValueText(_ date: Date, components: DatePickerComponents) -> String {
