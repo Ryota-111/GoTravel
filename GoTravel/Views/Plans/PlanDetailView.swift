@@ -182,91 +182,439 @@ struct PlanDetailView: View {
     }
 
     // MARK: - View Mode
+    //
+    // 種別ごとに別の画面を出す。
+    // おでかけは色の帯＋操作＋タイムライン、日常は時刻を主役にした1枚、
+    // 記念日は日数だけ。同じ画面に押し込めると、どれも中途半端になる
     private var viewModeView: some View {
         VStack(spacing: 0) {
-            // Top Border
             topBorderView
 
-            // 写真の有無でヘッダーを出し分ける
-            if displayImage == nil {
-                noPhotoHeaderView
-            } else {
+            // 写真は入れていれば出す。無いときは種別ごとの見出しが表紙になる
+            if displayImage != nil {
                 headerImageView
             }
 
-            // Content Card
-            VStack(alignment: .leading, spacing: 0) {
-                // 写真なしヘッダーには種別バッジが入っているので重複させない
-                if displayImage != nil {
-                    HStack(spacing: 8) {
-                        categoryTag
-                        statusPill
-                        Spacer(minLength: 0)
-                    }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 24)
-                } else {
-                    Color.clear.frame(height: 8)
-                }
+            VStack(alignment: .leading, spacing: 16) {
+                planHeaderArea
 
-                // 当日その場で開いたとき、一番上にあってほしいもの
-                quickActionRow
-                    .padding(.horizontal, 24)
-                    .padding(.top, 16)
-
-                // Description Section
                 if let description = plan.description, !description.isEmpty {
-                    gradientSeparator
-                    descriptionSection(description)
-                        .padding(.horizontal, 24)
+                    descriptionCard(description)
                 }
 
-                // Link Section
-                if let linkURL = plan.linkURL, !linkURL.isEmpty {
-                    gradientSeparator
-                    linkSection(linkURL)
-                        .padding(.horizontal, 24)
-                }
-
-                if plan.planType == .anniversary {
-                    gradientSeparator
-
-                    anniversarySection
-                        .padding(.horizontal, 24)
-                } else {
-                    gradientSeparator
-
-                    // Schedule Section
+                switch plan.planType {
+                case .outing:
+                    quickActionRow
                     scheduleSection
-                        .padding(.horizontal, 24)
+                    if !plan.places.isEmpty {
+                        mapSection
+                    }
+
+                case .daily:
+                    dailyPlaceCard
+                    dailySettingsList
+                    // 以前に入れたスケジュールがある予定だけ、今までどおり出す。
+                    // 日常の主役は時刻なので、新しく作った予定には出さない
+                    if !plan.scheduleItems.isEmpty {
+                        scheduleSection
+                    }
+
+                case .anniversary:
+                    anniversarySection
+                    dailySettingsList
                 }
-
-                // 「歯医者 10:30」に地図は要らない。おでかけのときだけ出す
-                if plan.planType == .outing {
-                    gradientSeparator
-
-                    mapSection
-                        .padding(.horizontal, 24)
-                        .padding(.bottom, 24)
-                }
-
-                // 場所の一覧は地図のピンと同じ内容で、タイムラインの各行も
-                // 場所を持っている。三重になるのでここでは出さない
-
-                if !plan.tags.isEmpty || plan.recurrence != .none {
-                    gradientSeparator
-
-                    tagAndRecurrenceRow
-                        .padding(.horizontal, 24)
-                }
-
-                gradientSeparator
 
                 completionSection
-                    .padding(.horizontal, 24)
-                    .padding(.bottom, 24)
+            }
+            .padding(.horizontal, 20)
+            .padding(.top, 18)
+            .padding(.bottom, 28)
+        }
+    }
+
+    // MARK: - 見出し
+
+    @ViewBuilder
+    private var planHeaderArea: some View {
+        switch plan.planType {
+        case .outing:      outingHeaderCard
+        case .daily:       dailyHeader
+        case .anniversary: dailyHeader
+        }
+    }
+
+    /// おでかけは色の帯を表紙にする。旅行計画の写真の表紙より軽い
+    private var outingHeaderCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 8) {
+                typePill(onColor: true)
+                Spacer(minLength: 0)
+                if let planStatusText {
+                    Text(planStatusText)
+                        .font(.system(size: 11, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 10)
+                        .padding(.vertical, 5)
+                        .background(Color.white.opacity(0.22), in: Capsule())
+                }
+            }
+
+            Text(plan.title)
+                .font(.system(size: 24, weight: .heavy))
+                .foregroundColor(.white)
+                .lineLimit(2)
+
+            Text(outingHeaderDateText)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundColor(.white.opacity(0.85))
+
+            if !plan.tags.isEmpty {
+                tagRow(onColor: true)
             }
         }
+        .padding(16)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 22, style: .continuous)
+                .fill(
+                    LinearGradient(
+                        colors: [filledPlanColor, filledPlanColor.opacity(0.82)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    )
+                )
+        )
+        .shadow(color: colorScheme == .dark ? .clear : filledPlanColor.opacity(0.28), radius: 16, x: 0, y: 8)
+    }
+
+    private var outingHeaderDateText: String {
+        var text = DateFormatter.japaneseDate.string(from: plan.startDate)
+        if !Calendar.current.isDate(plan.startDate, inSameDayAs: plan.endDate) {
+            text += " 〜 " + DateFormatter.japaneseDate.string(from: plan.endDate)
+        }
+        if let first = plan.scheduleItems.min(by: { $0.time < $1.time }) {
+            text += " · " + DateFormatter.japaneseTime.string(from: first.time) + " から"
+        }
+        return text
+    }
+
+    /// 日常と記念日は、時刻（または日数）そのものを主役にする
+    private var dailyHeader: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 8) {
+                typePill(onColor: false)
+                tagRow(onColor: false)
+                Spacer(minLength: 0)
+            }
+
+            Text(plan.title)
+                .font(.system(size: 26, weight: .heavy))
+                .foregroundColor(titleColor)
+                .lineLimit(2)
+
+            if plan.planType == .daily {
+                HStack(alignment: .lastTextBaseline, spacing: 14) {
+                    Text(plan.time.map { DateFormatter.japaneseTime.string(from: $0) } ?? "終日")
+                        .font(.system(size: 44, weight: .heavy, design: .rounded))
+                        .foregroundColor(planColor)
+                        .monospacedDigit()
+
+                    VStack(alignment: .leading, spacing: 5) {
+                        Text(DateFormatter.japaneseDate.string(from: plan.startDate))
+                            .font(.system(size: 14, weight: .bold))
+                            .foregroundColor(titleColor)
+
+                        if let countdown = dailyCountdownText {
+                            HStack(spacing: 4) {
+                                Image(systemName: "clock")
+                                    .font(.system(size: 10, weight: .bold))
+                                Text(countdown)
+                                    .font(.system(size: 12, weight: .bold))
+                            }
+                            .foregroundColor(planColor)
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 4)
+                            .background(planColor.opacity(colorScheme == .dark ? 0.22 : 0.12), in: Capsule())
+                        }
+                    }
+
+                    Spacer(minLength: 0)
+                }
+            }
+        }
+    }
+
+    private var titleColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
+    }
+
+    private var filledPlanColor: Color {
+        ThemePreset.readableTint(planColor, on: .white)
+    }
+
+    private func typePill(onColor: Bool) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: planTypeIcon)
+                .font(.system(size: 10, weight: .bold))
+            Text(planTypeText)
+                .font(.system(size: 12, weight: .bold))
+        }
+        .foregroundColor(onColor ? .white : planColor)
+        .padding(.horizontal, 10)
+        .padding(.vertical, 6)
+        .background(
+            (onColor ? Color.white.opacity(0.22) : planColor.opacity(colorScheme == .dark ? 0.22 : 0.12)),
+            in: Capsule()
+        )
+    }
+
+    /// タグは中立の灰色。種別の色と役割を混ぜない
+    @ViewBuilder
+    private func tagRow(onColor: Bool) -> some View {
+        HStack(spacing: 6) {
+            ForEach(plan.tags, id: \.self) { tag in
+                Text(tag)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(onColor ? .white : themeManager.currentTheme.secondaryText)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        (onColor ? Color.white.opacity(0.18) : themeManager.currentTheme.secondaryText.opacity(0.12)),
+                        in: Capsule()
+                    )
+            }
+
+            // タグが1つも無いときは、足せることが分かる口を出す
+            if plan.tags.isEmpty && !onColor {
+                Button(action: enterEditMode) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 9, weight: .bold))
+                        Text("タグ")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(
+                        Capsule().strokeBorder(
+                            themeManager.currentTheme.secondaryText.opacity(0.35),
+                            style: StrokeStyle(lineWidth: 1, dash: [4, 3])
+                        )
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+        }
+    }
+
+    /// 「あと2時間10分」。今日の予定のときだけ出す
+    private var dailyCountdownText: String? {
+        let calendar = Calendar.current
+        guard calendar.isDateInToday(plan.startDate), let time = plan.time else { return nil }
+
+        let parts = calendar.dateComponents([.hour, .minute], from: time)
+        guard let target = calendar.date(bySettingHour: parts.hour ?? 0, minute: parts.minute ?? 0, second: 0, of: Date()) else { return nil }
+
+        let minutes = Int(target.timeIntervalSince(Date()) / 60)
+        guard minutes > 0 else { return nil }
+
+        if minutes < 60 { return "あと\(minutes)分" }
+        return "あと\(minutes / 60)時間\(minutes % 60)分"
+    }
+
+    // MARK: - 内容
+    private func descriptionCard(_ text: String) -> some View {
+        Text(text)
+            .font(.system(size: 15))
+            .foregroundColor(titleColor.opacity(0.85))
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(cardSurface)
+            )
+            .shadow(color: colorScheme == .dark ? .clear : Color.black.opacity(0.05), radius: 10, x: 0, y: 4)
+    }
+
+    private var cardSurface: Color {
+        colorScheme == .dark
+            ? themeManager.currentTheme.secondaryBackgroundDark
+            : themeManager.currentTheme.backgroundLight
+    }
+
+    /// 日常の場所は1行だけ。無いときは、入れると何ができるのかを添える
+    @ViewBuilder
+    private var dailyPlaceCard: some View {
+        if let place = plan.places.first {
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        .fill(planColor.opacity(colorScheme == .dark ? 0.24 : 0.14))
+                        .frame(width: 44, height: 44)
+                    Image(systemName: "mappin.and.ellipse")
+                        .font(.system(size: 17, weight: .semibold))
+                        .foregroundColor(planColor)
+                }
+
+                VStack(alignment: .leading, spacing: 3) {
+                    Text(place.name)
+                        .font(.system(size: 16, weight: .bold))
+                        .foregroundColor(titleColor)
+                        .lineLimit(1)
+
+                    if let address = place.address, !address.isEmpty {
+                        Text(address)
+                            .font(.system(size: 12))
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer(minLength: 0)
+
+                Button(action: openRouteToFirstPlace) {
+                    HStack(spacing: 5) {
+                        Image(systemName: "location.fill")
+                            .font(.system(size: 11, weight: .bold))
+                        Text("経路")
+                            .font(.system(size: 13, weight: .bold))
+                    }
+                    .foregroundColor(planColor)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .background(planColor.opacity(colorScheme == .dark ? 0.24 : 0.14), in: Capsule())
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(cardSurface)
+            )
+            .shadow(color: colorScheme == .dark ? .clear : Color.black.opacity(0.05), radius: 10, x: 0, y: 4)
+        } else {
+            Button(action: enterEditMode) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        RoundedRectangle(cornerRadius: 13, style: .continuous)
+                            .fill(planColor.opacity(colorScheme == .dark ? 0.22 : 0.12))
+                            .frame(width: 44, height: 44)
+                        Image(systemName: "mappin.and.ellipse")
+                            .font(.system(size: 17, weight: .semibold))
+                            .foregroundColor(planColor)
+                    }
+
+                    VStack(alignment: .leading, spacing: 3) {
+                        Text("場所を追加")
+                            .font(.system(size: 15, weight: .bold))
+                            .foregroundColor(titleColor)
+                        Text("入れておくと、この画面から経路案内を開けます。")
+                            .font(.system(size: 12))
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
+                            .multilineTextAlignment(.leading)
+                    }
+
+                    Spacer(minLength: 0)
+
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
+                }
+                .padding(14)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .strokeBorder(
+                            themeManager.currentTheme.secondaryText.opacity(0.3),
+                            style: StrokeStyle(lineWidth: 1.5, dash: [7, 5])
+                        )
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+        }
+    }
+
+    /// 通知・繰り返し・リンクの3行。値が右に出るので、設定済みかどうかが一目で分かる
+    private var dailySettingsList: some View {
+        VStack(spacing: 0) {
+            settingsRow(
+                icon: "bell",
+                title: "通知",
+                value: isNotificationOn ? "入" : "未設定",
+                isSet: isNotificationOn,
+                action: toggleNotification
+            )
+
+            settingsDivider
+
+            settingsRow(
+                icon: "repeat",
+                title: "繰り返し",
+                value: plan.recurrence.displayName,
+                isSet: plan.recurrence != .none,
+                action: enterEditMode
+            )
+
+            settingsDivider
+
+            settingsRow(
+                icon: "link",
+                title: "リンク",
+                value: (plan.linkURL?.isEmpty == false) ? "設定済み" : "未設定",
+                isSet: plan.linkURL?.isEmpty == false,
+                action: {
+                    if let raw = plan.linkURL, let url = URL(string: raw) {
+                        UIApplication.shared.open(url)
+                    } else {
+                        enterEditMode()
+                    }
+                }
+            )
+        }
+        .background(
+            RoundedRectangle(cornerRadius: 18, style: .continuous)
+                .fill(cardSurface)
+        )
+        .shadow(color: colorScheme == .dark ? .clear : Color.black.opacity(0.05), radius: 10, x: 0, y: 4)
+        .task {
+            isNotificationOn = await NotificationService.shared.hasPendingPlanNotifications(for: plan.id)
+        }
+    }
+
+    private var settingsDivider: some View {
+        Rectangle()
+            .fill(themeManager.currentTheme.secondaryText.opacity(0.12))
+            .frame(height: 1)
+            .padding(.leading, 52)
+    }
+
+    private func settingsRow(icon: String, title: String, value: String, isSet: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 12) {
+                Image(systemName: icon)
+                    .font(.system(size: 16, weight: .semibold))
+                    .foregroundColor(isSet ? planColor : themeManager.currentTheme.secondaryText)
+                    .frame(width: 24)
+
+                Text(title)
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(titleColor)
+
+                Spacer(minLength: 0)
+
+                Text(value)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(isSet ? planColor : themeManager.currentTheme.secondaryText)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.4))
+            }
+            .padding(.horizontal, 16)
+            .frame(height: 54)
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 
     // MARK: - Top Border
