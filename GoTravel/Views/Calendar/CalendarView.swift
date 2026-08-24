@@ -427,15 +427,18 @@ struct CalendarView: View {
                 )
 
             // イベントインジケーター（イベントタイプごとに色分け）
-            if !eventTypes.isEmpty {
-                HStack(spacing: 2) {
-                    ForEach(eventTypes.prefix(3).indices, id: \.self) { index in
-                        Circle()
-                            .fill(colorForEventType(eventTypes[index]))
-                            .frame(width: 4, height: 4)
-                    }
+            //
+            // 予定の無い日で行ごと消すと、その日のマスだけ背が低くなる。
+            // 週の高さは一番高いマスで決まるため、予定のある日の数字が
+            // 上へ、無い日の数字が下へずれて見えていた。高さは常に確保する
+            HStack(spacing: 2) {
+                ForEach(eventTypes.prefix(3).indices, id: \.self) { index in
+                    Circle()
+                        .fill(colorForEventType(eventTypes[index]))
+                        .frame(width: 4, height: 4)
                 }
             }
+            .frame(height: 4)
         }
         .contentShape(Rectangle())
         .onTapGesture {
