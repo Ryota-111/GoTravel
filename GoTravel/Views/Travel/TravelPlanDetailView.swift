@@ -1056,8 +1056,7 @@ struct TravelPlanDetailView: View {
                                     .monospacedDigit()
                                     .foregroundColor(dayTabCountColor(itemCount: itemCount, isSelected: isSelected))
                             }
-                            .frame(minWidth: 62)
-                            .padding(.horizontal, 14)
+                            .padding(.horizontal, 12)
                             .padding(.vertical, 10)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
