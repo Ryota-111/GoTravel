@@ -26,6 +26,9 @@ struct PlanDetailView: View {
     @State private var editedStartDate: Date = Date()
     @State private var editedEndDate: Date = Date()
     @State private var editedTime: Date?
+    @State private var editedTags: [String] = []
+    @State private var editedTagInput: String = ""
+    @State private var editedRecurrence: PlanRecurrence = .none
     @State private var editedPlaces: [PlannedPlace] = []
     @State private var showAddPlaceInEdit = false
     @State private var mapPosition: MapCameraPosition = .region(MKCoordinateRegion(
@@ -444,9 +447,12 @@ struct PlanDetailView: View {
                 // 日程
                 editSectionCard {
                     VStack(alignment: .leading, spacing: 10) {
-                        editSectionLabel(editedPlanType == .outing ? "日程" : "日付・時刻", icon: "calendar")
+                        editSectionLabel(editDateSectionLabel, icon: "calendar")
                         VStack(spacing: 8) {
-                            if editedPlanType == .outing {
+                            if editedPlanType == .anniversary {
+                                // 記念日は日付だけ。時刻も期間も持たない
+                                editDateRow("日付", icon: "calendar", date: $editedStartDate)
+                            } else if editedPlanType == .outing {
                                 editDateRow("開始日", icon: "airplane.departure", date: $editedStartDate)
                                 editDateRow("終了日", icon: "calendar.badge.checkmark", date: $editedEndDate)
                                 if editedEndDate < editedStartDate {
@@ -479,6 +485,86 @@ struct PlanDetailView: View {
                                 }
                             }
                         }
+                    }
+                }
+
+                // 繰り返し（記念日は毎年で固定なので出さない）
+                if editedPlanType == .daily {
+                    editSectionCard {
+                        VStack(alignment: .leading, spacing: 10) {
+                            editSectionLabel("繰り返し", icon: "repeat")
+                            HStack(spacing: 8) {
+                                ForEach([PlanRecurrence.none, .weekly, .monthly], id: \.self) { rule in
+                                    Button {
+                                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                            editedRecurrence = rule
+                                        }
+                                    } label: {
+                                        Text(rule.displayName)
+                                            .font(.system(size: 14, weight: .semibold))
+                                            .foregroundColor(editedRecurrence == rule ? .white : editTextColor.opacity(0.7))
+                                            .frame(maxWidth: .infinity)
+                                            .frame(height: 42)
+                                            .background(
+                                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                    .fill(editedRecurrence == rule
+                                                          ? AnyShapeStyle(ThemePreset.readableTint(planColor, on: .white))
+                                                          : AnyShapeStyle(editFieldBg))
+                                            )
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // タグ
+                editSectionCard {
+                    VStack(alignment: .leading, spacing: 10) {
+                        editSectionLabel("タグ（任意）", icon: "number")
+
+                        if !editedTags.isEmpty {
+                            HStack(spacing: 6) {
+                                ForEach(editedTags, id: \.self) { tag in
+                                    Button {
+                                        editedTags.removeAll { $0 == tag }
+                                    } label: {
+                                        HStack(spacing: 4) {
+                                            Text(tag)
+                                                .font(.system(size: 12, weight: .semibold))
+                                            Image(systemName: "xmark")
+                                                .font(.system(size: 9, weight: .bold))
+                                        }
+                                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                                        .padding(.horizontal, 9)
+                                        .padding(.vertical, 5)
+                                        .background(themeManager.currentTheme.secondaryText.opacity(0.12), in: Capsule())
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+                                }
+
+                                Spacer(minLength: 0)
+                            }
+                        }
+
+                        HStack(spacing: 8) {
+                            TextField("仕事、家事、健康…", text: $editedTagInput)
+                                .foregroundColor(editTextColor)
+                                .submitLabel(.done)
+                                .onSubmit { addEditedTag() }
+
+                            Button("追加", action: addEditedTag)
+                                .font(.system(size: 13, weight: .bold))
+                                .foregroundColor(editedTagInput.trimmingCharacters(in: .whitespaces).isEmpty
+                                                 ? themeManager.currentTheme.secondaryText
+                                                 : planColor)
+                                .disabled(editedTagInput.trimmingCharacters(in: .whitespaces).isEmpty)
+                        }
+                        .padding(14)
+                        .background(editFieldBg)
+                        .cornerRadius(12)
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(planColor.opacity(0.2), lineWidth: 1))
                     }
                 }
 
@@ -528,7 +614,8 @@ struct PlanDetailView: View {
                     }
                 }
 
-                // 訪問場所
+                // 訪問場所。記念日は場所を持たない
+                if editedPlanType != .anniversary {
                 editSectionCard {
                     VStack(alignment: .leading, spacing: 10) {
                         editSectionLabel("訪問場所", icon: "mappin.circle.fill")
@@ -584,10 +671,11 @@ struct PlanDetailView: View {
                                 .foregroundColor(.white)
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
-                                .background(planColor)
+                                .background(ThemePreset.readableTint(planColor, on: .white))
                                 .cornerRadius(12)
                         }
                     }
+                }
                 }
 
                 // 削除ボタン
@@ -1827,6 +1915,21 @@ struct PlanDetailView: View {
             .sorted { $0.startDate < $1.startDate }
     }
 
+    private var editDateSectionLabel: String {
+        switch editedPlanType {
+        case .outing:      return "日程"
+        case .daily:       return "日付・時刻"
+        case .anniversary: return "日付"
+        }
+    }
+
+    private func addEditedTag() {
+        let trimmed = editedTagInput.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, !editedTags.contains(trimmed) else { return }
+        editedTags.append(trimmed)
+        editedTagInput = ""
+    }
+
     // MARK: - Edit Mode Functions
     private func enterEditMode() {
         editedTitle = plan.title
@@ -1837,6 +1940,9 @@ struct PlanDetailView: View {
         editedEndDate = plan.endDate
         editedTime = plan.time
         editedPlaces = plan.places
+        editedTags = plan.tags
+        editedTagInput = ""
+        editedRecurrence = plan.recurrence
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             isEditMode = true
         }
@@ -1881,6 +1987,16 @@ struct PlanDetailView: View {
         updatedPlan.time = editedTime
         updatedPlan.places = editedPlaces
         updatedPlan.localImageFileName = localFileName
+        updatedPlan.tags = editedTags
+        // 記念日は毎年で固定。種別を変えたときに古い設定が残らないようにする
+        updatedPlan.recurrence = editedPlanType == .anniversary ? .yearly : editedRecurrence
+
+        // 記念日は時刻も場所も持たない
+        if editedPlanType == .anniversary {
+            updatedPlan.time = nil
+            updatedPlan.places = []
+            updatedPlan.endDate = editedStartDate
+        }
 
         if let userId = authVM.userId {
             viewModel.update(updatedPlan, userId: userId)
