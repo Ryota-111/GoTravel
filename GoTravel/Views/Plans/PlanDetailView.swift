@@ -285,13 +285,8 @@ struct PlanDetailView: View {
     }
 
     private var separatorColors: [Color] {
-        if plan.planType == .daily {
-            // 日常プラン
-            return [themeManager.currentTheme.dailyPlanColor, themeManager.currentTheme.dailyPlanColor]
-        } else {
-            // おでかけプラン
-            return [themeManager.currentTheme.outingPlanColor, themeManager.currentTheme.outingPlanColor]
-        }
+        let color = plan.planType.color(themeManager.currentTheme)
+        return [color, color]
     }
 
     // MARK: - Edit Mode Helpers
@@ -332,9 +327,7 @@ struct PlanDetailView: View {
 
     private func editTypeButton(type: PlanType, icon: String, label: String) -> some View {
         let isSelected = editedPlanType == type
-        let btnColor: Color = type == .outing
-            ? themeManager.currentTheme.outingPlanColor
-            : themeManager.currentTheme.dailyPlanColor
+        let btnColor: Color = type.color(themeManager.currentTheme)
         return Button(action: {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 editedPlanType = type
@@ -419,8 +412,9 @@ struct PlanDetailView: View {
                     VStack(alignment: .leading, spacing: 12) {
                         editSectionLabel("プランタイプ", icon: "tag.fill")
                         HStack(spacing: 10) {
-                            editTypeButton(type: .outing, icon: "figure.walk", label: "おでかけ")
-                            editTypeButton(type: .daily,  icon: "house.fill",  label: "日常")
+                            editTypeButton(type: .outing, icon: PlanType.outing.icon, label: PlanType.outing.displayName)
+                            editTypeButton(type: .daily,  icon: PlanType.daily.icon,  label: PlanType.daily.displayName)
+                            editTypeButton(type: .anniversary, icon: PlanType.anniversary.icon, label: PlanType.anniversary.displayName)
                         }
                     }
                 }
@@ -1737,9 +1731,16 @@ struct PlanDetailView: View {
                 // Plan type icon
                 ZStack {
                     Circle()
-                        .fill(schedulePlan.planType == .daily ?
-                              LinearGradient(gradient: Gradient(colors: [themeManager.currentTheme.dailyPlanColor, themeManager.currentTheme.dailyPlanColor.opacity(0.7)]), startPoint: .topLeading, endPoint: .bottomTrailing) :
-                              LinearGradient(gradient: Gradient(colors: [themeManager.currentTheme.outingPlanColor, themeManager.currentTheme.outingPlanColor.opacity(0.7)]), startPoint: .topLeading, endPoint: .bottomTrailing))
+                        .fill(
+                            LinearGradient(
+                                colors: [
+                                    schedulePlan.planType.color(themeManager.currentTheme),
+                                    schedulePlan.planType.color(themeManager.currentTheme).opacity(0.7)
+                                ],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                         .frame(width: 50, height: 50)
 
                     Image(systemName: schedulePlan.planType.icon)

@@ -120,12 +120,19 @@ struct AddPlanView: View {
 
     // MARK: - Theme-Adaptive Colors
 
-    // おでかけ=青・日常=オレンジ で全テーマ統一
+    // おでかけ=青・日常=オレンジ・記念日=ローズ で全テーマ統一。
+    // 2種類前提の三項演算子だと、記念日が日常と同じオレンジになる
     private func planColorFor(_ type: PlanType) -> Color {
-        type == .outing ? themeManager.currentTheme.outingPlanColor : themeManager.currentTheme.dailyPlanColor
+        type.color(themeManager.currentTheme)
     }
 
     private var effectivePlanColor: Color { planColorFor(selectedPlanType) }
+
+    /// 白文字を載せるための塗り。種別ごとに文字色が黒と白で入れ替わらないよう、
+    /// 明るい色（オレンジなど）は白が読める濃さまで落とす
+    private var filledPlanColor: Color {
+        ThemePreset.readableTint(effectivePlanColor, on: .white)
+    }
 
     /// 文字の色。背景を明るい面に統一したので、種別で出し分ける必要がなくなった。
     /// 以前はおでかけ=青／日常=オレンジのべた塗りで明るさが正反対になり、
@@ -239,10 +246,10 @@ struct AddPlanView: View {
                 Button(action: savePlan) {
                     Text("保存")
                         .font(.subheadline.weight(.bold))
-                        .foregroundColor(ThemePreset.readableText(on: effectivePlanColor))
+                        .foregroundColor(.white)
                         .padding(.horizontal, 16)
                         .padding(.vertical, 9)
-                        .background(effectivePlanColor, in: Capsule())
+                        .background(filledPlanColor, in: Capsule())
                 }
                 .transition(.scale.combined(with: .opacity))
             }
@@ -329,12 +336,12 @@ struct AddPlanView: View {
                     }
                 }
                 .font(.system(size: 17, weight: .bold))
-                .foregroundColor(canProceed ? ThemePreset.readableText(on: effectivePlanColor) : uiAccentColor.opacity(0.35))
+                .foregroundColor(canProceed ? .white : uiAccentColor.opacity(0.35))
                 .frame(maxWidth: .infinity)
                 .frame(height: 58)
                 .background(
                     RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(canProceed ? AnyShapeStyle(effectivePlanColor) : AnyShapeStyle(uiAccentColor.opacity(0.08)))
+                        .fill(canProceed ? AnyShapeStyle(filledPlanColor) : AnyShapeStyle(uiAccentColor.opacity(0.08)))
                 )
                 .shadow(
                     color: canProceed ? effectivePlanColor.opacity(colorScheme == .dark ? 0 : 0.32) : .clear,
@@ -548,15 +555,13 @@ struct AddPlanView: View {
                     } label: {
                         Text(rule.displayName)
                             .font(.system(size: 14, weight: .semibold))
-                            .foregroundColor(recurrence == rule
-                                             ? ThemePreset.readableText(on: effectivePlanColor)
-                                             : uiAccentColor.opacity(0.7))
+                            .foregroundColor(recurrence == rule ? .white : uiAccentColor.opacity(0.7))
                             .frame(maxWidth: .infinity)
                             .frame(height: 44)
                             .background(
                                 RoundedRectangle(cornerRadius: 14, style: .continuous)
                                     .fill(recurrence == rule
-                                          ? AnyShapeStyle(effectivePlanColor)
+                                          ? AnyShapeStyle(filledPlanColor)
                                           : AnyShapeStyle(uiAccentColor.opacity(0.06)))
                             )
                     }
@@ -608,8 +613,11 @@ struct AddPlanView: View {
     /// 正方形2枚を横に並べていたときより、選んだ結果が先に見える
     private func typeCard(type: PlanType, icon: String, title: String, subtitle: String) -> some View {
         let isSelected = selectedPlanType == type
-        let cardColor = planColorFor(type)
-        let onColor = ThemePreset.readableText(on: cardColor)
+        // 塗りは白文字が読める濃さまで落とす。
+        // オレンジのまま白を載せると比 2.1 で読めず、かといって
+        // 黒文字にすると3枚のうち日常と記念日だけ黒になって揃わない
+        let cardColor = ThemePreset.readableTint(planColorFor(type), on: .white)
+        let onColor = Color.white
 
         return Button(action: {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.7)) {

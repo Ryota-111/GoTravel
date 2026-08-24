@@ -77,9 +77,7 @@ struct ScheduleItemEditorView: View {
 
     private func dayChip(_ day: Int) -> some View {
         let isSelected = selectedDay == day
-        let accent = plan.planType == .daily
-            ? themeManager.currentTheme.dailyPlanColor
-            : themeManager.currentTheme.outingPlanColor
+        let accent = plan.planType.color(themeManager.currentTheme)
 
         return Button {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
