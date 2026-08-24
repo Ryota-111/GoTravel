@@ -439,40 +439,77 @@ struct TravelPlanDetailView: View {
         }
     }
 
-    private func timelineItemView(item: ScheduleItem, isLast: Bool, plan: TravelPlan) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            // タイムラインライン
+    /// タイムラインの1行の状態。
+    /// 過ぎた・次の1件・これから、の3つは**その日が今日のときだけ**意味を持つ。
+    /// 明日の日程を開いているときに「次の1件」を光らせると嘘になるので、
+    /// 今日以外は全部 `flat` にする
+    private enum TimelineRowState {
+        case past, now, future, flat
+    }
+
+    /// 次に控えている1件の位置。今日でなければ nil
+    private func nextItemIndex(in items: [ScheduleItem], dayDate: Date) -> Int? {
+        guard Calendar.current.isDateInToday(dayDate) else { return nil }
+
+        let now = Date()
+        let calendar = Calendar.current
+
+        // 項目の時刻は日付を持たないことがあるため、時刻だけで比べる
+        func minutes(of date: Date) -> Int {
+            let parts = calendar.dateComponents([.hour, .minute], from: date)
+            return (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+        }
+
+        let nowMinutes = minutes(of: now)
+        return items.firstIndex { minutes(of: $0.time) >= nowMinutes }
+    }
+
+    private func rowState(index: Int, nowIndex: Int?) -> TimelineRowState {
+        guard let nowIndex else { return .flat }
+        if index < nowIndex { return .past }
+        if index == nowIndex { return .now }
+        return .future
+    }
+
+    private func timelineItemView(item: ScheduleItem, isLast: Bool, plan: TravelPlan, state: TimelineRowState) -> some View {
+        HStack(alignment: .top, spacing: 0) {
+            // 時刻は塗りつぶさず、等幅で右に揃える。
+            // カプセルで塗ると1行ごとに色の面ができて、レールが読めなくなる
+            Text(formatTime(item.time))
+                .font(.system(size: 13, weight: .bold))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .foregroundColor(state == .past
+                                 ? themeManager.currentTheme.secondaryText.opacity(0.6)
+                                 : themeManager.currentTheme.secondaryText)
+                .frame(width: 46, alignment: .trailing)
+                .padding(.top, 1)
+
+            // レール。点と点をつなぎ、過ぎた区間だけ色が入る
             VStack(spacing: 0) {
-                // 時刻バッジ
-                Text(formatTime(item.time))
-                    .font(.system(size: 12, weight: .bold))
-                    // 枠が狭く、太字設定などで幅が増えると折り返していた。
-                    // 折り返さずに縮める
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 5)
-                    .background(scheduleAccentColor)
-                    .clipShape(Capsule())
-                    .frame(width: 58)
+                timelineDot(state: state)
 
                 if !isLast {
                     Rectangle()
-                        .fill(scheduleAccentColor.opacity(0.25))
+                        .fill(state == .past
+                              ? scheduleAccentColor.opacity(0.4)
+                              : themeManager.currentTheme.secondaryText.opacity(0.18))
                         .frame(width: 2)
                         .frame(maxHeight: .infinity)
-                        .padding(.vertical, 6)
                 }
             }
-            .frame(width: 58)
+            .frame(width: 12)
+            .padding(.leading, 10)
+            .padding(.trailing, 16)
+            .padding(.top, 3)
 
-            // カードコンテンツ
+            // 次に控えている1件だけ面を起こして、タイムラインの視点にする
+            HStack(alignment: .top, spacing: 0) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(item.title)
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(accentColor)
+                    .font(.system(size: 16, weight: state == .now ? .bold : .semibold))
+                    .foregroundColor(state == .past ? themeManager.currentTheme.secondaryText : accentColor)
 
                 if let location = item.location, !location.isEmpty {
                     HStack(spacing: 4) {
@@ -562,8 +599,58 @@ struct TravelPlanDetailView: View {
                     .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
                     .padding(.top, 14)
             }
+            }
+            .padding(.horizontal, state == .now ? 12 : 0)
+            .background(
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                    .fill(state == .now ? AnyShapeStyle(timelineCardSurface) : AnyShapeStyle(Color.clear))
+                    .shadow(
+                        color: state == .now && colorScheme != .dark ? Color.black.opacity(0.08) : .clear,
+                        radius: 13,
+                        x: 0,
+                        y: 5
+                    )
+            )
         }
         .padding(.horizontal, 4)
+    }
+
+    /// レールの点。過ぎた分は塗り、次の1件は光らせ、これからは中を抜く
+    @ViewBuilder
+    private func timelineDot(state: TimelineRowState) -> some View {
+        switch state {
+        case .now:
+            Circle()
+                .fill(scheduleAccentColor)
+                .frame(width: 12, height: 12)
+                .overlay(
+                    Circle()
+                        .stroke(scheduleAccentColor.opacity(0.16), lineWidth: 5)
+                )
+        case .past:
+            Circle()
+                .fill(scheduleAccentColor.opacity(0.55))
+                .frame(width: 12, height: 12)
+        case .future, .flat:
+            Circle()
+                .fill(timelineCardSurface)
+                .frame(width: 12, height: 12)
+                .overlay(
+                    Circle()
+                        .strokeBorder(
+                            state == .flat
+                                ? scheduleAccentColor.opacity(0.55)
+                                : themeManager.currentTheme.secondaryText.opacity(0.65),
+                            lineWidth: 2.5
+                        )
+                )
+        }
+    }
+
+    private var timelineCardSurface: Color {
+        colorScheme == .dark
+            ? themeManager.currentTheme.secondaryBackgroundDark
+            : themeManager.currentTheme.backgroundLight
     }
 
     private func planHeaderSection(plan: TravelPlan) -> some View {
@@ -798,9 +885,15 @@ struct TravelPlanDetailView: View {
             if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }),
                !daySchedule.scheduleItems.isEmpty {
                 let sortedItems = sortedScheduleItems(daySchedule.scheduleItems)
+                let nowIndex = nextItemIndex(in: sortedItems, dayDate: daySchedule.date)
                 VStack(spacing: 0) {
                     ForEach(Array(sortedItems.enumerated()), id: \.element.id) { index, item in
-                        timelineItemView(item: item, isLast: index == sortedItems.count - 1, plan: plan)
+                        timelineItemView(
+                            item: item,
+                            isLast: index == sortedItems.count - 1,
+                            plan: plan,
+                            state: rowState(index: index, nowIndex: nowIndex)
+                        )
                     }
                 }
             } else {
@@ -1024,9 +1117,15 @@ struct TravelPlanDetailView: View {
             if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }),
                !daySchedule.scheduleItems.isEmpty {
                 let sortedItems = sortedScheduleItems(daySchedule.scheduleItems)
+                let nowIndex = nextItemIndex(in: sortedItems, dayDate: daySchedule.date)
                 VStack(spacing: 0) {
                     ForEach(Array(sortedItems.enumerated()), id: \.element.id) { index, item in
-                        timelineItemView(item: item, isLast: index == sortedItems.count - 1, plan: plan)
+                        timelineItemView(
+                            item: item,
+                            isLast: index == sortedItems.count - 1,
+                            plan: plan,
+                            state: rowState(index: index, nowIndex: nowIndex)
+                        )
                             .id(item.id)
                             .background(
                                 RoundedRectangle(cornerRadius: 10)
