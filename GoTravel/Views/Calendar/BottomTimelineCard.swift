@@ -304,7 +304,8 @@ struct TimelineItemCard: View {
                         .lineLimit(2)
                 }
             }
-            .padding(.bottom, 14)
+            // 行間はここで決まる。詰めすぎると時刻の並びが読みにくい
+            .padding(.bottom, 20)
 
             Spacer(minLength: 0)
 
