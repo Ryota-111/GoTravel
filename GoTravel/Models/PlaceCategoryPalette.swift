@@ -19,19 +19,6 @@ enum PlaceCategoryPalette {
         var color: Color { Color(hex: hex) ?? .gray }
     }
 
-    /// 選べる色。並び順がそのまま選択画面の並びになる
-    static let swatches: [Swatch] = [
-        Swatch(id: "blue",   name: "ブルー",   hex: "#2F6FE0"),
-        Swatch(id: "teal",   name: "ティール", hex: "#14A3A3"),
-        Swatch(id: "green",  name: "グリーン", hex: "#2E9E52"),
-        Swatch(id: "orange", name: "オレンジ", hex: "#EE8A21"),
-        Swatch(id: "red",    name: "レッド",   hex: "#DE4B4B"),
-        Swatch(id: "pink",   name: "ピンク",   hex: "#DD5397"),
-        Swatch(id: "purple", name: "パープル", hex: "#8558D6"),
-        Swatch(id: "brown",  name: "ブラウン", hex: "#96684C"),
-        Swatch(id: "gray",   name: "グレー",   hex: "#767E88")
-    ]
-
     /// 既定カテゴリーの色。ユーザーは変えられない
     static func defaultHex(forCategoryId id: String) -> String? {
         switch id {
@@ -41,6 +28,24 @@ enum PlaceCategoryPalette {
         default:            return nil
         }
     }
+
+    /// カスタムカテゴリーで選べる色。並び順がそのまま選択画面の並びになる。
+    ///
+    /// **既定の3色（ブルー・オレンジ・グリーン）は入れていない。**
+    /// 同じ色を選べると、一覧や地図のピンで
+    /// 自分で作ったカテゴリーがホテル・レストラン・風景に見えてしまう。
+    /// 抜いた3つのぶんは、色数が減らないよう別の色を足してある
+    static let swatches: [Swatch] = [
+        Swatch(id: "teal",   name: "ティール", hex: "#14A3A3"),
+        Swatch(id: "lime",   name: "ライム",   hex: "#7DA82B"),
+        Swatch(id: "yellow", name: "イエロー", hex: "#C9A227"),
+        Swatch(id: "red",    name: "レッド",   hex: "#DE4B4B"),
+        Swatch(id: "wine",   name: "ワイン",   hex: "#8E3A5A"),
+        Swatch(id: "pink",   name: "ピンク",   hex: "#DD5397"),
+        Swatch(id: "purple", name: "パープル", hex: "#8558D6"),
+        Swatch(id: "brown",  name: "ブラウン", hex: "#96684C"),
+        Swatch(id: "gray",   name: "グレー",   hex: "#767E88")
+    ]
 
     /// 色を選ばずに作られたカテゴリーの色。
     /// IDから決めるので、増やしても消しても既存の色が動かない
