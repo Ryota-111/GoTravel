@@ -1049,13 +1049,15 @@ struct TravelPlanDetailView: View {
                                     .font(.system(size: 10))
                                     .foregroundColor(isSelected ? .white.opacity(0.8) : themeManager.currentTheme.secondaryText)
 
-                                if itemCount > 0 {
-                                    Text("\(itemCount)件")
-                                        .font(.system(size: 10, weight: .medium))
-                                        .foregroundColor(isSelected ? .white.opacity(0.8) : scheduleAccentColor)
-                                }
+                                // 0件のときに行ごと消すと、その日のタブだけ低くなって
+                                // 帯がでこぼこになる。予定が無いことも情報なので出す
+                                Text("\(itemCount)件")
+                                    .font(.system(size: 10, weight: .medium))
+                                    .monospacedDigit()
+                                    .foregroundColor(dayTabCountColor(itemCount: itemCount, isSelected: isSelected))
                             }
-                            .padding(.horizontal, 16)
+                            .frame(minWidth: 62)
+                            .padding(.horizontal, 14)
                             .padding(.vertical, 10)
                             .background(
                                 RoundedRectangle(cornerRadius: 12)
@@ -1068,6 +1070,16 @@ struct TravelPlanDetailView: View {
                 }
                 .padding(.vertical, 4)
             }
+    }
+
+    /// 予定が無い日の件数は弱める。出しはするが、目を引く必要はない
+    private func dayTabCountColor(itemCount: Int, isSelected: Bool) -> Color {
+        if isSelected {
+            return .white.opacity(itemCount > 0 ? 0.8 : 0.5)
+        }
+        return itemCount > 0
+            ? scheduleAccentColor
+            : themeManager.currentTheme.secondaryText.opacity(0.5)
     }
 
     /// タブバーと一緒に貼り付ける部分。地図と Day の切り替えを常に見せる
