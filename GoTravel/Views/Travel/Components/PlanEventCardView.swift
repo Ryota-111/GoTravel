@@ -52,7 +52,8 @@ struct PlanEventCardView: View {
     }
 
     var body: some View {
-        HStack(spacing: 12) {
+        // 中身をたたむ今日のカードだけ、タイルと「⋯」を上に寄せる
+        HStack(alignment: isToday && !todayItems.isEmpty ? .top : .center, spacing: 12) {
             dateTile
 
             VStack(alignment: .leading, spacing: 6) {
@@ -75,6 +76,8 @@ struct PlanEventCardView: View {
                         .foregroundColor(subTextColor)
                         .lineLimit(1)
                 }
+
+                todayScheduleLines
             }
 
             Spacer(minLength: 0)
@@ -121,6 +124,64 @@ struct PlanEventCardView: View {
             x: 0,
             y: 5
         )
+    }
+
+    // MARK: - 今日の中身
+    //
+    // スケジュールは詳細を開かないと見えなかった。
+    // 毎日開くのは今日の予定なので、その1枚だけ中身をたたんで出す
+    @ViewBuilder
+    private var todayScheduleLines: some View {
+        if isToday, !todayItems.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Rectangle()
+                    .fill(titleColor.opacity(0.08))
+                    .frame(height: 1)
+                    .padding(.vertical, 2)
+
+                ForEach(todayItems.prefix(Self.foldedLineLimit)) { item in
+                    HStack(spacing: 8) {
+                        Text(DateFormatter.japaneseTime.string(from: item.time))
+                            .font(.system(size: 11, weight: .semibold))
+                            .monospacedDigit()
+                            .foregroundColor(mainColor)
+
+                        Text(item.title)
+                            .font(.system(size: 12))
+                            .foregroundColor(titleColor.opacity(0.85))
+                            .lineLimit(1)
+                    }
+                }
+
+                if todayItems.count > Self.foldedLineLimit {
+                    Text("＋\(todayItems.count - Self.foldedLineLimit)件")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(subTextColor)
+                }
+            }
+            .padding(.top, 2)
+        }
+    }
+
+    private static let foldedLineLimit = 2
+
+    /// 今日にあたる日のスケジュール。
+    /// 何日目かの判定は `Plan.dayNumber(for:)` に任せる。
+    /// 日付を指定できなかった頃のデータを1日目として扱う規則も、そこに入っている
+    private var todayItems: [PlanScheduleItem] {
+        guard isToday else { return [] }
+
+        let calendar = Calendar.current
+        let elapsed = calendar.dateComponents(
+            [.day],
+            from: calendar.startOfDay(for: plan.startDate),
+            to: calendar.startOfDay(for: Date())
+        ).day ?? 0
+        let todayNumber = min(max(elapsed + 1, 1), plan.dayCount)
+
+        return plan.scheduleItems
+            .filter { plan.dayNumber(for: $0) == todayNumber }
+            .sorted { $0.time < $1.time }
     }
 
     // MARK: - 日付タイル
