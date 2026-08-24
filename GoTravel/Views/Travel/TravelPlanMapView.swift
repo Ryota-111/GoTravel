@@ -118,7 +118,7 @@ struct TravelPlanMapView: View {
 
     // MARK: - Computed Properties
     private var tripDuration: Int {
-        let days = Calendar.current.dateComponents([.day], from: plan.startDate, to: plan.endDate).day ?? 0
+        let days = Calendar.current.dayDifference(from: plan.startDate, to: plan.endDate)
         return max(days + 1, 1)
     }
 

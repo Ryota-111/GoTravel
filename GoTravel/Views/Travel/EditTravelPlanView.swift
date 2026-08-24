@@ -34,7 +34,7 @@ struct EditTravelPlanView: View {
     }
 
     var tripDuration: Int {
-        let days = Calendar.current.dateComponents([.day], from: startDate, to: endDate).day ?? 0
+        let days = Calendar.current.dayDifference(from: startDate, to: endDate)
         return days + 1
     }
 

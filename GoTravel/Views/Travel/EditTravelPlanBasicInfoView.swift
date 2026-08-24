@@ -277,7 +277,7 @@ struct EditTravelPlanBasicInfoView: View {
                             .foregroundColor(themeManager.currentTheme.error)
                             .padding(.top, 2)
                     } else {
-                        let nights = Calendar.current.dateComponents([.day], from: startDate, to: endDate).day ?? 0
+                        let nights = Calendar.current.dayDifference(from: startDate, to: endDate)
                         if nights > 0 {
                             HStack(spacing: 6) {
                                 Image(systemName: "moon.stars.fill")
@@ -371,7 +371,7 @@ struct EditTravelPlanBasicInfoView: View {
 
     /// 縮めたことで旅行期間から外れる日程（予定が入っているものだけ）
     private var daysLeavingRange: [DaySchedule] {
-        let days = Calendar.current.dateComponents([.day], from: startDate, to: normalizedEndDate).day ?? 0
+        let days = Calendar.current.dayDifference(from: startDate, to: normalizedEndDate)
         return plan.daySchedulesOutOfRange(forDayCount: max(days + 1, 1))
     }
 

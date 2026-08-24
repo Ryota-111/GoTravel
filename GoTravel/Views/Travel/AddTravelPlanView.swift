@@ -331,7 +331,7 @@ struct AddTravelPlanView: View {
                 }
 
                 if startDate <= endDate {
-                    let nights = Calendar.current.dateComponents([.day], from: startDate, to: endDate).day ?? 0
+                    let nights = Calendar.current.dayDifference(from: startDate, to: endDate)
                     if nights > 0 {
                         HStack(spacing: 6) {
                             Image(systemName: "moon.stars.fill")

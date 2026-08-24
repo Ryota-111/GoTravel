@@ -98,7 +98,7 @@ struct BudgetSummaryView: View {
 
 
     private var tripDays: Int {
-        (Calendar.current.dateComponents([.day], from: currentPlan.startDate, to: currentPlan.endDate).day ?? 0) + 1
+        Calendar.current.dayDifference(from: currentPlan.startDate, to: currentPlan.endDate) + 1
     }
 
     // MARK: - Theme Colors

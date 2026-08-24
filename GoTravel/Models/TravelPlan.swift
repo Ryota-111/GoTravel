@@ -197,7 +197,7 @@ struct TravelPlan: Identifiable, Codable {
 
     /// 旅行の日数（出発日と帰宅日を含む）
     var dayCount: Int {
-        let days = Calendar.current.dateComponents([.day], from: startDate, to: endDate).day ?? 0
+        let days = Calendar.current.dayDifference(from: startDate, to: endDate)
         return max(days + 1, 1)
     }
 
@@ -256,7 +256,7 @@ struct TravelPlan: Identifiable, Codable {
         copy.updatedAt = Date()
 
         // 日数は変えずに、出発日だけ動かす
-        let length = Calendar.current.dateComponents([.day], from: startDate, to: endDate).day ?? 0
+        let length = Calendar.current.dayDifference(from: startDate, to: endDate)
         copy.startDate = newStartDate
         copy.endDate = Calendar.current.date(byAdding: .day, value: length, to: newStartDate) ?? newStartDate
 
@@ -287,7 +287,7 @@ struct TravelPlan: Identifiable, Codable {
 
         // 予約の日時も旅行と同じ日数だけずらす。
         // 前回の日付のまま残ると、いつの予約なのか分からなくなる
-        let shift = Calendar.current.dateComponents([.day], from: startDate, to: newStartDate).day ?? 0
+        let shift = Calendar.current.dayDifference(from: startDate, to: newStartDate)
         copy.reservations = includeReservations
             ? reservations.map { reservation in
                 var newReservation = reservation

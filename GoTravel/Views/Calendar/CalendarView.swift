@@ -256,7 +256,7 @@ struct CalendarView: View {
         } else if isEndDate {
             return "最終日 - \(dateRangeString(plan.startDate, plan.endDate))"
         } else {
-            let dayNumber = calendar.dateComponents([.day], from: plan.startDate, to: selectedDate).day ?? 0
+            let dayNumber = calendar.dayDifference(from: plan.startDate, to: selectedDate)
             return "\(dayNumber + 1)日目 - \(dateRangeString(plan.startDate, plan.endDate))"
         }
     }
@@ -273,7 +273,7 @@ struct CalendarView: View {
         } else if isEndDate {
             return "\(travelPlan.destination) - 最終日 (\(dateRangeString(travelPlan.startDate, travelPlan.endDate)))"
         } else {
-            let dayNumber = calendar.dateComponents([.day], from: travelPlan.startDate, to: selectedDate).day ?? 0
+            let dayNumber = calendar.dayDifference(from: travelPlan.startDate, to: selectedDate)
             return "\(travelPlan.destination) - \(dayNumber + 1)日目 (\(dateRangeString(travelPlan.startDate, travelPlan.endDate)))"
         }
     }

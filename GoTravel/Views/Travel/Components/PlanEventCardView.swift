@@ -171,12 +171,7 @@ struct PlanEventCardView: View {
     private var todayItems: [PlanScheduleItem] {
         guard isToday else { return [] }
 
-        let calendar = Calendar.current
-        let elapsed = calendar.dateComponents(
-            [.day],
-            from: calendar.startOfDay(for: plan.startDate),
-            to: calendar.startOfDay(for: Date())
-        ).day ?? 0
+        let elapsed = Calendar.current.dayDifference(from: plan.startDate, to: Date())
         let todayNumber = min(max(elapsed + 1, 1), plan.dayCount)
 
         return plan.scheduleItems
@@ -236,7 +231,7 @@ struct PlanEventCardView: View {
 
         if !isSingleDay {
             parts.append("\(DateFormatter.japaneseDate.string(from: plan.endDate))まで")
-            let days = (Calendar.current.dateComponents([.day], from: plan.startDate, to: plan.endDate).day ?? 0) + 1
+            let days = Calendar.current.dayDifference(from: plan.startDate, to: plan.endDate) + 1
             parts.append("\(days)日間")
         }
 

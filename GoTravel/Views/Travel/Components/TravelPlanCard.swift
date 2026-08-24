@@ -59,7 +59,7 @@ struct TravelPlanCard: View {
         if today >= start && today <= end {
             return .ongoing
         } else if start > today {
-            let days = calendar.dateComponents([.day], from: today, to: start).day ?? 0
+            let days = calendar.dayDifference(from: today, to: start)
             return .upcoming(daysUntil: days)
         } else {
             return .past

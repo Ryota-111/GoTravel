@@ -553,7 +553,7 @@ struct AddPlanView: View {
     /// 「2泊3日の日程になります」。選んだ日付が何日間になるのかを、
     /// その場で返す
     private var nightsText: String {
-        let nights = Calendar.current.dateComponents([.day], from: startDate, to: endDate).day ?? 0
+        let nights = Calendar.current.dayDifference(from: startDate, to: endDate)
         return nights <= 0 ? "日帰りの予定です" : "\(nights)泊\(nights + 1)日の日程になります"
     }
 

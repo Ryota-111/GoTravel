@@ -131,7 +131,7 @@ struct TravelPlanDetailView: View {
 
     private var tripDuration: Int {
         guard let plan = currentPlan else { return 1 }
-        let days = Calendar.current.dateComponents([.day], from: plan.startDate, to: plan.endDate).day ?? 0
+        let days = Calendar.current.dayDifference(from: plan.startDate, to: plan.endDate)
         return days + 1
     }
 
@@ -1539,11 +1539,11 @@ struct TravelPlanDetailView: View {
         let end = calendar.startOfDay(for: plan.endDate)
 
         if today < start {
-            let days = calendar.dateComponents([.day], from: today, to: start).day ?? 0
+            let days = calendar.dayDifference(from: today, to: start)
             return ("旅行まで", days == 1 ? "明日" : "\(days)日")
         }
         if today <= end {
-            let elapsed = calendar.dateComponents([.day], from: start, to: today).day ?? 0
+            let elapsed = calendar.dayDifference(from: start, to: today)
             return ("旅行中", "Day \(elapsed + 1)")
         }
         return nil
