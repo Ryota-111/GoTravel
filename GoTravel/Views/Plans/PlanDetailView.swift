@@ -1047,119 +1047,6 @@ struct PlanDetailView: View {
         }
     }
 
-    // MARK: - Header Image (View Mode)
-    // MARK: - Header (写真なし)
-    /// 写真がない場合は暗いスクリムをかけた擬似的な写真枠ではなく、
-    /// テーマ色ベースの明るいヘッダーにして写真追加への導線を置く
-    private var noPhotoHeaderView: some View {
-        let mainColor = themeManager.currentTheme.xprimary
-        let baseColor: Color = colorScheme == .dark
-            ? themeManager.currentTheme.secondaryBackgroundDark
-            : themeManager.currentTheme.backgroundLight
-        let titleColor: Color = colorScheme == .dark
-            ? themeManager.currentTheme.accent2
-            : themeManager.currentTheme.accent1
-
-        return ZStack(alignment: .bottomTrailing) {
-            LinearGradient(
-                colors: [mainColor.opacity(colorScheme == .dark ? 0.35 : 0.22), baseColor],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-
-            // 背景の飾りとして種別アイコンを大きく薄く置く
-            Image(systemName: planTypeIcon)
-                .font(.system(size: 150))
-                .foregroundColor(mainColor.opacity(0.10))
-                .offset(x: 40, y: 30)
-                .clipped()
-
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
-                    ZStack {
-                        RoundedRectangle(cornerRadius: 12)
-                            .fill(
-                                LinearGradient(
-                                    colors: [mainColor, mainColor.opacity(0.65)],
-                                    startPoint: .topLeading,
-                                    endPoint: .bottomTrailing
-                                )
-                            )
-                            .frame(width: 40, height: 40)
-                            .shadow(color: mainColor.opacity(0.35), radius: 5, x: 0, y: 3)
-                        Image(systemName: planTypeIcon)
-                            .font(.system(size: 18, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-
-                    // 種別は色分けを残したいのでプランカラーのままにする
-                    Text(planTypeText)
-                        .font(.caption.weight(.bold))
-                        .foregroundColor(planColor)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(planColor.opacity(0.16), in: Capsule())
-
-                    statusPill
-                }
-
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(plan.title)
-                        .font(.system(size: 26, weight: .bold, design: .rounded))
-                        .foregroundColor(titleColor)
-                        .lineLimit(2)
-
-                    HStack(spacing: 6) {
-                        Image(systemName: "calendar")
-                            .font(.subheadline)
-
-                        if plan.planType == .outing {
-                            Text(dateRangeString(plan.startDate, plan.endDate))
-                                .font(.subheadline)
-                        } else {
-                            Text(formatDate(plan.startDate))
-                                .font(.subheadline)
-                        }
-
-                        if plan.planType == .daily, let time = plan.time {
-                            HStack(spacing: 4) {
-                                Image(systemName: "clock.fill")
-                                    .font(.caption)
-                                Text(formatTime(time))
-                                    .font(.subheadline)
-                                    .lineLimit(1)
-                            }
-                            .padding(.leading, 4)
-                        }
-                    }
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-                }
-
-                Button(action: {
-                    enterEditMode()
-                    showImagePicker = true
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "camera.fill")
-                            .font(.caption)
-                        Text("写真を追加")
-                            .font(.subheadline.weight(.semibold))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 10)
-                    .background(mainColor, in: Capsule())
-                    .shadow(color: mainColor.opacity(0.35), radius: 6, x: 0, y: 3)
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(24)
-        }
-        .frame(maxWidth: .infinity)
-        .clipped()
-    }
-
     private var headerImageView: some View {
         ZStack(alignment: .bottomLeading) {
             // Background Image
@@ -1295,24 +1182,6 @@ struct PlanDetailView: View {
         .frame(height: 260)
     }
 
-    // MARK: - Category Tag
-    private var categoryTag: some View {
-        HStack(spacing: 8) {
-            Image(systemName: planTypeIcon)
-                .font(.caption)
-            Text(planTypeText)
-                .font(.subheadline.weight(.semibold))
-        }
-        .foregroundColor(.white)
-        .padding(.horizontal, 13)
-        .padding(.vertical, 6)
-        .background(
-            Capsule()
-                .fill(planColor)
-        )
-        .shadow(color: planColor.opacity(0.3), radius: 4, x: 0, y: 2)
-    }
-
     // MARK: - Date & Time Section
 //    private var dateTimeSection: some View {
 //        VStack(alignment: .leading, spacing: 12) {
@@ -1350,46 +1219,6 @@ struct PlanDetailView: View {
 //        }
 //        .frame(maxWidth: .infinity, alignment: .leading)
 //    }
-
-    // MARK: - Description Section
-    private func descriptionSection(_ description: String) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(description)
-                .font(.body)
-                .foregroundColor(themeManager.currentTheme.secondaryText)
-                .lineSpacing(6)
-                .fixedSize(horizontal: false, vertical: true)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
-
-    // MARK: - Link Section
-    private func linkSection(_ linkURL: String) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            if let url = URL(string: linkURL) {
-                Link(destination: url) {
-                    HStack {
-                        Image(systemName: "safari")
-                            .foregroundColor(planColor)
-                        Text(linkURL)
-                            .font(.subheadline)
-                            .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-                            .lineLimit(1)
-                        Spacer()
-                        Image(systemName: "arrow.up.right")
-                            .font(.caption)
-                            .foregroundColor(themeManager.currentTheme.secondaryText)
-                    }
-                    .padding(12)
-                    .background(
-                        RoundedRectangle(cornerRadius: 10)
-                            .fill(planColor.opacity(0.1))
-                    )
-                }
-            }
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
-    }
 
     // MARK: - Action Buttons
 //    private var actionButtons: some View {
@@ -1641,37 +1470,6 @@ struct PlanDetailView: View {
         guard let next = nextAnniversaryDate else { return 1 }
         let years = calendar.component(.year, from: next) - calendar.component(.year, from: plan.startDate)
         return max(years + 1, 1)
-    }
-
-    // MARK: - タグと繰り返し
-    private var tagAndRecurrenceRow: some View {
-        HStack(spacing: 6) {
-            if plan.recurrence != .none {
-                HStack(spacing: 5) {
-                    Image(systemName: "repeat")
-                        .font(.system(size: 11, weight: .bold))
-                    Text(plan.recurrence.displayName)
-                        .font(.system(size: 12, weight: .semibold))
-                }
-                .foregroundColor(planColor)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(planColor.opacity(colorScheme == .dark ? 0.22 : 0.12), in: Capsule())
-            }
-
-            // タグは中立の灰色。種別の色と役割を混ぜない
-            ForEach(plan.tags, id: \.self) { tag in
-                Text(tag)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-                    .padding(.horizontal, 10)
-                    .padding(.vertical, 6)
-                    .background(themeManager.currentTheme.secondaryText.opacity(0.12), in: Capsule())
-            }
-
-            Spacer(minLength: 0)
-        }
-        .padding(.vertical, 4)
     }
 
     // MARK: - 完了
