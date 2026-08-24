@@ -189,6 +189,15 @@ class NotificationService {
         }
     }
 
+    /// この予定の通知が入っているか。
+    ///
+    /// 入切の状態はどこにも保存していない。予約されている通知そのものが状態なので、
+    /// 保存する場所を増やさずに済む（Core Data と CloudKit を触らない）
+    func hasPendingPlanNotifications(for planId: String) async -> Bool {
+        let requests = await UNUserNotificationCenter.current().pendingNotificationRequests()
+        return requests.contains { $0.identifier.hasPrefix("\(planId)_") }
+    }
+
     func cancelPlanNotifications(for planId: String) {
         let identifiers = [
             "\(planId)_day",

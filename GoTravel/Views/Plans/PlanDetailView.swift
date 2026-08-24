@@ -15,6 +15,7 @@ struct PlanDetailView: View {
     @State private var alertMessage = ""
     @State private var showDeleteConfirmation = false
     @State private var showScheduleEditor = false
+    @State private var isNotificationOn = false
     @State private var editingScheduleItem: PlanScheduleItem?
 
     // 編集用の一時変数
@@ -189,12 +190,21 @@ struct PlanDetailView: View {
             VStack(alignment: .leading, spacing: 0) {
                 // 写真なしヘッダーには種別バッジが入っているので重複させない
                 if displayImage != nil {
-                    categoryTag
-                        .padding(.horizontal, 24)
-                        .padding(.top, 24)
+                    HStack(spacing: 8) {
+                        categoryTag
+                        statusPill
+                        Spacer(minLength: 0)
+                    }
+                    .padding(.horizontal, 24)
+                    .padding(.top, 24)
                 } else {
                     Color.clear.frame(height: 8)
                 }
+
+                // 当日その場で開いたとき、一番上にあってほしいもの
+                quickActionRow
+                    .padding(.horizontal, 24)
+                    .padding(.top, 16)
 
                 // Description Section
                 if let description = plan.description, !description.isEmpty {
@@ -216,20 +226,17 @@ struct PlanDetailView: View {
                 scheduleSection
                     .padding(.horizontal, 24)
 
-                gradientSeparator
-
-                // Map Section
-                mapSection
-                    .padding(.horizontal, 24)
-
-                // Places Section
-                if !plan.places.isEmpty {
+                // 「歯医者 10:30」に地図は要らない。おでかけのときだけ出す
+                if plan.planType == .outing {
                     gradientSeparator
 
-                    placesSection
+                    mapSection
                         .padding(.horizontal, 24)
                         .padding(.bottom, 24)
                 }
+
+                // 場所の一覧は地図のピンと同じ内容で、タイムラインの各行も
+                // 場所を持っている。三重になるのでここでは出さない
             }
         }
     }
@@ -637,6 +644,8 @@ struct PlanDetailView: View {
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
                         .background(planColor.opacity(0.16), in: Capsule())
+
+                    statusPill
                 }
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -966,6 +975,162 @@ struct PlanDetailView: View {
 //        }
 //    }
 
+    // MARK: - 状態
+    //
+    // 旅行計画のような大きな表紙ではなく、その日の1枚として小さく出す。
+    // 開いた瞬間に「まだ先か、今日か、終わったか」が分かるようにする
+    private var planStatusText: String? {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let start = calendar.startOfDay(for: plan.startDate)
+        let end = calendar.startOfDay(for: plan.endDate)
+
+        if today < start {
+            let days = calendar.dayDifference(from: today, to: start)
+            return days == 1 ? "明日" : "あと\(days)日"
+        }
+        if today <= end {
+            return plan.isMultiDay
+                ? "\(calendar.dayDifference(from: start, to: today) + 1)日目"
+                : "今日"
+        }
+        return "終了"
+    }
+
+    private var isPlanFinished: Bool {
+        Calendar.current.startOfDay(for: Date()) > Calendar.current.startOfDay(for: plan.endDate)
+    }
+
+    @ViewBuilder
+    private var statusPill: some View {
+        if let planStatusText {
+            Text(planStatusText)
+                .font(.caption.weight(.bold))
+                // 終わった予定は色を抜く
+                .foregroundColor(isPlanFinished ? themeManager.currentTheme.secondaryText : planColor)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .background(
+                    Capsule().fill(isPlanFinished
+                                   ? themeManager.currentTheme.secondaryText.opacity(0.12)
+                                   : planColor.opacity(colorScheme == .dark ? 0.24 : 0.14))
+                )
+        }
+    }
+
+    // MARK: - 今すぐ使う操作
+    //
+    // 旅行計画には無い行。当日その場で開いて押すものを、見出しのすぐ下に並べる。
+    // 経路案内は最初の場所へ、通知はその場で入切できる
+    private var quickActionRow: some View {
+        HStack(spacing: 10) {
+            quickAction(
+                icon: "arrow.triangle.turn.up.right.diamond.fill",
+                title: "経路案内",
+                subtitle: plan.places.first?.name,
+                isEnabled: plan.places.first != nil,
+                isOn: false
+            ) {
+                openRouteToFirstPlace()
+            }
+
+            quickAction(
+                icon: "link",
+                title: "リンク",
+                subtitle: (plan.linkURL?.isEmpty == false) ? "1件" : "なし",
+                isEnabled: plan.linkURL?.isEmpty == false,
+                isOn: false
+            ) {
+                guard let raw = plan.linkURL, let url = URL(string: raw) else { return }
+                UIApplication.shared.open(url)
+            }
+
+            quickAction(
+                icon: isNotificationOn ? "bell.fill" : "bell.slash",
+                title: "通知",
+                subtitle: isNotificationOn ? "入" : "切",
+                isEnabled: true,
+                isOn: isNotificationOn
+            ) {
+                toggleNotification()
+            }
+        }
+        .task {
+            isNotificationOn = await NotificationService.shared.hasPendingPlanNotifications(for: plan.id)
+        }
+    }
+
+    private func quickAction(
+        icon: String,
+        title: String,
+        subtitle: String?,
+        isEnabled: Bool,
+        isOn: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(spacing: 7) {
+                Image(systemName: icon)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(isEnabled ? planColor : themeManager.currentTheme.secondaryText.opacity(0.5))
+
+                Text(title)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(isEnabled
+                                     ? (colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+                                     : themeManager.currentTheme.secondaryText.opacity(0.5))
+
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 76)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(isOn
+                          ? AnyShapeStyle(planColor.opacity(colorScheme == .dark ? 0.22 : 0.12))
+                          : AnyShapeStyle(colorScheme == .dark
+                                          ? themeManager.currentTheme.secondaryBackgroundDark
+                                          : themeManager.currentTheme.backgroundLight))
+            )
+            .shadow(
+                color: colorScheme == .dark || isOn ? .clear : Color.black.opacity(0.06),
+                radius: 10,
+                x: 0,
+                y: 4
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .disabled(!isEnabled)
+    }
+
+    /// 最初の場所へ地図アプリで案内させる。
+    /// 座標を持っているので、URLを組み立てる必要はない
+    private func openRouteToFirstPlace() {
+        guard let place = plan.places.first else { return }
+
+        let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: place.coordinate))
+        mapItem.name = place.name
+        mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving])
+    }
+
+    private func toggleNotification() {
+        if isNotificationOn {
+            NotificationService.shared.cancelPlanNotifications(for: plan.id)
+            isNotificationOn = false
+        } else {
+            NotificationService.shared.schedulePlanNotifications(for: plan)
+            // 予定日が過ぎていると何も予約されないため、結果を見てから戻す
+            Task {
+                isNotificationOn = await NotificationService.shared.hasPendingPlanNotifications(for: plan.id)
+            }
+        }
+    }
+
     // MARK: - Map Section
     private var mapSection: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -1010,7 +1175,8 @@ struct PlanDetailView: View {
                             .tint(planColor)
                     }
                 }
-                .frame(height: 300)
+                // 300ptは旅行計画の地図と同じ大きさで、当日の確認には過剰だった
+                .frame(height: 160)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
                 .overlay(alignment: .bottomTrailing) {
                     HStack(spacing: 6) {
@@ -1330,21 +1496,6 @@ struct PlanDetailView: View {
         plan = updatedPlan
         if let userId = authVM.userId {
             viewModel.update(updatedPlan, userId: userId)
-        }
-    }
-
-    // MARK: - Places Section
-    private var placesSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("訪問予定の場所")
-                .font(.headline.weight(.semibold))
-                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-
-            VStack(spacing: 12) {
-                ForEach(plan.places) { place in
-                    PlaceRowCard(place: place, planColor: planColor)
-                }
-            }
         }
     }
 
