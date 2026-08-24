@@ -1074,8 +1074,19 @@ struct PlanDetailView: View {
                                 dayHeader(for: group.day)
                             }
 
-                            ForEach(group.items) { item in
-                                scheduleItemRow(item: item)
+                            let nowIndex = nextItemIndex(in: group.items, day: group.day)
+
+                            VStack(spacing: 0) {
+                                ForEach(Array(group.items.enumerated()), id: \.element.id) { index, item in
+                                    let isLast = index == group.items.count - 1
+                                    let state = scheduleRowState(index: index, nowIndex: nowIndex)
+
+                                    scheduleItemRow(item: item, isLast: isLast, state: state)
+
+                                    if !isLast, needsMoveMarker(from: item, to: group.items[index + 1]) {
+                                        moveMarkerRow(state: state)
+                                    }
+                                }
                             }
                         }
                     }
@@ -1122,18 +1133,41 @@ struct PlanDetailView: View {
         return formatter.string(from: date)
     }
 
-    private func scheduleItemRow(item: PlanScheduleItem) -> some View {
-        HStack(alignment: .top, spacing: 12) {
-            // Time
-            VStack(spacing: 2) {
-                Text(formatTime(item.time))
-                    .font(.system(size: 16, weight: .bold))
-                    // 16ptの時刻に対して枠が狭く、折り返しが起きていた
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.7)
-                    .foregroundColor(planColor)
+    /// タイムラインの1行の状態。
+    /// 過ぎた・次の1件・これからは、その日が今日のときだけ意味を持つ
+    private enum ScheduleRowState {
+        case past, now, future, flat
+    }
+
+    private func scheduleItemRow(item: PlanScheduleItem, isLast: Bool, state: ScheduleRowState) -> some View {
+        HStack(alignment: .top, spacing: 0) {
+            // 時刻は塗らず等幅で右に揃える。レールを読ませるため
+            Text(formatTime(item.time))
+                .font(.system(size: 13, weight: .bold))
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+                .foregroundColor(state == .past
+                                 ? themeManager.currentTheme.secondaryText.opacity(0.6)
+                                 : themeManager.currentTheme.secondaryText)
+                .frame(width: 46, alignment: .trailing)
+                .padding(.top, 1)
+
+            // レール
+            VStack(spacing: 0) {
+                scheduleDot(state: state)
+
+                if !isLast {
+                    Rectangle()
+                        .fill(railColor(state: state))
+                        .frame(width: 2)
+                        .frame(maxHeight: .infinity)
+                }
             }
-            .frame(width: 56)
+            .frame(width: 12)
+            .padding(.leading, 10)
+            .padding(.trailing, 16)
+            .padding(.top, 3)
 
             // Content
             VStack(alignment: .leading, spacing: 6) {
@@ -1184,6 +1218,93 @@ struct PlanDetailView: View {
             }
         }
         .padding(.vertical, 8)
+    }
+
+    /// レールの点。過ぎた分は塗り、次の1件は光らせ、これからは中を抜く
+    @ViewBuilder
+    private func scheduleDot(state: ScheduleRowState) -> some View {
+        switch state {
+        case .now:
+            Circle()
+                .fill(planColor)
+                .frame(width: 12, height: 12)
+                .overlay(Circle().stroke(planColor.opacity(0.16), lineWidth: 5))
+        case .past:
+            Circle()
+                .fill(planColor.opacity(0.55))
+                .frame(width: 12, height: 12)
+        case .future, .flat:
+            Circle()
+                .fill(colorScheme == .dark
+                      ? themeManager.currentTheme.secondaryBackgroundDark
+                      : themeManager.currentTheme.backgroundLight)
+                .frame(width: 12, height: 12)
+                .overlay(
+                    Circle().strokeBorder(
+                        state == .flat ? planColor.opacity(0.55) : themeManager.currentTheme.secondaryText.opacity(0.65),
+                        lineWidth: 2.5
+                    )
+                )
+        }
+    }
+
+    private func railColor(state: ScheduleRowState) -> Color {
+        state == .past
+            ? planColor.opacity(0.4)
+            : themeManager.currentTheme.secondaryText.opacity(0.18)
+    }
+
+    /// 予定と予定のあいだに挟む移動の目印。
+    ///
+    /// 所要時間は出さない。バス・電車・徒歩を分けて出すには
+    /// 経路計算（`MKDirections`）が要るうえ、電車はそもそも計算できない。
+    /// 「ここで移動する」ことだけ分かれば足りる
+    private func moveMarkerRow(state: ScheduleRowState) -> some View {
+        HStack(spacing: 0) {
+            Color.clear.frame(width: 46)
+
+            Rectangle()
+                .fill(railColor(state: state))
+                .frame(width: 2)
+                .frame(maxHeight: .infinity)
+                .frame(width: 12)
+                .padding(.leading, 10)
+                .padding(.trailing, 16)
+
+            HStack(spacing: 5) {
+                Image(systemName: "arrow.down")
+                    .font(.system(size: 10, weight: .bold))
+                Text("移動")
+                    .font(.system(size: 11, weight: .semibold))
+            }
+            .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.75))
+
+            Spacer(minLength: 0)
+        }
+        .frame(height: 26)
+    }
+
+    /// 移動を挟むのは、続けて別の場所へ行くときだけ。
+    /// 場所が入っていない項目や、同じ場所での続きには出さない
+    private func needsMoveMarker(from: PlanScheduleItem, to: PlanScheduleItem) -> Bool {
+        guard let fromPlace = from.placeId, let toPlace = to.placeId else { return false }
+        return fromPlace != toPlace
+    }
+
+    /// 次に控えている1件の位置。その日が今日でなければ nil
+    private func nextItemIndex(in items: [PlanScheduleItem], day: Int) -> Int? {
+        let dayDate = Calendar.current.date(byAdding: .day, value: day - 1, to: plan.startDate) ?? plan.startDate
+        guard Calendar.current.isDateInToday(dayDate) else { return nil }
+
+        let nowMinutes = minutesOfDay(Date())
+        return items.firstIndex { minutesOfDay($0.time) >= nowMinutes }
+    }
+
+    private func scheduleRowState(index: Int, nowIndex: Int?) -> ScheduleRowState {
+        guard let nowIndex else { return .flat }
+        if index < nowIndex { return .past }
+        if index == nowIndex { return .now }
+        return .future
     }
 
     /// 何日目かでまとめ、日ごとに時刻順で並べる。
