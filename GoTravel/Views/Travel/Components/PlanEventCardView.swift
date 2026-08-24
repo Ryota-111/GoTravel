@@ -47,9 +47,10 @@ struct PlanEventCardView: View {
         Calendar.current.isDate(plan.startDate, inSameDayAs: plan.endDate)
     }
 
-    private var typeName: String {
-        plan.planType == .daily ? "日常" : "おでかけ"
-    }
+    private var typeName: String { plan.planType.displayName }
+
+    /// 記念日は「あと◯日」が主役。日付タイルも当日ではなく記念日そのものを指す
+    private var isAnniversary: Bool { plan.planType == .anniversary }
 
     var body: some View {
         // 中身をたたむ今日のカードだけ、タイルと「⋯」を上に寄せる
@@ -60,9 +61,16 @@ struct PlanEventCardView: View {
                 Text(plan.title)
                     .font(.system(size: isToday ? 17 : 16, weight: isToday ? .bold : .semibold))
                     .foregroundColor(titleColor)
+                    .strikethrough(plan.isCompleted, color: subTextColor)
                     .lineLimit(1)
 
                 HStack(spacing: 7) {
+                    if plan.isCompleted {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(themeManager.currentTheme.success)
+                    }
+
                     // 種別色を使うのはここだけ
                     Text(typeName)
                         .font(.system(size: 10, weight: .bold))
@@ -124,6 +132,8 @@ struct PlanEventCardView: View {
             x: 0,
             y: 5
         )
+        // 済んだ予定は残すが、目立たせない
+        .opacity(plan.isCompleted ? 0.55 : 1)
     }
 
     // MARK: - 今日の中身
@@ -243,13 +253,19 @@ struct PlanEventCardView: View {
             parts.append("\(plan.places.count)件の場所")
         }
 
+        if plan.recurrence != .none {
+            parts.append(plan.recurrence.displayName)
+        }
+
+        if !plan.tags.isEmpty {
+            parts.append(plan.tags.map { "#\($0)" }.joined(separator: " "))
+        }
+
         return parts.joined(separator: " · ")
     }
 
     private var typeColor: Color {
-        plan.planType == .daily
-            ? themeManager.currentTheme.dailyPlanColor
-            : themeManager.currentTheme.outingPlanColor
+        plan.planType.color(themeManager.currentTheme)
     }
 
     /// タイルに出す日。今日にかかっている予定は今日を指す

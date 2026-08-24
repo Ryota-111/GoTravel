@@ -186,6 +186,32 @@ class NotificationService {
                     }
                 }
             }
+
+        case .anniversary:
+            // 記念日は当日の朝に1回だけ。時刻を持たないので前後の通知はしない。
+            // 「前日に知らせる」ほうが準備には向くため、1週間前も出す
+            let anniversaryReminders: [(daysBefore: Int, suffix: String, title: String)] = [
+                (7, "day", "記念日が1週間後です"),
+                (0, "morning", "今日は記念日です")
+            ]
+
+            for reminder in anniversaryReminders {
+                guard let date = calendar.date(byAdding: .day, value: -reminder.daysBefore, to: plan.startDate) else { continue }
+
+                var components = calendar.dateComponents(in: TimeZone.current, from: date)
+                components.hour = 9
+                components.minute = 0
+                components.second = 0
+
+                guard let scheduledDate = calendar.date(from: components), scheduledDate > now else { continue }
+
+                scheduleNotification(
+                    id: "\(plan.id)_\(reminder.suffix)",
+                    title: reminder.title,
+                    body: "\(plan.title)",
+                    dateComponents: components
+                )
+            }
         }
     }
 

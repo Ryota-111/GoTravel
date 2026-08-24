@@ -14,6 +14,7 @@ struct CalendarTimelineItem: Identifiable {
 enum CalendarItemType {
     case dailyPlan
     case outingPlan
+    case anniversary
     case travel
 }
 
@@ -203,6 +204,23 @@ struct CalendarView: View {
                 )
             }
 
+        // 記念日。時刻を持たないので、その日の先頭に置く
+        let anniversaryItems = viewModel.plans
+            .filter { plan in
+                plan.planType == .anniversary &&
+                isDateInPlanRange(date: selectedDate, plan: plan)
+            }
+            .map { plan -> CalendarTimelineItem in
+                CalendarTimelineItem(
+                    time: calendar.startOfDay(for: selectedDate),
+                    title: plan.title,
+                    subtitle: anniversaryCountText(for: plan),
+                    type: .anniversary,
+                    relatedPlan: plan,
+                    relatedTravelPlan: nil
+                )
+            }
+
         // Travel plan items
         let travelItems = travelViewModel.travelPlans
             .filter { travelPlan in
@@ -221,7 +239,7 @@ struct CalendarView: View {
             }
 
         // 時系列順にソート
-        return (dailyPlanItems + outingPlanItems + travelItems).sorted { item1, item2 in
+        return (anniversaryItems + dailyPlanItems + outingPlanItems + travelItems).sorted { item1, item2 in
             let components1 = calendar.dateComponents([.hour, .minute], from: item1.time)
             let components2 = calendar.dateComponents([.hour, .minute], from: item2.time)
 
@@ -491,7 +509,18 @@ struct CalendarView: View {
             eventTypes.append(.dailyPlan)
         }
 
+        // 記念日
+        if viewModel.plans.contains(where: { $0.planType == .anniversary && isDateInPlanRange(date: date, plan: $0) }) {
+            eventTypes.append(.anniversary)
+        }
+
         return eventTypes
+    }
+
+    /// 「10回目の結婚記念日」。開始年からの経過で数える
+    private func anniversaryCountText(for plan: Plan) -> String {
+        let years = calendar.component(.year, from: selectedDate) - calendar.component(.year, from: plan.startDate)
+        return years > 0 ? "\(years + 1)回目" : "1回目"
     }
 
     private func colorForEventType(_ type: CalendarItemType) -> Color {
@@ -500,6 +529,8 @@ struct CalendarView: View {
             return themeManager.currentTheme.dailyPlanColor
         case .outingPlan:
             return themeManager.currentTheme.outingPlanColor
+        case .anniversary:
+            return themeManager.currentTheme.anniversaryPlanColor
         case .travel:
             return themeManager.currentTheme.travelColor
         }

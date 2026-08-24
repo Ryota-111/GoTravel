@@ -345,7 +345,7 @@ struct TimelineItemCard: View {
     @ViewBuilder
     private var destinationView: some View {
         switch item.type {
-        case .dailyPlan, .outingPlan:
+        case .dailyPlan, .outingPlan, .anniversary:
             if let plan = item.relatedPlan {
                 PlanDetailView(plan: plan)
                     .environmentObject(plansViewModel)
@@ -366,6 +366,7 @@ struct TimelineItemCard: View {
         switch item.type {
         case .dailyPlan: return themeManager.currentTheme.dailyPlanColor
         case .outingPlan: return themeManager.currentTheme.outingPlanColor
+        case .anniversary: return themeManager.currentTheme.anniversaryPlanColor
         case .travel: return themeManager.currentTheme.success
         }
     }
@@ -374,6 +375,7 @@ struct TimelineItemCard: View {
         switch item.type {
         case .dailyPlan: return "house.fill"
         case .outingPlan: return "figure.walk"
+        case .anniversary: return "heart.fill"
         case .travel: return "airplane"
         }
     }
@@ -393,6 +395,9 @@ struct TimelineItemCard: View {
         case .dailyPlan:
             // 日常プランは時刻を表示
             formatter.dateFormat = "HH:mm"
+        case .anniversary:
+            // 記念日は時刻を持たない
+            return "終日"
         case .outingPlan, .travel:
             // おでかけプランと旅行プランは日付を表示
             formatter.dateFormat = "M月d日"

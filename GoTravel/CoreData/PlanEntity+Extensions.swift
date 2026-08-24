@@ -19,6 +19,9 @@ public class PlanEntity: NSManagedObject {
     @NSManaged public var linkURL: String?
     @NSManaged public var placesData: Data?
     @NSManaged public var scheduleItemsData: Data?
+    @NSManaged public var isCompleted: Bool
+    @NSManaged public var tagsData: Data?
+    @NSManaged public var recurrence: String?
 }
 
 // MARK: - Fetch Request
@@ -81,6 +84,12 @@ extension PlanEntity {
             scheduleItems = (try? decoder.decode([PlanScheduleItem].self, from: data)) ?? []
         }
 
+        // タグをデコード
+        var tags: [String] = []
+        if let data = tagsData {
+            tags = (try? JSONDecoder().decode([String].self, from: data)) ?? []
+        }
+
         var cardColor: Color? = nil
         if let hex = cardColorHex {
             cardColor = Color(hex: hex)
@@ -100,7 +109,10 @@ extension PlanEntity {
             time: time,
             description: descriptionText,
             linkURL: linkURL,
-            scheduleItems: scheduleItems
+            scheduleItems: scheduleItems,
+            isCompleted: isCompleted,
+            tags: tags,
+            recurrence: PlanRecurrence(rawValue: recurrence ?? "") ?? .none
         )
     }
 
@@ -138,6 +150,13 @@ extension PlanEntity {
         self.scheduleItemsData = plan.scheduleItems.isEmpty
             ? nil
             : try? encoder.encode(plan.scheduleItems)
+
+        self.tagsData = plan.tags.isEmpty
+            ? nil
+            : try? encoder.encode(plan.tags)
+
+        self.isCompleted = plan.isCompleted
+        self.recurrence = plan.recurrence == .none ? nil : plan.recurrence.rawValue
     }
 
     /// Plan構造体から新しいEntityを作成

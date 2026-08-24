@@ -34,6 +34,9 @@ struct AddPlanView: View {
     @State private var dailyTime: Date = Date()
     @State private var description: String = ""
     @State private var linkURL: String = ""
+    @State private var recurrence: PlanRecurrence = .none
+    @State private var tags: [String] = []
+    @State private var tagInput: String = ""
 
     // Map state
     @State private var showMapPicker: Bool = false
@@ -48,7 +51,14 @@ struct AddPlanView: View {
 
     // MARK: - Computed Properties
     // 0:種別+タイトル / 1:日付 / 2:場所 / 3:内容+リンク（日常のみ）
-    private var totalSteps: Int { selectedPlanType == .outing ? 3 : 4 }
+    // 記念日は場所も内容も持たないので日付で終わり
+    private var totalSteps: Int {
+        switch selectedPlanType {
+        case .outing:      return 3
+        case .daily:       return 4
+        case .anniversary: return 2
+        }
+    }
     private var isLastStep: Bool { currentStep == totalSteps - 1 }
 
     private var canProceed: Bool {
@@ -386,6 +396,7 @@ struct AddPlanView: View {
                 VStack(spacing: 10) {
                     typeCard(type: .outing, icon: "figure.walk", title: "おでかけ", subtitle: "旅行・お出かけ計画")
                     typeCard(type: .daily, icon: "house.fill", title: "日常", subtitle: "日常のタスク・用事")
+                    typeCard(type: .anniversary, icon: "heart.fill", title: "記念日", subtitle: "毎年めぐってくる日")
                 }
                 .padding(.horizontal, 20)
 
@@ -421,11 +432,145 @@ struct AddPlanView: View {
                 .padding(.horizontal, 20)
                 .padding(.top, 4)
 
+                tagField
+
                 historyEntryButton
 
                 Spacer(minLength: 20)
             }
         }
+    }
+
+    /// 自由タグ。種別（画面が変わる）とは別軸で、分類したいだけのもの。
+    /// 色は付けない（種別が色つき、タグは中立の灰色）
+    private var tagField: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("タグ（任意）")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(uiAccentColor.opacity(0.5))
+
+            if !tags.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(tags, id: \.self) { tag in
+                        Button {
+                            tags.removeAll { $0 == tag }
+                        } label: {
+                            HStack(spacing: 4) {
+                                Text(tag)
+                                    .font(.system(size: 12, weight: .semibold))
+                                Image(systemName: "xmark")
+                                    .font(.system(size: 9, weight: .bold))
+                            }
+                            .foregroundColor(uiAccentColor.opacity(0.75))
+                            .padding(.horizontal, 9)
+                            .padding(.vertical, 5)
+                            .background(uiAccentColor.opacity(0.08), in: Capsule())
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+            }
+
+            HStack(spacing: 8) {
+                TextField("仕事、家事、健康…", text: $tagInput)
+                    .font(.system(size: 15))
+                    .foregroundColor(uiAccentColor)
+                    .submitLabel(.done)
+                    .onSubmit { addTag() }
+
+                Button("追加", action: addTag)
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(tagInput.trimmingCharacters(in: .whitespaces).isEmpty
+                                     ? uiAccentColor.opacity(0.3)
+                                     : effectivePlanColor)
+                    .disabled(tagInput.trimmingCharacters(in: .whitespaces).isEmpty)
+            }
+            .padding(.bottom, 6)
+            .overlay(alignment: .bottom) {
+                Rectangle()
+                    .fill(uiAccentColor.opacity(0.15))
+                    .frame(height: 1)
+            }
+
+            // 過去に使ったタグから選べるようにする。表記ゆれを減らすため
+            if !tagSuggestions.isEmpty {
+                HStack(spacing: 6) {
+                    ForEach(tagSuggestions.prefix(4), id: \.self) { tag in
+                        Button {
+                            tags.append(tag)
+                        } label: {
+                            Text("＋ \(tag)")
+                                .font(.system(size: 12))
+                                .foregroundColor(uiAccentColor.opacity(0.55))
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 5)
+                                .background(
+                                    Capsule().strokeBorder(uiAccentColor.opacity(0.15), lineWidth: 1)
+                                )
+                        }
+                        .buttonStyle(PlainButtonStyle())
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+    }
+
+    /// これまでに使ったタグ（今のこの予定に付いていないもの）
+    private var tagSuggestions: [String] {
+        let used = Set(tags)
+        var seen = Set<String>()
+        return historyPlans
+            .flatMap(\.tags)
+            .filter { !used.contains($0) && seen.insert($0).inserted }
+    }
+
+    private func addTag() {
+        let trimmed = tagInput.trimmingCharacters(in: .whitespaces)
+        guard !trimmed.isEmpty, !tags.contains(trimmed) else { return }
+        tags.append(trimmed)
+        tagInput = ""
+    }
+
+    /// 繰り返し。日常の用事は繰り返すが、おでかけには無い概念
+    private var recurrenceField: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("繰り返し")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(uiAccentColor.opacity(0.5))
+
+            HStack(spacing: 8) {
+                ForEach([PlanRecurrence.none, .weekly, .monthly], id: \.self) { rule in
+                    Button {
+                        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                            recurrence = rule
+                        }
+                    } label: {
+                        Text(rule.displayName)
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(recurrence == rule
+                                             ? ThemePreset.readableText(on: effectivePlanColor)
+                                             : uiAccentColor.opacity(0.7))
+                            .frame(maxWidth: .infinity)
+                            .frame(height: 44)
+                            .background(
+                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    .fill(recurrence == rule
+                                          ? AnyShapeStyle(effectivePlanColor)
+                                          : AnyShapeStyle(uiAccentColor.opacity(0.06)))
+                            )
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                }
+            }
+
+            if recurrence != .none {
+                Text("完了にすると、次回分が自動で作られます。")
+                    .font(.system(size: 12))
+                    .foregroundColor(uiAccentColor.opacity(0.5))
+            }
+        }
+        .padding(.horizontal, 20)
     }
 
     /// 履歴が1件もないうちはボタン自体を出さない
@@ -515,10 +660,34 @@ struct AddPlanView: View {
     // MARK: - Step 1: Date / DateTime
     @ViewBuilder
     private var step1Date: some View {
-        if selectedPlanType == .outing {
-            outingDateStep
-        } else {
-            dailyDateTimeStep
+        switch selectedPlanType {
+        case .outing:      outingDateStep
+        case .daily:       dailyDateTimeStep
+        case .anniversary: anniversaryDateStep
+        }
+    }
+
+    /// 記念日は日付だけ。時刻も期間も持たない
+    private var anniversaryDateStep: some View {
+        VStack(alignment: .leading, spacing: 20) {
+            stepHeading("日付", question: "いつの記念日ですか？", sub: "毎年この日に知らせます。")
+
+            VStack(spacing: 0) {
+                dateField(.dailyDate, label: "日付", date: $dailyDate)
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(cardSurface)
+            )
+            .shadow(color: colorScheme == .dark ? .clear : Color.black.opacity(0.06), radius: 12, x: 0, y: 5)
+            .padding(.horizontal, 20)
+
+            Text("最初の年から数えて「何回目か」を出します。")
+                .font(.system(size: 13))
+                .foregroundColor(uiAccentColor.opacity(0.55))
+                .padding(.horizontal, 24)
+
+            Spacer()
         }
     }
 
@@ -587,6 +756,11 @@ struct AddPlanView: View {
             )
             .shadow(color: colorScheme == .dark ? .clear : Color.black.opacity(0.06), radius: 12, x: 0, y: 5)
             .padding(.horizontal, 20)
+
+            if selectedPlanType == .daily {
+                recurrenceField
+                    .padding(.top, 6)
+            }
 
             Spacer()
         }
@@ -853,7 +1027,7 @@ struct AddPlanView: View {
                 RoundedRectangle(cornerRadius: 12)
                     .fill(color.opacity(0.15))
                     .frame(width: 44, height: 44)
-                Image(systemName: entry.plan.planType == .daily ? "house.fill" : "figure.walk")
+                Image(systemName: entry.plan.planType.icon)
                     .font(.system(size: 18, weight: .semibold))
                     .foregroundColor(color)
             }
@@ -1112,27 +1286,45 @@ struct AddPlanView: View {
     }
 
     private func savePlan() {
+        let trimmedTitle = title.trimmingCharacters(in: .whitespacesAndNewlines)
         let plan: Plan
-        if selectedPlanType == .outing {
+
+        switch selectedPlanType {
+        case .outing:
             plan = Plan(
-                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                title: trimmedTitle,
                 startDate: startDate,
                 endDate: endDate < startDate ? startDate : endDate,
                 places: places,
-                planType: .outing
+                planType: .outing,
+                tags: tags
             )
-        } else {
+        case .daily:
             plan = Plan(
-                title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                title: trimmedTitle,
                 startDate: dailyDate,
                 endDate: dailyDate,
                 places: places,
                 planType: .daily,
                 time: dailyTime,
                 description: trimmedDescription,
-                linkURL: normalizedLinkURL()
+                linkURL: normalizedLinkURL(),
+                tags: tags,
+                recurrence: recurrence
+            )
+        case .anniversary:
+            // 記念日は時刻も場所も持たない。毎年めぐってくるものなので繰り返しは固定
+            plan = Plan(
+                title: trimmedTitle,
+                startDate: dailyDate,
+                endDate: dailyDate,
+                places: [],
+                planType: .anniversary,
+                tags: tags,
+                recurrence: .yearly
             )
         }
+
         onSave(plan)
         presentationMode.wrappedValue.dismiss()
     }

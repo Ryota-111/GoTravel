@@ -67,6 +67,8 @@ struct ThemePreset {
     
     // MARK: - plansの予定
     var dailyPlanColor: Color
+    /// 記念日。青（おでかけ）とオレンジ（日常）のどちらとも衝突しない3つ目
+    var anniversaryPlanColor: Color = Color(red: 1.0, green: 0.18, blue: 0.33)
     var outingPlanColor: Color
     var travelColor: Color
     

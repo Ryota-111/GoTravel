@@ -38,6 +38,9 @@
         <attribute name="userId" optional="YES" attributeType="String"/>
         <attribute name="placesData" optional="YES" attributeType="Binary"/>
         <attribute name="scheduleItemsData" optional="YES" attributeType="Binary"/>
+        <attribute name="isCompleted" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="tagsData" optional="YES" attributeType="Binary"/>
+        <attribute name="recurrence" optional="YES" attributeType="String"/>
     </entity>
     <entity name="AlbumEntity" representedClassName="AlbumEntity" syncable="YES">
         <attribute name="albumType" optional="YES" attributeType="String"/>

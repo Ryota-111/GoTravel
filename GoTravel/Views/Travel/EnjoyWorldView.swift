@@ -68,6 +68,8 @@ struct EnjoyWorldView: View {
             filtered = plansViewModel.plans.filter { $0.planType == .outing }
         case .everyday:
             filtered = plansViewModel.plans.filter { $0.planType == .daily }
+        case .anniversary:
+            filtered = plansViewModel.plans.filter { $0.planType == .anniversary }
         }
         return filtered
     }
@@ -910,6 +912,7 @@ extension EnjoyWorldView {
         case all = "すべて"
         case goingout = "おでかけ"
         case everyday = "日常"
+        case anniversary = "記念日"
 
         var id: String { rawValue }
 

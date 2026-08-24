@@ -2,9 +2,62 @@ import Foundation
 import SwiftUI
 
 // MARK: - Plan Type
-enum PlanType: String, Codable {
+enum PlanType: String, Codable, CaseIterable {
     case outing
     case daily
+    /// 記念日。時刻も場所も持たず、毎年めぐってくる日付そのもの。
+    /// 「あと◯日」「何回目か」が主役で、何をするかは持たない
+    case anniversary
+
+    var displayName: String {
+        switch self {
+        case .outing:      return "おでかけ"
+        case .daily:       return "日常"
+        case .anniversary: return "記念日"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .outing:      return "figure.walk"
+        case .daily:       return "house.fill"
+        case .anniversary: return "heart.fill"
+        }
+    }
+}
+
+// MARK: - Recurrence
+
+/// 繰り返し。旅行計画には絶対に無い概念で、日常の用事と記念日にだけある。
+///
+/// 「完了にすると次回分を作る」方式にしている。
+/// 未来の分をあらかじめ大量に作ると、1件直したいだけのときに
+/// どれを直せばいいのか分からなくなるため
+enum PlanRecurrence: String, Codable, CaseIterable {
+    case none
+    case weekly
+    case monthly
+    case yearly
+
+    var displayName: String {
+        switch self {
+        case .none:    return "なし"
+        case .weekly:  return "毎週"
+        case .monthly: return "毎月"
+        case .yearly:  return "毎年"
+        }
+    }
+
+    /// 次回の日付。同じ曜日・同じ日を保つよう、カレンダー計算に任せる
+    func nextDate(after date: Date) -> Date? {
+        let calendar = Calendar.current
+        switch self {
+        case .none:    return nil
+        case .weekly:  return calendar.date(byAdding: .weekOfYear, value: 1, to: date)
+        case .monthly: return calendar.date(byAdding: .month, value: 1, to: date)
+        case .yearly:  return calendar.date(byAdding: .year, value: 1, to: date)
+        }
+    }
 }
 
 struct Plan: Identifiable, Codable, Equatable {
@@ -22,10 +75,16 @@ struct Plan: Identifiable, Codable, Equatable {
     var description: String?
     var linkURL: String?
     var scheduleItems: [PlanScheduleItem] = [] // スケジュール項目（おでかけプラン用）
+    /// 済んだかどうか。用事は「終わったか」が意味を持つ
+    var isCompleted: Bool = false
+    /// 自由タグ。種別（＝画面が変わる）とは別軸で、絞り込みと見分けだけに使う。
+    /// 色は持たせない（種別が色つき、タグは中立の灰色）
+    var tags: [String] = []
+    var recurrence: PlanRecurrence = .none
 
     enum CodingKeys: String, CodingKey {
         case id, title, startDate, endDate, places, cardColorHex, localImageFileName, userId, createdAt
-        case planType, time, description, linkURL, scheduleItems
+        case planType, time, description, linkURL, scheduleItems, isCompleted, tags, recurrence
     }
 
     var cardColorHex: String? {
@@ -49,7 +108,10 @@ struct Plan: Identifiable, Codable, Equatable {
          time: Date? = nil,
          description: String? = nil,
          linkURL: String? = nil,
-         scheduleItems: [PlanScheduleItem] = []) {
+         scheduleItems: [PlanScheduleItem] = [],
+         isCompleted: Bool = false,
+         tags: [String] = [],
+         recurrence: PlanRecurrence = .none) {
         self.id = id
         self.title = title
         self.startDate = startDate
@@ -64,6 +126,9 @@ struct Plan: Identifiable, Codable, Equatable {
         self.description = description
         self.linkURL = linkURL
         self.scheduleItems = scheduleItems
+        self.isCompleted = isCompleted
+        self.tags = tags
+        self.recurrence = recurrence
     }
 
     init(from decoder: Decoder) throws {
@@ -81,6 +146,9 @@ struct Plan: Identifiable, Codable, Equatable {
         description = try container.decodeIfPresent(String.self, forKey: .description)
         linkURL = try container.decodeIfPresent(String.self, forKey: .linkURL)
         scheduleItems = try container.decodeIfPresent([PlanScheduleItem].self, forKey: .scheduleItems) ?? []
+        isCompleted = try container.decodeIfPresent(Bool.self, forKey: .isCompleted) ?? false
+        tags = try container.decodeIfPresent([String].self, forKey: .tags) ?? []
+        recurrence = try container.decodeIfPresent(PlanRecurrence.self, forKey: .recurrence) ?? .none
         if let hex = try container.decodeIfPresent(String.self, forKey: .cardColorHex) {
             cardColor = Color(hex: hex)
         } else {
@@ -104,6 +172,9 @@ struct Plan: Identifiable, Codable, Equatable {
         try container.encodeIfPresent(description, forKey: .description)
         try container.encodeIfPresent(linkURL, forKey: .linkURL)
         try container.encode(scheduleItems, forKey: .scheduleItems)
+        try container.encode(isCompleted, forKey: .isCompleted)
+        try container.encode(tags, forKey: .tags)
+        try container.encode(recurrence, forKey: .recurrence)
     }
 }
 
@@ -169,5 +240,19 @@ extension Plan {
     /// 指定の日番号に対応する日付
     func date(forDay dayNumber: Int) -> Date {
         Calendar.current.date(byAdding: .day, value: dayNumber - 1, to: startDate) ?? startDate
+    }
+}
+
+// MARK: - Plan Type Color
+
+extension PlanType {
+    /// 種別の色。3つとも全テーマで同じ色を使う。
+    /// 予定カードの小さなタグや点にだけ出るので、白黒テーマでも色が付いてよい
+    func color(_ theme: ThemePreset) -> Color {
+        switch self {
+        case .outing:      return theme.outingPlanColor
+        case .daily:       return theme.dailyPlanColor
+        case .anniversary: return theme.anniversaryPlanColor
+        }
     }
 }

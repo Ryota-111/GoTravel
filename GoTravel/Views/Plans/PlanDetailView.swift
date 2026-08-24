@@ -161,16 +161,21 @@ struct PlanDetailView: View {
     }
 
     // MARK: - Computed Properties
+    /// 表示中の種別。編集中は編集後の種別で色と文言を出す
+    private var effectivePlanType: PlanType {
+        isEditMode ? editedPlanType : plan.planType
+    }
+
     private var planColor: Color {
-        isEditMode ? (editedPlanType == .daily ? themeManager.currentTheme.dailyPlanColor : themeManager.currentTheme.outingPlanColor) : (plan.planType == .daily ? themeManager.currentTheme.dailyPlanColor : themeManager.currentTheme.outingPlanColor)
+        effectivePlanType.color(themeManager.currentTheme)
     }
 
     private var planTypeText: String {
-        isEditMode ? (editedPlanType == .daily ? "日常" : "おでかけ") : (plan.planType == .daily ? "日常" : "おでかけ")
+        effectivePlanType.displayName
     }
 
     private var planTypeIcon: String {
-        isEditMode ? (editedPlanType == .daily ? "house.fill" : "figure.walk") : (plan.planType == .daily ? "house.fill" : "figure.walk")
+        effectivePlanType.icon
     }
 
     // MARK: - View Mode
@@ -220,11 +225,18 @@ struct PlanDetailView: View {
                         .padding(.horizontal, 24)
                 }
 
-                gradientSeparator
+                if plan.planType == .anniversary {
+                    gradientSeparator
 
-                // Schedule Section
-                scheduleSection
-                    .padding(.horizontal, 24)
+                    anniversarySection
+                        .padding(.horizontal, 24)
+                } else {
+                    gradientSeparator
+
+                    // Schedule Section
+                    scheduleSection
+                        .padding(.horizontal, 24)
+                }
 
                 // 「歯医者 10:30」に地図は要らない。おでかけのときだけ出す
                 if plan.planType == .outing {
@@ -237,6 +249,19 @@ struct PlanDetailView: View {
 
                 // 場所の一覧は地図のピンと同じ内容で、タイムラインの各行も
                 // 場所を持っている。三重になるのでここでは出さない
+
+                if !plan.tags.isEmpty || plan.recurrence != .none {
+                    gradientSeparator
+
+                    tagAndRecurrenceRow
+                        .padding(.horizontal, 24)
+                }
+
+                gradientSeparator
+
+                completionSection
+                    .padding(.horizontal, 24)
+                    .padding(.bottom, 24)
             }
         }
     }
@@ -802,7 +827,7 @@ struct PlanDetailView: View {
                 )
                 .frame(height: 260)
                 .overlay(
-                    Image(systemName: editedPlanType == .daily ? "house.fill" : "figure.walk")
+                    Image(systemName: editedPlanType.icon)
                         .font(.system(size: 80))
                         .foregroundColor(.white.opacity(0.2))
                 )
@@ -1129,6 +1154,162 @@ struct PlanDetailView: View {
                 isNotificationOn = await NotificationService.shared.hasPendingPlanNotifications(for: plan.id)
             }
         }
+    }
+
+    // MARK: - 記念日
+    //
+    // 時刻も場所も持たない。日数だけで成立するので、
+    // 日常の画面（時刻が主役）でもおでかけの画面（地図とタイムライン）でも表せない
+    private var anniversarySection: some View {
+        VStack(spacing: 14) {
+            Text(anniversaryCountdownText)
+                .font(.system(size: 40, weight: .heavy, design: .rounded))
+                .foregroundColor(planColor)
+                .monospacedDigit()
+
+            Text("\(anniversaryOccurrence)回目 · \(DateFormatter.japaneseDate.string(from: plan.startDate))から")
+                .font(.system(size: 13))
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 26)
+        .background(
+            RoundedRectangle(cornerRadius: 20, style: .continuous)
+                .fill(planColor.opacity(colorScheme == .dark ? 0.18 : 0.10))
+        )
+    }
+
+    /// 今年の記念日までの日数。過ぎていれば来年の分を数える
+    private var anniversaryCountdownText: String {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+
+        guard let next = nextAnniversaryDate else { return "今日" }
+        let days = calendar.dayDifference(from: today, to: next)
+
+        if days == 0 { return "今日" }
+        if days == 1 { return "明日" }
+        return "あと\(days)日"
+    }
+
+    private var nextAnniversaryDate: Date? {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        var components = calendar.dateComponents([.month, .day], from: plan.startDate)
+        components.year = calendar.component(.year, from: today)
+
+        guard let thisYear = calendar.date(from: components) else { return nil }
+        if calendar.startOfDay(for: thisYear) >= today { return thisYear }
+
+        components.year = (components.year ?? 0) + 1
+        return calendar.date(from: components)
+    }
+
+    /// 「10回目」。最初の年から数える
+    private var anniversaryOccurrence: Int {
+        let calendar = Calendar.current
+        guard let next = nextAnniversaryDate else { return 1 }
+        let years = calendar.component(.year, from: next) - calendar.component(.year, from: plan.startDate)
+        return max(years + 1, 1)
+    }
+
+    // MARK: - タグと繰り返し
+    private var tagAndRecurrenceRow: some View {
+        HStack(spacing: 6) {
+            if plan.recurrence != .none {
+                HStack(spacing: 5) {
+                    Image(systemName: "repeat")
+                        .font(.system(size: 11, weight: .bold))
+                    Text(plan.recurrence.displayName)
+                        .font(.system(size: 12, weight: .semibold))
+                }
+                .foregroundColor(planColor)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 6)
+                .background(planColor.opacity(colorScheme == .dark ? 0.22 : 0.12), in: Capsule())
+            }
+
+            // タグは中立の灰色。種別の色と役割を混ぜない
+            ForEach(plan.tags, id: \.self) { tag in
+                Text(tag)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 6)
+                    .background(themeManager.currentTheme.secondaryText.opacity(0.12), in: Capsule())
+            }
+
+            Spacer(minLength: 0)
+        }
+        .padding(.vertical, 4)
+    }
+
+    // MARK: - 完了
+    //
+    // 用事は「終わったか」が意味を持つ。旅行計画には無い概念
+    private var completionSection: some View {
+        VStack(spacing: 10) {
+            Button(action: toggleCompletion) {
+                HStack(spacing: 8) {
+                    Image(systemName: plan.isCompleted ? "arrow.uturn.backward" : "checkmark.circle.fill")
+                        .font(.system(size: 16, weight: .bold))
+                    Text(plan.isCompleted ? "完了を取り消す" : "完了にする")
+                        .font(.system(size: 16, weight: .bold))
+                }
+                .foregroundColor(plan.isCompleted
+                                 ? themeManager.currentTheme.secondaryText
+                                 : ThemePreset.readableText(on: planColor))
+                .frame(maxWidth: .infinity)
+                .frame(height: 54)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(plan.isCompleted
+                              ? AnyShapeStyle(themeManager.currentTheme.secondaryText.opacity(0.12))
+                              : AnyShapeStyle(planColor))
+                )
+            }
+            .buttonStyle(PlainButtonStyle())
+
+            if !plan.isCompleted, plan.recurrence != .none, let next = plan.recurrence.nextDate(after: plan.startDate) {
+                Text("完了にすると、\(DateFormatter.japaneseDate.string(from: next))の予定が自動で作られます。")
+                    .font(.system(size: 12))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .multilineTextAlignment(.center)
+            }
+        }
+    }
+
+    /// 完了にしたとき、繰り返しの設定があれば次回分を作る。
+    ///
+    /// 未来の分をあらかじめ並べておくと、1件だけ直したいときに
+    /// どれを直せばいいのか分からなくなる。済んだ時点で1件だけ作る
+    private func toggleCompletion() {
+        var updated = plan
+        updated.isCompleted.toggle()
+        plan = updated
+
+        guard let userId = authVM.userId else { return }
+        viewModel.update(updated, userId: userId)
+
+        guard updated.isCompleted,
+              updated.recurrence != .none,
+              let nextStart = updated.recurrence.nextDate(after: updated.startDate) else { return }
+
+        let span = Calendar.current.dayDifference(from: updated.startDate, to: updated.endDate)
+        var next = updated
+        next.id = UUID().uuidString
+        next.isCompleted = false
+        next.createdAt = Date()
+        next.startDate = nextStart
+        next.endDate = Calendar.current.date(byAdding: .day, value: span, to: nextStart) ?? nextStart
+        // 済んだ回の記録は引き継がない
+        next.scheduleItems = updated.scheduleItems.map { item in
+            var copy = item
+            copy.id = UUID().uuidString
+            return copy
+        }
+
+        viewModel.add(next, userId: userId)
     }
 
     // MARK: - Map Section
@@ -1561,11 +1742,11 @@ struct PlanDetailView: View {
                               LinearGradient(gradient: Gradient(colors: [themeManager.currentTheme.outingPlanColor, themeManager.currentTheme.outingPlanColor.opacity(0.7)]), startPoint: .topLeading, endPoint: .bottomTrailing))
                         .frame(width: 50, height: 50)
 
-                    Image(systemName: schedulePlan.planType == .outing ? "figure.walk" : "house.fill")
+                    Image(systemName: schedulePlan.planType.icon)
                         .font(.system(size: 20, weight: .semibold))
                         .foregroundColor(.white)
                 }
-                .shadow(color: (schedulePlan.planType == .daily ? themeManager.currentTheme.dailyPlanColor : themeManager.currentTheme.outingPlanColor).opacity(0.4), radius: 6, x: 0, y: 3)
+                .shadow(color: schedulePlan.planType.color(themeManager.currentTheme).opacity(0.4), radius: 6, x: 0, y: 3)
 
                 VStack(alignment: .leading, spacing: 6) {
                     Text(schedulePlan.title)
@@ -1593,7 +1774,7 @@ struct PlanDetailView: View {
                         HStack(spacing: 4) {
                             Image(systemName: "mappin.circle.fill")
                                 .font(.caption2)
-                                .foregroundColor(schedulePlan.planType == .daily ? themeManager.currentTheme.dailyPlanColor : themeManager.currentTheme.outingPlanColor)
+                                .foregroundColor(schedulePlan.planType.color(themeManager.currentTheme))
                             Text("\(schedulePlan.places.count)件")
                                 .font(.caption)
                                 .foregroundColor(themeManager.currentTheme.secondaryText)
@@ -1606,20 +1787,20 @@ struct PlanDetailView: View {
                 if schedulePlan.id == plan.id {
                     Image(systemName: "checkmark.circle.fill")
                         .font(.system(size: 22))
-                        .foregroundColor(schedulePlan.planType == .daily ? themeManager.currentTheme.dailyPlanColor : themeManager.currentTheme.outingPlanColor)
+                        .foregroundColor(schedulePlan.planType.color(themeManager.currentTheme))
                 }
             }
             .padding(14)
             .background(
                 RoundedRectangle(cornerRadius: 14)
                     .fill(schedulePlan.id == plan.id ?
-                          (schedulePlan.planType == .daily ? themeManager.currentTheme.dailyPlanColor.opacity(0.1) : themeManager.currentTheme.outingPlanColor.opacity(0.1)) :
+                          schedulePlan.planType.color(themeManager.currentTheme).opacity(0.1) :
                           Color(.tertiarySystemBackground))
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 14)
                     .stroke(schedulePlan.id == plan.id ?
-                            (schedulePlan.planType == .daily ? themeManager.currentTheme.dailyPlanColor.opacity(0.4) : themeManager.currentTheme.outingPlanColor.opacity(0.4)) :
+                            schedulePlan.planType.color(themeManager.currentTheme).opacity(0.4) :
                             Color.clear, lineWidth: 1.5)
             )
         }
