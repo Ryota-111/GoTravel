@@ -223,8 +223,6 @@ struct PlanDetailView: View {
                     anniversarySection
                     dailySettingsList
                 }
-
-                completionSection
             }
             .padding(.horizontal, 20)
             .padding(.top, 18)
@@ -1470,74 +1468,6 @@ struct PlanDetailView: View {
         guard let next = nextAnniversaryDate else { return 1 }
         let years = calendar.component(.year, from: next) - calendar.component(.year, from: plan.startDate)
         return max(years + 1, 1)
-    }
-
-    // MARK: - 完了
-    //
-    // 用事は「終わったか」が意味を持つ。旅行計画には無い概念
-    private var completionSection: some View {
-        VStack(spacing: 10) {
-            Button(action: toggleCompletion) {
-                HStack(spacing: 8) {
-                    Image(systemName: plan.isCompleted ? "arrow.uturn.backward" : "checkmark.circle.fill")
-                        .font(.system(size: 16, weight: .bold))
-                    Text(plan.isCompleted ? "完了を取り消す" : "完了にする")
-                        .font(.system(size: 16, weight: .bold))
-                }
-                .foregroundColor(plan.isCompleted
-                                 ? themeManager.currentTheme.secondaryText
-                                 : ThemePreset.readableText(on: planColor))
-                .frame(maxWidth: .infinity)
-                .frame(height: 54)
-                .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        .fill(plan.isCompleted
-                              ? AnyShapeStyle(themeManager.currentTheme.secondaryText.opacity(0.12))
-                              : AnyShapeStyle(planColor))
-                )
-            }
-            .buttonStyle(PlainButtonStyle())
-
-            if !plan.isCompleted, plan.recurrence != .none, let next = plan.recurrence.nextDate(after: plan.startDate) {
-                Text("完了にすると、\(DateFormatter.japaneseDate.string(from: next))の予定が自動で作られます。")
-                    .font(.system(size: 12))
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-                    .multilineTextAlignment(.center)
-            }
-        }
-    }
-
-    /// 完了にしたとき、繰り返しの設定があれば次回分を作る。
-    ///
-    /// 未来の分をあらかじめ並べておくと、1件だけ直したいときに
-    /// どれを直せばいいのか分からなくなる。済んだ時点で1件だけ作る
-    private func toggleCompletion() {
-        var updated = plan
-        updated.isCompleted.toggle()
-        plan = updated
-
-        guard let userId = authVM.userId else { return }
-        viewModel.update(updated, userId: userId)
-
-        guard updated.isCompleted,
-              updated.recurrence != .none,
-              let nextStart = updated.recurrence.nextDate(after: updated.startDate) else { return }
-
-        let span = Calendar.current.dayDifference(from: updated.startDate, to: updated.endDate)
-        var next = updated
-        next.id = UUID().uuidString
-        next.isCompleted = false
-        next.createdAt = Date()
-        next.startDate = nextStart
-        next.endDate = Calendar.current.date(byAdding: .day, value: span, to: nextStart) ?? nextStart
-        // 済んだ回の記録は引き継がない
-        next.scheduleItems = updated.scheduleItems.map { item in
-            var copy = item
-            copy.id = UUID().uuidString
-            return copy
-        }
-
-        viewModel.add(next, userId: userId)
     }
 
     // MARK: - Map Section

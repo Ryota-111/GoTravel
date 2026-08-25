@@ -61,16 +61,9 @@ struct PlanEventCardView: View {
                 Text(plan.title)
                     .font(.system(size: isToday ? 17 : 16, weight: isToday ? .bold : .semibold))
                     .foregroundColor(titleColor)
-                    .strikethrough(plan.isCompleted, color: subTextColor)
                     .lineLimit(1)
 
                 HStack(spacing: 7) {
-                    if plan.isCompleted {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(themeManager.currentTheme.success)
-                    }
-
                     // 種別色を使うのはここだけ
                     Text(typeName)
                         .font(.system(size: 10, weight: .bold))
@@ -132,8 +125,6 @@ struct PlanEventCardView: View {
             x: 0,
             y: 5
         )
-        // 済んだ予定は残すが、目立たせない
-        .opacity(plan.isCompleted ? 0.55 : 1)
     }
 
     // MARK: - 今日の中身

@@ -56,6 +56,64 @@ final class PlansViewModel: NSObject, ObservableObject {
         }
 
         plans = entities.map { $0.toPlan() }
+
+        Task { @MainActor in generateNextOccurrencesIfNeeded() }
+    }
+
+    // MARK: - 繰り返し
+
+    /// 日付が過ぎた繰り返しの予定について、次回分を1件だけ作る。
+    ///
+    /// 以前は「完了にする」を押したときに作っていたが、そのボタンをやめたため
+    /// 日付が過ぎたことを合図にする。未来の分をまとめて作らないのは、
+    /// 1件だけ直したいときにどれを直せばいいのか分からなくなるため。
+    ///
+    /// 作り終えた回には `isCompleted` を立てて、二度作らない印にしている
+    @MainActor
+    private func generateNextOccurrencesIfNeeded() {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+
+        let due = plans.filter { plan in
+            plan.recurrence != .none
+                && !plan.isCompleted
+                && calendar.startOfDay(for: plan.endDate) < today
+        }
+
+        guard !due.isEmpty else { return }
+
+        for plan in due {
+            guard let userId = plan.userId,
+                  let nextStart = plan.recurrence.nextDate(after: plan.startDate) else { continue }
+
+            // 同じ予定が既にあるなら作らない（別の端末で作られている場合）
+            let exists = plans.contains { other in
+                other.id != plan.id
+                    && other.title == plan.title
+                    && calendar.isDate(other.startDate, inSameDayAs: nextStart)
+            }
+
+            var handled = plan
+            handled.isCompleted = true
+            update(handled, userId: userId)
+
+            guard !exists else { continue }
+
+            let span = calendar.dayDifference(from: plan.startDate, to: plan.endDate)
+            var next = plan
+            next.id = UUID().uuidString
+            next.isCompleted = false
+            next.createdAt = Date()
+            next.startDate = nextStart
+            next.endDate = calendar.date(byAdding: .day, value: span, to: nextStart) ?? nextStart
+            next.scheduleItems = plan.scheduleItems.map { item in
+                var copy = item
+                copy.id = UUID().uuidString
+                return copy
+            }
+
+            add(next, userId: userId)
+        }
     }
 
     // MARK: - CRUD Operations
