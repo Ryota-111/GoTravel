@@ -15,6 +15,10 @@ import SwiftUI
 struct PaperGrain: View {
     let opacity: Double
 
+    /// ここでの分岐は overlay の中だけで完結する。
+    /// overlay 自体は常に付いたままなので、外側のビューの同一性は変わらない。
+    /// 粒子を使わないテーマで乗算合成を走らせないために、中身は空にしておく
+    @ViewBuilder
     var body: some View {
         if opacity > 0, let tile = Self.tile {
             Image(uiImage: tile)
@@ -23,6 +27,9 @@ struct PaperGrain: View {
                 .blendMode(.multiply)
                 .allowsHitTesting(false)
                 .ignoresSafeArea()
+        } else {
+            Color.clear
+                .allowsHitTesting(false)
         }
     }
 
@@ -107,16 +114,14 @@ private struct OffsetShadow: ViewModifier {
     let cornerRadius: CGFloat
 
     func body(content: Content) -> some View {
-        if amount > 0 {
-            content.background(
-                // ぼかさず、ずらすだけ。印刷の版ズレに見せる
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .fill(color)
-                    .offset(x: amount, y: amount)
-            )
-        } else {
-            content
-        }
+        // こちらも同じ理由で、付けたり外したりしない（`paperGrain` の注記を参照）
+        content.background(
+            // ぼかさず、ずらすだけ。印刷の版ズレに見せる
+            RoundedRectangle(cornerRadius: cornerRadius)
+                .fill(color)
+                .opacity(amount > 0 ? 1 : 0)
+                .offset(x: amount, y: amount)
+        )
     }
 }
 
@@ -126,13 +131,14 @@ extension View {
         modifier(OffsetShadow(amount: amount, color: color, cornerRadius: cornerRadius))
     }
 
-    /// 紙の粒子を最前面に重ねる。`paperGrain` が 0 のテーマでは何もしない
-    @ViewBuilder
+    /// 紙の粒子を最前面に重ねる。`paperGrain` が 0 のテーマでは何も見えない。
+    ///
+    /// **付けるか付けないかを if で分けてはいけない。**
+    /// 分岐が変わるとビューの同一性が変わり、SwiftUI がその部分木を作り直す。
+    /// この修飾子は NavigationView の中身の根に付いているので、テーマを
+    /// 変えた瞬間に開いていた画面が閉じてホームに戻ってしまう。
+    /// 常に重ねたままにして、濃さ 0 で見えなくする
     func paperGrain(_ opacity: Double) -> some View {
-        if opacity > 0 {
-            overlay(PaperGrain(opacity: opacity))
-        } else {
-            self
-        }
+        overlay(PaperGrain(opacity: opacity))
     }
 }
