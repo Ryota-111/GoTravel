@@ -1270,11 +1270,15 @@ struct ThemeCard: View {
                     .fixedSize(horizontal: false, vertical: true)
                     .frame(maxWidth: .infinity, alignment: .leading)
 
-                // 予定の3色と、背景・文字。テーマの違いがいちばん出るところ
+                // テーマの主色3つと、背景・文字。
+                //
+                // 予定の3色（おでかけ・日常・旅行）はここでは使えない。
+                // 既定の3テーマがどれも青・橙・緑をベタ書きで持っているため、
+                // 並べると3つとも同じ見本になってしまう
                 HStack(spacing: 8) {
-                    swatch(previewTheme.outingPlanColor, in: previewTheme)
-                    swatch(previewTheme.dailyPlanColor, in: previewTheme)
-                    swatch(previewTheme.travelColor, in: previewTheme)
+                    swatch(previewTheme.primary, in: previewTheme)
+                    swatch(previewTheme.secondary, in: previewTheme)
+                    swatch(previewTheme.tertiary, in: previewTheme)
                     swatch(previewTheme.backgroundLight, in: previewTheme)
                     swatch(previewTheme.text, in: previewTheme)
                 }

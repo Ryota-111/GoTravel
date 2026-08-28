@@ -422,8 +422,12 @@ struct OnboardingThemePage: View {
             .opacity(animateContent ? 1.0 : 0.0)
             .offset(y: animateContent ? 0 : 20)
 
+            // 今その人が使えるテーマだけを出す。
+            //
+            // allCases を並べると、未購入でも追加テーマを選べてしまう。
+            // 季節テーマはその季節のあいだ無料なので、canUse なら含まれる
             VStack(spacing: 12) {
-                ForEach(ThemePreset.ThemeType.allCases, id: \.self) { type in
+                ForEach(ThemePreset.ThemeType.allCases.filter { themeManager.canUse($0) }, id: \.self) { type in
                     OnboardingThemeCard(
                         themeType: type,
                         isSelected: themeManager.currentTheme.type == type
