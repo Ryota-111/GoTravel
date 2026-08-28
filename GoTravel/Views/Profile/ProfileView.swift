@@ -1287,16 +1287,22 @@ struct ThemeCard: View {
             .padding()
             // 角丸と縁はプレビュー側のテーマから引く。
             // 墨は角ばり、桜は丸い、といった形の違いが一覧の時点で見える
+            // 枠は今のテーマの形に揃える。
+            //
+            // 以前はプレビュー側のテーマの角丸と縁幅で描いていた。形の違いが
+            // 一覧で分かるという意図だったが、角丸が 6〜22、縁が 0〜1.5 と
+            // 幅があるため、行ごとに輪郭が変わって一覧が落ち着かなかった。
+            // 形の違いは下の色見本で見せる
             .background(
-                RoundedRectangle(cornerRadius: previewTheme.radius(.large))
+                RoundedRectangle(cornerRadius: themeManager.currentTheme.radius(.large))
                     // 選択中の枠が白黒テーマで白くなり、どれを選んでいるか分からなくなるため actionFill を使う
                     .fill(isSelected ? themeManager.currentTheme.actionFill.opacity(0.1) : themeManager.currentTheme.cardBackground2)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: previewTheme.radius(.large))
+                RoundedRectangle(cornerRadius: themeManager.currentTheme.radius(.large))
                     .stroke(
                         isSelected ? themeManager.currentTheme.actionFill : themeManager.currentTheme.cardBorder,
-                        lineWidth: isSelected ? 2 : max(previewTheme.style.borderWidth, 0.5)
+                        lineWidth: isSelected ? 2 : 1
                     )
             )
             .shadow(color: isSelected ? themeManager.currentTheme.shadow : Color.clear, radius: isSelected ? 15 : 5, x: 0, y: 5)
@@ -1306,12 +1312,18 @@ struct ThemeCard: View {
     }
 
     /// 白や淡い色でも見えるよう、縁を必ず付ける
+    /// 色見本。角丸と縁の太さは、そのテーマ自身の値で描く。
+    /// 枠を揃えたぶん、形の個性はここで見せる。
+    /// 大きさと位置は全テーマで同じなので、並べても一覧は乱れない
     private func swatch(_ color: Color, in preset: ThemePreset) -> some View {
-        Circle()
+        let shape = RoundedRectangle(cornerRadius: preset.radius(.small))
+
+        return shape
             .fill(color)
             .frame(width: 36, height: 36)
             .overlay(
-                Circle().stroke(preset.text.opacity(0.18), lineWidth: 1)
+                shape.stroke(preset.text.opacity(0.18),
+                             lineWidth: max(preset.style.borderWidth, 1))
             )
     }
 }
