@@ -375,11 +375,11 @@ struct ThemePreset {
             ysecondary = p.planDaily
 
             backgroundLight = p.bgLight
-            secondaryBackgroundLight = p.surfaceLight
+            secondaryBackgroundLight = p.paper2 ?? p.surfaceLight
             backgroundDark = p.bgDark
             secondaryBackgroundDark = p.surfaceDark
             tertiaryBackground = p.accent.opacity(0.12)
-            separatorLight = p.ink.opacity(0.14)
+            separatorLight = p.rule ?? p.ink.opacity(0.14)
             separatorDark = Color.white.opacity(0.16)
 
             text = p.ink
@@ -401,7 +401,7 @@ struct ThemePreset {
 
             cardBackground1 = p.accent.opacity(0.08)
             cardBackground2 = p.surfaceLight
-            cardBorder = p.accent.opacity(0.28)
+            cardBorder = p.rule ?? p.accent.opacity(0.28)
             shadow = p.accent.opacity(0.18)
 
             gradientLight = p.bgLight
@@ -455,6 +455,14 @@ extension ThemePreset {
 
         /// アルバムの6色。japan / travel / family / landscape / food / custom の順
         var album: [Color]
+
+        /// 罫と破線の色。紙もののテーマは、文字を薄めた色ではなく専用の色を持つ。
+        /// 指定しなければ ink から導出する
+        var rule: Color? = nil
+
+        /// 地色とは別の、もう一段沈んだ紙の色。タブバーなどに敷く。
+        /// 指定しなければ surfaceLight を使う
+        var paper2: Color? = nil
 
         static func forType(_ type: ThemeType) -> Palette {
             switch type {
@@ -544,14 +552,16 @@ extension ThemePreset {
 
             case .retroTravel:
                 return Palette(
-                    bgLight: hex(0xEFE6D3), surfaceLight: hex(0xF8F3E6),
-                    bgDark: hex(0x1E2124), surfaceDark: hex(0x292C30),
-                    ink: hex(0x22303A), ink2: hex(0x6E7A80), ink3: hex(0x9AA39E),
-                    inkDark: hex(0xEDE3D0), inkDark2: hex(0x9A968C),
+                    // 値はデザイン案の実測値をそのまま入れている
+                    bgLight: hex(0xEFE6D3), surfaceLight: hex(0xFAF4E6),
+                    bgDark: hex(0x1B2229), surfaceDark: hex(0x242D35),
+                    ink: hex(0x22303A), ink2: hex(0x4E5F69), ink3: hex(0x9AA39E),
+                    inkDark: hex(0xEDE3CE), inkDark2: hex(0x9A968C),
                     accent: hex(0xB24A34),
                     planOuting: hex(0x2E6B62), planDaily: hex(0xB8862F), planTravel: hex(0xB24A34),
                     album: [hex(0x2E6B62), hex(0xB8862F), hex(0xB24A34),
-                            hex(0x6B7A4A), hex(0x8A6A45), hex(0x6B5B7A)]
+                            hex(0x6B7A4A), hex(0x8A6A45), hex(0x6B5B7A)],
+                    rule: hex(0xC7B99F), paper2: hex(0xE5D9C0)
                 )
 
             case .guidebook:

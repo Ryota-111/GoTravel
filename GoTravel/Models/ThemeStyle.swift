@@ -36,6 +36,37 @@ struct ThemeStyle {
     /// 本文用の同梱フォント名。未同梱なら nil のままにする
     var bodyFontName: String?
 
+    /// 日付や英字ラベル用の同梱フォント名。未同梱なら等幅のシステムフォントに落ちる
+    var monoFontName: String? = nil
+
+    // MARK: - 意匠
+    //
+    // 「レトロのときだけ切符の形」のような差は、ビュー側で
+    // `if theme == .retroTravel` と書くと、テーマが増えるたびに分岐が増える。
+    // どう描くかをここに持たせて、ビューはトークンを読むだけにする。
+    // 既定値は今までの見た目なので、値を足さないテーマは何も変わらない。
+
+    enum Decor {
+        /// これまでどおりのカード
+        case plain
+        /// 切り取り線と半円の切り欠きを持つ切符仕立て
+        case ticket
+    }
+
+    var decor: Decor = .plain
+
+    /// 紙の粒子を乗算で重ねる濃さ。0 で重ねない
+    var paperGrain: Double = 0
+
+    /// ぼかさず、ずらすだけの影の量。印刷物の版ズレの表現。0 で使わない
+    var offsetShadow: CGFloat = 0
+
+    /// 予定行の左に立てる、種別を示す帯の幅。0 で描かない
+    var typeSpineWidth: CGFloat = 0
+
+    /// 予定行の右に置く、日付の半券の幅。0 で描かない
+    var dateStubWidth: CGFloat = 0
+
     func radius(_ r: Radius) -> CGFloat {
         switch r {
         case .small: return radiusSmall
@@ -130,14 +161,23 @@ struct ThemeStyle {
         // 同梱フォント名を指定してあるが、未同梱なら fontDesign に落ちる。
 
         case .retroTravel:
-            // 切符と印刷物。角は控えめ、縁は太く、影は薄く
+            // 切符と印刷物。デザイン案の実測値をそのまま入れている。
+            //
+            // ぼかした影は使わない。階層は破線・罫・版ズレのずらし影だけで作る。
+            // 角丸もカード6／行5／チップ3まで下げて、切符らしい直線的な輪郭にする
             return ThemeStyle(
-                radiusSmall: 5, radiusMedium: 8, radiusLarge: 11,
+                radiusSmall: 3, radiusMedium: 5, radiusLarge: 6,
                 borderWidth: 1.5,
-                shadowStrength: 0.35, shadowRadius: 8, shadowY: 3,
+                shadowStrength: 0, shadowRadius: 0, shadowY: 0,
                 fontDesign: .serif,
                 displayFontName: "ZenAntique-Regular",
-                bodyFontName: "ZenKakuGothicNew-Regular"
+                bodyFontName: "ZenKakuGothicNew-Regular",
+                monoFontName: "SpaceMono-Bold",
+                decor: .ticket,
+                paperGrain: 0.06,
+                offsetShadow: 2,
+                typeSpineWidth: 6,
+                dateStubWidth: 68
             )
 
         case .guidebook:
@@ -254,6 +294,16 @@ extension ThemeStyle {
         }
         return .system(style, design: fontDesign).weight(weight)
     }
+
+    /// 日付や英字ラベルに使う等幅の書体。
+    /// 桁の揃った数字が、そのまま切符や時刻表の表情になる。
+    /// 同梱フォントが無いときは等幅のシステムフォントに落ちる
+    func monoFont(_ style: Font.TextStyle, weight: Font.Weight = .bold) -> Font {
+        if let name = monoFontName, Self.isBundled(name) {
+            return .custom(name, size: Self.pointSize(for: style), relativeTo: style)
+        }
+        return .system(style, design: .monospaced).weight(weight)
+    }
 }
 
 // MARK: - ThemePreset から引く
@@ -261,6 +311,10 @@ extension ThemePreset {
     var style: ThemeStyle { ThemeStyle.forType(type) }
 
     func radius(_ r: ThemeStyle.Radius) -> CGFloat { style.radius(r) }
+
+    func monoFont(_ textStyle: Font.TextStyle, weight: Font.Weight = .bold) -> Font {
+        style.monoFont(textStyle, weight: weight)
+    }
 
     func displayFont(_ textStyle: Font.TextStyle, weight: Font.Weight = .bold) -> Font {
         style.displayFont(textStyle, weight: weight)
