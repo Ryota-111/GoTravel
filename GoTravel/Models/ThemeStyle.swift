@@ -1,4 +1,5 @@
 import SwiftUI
+import UIKit
 
 /// テーマの「色以外」。書体・角丸・影・罫線。
 ///
@@ -124,6 +125,82 @@ struct ThemeStyle {
                 fontDesign: .default,
                 displayFontName: nil, bodyFontName: nil
             )
+
+        // ここから下は形と書体で個性を出すテーマ。
+        // 同梱フォント名を指定してあるが、未同梱なら fontDesign に落ちる。
+
+        case .retroTravel:
+            // 切符と印刷物。角は控えめ、縁は太く、影は薄く
+            return ThemeStyle(
+                radiusSmall: 5, radiusMedium: 8, radiusLarge: 11,
+                borderWidth: 1.5,
+                shadowStrength: 0.35, shadowRadius: 8, shadowY: 3,
+                fontDesign: .serif,
+                displayFontName: "ZenAntique-Regular",
+                bodyFontName: "ZenKakuGothicNew-Regular"
+            )
+
+        case .guidebook:
+            // 紙の地図。罫線で区切る印刷物の作り
+            return ThemeStyle(
+                radiusSmall: 5, radiusMedium: 8, radiusLarge: 11,
+                borderWidth: 1,
+                shadowStrength: 0.4, shadowRadius: 8, shadowY: 3,
+                fontDesign: .default,
+                displayFontName: nil,
+                bodyFontName: "ZenKakuGothicNew-Medium"
+            )
+
+        case .passport:
+            // 旅券。角ばって、箔押しの縁
+            return ThemeStyle(
+                radiusSmall: 3, radiusMedium: 5, radiusLarge: 8,
+                borderWidth: 1.5,
+                shadowStrength: 0.3, shadowRadius: 8, shadowY: 3,
+                fontDesign: .serif,
+                displayFontName: "ZenOldMincho-Bold",
+                bodyFontName: nil
+            )
+
+        case .film:
+            // 写真の角。縁は無く、影はやわらかく広い
+            return ThemeStyle(
+                radiusSmall: 2, radiusMedium: 4, radiusLarge: 6,
+                borderWidth: 0,
+                shadowStrength: 0.55, shadowRadius: 18, shadowY: 7,
+                fontDesign: .serif,
+                displayFontName: nil, bodyFontName: nil
+            )
+
+        case .morningAirport:
+            // ガラスと光。影を持たず、細い罫線だけで区切る
+            return ThemeStyle(
+                radiusSmall: 10, radiusMedium: 14, radiusLarge: 18,
+                borderWidth: 1,
+                shadowStrength: 0, shadowRadius: 0, shadowY: 0,
+                fontDesign: .default,
+                displayFontName: nil, bodyFontName: nil
+            )
+
+        case .mountainHut:
+            // 地形図と木。太めの縁で図面らしく
+            return ThemeStyle(
+                radiusSmall: 6, radiusMedium: 10, radiusLarge: 14,
+                borderWidth: 1.5,
+                shadowStrength: 0.4, shadowRadius: 10, shadowY: 4,
+                fontDesign: .default,
+                displayFontName: nil, bodyFontName: nil
+            )
+
+        case .neonNight:
+            // 発光。縁を光らせ、影を広く強く
+            return ThemeStyle(
+                radiusSmall: 8, radiusMedium: 12, radiusLarge: 16,
+                borderWidth: 1.5,
+                shadowStrength: 1, shadowRadius: 20, shadowY: 0,
+                fontDesign: .monospaced,
+                displayFontName: nil, bodyFontName: nil
+            )
         }
     }
 }
@@ -148,9 +225,21 @@ extension ThemeStyle {
         }
     }
 
+    /// フォントが実際に同梱されているか。
+    /// Font.custom は見つからないと黙ってシステムフォントに落ちるので、
+    /// 先に確かめて fontDesign の側へ倒す。毎回の照会は重いので結果を覚えておく。
+    private static var availability: [String: Bool] = [:]
+
+    static func isBundled(_ name: String) -> Bool {
+        if let known = availability[name] { return known }
+        let found = UIFont(name: name, size: 12) != nil
+        availability[name] = found
+        return found
+    }
+
     /// 見出しに使う書体
     func displayFont(_ style: Font.TextStyle, weight: Font.Weight = .bold) -> Font {
-        if let name = displayFontName {
+        if let name = displayFontName, Self.isBundled(name) {
             return .custom(name, size: Self.pointSize(for: style), relativeTo: style)
         }
         return .system(style, design: fontDesign).weight(weight)
@@ -158,7 +247,7 @@ extension ThemeStyle {
 
     /// 本文に使う書体
     func bodyFont(_ style: Font.TextStyle, weight: Font.Weight = .regular) -> Font {
-        if let name = bodyFontName {
+        if let name = bodyFontName, Self.isBundled(name) {
             return .custom(name, size: Self.pointSize(for: style), relativeTo: style)
         }
         return .system(style, design: fontDesign).weight(weight)
