@@ -61,6 +61,21 @@
       "productID" : "com.gmail.taismryotasis.Travory.tip.xlarge",
       "referenceName" : "Tip XLarge",
       "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "490",
+      "familySharable" : false,
+      "internalID" : "pro_themes",
+      "localizations" : [
+        {
+          "description" : "追加テーマがすべて使えるようになります。これから増えるぶんも含まれます。",
+          "displayName" : "追加テーマ",
+          "locale" : "ja_JP"
+        }
+      ],
+      "productID" : "com.gmail.taismryotasis.Travory.pro.themes",
+      "referenceName" : "Pro Themes",
+      "type" : "NonConsumable"
     }
   ],
   "settings" : {
