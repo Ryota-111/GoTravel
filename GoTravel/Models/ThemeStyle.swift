@@ -148,7 +148,7 @@ struct ThemeStyle {
                 shadowStrength: 0.4, shadowRadius: 8, shadowY: 3,
                 fontDesign: .default,
                 displayFontName: nil,
-                bodyFontName: "ZenKakuGothicNew-Medium"
+                bodyFontName: "ZenKakuGothicNew-Regular"
             )
 
         case .passport:
@@ -158,8 +158,8 @@ struct ThemeStyle {
                 borderWidth: 1.5,
                 shadowStrength: 0.3, shadowRadius: 8, shadowY: 3,
                 fontDesign: .serif,
-                displayFontName: "ZenOldMincho-Bold",
-                bodyFontName: nil
+                displayFontName: "ZenAntique-Regular",
+                bodyFontName: "ZenKakuGothicNew-Regular"
             )
 
         case .film:
@@ -237,7 +237,9 @@ extension ThemeStyle {
         return found
     }
 
-    /// 見出しに使う書体
+    /// 見出しに使う書体。
+    /// 同梱フォントには weight を当てない。Zen Antique は単一ウェイトで、
+    /// 太らせると和文の字面が潰れる。あの書体はその太さで完成している。
     func displayFont(_ style: Font.TextStyle, weight: Font.Weight = .bold) -> Font {
         if let name = displayFontName, Self.isBundled(name) {
             return .custom(name, size: Self.pointSize(for: style), relativeTo: style)
