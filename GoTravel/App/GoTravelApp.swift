@@ -15,9 +15,9 @@ struct GoTravelApp: App {
         NotificationService.shared.requestAuthorization { _ in }
     }
 
-    // originalColor のみシステムのダークモードに従う。それ以外は常にライトモード固定
+    // ダークの配色を持つテーマだけシステムに従う。持たないものはライト固定
     private var preferredScheme: ColorScheme? {
-        themeManager.currentTheme.type == .originalColor ? nil : .light
+        themeManager.currentTheme.type.followsSystemAppearance ? nil : .light
     }
 
     var body: some Scene {
@@ -27,6 +27,12 @@ struct GoTravelApp: App {
                 .environment(\.locale, Locale(identifier: "ja_JP"))
                 .environment(\.managedObjectContext, CoreDataManager.shared.viewContext)
                 .preferredColorScheme(preferredScheme)
+                .task {
+                    // 所有を確かめてから、使えなくなったテーマを戻す。
+                    // 順番が逆だと、購入済みの人のテーマが起動のたびに外れる。
+                    await ProStore.shared.refreshEntitlements()
+                    ThemeManager.shared.enforceEntitlement()
+                }
         }
     }
 }
