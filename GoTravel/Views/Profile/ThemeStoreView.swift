@@ -76,54 +76,50 @@ struct ThemeStoreView: View {
                 .font(theme.displayFont(.subheadline))
                 .foregroundColor(theme.text)
 
-            ForEach(ThemePreset.ThemeType.premiumCases, id: \.self) { type in
-                let preset = ThemePreset(type: type)
+            // 色の点だけでは、どんな画面になるのかが伝わらない。
+            // 買う前にいちばん知りたいのはそこなので、実際の見え方を並べる
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(alignment: .top, spacing: 12) {
+                    ForEach(ThemePreset.ThemeType.premiumCases, id: \.self) { type in
+                        let preset = ThemePreset(type: type)
 
-                HStack(spacing: 12) {
-                    HStack(spacing: -6) {
-                        swatchDot(preset.outingPlanColor)
-                        swatchDot(preset.dailyPlanColor)
-                        swatchDot(preset.travelColor)
-                    }
+                        VStack(alignment: .leading, spacing: 7) {
+                            ThemePreviewCard(preset: preset, width: 132)
 
-                    VStack(alignment: .leading, spacing: 2) {
-                        HStack(spacing: 6) {
-                            Text(type.displayName)
-                                .font(.subheadline.bold())
-                                .foregroundColor(theme.text)
+                            HStack(spacing: 5) {
+                                Text(type.displayName)
+                                    .font(.caption.bold())
+                                    .foregroundColor(theme.text)
+                                    .lineLimit(1)
 
-                            if let season = type.season {
-                                Text(season.displayName)
-                                    .font(.caption2.bold())
-                                    .foregroundColor(theme.secondaryText)
-                                    .padding(.horizontal, 6)
-                                    .padding(.vertical, 2)
-                                    .background(
-                                        Capsule().fill(theme.secondaryText.opacity(0.12))
-                                    )
+                                if let season = type.season {
+                                    Text(season.displayName)
+                                        .font(.caption2.bold())
+                                        .foregroundColor(theme.secondaryText)
+                                        .padding(.horizontal, 5)
+                                        .padding(.vertical, 2)
+                                        .background(
+                                            Capsule().fill(theme.secondaryText.opacity(0.12))
+                                        )
+                                }
                             }
+
+                            Text(type.subtitle)
+                                .font(.caption2)
+                                .foregroundColor(theme.tertiaryText)
+                                .lineLimit(2)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
-
-                        Text(type.subtitle)
-                            .font(.caption)
-                            .foregroundColor(theme.tertiaryText)
-                            .lineLimit(1)
+                        .frame(width: 132, alignment: .leading)
                     }
-
-                    Spacer(minLength: 0)
                 }
-                .padding(.vertical, 6)
+                .padding(.horizontal, 16)
             }
+            // カードの内側の余白を打ち消して、見本を端まで流す
+            .padding(.horizontal, -16)
         }
         .padding(16)
         .themedCard()
-    }
-
-    private func swatchDot(_ color: Color) -> some View {
-        Circle()
-            .fill(color)
-            .frame(width: 22, height: 22)
-            .overlay(Circle().stroke(theme.backgroundLight, lineWidth: 2))
     }
 
     // MARK: - Benefits

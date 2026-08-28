@@ -1233,60 +1233,68 @@ struct ThemeCard: View {
         Button(action: onSelect) {
             let previewTheme = ThemePreset(type: themeType)
 
-            VStack(alignment: .leading, spacing: 12) {
-                HStack(spacing: 8) {
-                    // そのテーマ自身の書体で名前を出す。明朝か丸ゴシックかがここで分かる
-                    Text(themeType.displayName)
-                        .font(previewTheme.displayFont(.headline))
-                        .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 8) {
+                        // そのテーマ自身の書体で名前を出す。明朝か丸ゴシックかがここで分かる
+                        Text(themeType.displayName)
+                            .font(previewTheme.displayFont(.headline))
+                            .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
 
-                    if isSeasonallyOpen, let season = themeType.season {
-                        Text("\(season.displayName)のあいだ使えます")
-                            .font(.caption2.bold())
-                            .foregroundColor(themeManager.currentTheme.success)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
-                            .background(
-                                Capsule().fill(themeManager.currentTheme.success.opacity(0.14))
-                            )
+                        if isSeasonallyOpen, let season = themeType.season {
+                            Text("\(season.displayName)のあいだ使えます")
+                                .font(.caption2.bold())
+                                .foregroundColor(themeManager.currentTheme.success)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Capsule().fill(themeManager.currentTheme.success.opacity(0.14))
+                                )
+                        }
+
+                        Spacer(minLength: 0)
+
+                        if isSelected {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.title2)
+                                .foregroundColor(themeManager.currentTheme.success)
+                        } else if isLocked {
+                            Image(systemName: "lock.fill")
+                                .font(.subheadline)
+                                .foregroundColor(themeManager.currentTheme.tertiaryText)
+                        }
+                    }
+
+                    Text(themeType.subtitle)
+                        .font(.caption)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    // テーマの主色3つと、背景・文字。
+                    //
+                    // 予定の3色（おでかけ・日常・旅行）はここでは使えない。
+                    // 既定の3テーマがどれも青・橙・緑をベタ書きで持っているため、
+                    // 並べると3つとも同じ見本になってしまう
+                    HStack(spacing: 6) {
+                        swatch(previewTheme.primary, in: previewTheme)
+                        swatch(previewTheme.secondary, in: previewTheme)
+                        swatch(previewTheme.tertiary, in: previewTheme)
+                        swatch(previewTheme.backgroundLight, in: previewTheme)
+                        swatch(previewTheme.text, in: previewTheme)
                     }
 
                     Spacer(minLength: 0)
-
-                    if isSelected {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.title2)
-                            .foregroundColor(themeManager.currentTheme.success)
-                    } else if isLocked {
-                        Image(systemName: "lock.fill")
-                            .font(.subheadline)
-                            .foregroundColor(themeManager.currentTheme.tertiaryText)
-                    }
                 }
+                .opacity(isLocked ? 0.55 : 1)
 
-                Text(themeType.subtitle)
-                    .font(.caption)
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                // テーマの主色3つと、背景・文字。
+                // 見え方の見本。写真ではなく、そのテーマのトークンで描いている。
                 //
-                // 予定の3色（おでかけ・日常・旅行）はここでは使えない。
-                // 既定の3テーマがどれも青・橙・緑をベタ書きで持っているため、
-                // 並べると3つとも同じ見本になってしまう
-                HStack(spacing: 8) {
-                    swatch(previewTheme.primary, in: previewTheme)
-                    swatch(previewTheme.secondary, in: previewTheme)
-                    swatch(previewTheme.tertiary, in: previewTheme)
-                    swatch(previewTheme.backgroundLight, in: previewTheme)
-                    swatch(previewTheme.text, in: previewTheme)
-                }
+                // 未購入でも薄くしない。どんな見た目になるか分からないものは
+                // 買われないので、ここは鍵付きのときこそ見せる必要がある
+                ThemePreviewCard(preset: previewTheme, width: 88)
             }
-            .opacity(isLocked ? 0.55 : 1)
             .padding()
-            // 角丸と縁はプレビュー側のテーマから引く。
-            // 墨は角ばり、桜は丸い、といった形の違いが一覧の時点で見える
             // 枠は今のテーマの形に揃える。
             //
             // 以前はプレビュー側のテーマの角丸と縁幅で描いていた。形の違いが
@@ -1320,7 +1328,7 @@ struct ThemeCard: View {
 
         return shape
             .fill(color)
-            .frame(width: 36, height: 36)
+            .frame(width: 26, height: 26)
             .overlay(
                 shape.stroke(preset.text.opacity(0.18),
                              lineWidth: max(preset.style.borderWidth, 1))
