@@ -1047,6 +1047,8 @@ struct AppSettingView: View {
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
     @State private var animateCards = false
+    /// 未購入のテーマが選ばれたとき、どれから開かれたかを覚えて購入画面を出す
+    @State private var storeTargetTheme: ThemePreset.ThemeType?
 
     var body: some View {
         ZStack {
@@ -1117,21 +1119,29 @@ struct AppSettingView: View {
                             .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
                             .padding(.horizontal)
 
-                        ForEach(Array(ThemePreset.ThemeType.allCases.enumerated()), id: \.offset) { index, themeType in
-                            ThemeCard(
-                                themeType: themeType,
-                                isSelected: themeManager.currentTheme.type == themeType,
-                                onSelect: {
-                                    withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-                                        themeManager.setTheme(themeType)
-                                    }
-                                }
-                            )
-                            .padding(.horizontal)
-                            .opacity(animateCards ? 1 : 0)
-                            .offset(y: animateCards ? 0 : 20)
-                            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.15 + Double(index) * 0.05), value: animateCards)
+                        themeList(ThemePreset.ThemeType.freeCases, startIndex: 0)
+
+                        HStack(spacing: 8) {
+                            Text("追加のテーマ")
+                                .font(.headline)
+                                .foregroundColor(themeManager.currentTheme.text)
+
+                            if themeManager.isPremiumUnlocked {
+                                Text("購入済み")
+                                    .font(.caption2.bold())
+                                    .foregroundColor(themeManager.currentTheme.success)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(
+                                        Capsule().fill(themeManager.currentTheme.success.opacity(0.14))
+                                    )
+                            }
                         }
+                        .padding(.horizontal)
+                        .padding(.top, 8)
+
+                        themeList(ThemePreset.ThemeType.premiumCases,
+                                  startIndex: ThemePreset.ThemeType.freeCases.count)
                     }
                 }
                 .padding(.bottom, 30)
@@ -1143,6 +1153,39 @@ struct AppSettingView: View {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
                 animateCards = true
             }
+        }
+        .sheet(item: $storeTargetTheme) { target in
+            ThemeStoreView(highlighted: target)
+        }
+    }
+
+    /// テーマの一覧。startIndex は登場アニメーションの順番をずらすためだけに使う
+    @ViewBuilder
+    private func themeList(_ types: [ThemePreset.ThemeType], startIndex: Int) -> some View {
+        ForEach(Array(types.enumerated()), id: \.element) { index, themeType in
+            ThemeCard(
+                themeType: themeType,
+                isSelected: themeManager.currentTheme.type == themeType,
+                isLocked: !themeManager.canUse(themeType),
+                isSeasonallyOpen: themeManager.isSeasonallyOpen(themeType),
+                onSelect: {
+                    if themeManager.canUse(themeType) {
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                            themeManager.setTheme(themeType)
+                        }
+                    } else {
+                        storeTargetTheme = themeType
+                    }
+                }
+            )
+            .padding(.horizontal)
+            .opacity(animateCards ? 1 : 0)
+            .offset(y: animateCards ? 0 : 20)
+            .animation(
+                .spring(response: 0.6, dampingFraction: 0.8)
+                    .delay(0.15 + Double(startIndex + index) * 0.05),
+                value: animateCards
+            )
         }
     }
 
@@ -1179,6 +1222,8 @@ struct ThemeColorDot: View {
 struct ThemeCard: View {
     let themeType: ThemePreset.ThemeType
     let isSelected: Bool
+    var isLocked: Bool = false
+    var isSeasonallyOpen: Bool = false
     let onSelect: () -> Void
 
     @ObservedObject var themeManager = ThemeManager.shared
@@ -1189,29 +1234,51 @@ struct ThemeCard: View {
             let previewTheme = ThemePreset(type: themeType)
 
             VStack(alignment: .leading, spacing: 12) {
-                HStack {
+                HStack(spacing: 8) {
                     Text(themeType.displayName)
                         .font(.headline)
                         .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
 
-                    Spacer()
+                    if isSeasonallyOpen, let season = themeType.season {
+                        Text("\(season.displayName)のあいだ使えます")
+                            .font(.caption2.bold())
+                            .foregroundColor(themeManager.currentTheme.success)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(
+                                Capsule().fill(themeManager.currentTheme.success.opacity(0.14))
+                            )
+                    }
+
+                    Spacer(minLength: 0)
 
                     if isSelected {
                         Image(systemName: "checkmark.circle.fill")
                             .font(.title2)
                             .foregroundColor(themeManager.currentTheme.success)
+                    } else if isLocked {
+                        Image(systemName: "lock.fill")
+                            .font(.subheadline)
+                            .foregroundColor(themeManager.currentTheme.tertiaryText)
                     }
                 }
 
-                // Color Preview
+                Text(themeType.subtitle)
+                    .font(.caption)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                // 予定の3色と、背景・文字。テーマの違いがいちばん出るところ
                 HStack(spacing: 8) {
-                    ThemeColorDot(color: previewTheme.primary)
-                    ThemeColorDot(color: previewTheme.secondary)
-                    ThemeColorDot(color: previewTheme.tertiary)
-                    ThemeColorDot(color: previewTheme.accent1)
-                    ThemeColorDot(color: previewTheme.accent2)
+                    swatch(previewTheme.outingPlanColor, in: previewTheme)
+                    swatch(previewTheme.dailyPlanColor, in: previewTheme)
+                    swatch(previewTheme.travelColor, in: previewTheme)
+                    swatch(previewTheme.backgroundLight, in: previewTheme)
+                    swatch(previewTheme.text, in: previewTheme)
                 }
             }
+            .opacity(isLocked ? 0.55 : 1)
             .padding()
             .background(
                 RoundedRectangle(cornerRadius: 16)
@@ -1226,6 +1293,16 @@ struct ThemeCard: View {
             .scaleEffect(isSelected ? 1.02 : 1.0)
         }
         .buttonStyle(PlainButtonStyle())
+    }
+
+    /// 白や淡い色でも見えるよう、縁を必ず付ける
+    private func swatch(_ color: Color, in preset: ThemePreset) -> some View {
+        Circle()
+            .fill(color)
+            .frame(width: 36, height: 36)
+            .overlay(
+                Circle().stroke(preset.text.opacity(0.18), lineWidth: 1)
+            )
     }
 }
 
