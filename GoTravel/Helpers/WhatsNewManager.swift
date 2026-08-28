@@ -32,8 +32,9 @@ enum WhatsNewManager {
         #endif
 
         guard let lastShown = UserDefaults.standard.string(forKey: lastShownVersionKey) else {
-            // 記録が無い = 初回起動、または この仕組みを入れる前から使っている人。
-            // 後者にはお知らせを見せたいので、オンボーディング済みかで判定する
+            // ここに来るのは、この仕組みを入れる前から使っている人。
+            // 新しく入れた人は、オンボーディングを終えた時点で
+            // `markAsShown()` により記録が入るので、ここには来ない
             return OnboardingManager.shared.hasCompletedOnboarding
         }
         return lastShown != currentVersion
