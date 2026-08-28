@@ -74,6 +74,9 @@
             ReferencedContainer = "container:GoTravel.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
+      <StoreKitConfigurationFileReference
+         identifier = "../../../GoTravel/GoTravel.storekit">
+      </StoreKitConfigurationFileReference>
       <CommandLineArguments>
          <CommandLineArgument
             argument = "-TravoryEmptyDataMode"
