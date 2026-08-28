@@ -1235,8 +1235,9 @@ struct ThemeCard: View {
 
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 8) {
+                    // そのテーマ自身の書体で名前を出す。明朝か丸ゴシックかがここで分かる
                     Text(themeType.displayName)
-                        .font(.headline)
+                        .font(previewTheme.displayFont(.headline))
                         .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
 
                     if isSeasonallyOpen, let season = themeType.season {
@@ -1280,14 +1281,19 @@ struct ThemeCard: View {
             }
             .opacity(isLocked ? 0.55 : 1)
             .padding()
+            // 角丸と縁はプレビュー側のテーマから引く。
+            // 墨は角ばり、桜は丸い、といった形の違いが一覧の時点で見える
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: previewTheme.radius(.large))
                     // 選択中の枠が白黒テーマで白くなり、どれを選んでいるか分からなくなるため actionFill を使う
                     .fill(isSelected ? themeManager.currentTheme.actionFill.opacity(0.1) : themeManager.currentTheme.cardBackground2)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(isSelected ? themeManager.currentTheme.actionFill : themeManager.currentTheme.cardBorder, lineWidth: isSelected ? 2 : 1)
+                RoundedRectangle(cornerRadius: previewTheme.radius(.large))
+                    .stroke(
+                        isSelected ? themeManager.currentTheme.actionFill : themeManager.currentTheme.cardBorder,
+                        lineWidth: isSelected ? 2 : max(previewTheme.style.borderWidth, 0.5)
+                    )
             )
             .shadow(color: isSelected ? themeManager.currentTheme.shadow : Color.clear, radius: isSelected ? 15 : 5, x: 0, y: 5)
             .scaleEffect(isSelected ? 1.02 : 1.0)
