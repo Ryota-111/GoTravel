@@ -15,9 +15,9 @@ struct GoTravelApp: App {
         NotificationService.shared.requestAuthorization { _ in }
     }
 
-    // ダークの配色を持つテーマだけシステムに従う。持たないものはライト固定
+    // 明暗の扱いはテーマ側が決める。ライト固定・ダーク固定・システム追従の3つ
     private var preferredScheme: ColorScheme? {
-        themeManager.currentTheme.type.followsSystemAppearance ? nil : .light
+        themeManager.currentTheme.type.preferredColorScheme
     }
 
     var body: some Scene {
