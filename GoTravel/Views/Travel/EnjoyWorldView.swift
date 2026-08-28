@@ -223,6 +223,8 @@ struct EnjoyWorldView: View {
                 }
             }
             .background(backgroundGradient)
+            // 紙の粒子。濃さ 0 のテーマでは何も重ならない
+            .paperGrain(themeManager.currentTheme.style.paperGrain)
             .navigationBarHidden(true)
             .sheet(isPresented: $showAddTravelPlan) {
                 AddTravelPlanView { newPlan in
@@ -411,11 +413,35 @@ struct EnjoyWorldView: View {
         
     }
     
+    /// 見出しの右に伸ばす罫と、その先の英字ラベル。
+    /// 印刷物のテーマだけに出す。それ以外では何も描かない
+    @ViewBuilder
+    private func sectionRule(_ kicker: String) -> some View {
+        if chipStyle.decor == .ticket {
+            Rectangle()
+                .fill(themeManager.currentTheme.cardBorder)
+                .frame(height: 1)
+
+            Text(kicker)
+                .font(chipStyle.monoFont(size: 9))
+                .tracking(2.16)     // 0.24em
+                .foregroundColor(themeManager.currentTheme.tertiaryText)
+        }
+    }
+
     private var travelEventsTitleSection: some View {
         HStack {
             Text("旅行計画")
                 .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-                .font(.title.weight(.semibold))
+                .font(chipStyle.decor == .ticket
+                      ? chipStyle.displayFont(size: 23)
+                      : .title.weight(.semibold))
+                // 罫が横幅を取りに行くので、見出しは縮ませない
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+
+            sectionRule("TRIPS")
+
             Spacer()
 
             Button(action: { showJoinPlan = true }) {
@@ -424,7 +450,11 @@ struct EnjoyWorldView: View {
                         .font(.caption)
                     Text("共有に参加")
                         .font(.subheadline.weight(.medium))
+                        .lineLimit(1)
                 }
+                // 見出しの罫が横幅を取りに行くので、ボタン側を縮ませない。
+                // 付けないと「共有 / に参加」と2行に折れる
+                .fixedSize(horizontal: true, vertical: false)
                 // テーマ色をそのまま載せると、明るい色（オレンジなど）で
                 // 読めなくなる。背景に対して差が出る濃さに調整して使う。
                 //
@@ -508,7 +538,14 @@ struct EnjoyWorldView: View {
         HStack {
             Text("予定計画")
                 .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-                .font(.title.weight(.semibold))
+                .font(chipStyle.decor == .ticket
+                      ? chipStyle.displayFont(size: 23)
+                      : .title.weight(.semibold))
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+
+            sectionRule("PLANS")
+
             Spacer()
 
             sectionAddButton(label: "予定を追加") { showAddPlan = true }
@@ -607,17 +644,19 @@ struct EnjoyWorldView: View {
             Text(tab.displayName)
                 .font(.callout)
                 .fontWeight(selectedTab == tab ? .semibold : .regular)
-                .foregroundColor(selectedTab == tab ? themeManager.currentTheme.light : themeManager.currentTheme.secondaryText)
+                .foregroundColor(
+                    chipTextColor(isSelected: selectedTab == tab,
+                                  onFill: themeManager.currentTheme.light)
+                )
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, chipStyle.decor == .ticket ? 14 : 12)
                 .padding(.vertical, 7)
+                .frame(minHeight: chipStyle.decor == .ticket ? 44 : 0)
                 .background {
-                    if selectedTab == tab {
-                        Capsule()
-                            .fill(themeManager.currentTheme.secondary)
-                            .matchedGeometryEffect(id: "TAB", in: animation)
-                    }
+                    chipChrome(isSelected: selectedTab == tab,
+                               fill: themeManager.currentTheme.secondary,
+                               geometryID: "TAB")
                 }
         }
     }
@@ -633,18 +672,52 @@ struct EnjoyWorldView: View {
             Text(label)
                 .font(.callout)
                 .fontWeight(isSelected ? .semibold : .regular)
-                .foregroundColor(isSelected ? onFill : themeManager.currentTheme.secondaryText)
+                .foregroundColor(chipTextColor(isSelected: isSelected, onFill: onFill))
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
-                .padding(.horizontal, 12)
+                .padding(.horizontal, chipStyle.decor == .ticket ? 14 : 12)
                 .padding(.vertical, 7)
-                .background {
-                    if isSelected {
-                        Capsule()
-                            .fill(fill)
-                            .matchedGeometryEffect(id: "PLAN_TAB", in: animation)
-                    }
-                }
+                .frame(minHeight: chipStyle.decor == .ticket ? 44 : 0)
+                .background { chipChrome(isSelected: isSelected, fill: fill) }
+        }
+    }
+
+    private var chipStyle: ThemeStyle { themeManager.currentTheme.style }
+
+    private func chipTextColor(isSelected: Bool, onFill: Color) -> Color {
+        guard chipStyle.decor == .ticket else {
+            return isSelected ? onFill : themeManager.currentTheme.secondaryText
+        }
+        // 切符仕立てでは、選択中は紙を反転させて刷り込んだように見せる
+        return isSelected
+            ? themeManager.currentTheme.cardBackground2
+            : themeManager.currentTheme.secondaryText
+    }
+
+    /// チップの外枠。丸のままか、角を落として版ズレの影を敷くか
+    @ViewBuilder
+    private func chipChrome(isSelected: Bool, fill: Color, geometryID: String = "PLAN_TAB") -> some View {
+        let theme = themeManager.currentTheme
+
+        switch chipStyle.decor {
+        case .ticket:
+            let radius = chipStyle.radiusSmall
+            RoundedRectangle(cornerRadius: radius)
+                .fill(isSelected ? theme.text : Color.clear)
+                .overlay(
+                    RoundedRectangle(cornerRadius: radius)
+                        .strokeBorder(isSelected ? theme.text : theme.cardBorder, lineWidth: 1)
+                )
+                .offsetShadow(isSelected ? chipStyle.offsetShadow : 0,
+                              color: theme.primary,
+                              cornerRadius: radius)
+
+        case .plain:
+            if isSelected {
+                Capsule()
+                    .fill(fill)
+                    .matchedGeometryEffect(id: geometryID, in: animation)
+            }
         }
     }
 

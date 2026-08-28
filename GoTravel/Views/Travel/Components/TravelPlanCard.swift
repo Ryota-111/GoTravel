@@ -10,30 +10,16 @@ struct TravelPlanCard: View {
 
     @State private var showDuplicateSheet = false
 
+    private var theme: ThemePreset { themeManager.currentTheme }
+
     var body: some View {
         NavigationLink(destination: TravelPlanDetailView(plan: plan).environmentObject(viewModel)) {
-            ZStack {
-                cardBackground
-                cardOverlay
-                cardContent
+            // 見た目の切り替えはテーマ名ではなく decor トークンで決める。
+            // 意匠を持つテーマが増えても、増えるのはここの case だけ
+            switch theme.style.decor {
+            case .ticket: ticketBody
+            case .plain:  plainBody
             }
-            .frame(width: 200, height: 200)
-            .overlay(
-                // ガラス風のハイライト縁取り
-                RoundedRectangle(cornerRadius: 25)
-                    .stroke(
-                        LinearGradient(
-                            colors: [Color.white.opacity(0.45), Color.white.opacity(0.05)],
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ),
-                        lineWidth: 1
-                    )
-            )
-            // 影は付けない。カードは横スクロールの帯とほぼ同じ高さで、
-            // 帯からはみ出した影が上下で切り取られ、black な帯として見えてしまう。
-            // 帯を高くすれば収まるが、今の高さを変えたくないので影ごと外した。
-            // 写真と白い縁取りがあるので、影が無くても浮いて見える
         }
         .buttonStyle(PlainButtonStyle())
         .sheet(isPresented: $showDuplicateSheet) {
@@ -41,6 +27,200 @@ struct TravelPlanCard: View {
                 .environmentObject(viewModel)
                 .environmentObject(authVM)
         }
+    }
+
+    private var plainBody: some View {
+        ZStack {
+            cardBackground
+            cardOverlay
+            cardContent
+        }
+        .frame(width: 200, height: 200)
+        .overlay(
+            // ガラス風のハイライト縁取り
+            RoundedRectangle(cornerRadius: 25)
+                .stroke(
+                    LinearGradient(
+                        colors: [Color.white.opacity(0.45), Color.white.opacity(0.05)],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 1
+                )
+        )
+        // 影は付けない。カードは横スクロールの帯とほぼ同じ高さで、
+        // 帯からはみ出した影が上下で切り取られ、black な帯として見えてしまう。
+        // 帯を高くすれば収まるが、今の高さを変えたくないので影ごと外した。
+        // 写真と白い縁取りがあるので、影が無くても浮いて見える
+    }
+
+    // MARK: - 切符
+
+    /// 216×226。上 170 が写真、その下が半券。
+    /// 切り取り線は y=170、両端に 16px の半円を重ねる
+    private var ticketBody: some View {
+        let radius = theme.radius(.large)
+        let rule = theme.cardBorder
+        let border = theme.style.borderWidth
+
+        return VStack(spacing: 0) {
+            ticketArt
+            ticketStub
+        }
+        .frame(width: 216, height: 226)
+        .background(theme.cardBackground2)
+        .clipShape(RoundedRectangle(cornerRadius: radius))
+        .overlay(
+            RoundedRectangle(cornerRadius: radius)
+                .strokeBorder(rule, lineWidth: 1)
+        )
+        .overlay(
+            TicketNotches(y: 170, diameter: 16,
+                          fill: theme.backgroundLight,
+                          border: rule, borderWidth: border > 0 ? 1 : 0)
+        )
+    }
+
+    private var ticketArt: some View {
+        ZStack(alignment: .bottomLeading) {
+            ticketArtBackground
+
+            // 下だけ沈める。写真を残しつつ文字を読ませる
+            LinearGradient(
+                stops: [
+                    .init(color: theme.text.opacity(0), location: 0.38),
+                    .init(color: theme.text.opacity(0.72), location: 1.0)
+                ],
+                startPoint: .top, endPoint: .bottom
+            )
+
+            VStack(alignment: .leading, spacing: 3) {
+                HStack(spacing: 4) {
+                    Image(systemName: "mappin.and.ellipse")
+                        .font(.system(size: 8, weight: .bold))
+                    Text(plan.destination.uppercased())
+                        .font(theme.style.monoFont(size: 9))
+                        .tracking(1.44)      // 0.16em
+                        .lineLimit(1)
+                }
+                .foregroundColor(theme.cardBackground2.opacity(0.9))
+
+                Text(plan.title)
+                    .font(theme.style.bodyFont(size: 16, weight: .bold))
+                    .lineSpacing(2)
+                    .lineLimit(2)
+                    .foregroundColor(theme.cardBackground2)
+            }
+            .padding(.horizontal, 12)
+            .padding(.bottom, 10)
+
+            VStack {
+                HStack(alignment: .top) {
+                    menuButton
+                    Spacer()
+                    ticketStamp
+                }
+                Spacer()
+            }
+            .padding(.top, 6)
+            .padding(.horizontal, 6)
+        }
+        .frame(width: 216, height: 170)
+        .clipped()
+    }
+
+    @ViewBuilder
+    private var ticketArtBackground: some View {
+        if let planId = plan.id, let image = viewModel.planImages[planId] {
+            Image(uiImage: image).resizable().scaledToFill()
+        } else if let name = plan.localImageFileName,
+                  let image = FileManager.documentsImage(named: name) {
+            Image(uiImage: image).resizable().scaledToFill()
+        } else {
+            LinearGradient(
+                colors: [
+                    plan.cardColor?.opacity(0.8) ?? theme.primary.opacity(0.8),
+                    plan.cardColor?.opacity(0.4) ?? theme.primary.opacity(0.4)
+                ],
+                startPoint: .topLeading, endPoint: .bottomTrailing
+            )
+        }
+    }
+
+    /// 状態はバッジではなくスタンプで出す。少し傾けるだけで押印に見える
+    private var ticketStamp: some View {
+        Text(stampText)
+            .font(theme.style.monoFont(size: 10))
+            .tracking(1.6)
+            .foregroundColor(theme.primary)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 4)
+            .background(
+                RoundedRectangle(cornerRadius: theme.radius(.small))
+                    .fill(theme.cardBackground2.opacity(0.82))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: theme.radius(.small))
+                    .strokeBorder(theme.primary, lineWidth: 2)
+            )
+            .rotationEffect(.degrees(-9))
+            .padding(.trailing, 4)
+            .padding(.top, 6)
+    }
+
+    private var stampText: String {
+        switch status {
+        case .ongoing: return "進行中"
+        case .upcoming(let days): return days == 1 ? "明日" : "あと\(days)日"
+        case .past: return "終了"
+        }
+    }
+
+    /// 切り取り線から下。日付と泊数を等幅で並べる
+    private var ticketStub: some View {
+        HStack(spacing: 8) {
+            Text(ticketDateRange)
+                .font(theme.style.monoFont(size: 13))
+                .tracking(0.26)
+                .foregroundColor(theme.text)
+
+            Spacer(minLength: 0)
+
+            if plan.isShared {
+                HStack(spacing: 3) {
+                    Image(systemName: "person.2.fill")
+                        .font(.system(size: 8, weight: .bold))
+                    Text("\(plan.sharedWith.count)")
+                        .font(theme.style.monoFont(size: 10))
+                }
+                .foregroundColor(theme.secondaryText)
+            }
+
+            Text(nightsText)
+                .font(theme.style.monoFont(size: 10, weight: .regular))
+                .tracking(0.8)
+                .foregroundColor(theme.secondaryText)
+        }
+        .padding(.horizontal, 9)
+        .frame(maxHeight: .infinity)
+        .overlay(alignment: .top) {
+            DashedRule()
+                .stroke(theme.cardBorder,
+                        style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                .frame(height: 1.5)
+                .padding(.horizontal, 9)
+        }
+    }
+
+    private var ticketDateRange: String {
+        let f = DateFormatter.japanese
+        f.dateFormat = "M/d"
+        return "\(f.string(from: plan.startDate)) — \(f.string(from: plan.endDate))"
+    }
+
+    private var nightsText: String {
+        let days = Calendar.current.dayDifference(from: plan.startDate, to: plan.endDate)
+        return days <= 0 ? "日帰り" : "\(days)泊\(days + 1)日"
     }
 
     // MARK: - Status

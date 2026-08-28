@@ -304,6 +304,33 @@ extension ThemeStyle {
         }
         return .system(style, design: .monospaced).weight(weight)
     }
+
+    // MARK: - 実寸の指定
+    //
+    // 意匠のある画面は、デザイン案が px で決まっている。
+    // TextStyle 経由だと端末の文字サイズ設定で崩れる箇所があるので、
+    // そこだけ実寸で指定できるようにしておく
+
+    func monoFont(size: CGFloat, weight: Font.Weight = .bold) -> Font {
+        if let name = monoFontName, Self.isBundled(name) {
+            return .custom(name, size: size)
+        }
+        return .system(size: size, weight: weight, design: .monospaced)
+    }
+
+    func displayFont(size: CGFloat, weight: Font.Weight = .bold) -> Font {
+        if let name = displayFontName, Self.isBundled(name) {
+            return .custom(name, size: size)
+        }
+        return .system(size: size, weight: weight, design: fontDesign)
+    }
+
+    func bodyFont(size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        if let name = bodyFontName, Self.isBundled(name) {
+            return .custom(name, size: size)
+        }
+        return .system(size: size, weight: weight, design: fontDesign)
+    }
 }
 
 // MARK: - ThemePreset から引く

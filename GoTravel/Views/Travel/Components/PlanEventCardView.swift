@@ -56,35 +56,120 @@ struct PlanEventCardView: View {
     /// 記念日は「あと◯日」が主役。日付タイルも当日ではなく記念日そのものを指す
     private var isAnniversary: Bool { plan.planType == .anniversary }
 
+    private var theme: ThemePreset { themeManager.currentTheme }
+
+    /// 行の中身。外枠がどちらでも同じものを出す
+    private var rowText: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(plan.title)
+                .font(.system(size: isToday ? 17 : 16, weight: isToday ? .bold : .semibold))
+                .foregroundColor(titleColor)
+                .lineLimit(1)
+
+            HStack(spacing: 7) {
+                // 種別はアイコンだけに落としたが、無色だと3種類の区別がつかない。
+                // 名前を出さないぶん、色で見分けられるようにしておく
+                Image(systemName: plan.planType.icon)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(typeColor)
+                    .accessibilityLabel(typeName)
+
+                tagChip
+
+                Text(subtitle)
+                    .font(.system(size: 12))
+                    .foregroundColor(subTextColor)
+                    .lineLimit(1)
+            }
+
+            todayScheduleLines
+        }
+    }
+
     var body: some View {
+        // 外枠の作りはテーマ名ではなく decor トークンで決める
+        switch theme.style.decor {
+        case .ticket: ticketRow
+        case .plain:  plainRow
+        }
+    }
+
+    // MARK: - 半券つきの行
+    //
+    // 左に種別の帯、右に日付の半券。あいだは切り取り線で分ける。
+    // 幅が 0 のテーマではそもそもこちらに来ない
+
+    private var ticketRow: some View {
+        HStack(spacing: 0) {
+            Rectangle()
+                .fill(typeColor)
+                .frame(width: theme.style.typeSpineWidth)
+
+            rowText
+                .padding(.leading, 14)
+                .padding(.trailing, 12)
+                .padding(.vertical, 12)
+
+            Spacer(minLength: 0)
+
+            menuButton
+
+            dateStub
+        }
+        .frame(minHeight: 76)
+        .background(theme.cardBackground2)
+        .clipShape(RoundedRectangle(cornerRadius: theme.radius(.medium)))
+        .overlay(
+            RoundedRectangle(cornerRadius: theme.radius(.medium))
+                .strokeBorder(theme.cardBorder, lineWidth: 1)
+        )
+    }
+
+    /// 右端の日付。切り取り線で本体と分かれている
+    private var dateStub: some View {
+        VStack(spacing: 1) {
+            Text(stubDay)
+                .font(theme.style.monoFont(size: 15))
+                .foregroundColor(titleColor)
+            Text(stubWeekday)
+                .font(.system(size: 10))
+                .foregroundColor(subTextColor)
+        }
+        .frame(width: theme.style.dateStubWidth)
+        .frame(maxHeight: .infinity)
+        .background(theme.cardBorder.opacity(0.13))
+        .overlay(alignment: .leading) {
+            DashedRule(vertical: true)
+                .stroke(theme.cardBorder,
+                        style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                .frame(width: 1.5)
+        }
+    }
+
+    private var stubDate: Date {
+        isAnniversary ? plan.startDate : (isToday ? Date() : plan.startDate)
+    }
+
+    private var stubDay: String {
+        let f = DateFormatter.japanese
+        f.dateFormat = "M/d"
+        return f.string(from: stubDate)
+    }
+
+    private var stubWeekday: String {
+        let f = DateFormatter.japanese
+        f.dateFormat = "E"
+        return f.string(from: stubDate)
+    }
+
+    // MARK: - これまでの行
+
+    private var plainRow: some View {
         // 中身をたたむ今日のカードだけ、タイルと「⋯」を上に寄せる
         HStack(alignment: isToday && !todayItems.isEmpty ? .top : .center, spacing: 12) {
             dateTile
 
-            VStack(alignment: .leading, spacing: 6) {
-                Text(plan.title)
-                    .font(.system(size: isToday ? 17 : 16, weight: isToday ? .bold : .semibold))
-                    .foregroundColor(titleColor)
-                    .lineLimit(1)
-
-                HStack(spacing: 7) {
-                    // 種別はアイコンだけに落としたが、無色だと3種類の区別がつかない。
-                    // 名前を出さないぶん、色で見分けられるようにしておく
-                    Image(systemName: plan.planType.icon)
-                        .font(.system(size: 11, weight: .semibold))
-                        .foregroundColor(typeColor)
-                        .accessibilityLabel(typeName)
-
-                    tagChip
-
-                    Text(subtitle)
-                        .font(.system(size: 12))
-                        .foregroundColor(subTextColor)
-                        .lineLimit(1)
-                }
-
-                todayScheduleLines
-            }
+            rowText
 
             Spacer(minLength: 0)
 
