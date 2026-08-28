@@ -56,7 +56,7 @@ struct ThemeStoreView: View {
                 .background(Circle().fill(theme.primary.opacity(0.12)))
 
             Text(highlighted.map { "「\($0.displayName)」を使う" } ?? "テーマを増やす")
-                .font(.title2.bold())
+                .font(theme.displayFont(.title2))
                 .foregroundColor(theme.text)
                 .multilineTextAlignment(.center)
 
@@ -73,7 +73,7 @@ struct ThemeStoreView: View {
     private var swatches: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("入っているテーマ")
-                .font(.subheadline.bold())
+                .font(theme.displayFont(.subheadline))
                 .foregroundColor(theme.text)
 
             ForEach(ThemePreset.ThemeType.premiumCases, id: \.self) { type in
@@ -116,12 +116,7 @@ struct ThemeStoreView: View {
             }
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 18).fill(theme.cardBackground2)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18).stroke(theme.cardBorder, lineWidth: 1)
-        )
+        .themedCard()
     }
 
     private func swatchDot(_ color: Color) -> some View {
@@ -151,12 +146,7 @@ struct ThemeStoreView: View {
             )
         }
         .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 18).fill(theme.cardBackground2)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 18).stroke(theme.cardBorder, lineWidth: 1)
-        )
+        .themedCard()
     }
 
     private func benefitRow(icon: String, title: String, detail: String) -> some View {
@@ -220,7 +210,7 @@ struct ThemeStoreView: View {
                     }
                     .frame(maxWidth: .infinity, minHeight: 54)
                     .background(
-                        RoundedRectangle(cornerRadius: 16).fill(theme.primary)
+                        RoundedRectangle(cornerRadius: theme.radius(.large)).fill(theme.primary)
                     )
                     .foregroundColor(.white)
                 }

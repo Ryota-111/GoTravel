@@ -81,7 +81,63 @@ class ThemeManager: ObservableObject {
     }
 }
 
+// MARK: - カード
+/// 背景・角丸・罫線・影をテーマ1か所から引く。
+/// 影を持たないテーマ（墨）や縁を持たないテーマ（桜・瀬戸内）も、この1つで正しく描ける。
+struct ThemedCard: ViewModifier {
+    var radius: ThemeStyle.Radius = .large
+    var fill: Color?
+
+    @ObservedObject private var themeManager = ThemeManager.shared
+
+    func body(content: Content) -> some View {
+        let theme = themeManager.currentTheme
+        let r = theme.radius(radius)
+        let width = theme.style.borderWidth
+
+        return content
+            .background(
+                RoundedRectangle(cornerRadius: r)
+                    .fill(fill ?? theme.cardBackground2)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: r)
+                    .stroke(theme.effectiveBorder, lineWidth: width)
+            )
+            .shadow(
+                color: theme.effectiveShadow,
+                radius: theme.style.shadowRadius,
+                x: 0,
+                y: theme.style.shadowY
+            )
+    }
+}
+
 // MARK: - View Extension for Easy Theme Access
+// themedCard 以外は呼び出し時点の値を読むだけなので、
+// テーマ切り替えに追従させたい View 側は themeManager を @ObservedObject で持っておくこと。
+extension View {
+    /// テーマのカード表現をまとめて当てる。これだけは単体でテーマ変更に追従する
+    func themedCard(_ radius: ThemeStyle.Radius = .large, fill: Color? = nil) -> some View {
+        modifier(ThemedCard(radius: radius, fill: fill))
+    }
+
+    /// テーマの角丸で切り抜く
+    func themedCorners(_ radius: ThemeStyle.Radius = .large) -> some View {
+        clipShape(RoundedRectangle(cornerRadius: ThemeManager.shared.currentTheme.radius(radius)))
+    }
+
+    /// 見出しの書体
+    func themedDisplayFont(_ style: Font.TextStyle, weight: Font.Weight = .bold) -> some View {
+        font(ThemeManager.shared.currentTheme.displayFont(style, weight: weight))
+    }
+
+    /// 本文の書体
+    func themedBodyFont(_ style: Font.TextStyle, weight: Font.Weight = .regular) -> some View {
+        font(ThemeManager.shared.currentTheme.bodyFont(style, weight: weight))
+    }
+}
+
 extension View {
     func themedBackground() -> some View {
         self.background(ThemeManager.shared.currentTheme.backgroundLight.ignoresSafeArea())
