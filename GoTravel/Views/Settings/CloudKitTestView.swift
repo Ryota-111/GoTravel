@@ -173,6 +173,7 @@ struct CloudKitTestView: View {
             .navigationTitle("CloudKit テスト")
             .navigationBarTitleDisplayMode(.inline)
         }
+        .navigationViewStyle(.stack)
         .alert("結果", isPresented: $showAlert) {
             Button("OK", role: .cancel) {}
         } message: {

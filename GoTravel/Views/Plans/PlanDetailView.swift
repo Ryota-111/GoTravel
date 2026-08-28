@@ -15,7 +15,10 @@ struct PlanDetailView: View {
     @State private var alertMessage = ""
     @State private var showDeleteConfirmation = false
     @State private var showScheduleEditor = false
-    @State private var isNotificationOn = false
+    @State private var showNotificationSettings = false
+    @State private var showRoutePicker = false
+    /// 編集中に写真を外したか。保存を押すまで実体は消さない（編集の取り消しで戻せるように）
+    @State private var isRemovingPhoto = false
     @State private var editingScheduleItem: PlanScheduleItem?
 
     // 編集用の一時変数
@@ -26,8 +29,8 @@ struct PlanDetailView: View {
     @State private var editedStartDate: Date = Date()
     @State private var editedEndDate: Date = Date()
     @State private var editedTime: Date?
-    @State private var editedTags: [String] = []
-    @State private var editedTagInput: String = ""
+    @State private var editedEndTime: Date?
+    @State private var editedTagIDs: [String] = []
     @State private var editedRecurrence: PlanRecurrence = .none
     @State private var editedPlaces: [PlannedPlace] = []
     @State private var showAddPlaceInEdit = false
@@ -41,7 +44,13 @@ struct PlanDetailView: View {
     @State private var searchResults: [MKMapItem] = []
 
     @ObservedObject var themeManager = ThemeManager.shared
+    @ObservedObject var tagManager = PlanTagManager.shared
     @Environment(\.colorScheme) var colorScheme
+
+    /// この予定に付いているタグ。消されたタグを指すIDは落ちる
+    private var planTags: [PlanTag] {
+        tagManager.tags(for: plan.tagIDs)
+    }
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var viewModel: PlansViewModel
     @EnvironmentObject var authVM: AuthViewModel
@@ -60,10 +69,7 @@ struct PlanDetailView: View {
                     }
                 }
             }
-            .background(
-                (colorScheme == .dark ? themeManager.currentTheme.dark : themeManager.currentTheme.light)
-                    .ignoresSafeArea()
-            )
+            .background(backgroundGradient)
             .offset(x: showSidebar ? 280 : 0)
             .animation(.spring(response: 0.3, dampingFraction: 0.8), value: showSidebar)
             .gesture(
@@ -139,6 +145,17 @@ struct PlanDetailView: View {
         }
         .sheet(isPresented: $showImagePicker) {
             ImagePicker(image: $selectedImage)
+        }
+        .confirmationDialog("どこへ案内しますか？", isPresented: $showRoutePicker, titleVisibility: .visible) {
+            ForEach(routeDestinations) { place in
+                Button(place.name) { openRoute(to: place) }
+            }
+            Button("キャンセル", role: .cancel) {}
+        }
+        .sheet(isPresented: $showNotificationSettings) {
+            PlanNotificationSettingsView(plan: plan) { reminders in
+                saveReminders(reminders)
+            }
         }
         .fullScreenCover(isPresented: $showAddPlaceInEdit) {
             mapPickerView
@@ -235,54 +252,48 @@ struct PlanDetailView: View {
     @ViewBuilder
     private var planHeaderArea: some View {
         switch plan.planType {
-        case .outing:      outingHeaderCard
+        case .outing:      outingHeader
         case .daily:       dailyHeader
         case .anniversary: dailyHeader
         }
     }
 
-    /// おでかけは色の帯を表紙にする。旅行計画の写真の表紙より軽い
-    private var outingHeaderCard: some View {
+    /// おでかけの見出し。
+    ///
+    /// 以前は種別色を敷いた表紙カードだったが、面を塗るのをやめて
+    /// 日常・記念日と同じ組みに揃えた。
+    /// 色を持つのは種別のピルと状態のチップ、それとタグだけ
+    private var outingHeader: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
-                typePill(onColor: true)
+                typePill()
+
+                if !planTags.isEmpty {
+                    tagRow()
+                }
+
                 Spacer(minLength: 0)
+
                 if let planStatusText {
                     Text(planStatusText)
                         .font(.system(size: 11, weight: .bold))
-                        .foregroundColor(.white)
+                        .foregroundColor(planColor)
                         .padding(.horizontal, 10)
                         .padding(.vertical, 5)
-                        .background(Color.white.opacity(0.22), in: Capsule())
+                        .background(planColor.opacity(colorScheme == .dark ? 0.22 : 0.12), in: Capsule())
                 }
             }
 
             Text(plan.title)
-                .font(.system(size: 24, weight: .heavy))
-                .foregroundColor(.white)
+                .font(.system(size: 26, weight: .heavy))
+                .foregroundColor(titleColor)
                 .lineLimit(2)
 
             Text(outingHeaderDateText)
                 .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.white.opacity(0.85))
-
-            if !plan.tags.isEmpty {
-                tagRow(onColor: true)
-            }
+                .foregroundColor(themeManager.currentTheme.secondaryText)
         }
-        .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .fill(
-                    LinearGradient(
-                        colors: [filledPlanColor, filledPlanColor.opacity(0.82)],
-                        startPoint: .topLeading,
-                        endPoint: .bottomTrailing
-                    )
-                )
-        )
-        .shadow(color: colorScheme == .dark ? .clear : filledPlanColor.opacity(0.28), radius: 16, x: 0, y: 8)
     }
 
     private var outingHeaderDateText: String {
@@ -300,8 +311,8 @@ struct PlanDetailView: View {
     private var dailyHeader: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                typePill(onColor: false)
-                tagRow(onColor: false)
+                typePill()
+                tagRow()
                 Spacer(minLength: 0)
             }
 
@@ -312,10 +323,20 @@ struct PlanDetailView: View {
 
             if plan.planType == .daily {
                 HStack(alignment: .lastTextBaseline, spacing: 14) {
-                    Text(plan.time.map { DateFormatter.japaneseTime.string(from: $0) } ?? "終日")
-                        .font(.system(size: 44, weight: .heavy, design: .rounded))
-                        .foregroundColor(planColor)
-                        .monospacedDigit()
+                    // 終わりは主役ではないので、開始時刻の右に小さく添える
+                    HStack(alignment: .lastTextBaseline, spacing: 6) {
+                        Text(plan.time.map { DateFormatter.japaneseTime.string(from: $0) } ?? "終日")
+                            .font(.system(size: 44, weight: .heavy, design: .rounded))
+                            .foregroundColor(planColor)
+                            .monospacedDigit()
+
+                        if let endTime = plan.endTime {
+                            Text("〜 " + DateFormatter.japaneseTime.string(from: endTime))
+                                .font(.system(size: 17, weight: .bold, design: .rounded))
+                                .foregroundColor(planColor.opacity(0.75))
+                                .monospacedDigit()
+                        }
+                    }
 
                     VStack(alignment: .leading, spacing: 5) {
                         Text(DateFormatter.japaneseDate.string(from: plan.startDate))
@@ -342,48 +363,49 @@ struct PlanDetailView: View {
         }
     }
 
+    /// 背景。ここだけ `dark`（＝純黒）を直に敷いていたため、
+    /// テーマ側の `backgroundDark` を持ち上げてもこの画面には効いていなかった
+    private var backgroundGradient: some View {
+        themeManager.currentTheme.backgroundGradient(for: colorScheme)
+            .ignoresSafeArea()
+    }
+
     private var titleColor: Color {
         colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
     }
 
-    private var filledPlanColor: Color {
-        ThemePreset.readableTint(planColor, on: .white)
-    }
-
-    private func typePill(onColor: Bool) -> some View {
+    private func typePill() -> some View {
         HStack(spacing: 5) {
             Image(systemName: planTypeIcon)
                 .font(.system(size: 10, weight: .bold))
             Text(planTypeText)
                 .font(.system(size: 12, weight: .bold))
         }
-        .foregroundColor(onColor ? .white : planColor)
+        .foregroundColor(planColor)
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
-        .background(
-            (onColor ? Color.white.opacity(0.22) : planColor.opacity(colorScheme == .dark ? 0.22 : 0.12)),
-            in: Capsule()
-        )
+        .background(planColor.opacity(colorScheme == .dark ? 0.22 : 0.12), in: Capsule())
     }
 
-    /// タグは中立の灰色。種別の色と役割を混ぜない
+    /// タグはそれぞれの色で出す。見出しの面を塗るのをやめたので、
+    /// 白抜きで載せる必要がなくなった
     @ViewBuilder
-    private func tagRow(onColor: Bool) -> some View {
+    private func tagRow() -> some View {
         HStack(spacing: 6) {
-            ForEach(plan.tags, id: \.self) { tag in
-                Text(tag)
+            ForEach(planTags) { tag in
+                Text(tag.name)
                     .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(onColor ? .white : themeManager.currentTheme.secondaryText)
+                    .foregroundColor(tag.color)
                     .padding(.horizontal, 10)
                     .padding(.vertical, 6)
                     .background(
-                        (onColor ? Color.white.opacity(0.18) : themeManager.currentTheme.secondaryText.opacity(0.12)),
+                        tag.color.opacity(colorScheme == .dark ? 0.24 : 0.14),
                         in: Capsule()
                     )
             }
 
             // タグが1つも無いときは、足せることが分かる口を出す
-            if plan.tags.isEmpty && !onColor {
+            if planTags.isEmpty {
                 Button(action: enterEditMode) {
                     HStack(spacing: 4) {
                         Image(systemName: "plus")
@@ -471,7 +493,7 @@ struct PlanDetailView: View {
 
                 Spacer(minLength: 0)
 
-                Button(action: openRouteToFirstPlace) {
+                Button { openRoute(to: place) } label: {
                     HStack(spacing: 5) {
                         Image(systemName: "location.fill")
                             .font(.system(size: 11, weight: .bold))
@@ -532,15 +554,98 @@ struct PlanDetailView: View {
         }
     }
 
+    private var quickActionRow: some View {
+        HStack(spacing: 10) {
+            quickAction(
+                icon: "arrow.triangle.turn.up.right.diamond.fill",
+                title: "経路案内",
+                subtitle: routeSubtitle,
+                isEnabled: !routeDestinations.isEmpty,
+                isOn: false
+            ) {
+                startRouteGuidance()
+            }
+
+            quickAction(
+                icon: "link",
+                title: "リンク",
+                subtitle: (plan.linkURL?.isEmpty == false) ? "1件" : "なし",
+                isEnabled: plan.linkURL?.isEmpty == false,
+                isOn: false
+            ) {
+                guard let raw = plan.linkURL, let url = URL(string: raw) else { return }
+                UIApplication.shared.open(url)
+            }
+
+            quickAction(
+                icon: plan.hasReminders ? "bell.fill" : "bell.slash",
+                title: "通知",
+                subtitle: reminderSummary,
+                isEnabled: true,
+                isOn: plan.hasReminders
+            ) {
+                showNotificationSettings = true
+            }
+        }
+    }
+
+    private func quickAction(
+        icon: String,
+        title: String,
+        subtitle: String?,
+        isEnabled: Bool,
+        isOn: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            VStack(spacing: 7) {
+                Image(systemName: icon)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(isEnabled ? planColor : themeManager.currentTheme.secondaryText.opacity(0.5))
+
+                Text(title)
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(isEnabled
+                                     ? (colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+                                     : themeManager.currentTheme.secondaryText.opacity(0.5))
+
+                if let subtitle {
+                    Text(subtitle)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .lineLimit(1)
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 76)
+            .background(
+                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    .fill(isOn
+                          ? AnyShapeStyle(planColor.opacity(colorScheme == .dark ? 0.22 : 0.12))
+                          : AnyShapeStyle(colorScheme == .dark
+                                          ? themeManager.currentTheme.secondaryBackgroundDark
+                                          : themeManager.currentTheme.backgroundLight))
+            )
+            .shadow(
+                color: colorScheme == .dark || isOn ? .clear : Color.black.opacity(0.06),
+                radius: 10,
+                x: 0,
+                y: 4
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .disabled(!isEnabled)
+    }
+
     /// 通知・繰り返し・リンクの3行。値が右に出るので、設定済みかどうかが一目で分かる
     private var dailySettingsList: some View {
         VStack(spacing: 0) {
             settingsRow(
                 icon: "bell",
                 title: "通知",
-                value: isNotificationOn ? "入" : "未設定",
-                isSet: isNotificationOn,
-                action: toggleNotification
+                value: reminderSummary,
+                isSet: plan.hasReminders,
+                action: { showNotificationSettings = true }
             )
 
             settingsDivider
@@ -574,9 +679,28 @@ struct PlanDetailView: View {
                 .fill(cardSurface)
         )
         .shadow(color: colorScheme == .dark ? .clear : Color.black.opacity(0.05), radius: 10, x: 0, y: 4)
-        .task {
-            isNotificationOn = await NotificationService.shared.hasPendingPlanNotifications(for: plan.id)
+    }
+
+    /// 通知の設定内容を1行で。件数だけだと何が鳴るのか分からないので、
+    /// 1つなら名前をそのまま出す
+    private var reminderSummary: String {
+        let reminders = plan.effectiveReminders
+
+        switch reminders.count {
+        case 0:  return "なし"
+        case 1:  return reminders[0].displayName
+        default: return "\(reminders.count)件"
         }
+    }
+
+    /// 選んだ通知を予定に保存して、予約を入れ直す
+    private func saveReminders(_ reminders: [PlanReminder]) {
+        var updated = plan
+        updated.reminders = reminders
+        plan = updated
+
+        guard let userId = authVM.userId else { return }
+        viewModel.update(updated, userId: userId)
     }
 
     private var settingsDivider: some View {
@@ -648,19 +772,21 @@ struct PlanDetailView: View {
         colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight
     }
 
-    private var editCardBg: Color {
-        colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight
-    }
+    /// 編集画面の1区切り。
+    ///
+    /// 以前はセクションごとに影付きのカードを敷いていたが、中の入力欄も箱を持っているため
+    /// 箱が二重になり、8つ並ぶと画面が箱だらけだった。
+    /// 面を塗るのはやめて薄い区切り線だけにする。詳細画面をフラットにしたのとも揃う
+    private func editSection<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 0) {
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 16)
 
-    @ViewBuilder
-    private func editSectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        content()
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(editCardBg)
-                    .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
-            )
+            Rectangle()
+                .fill(themeManager.currentTheme.secondaryText.opacity(0.15))
+                .frame(height: 1)
+        }
     }
 
     private func editSectionLabel(_ text: String, icon: String) -> some View {
@@ -722,23 +848,24 @@ struct PlanDetailView: View {
         .cornerRadius(12)
     }
 
-    private func editTimeRow() -> some View {
+    /// 始まりと終わりで同じ行を使う
+    private func editTimeRow(_ label: String, time: Binding<Date?>) -> some View {
         HStack {
             Image(systemName: "clock")
                 .foregroundColor(planColor.opacity(0.8))
                 .frame(width: 22)
-            Text("時刻")
+            Text(label)
                 .font(.subheadline)
                 .foregroundColor(editTextColor)
             Spacer()
             DatePicker("", selection: Binding(
-                get: { editedTime ?? Date() },
-                set: { editedTime = $0 }
+                get: { time.wrappedValue ?? Date() },
+                set: { time.wrappedValue = $0 }
             ), displayedComponents: .hourAndMinute)
             .colorMultiply(planColor)
             .datePickerStyle(.compact)
             .labelsHidden()
-            Button(action: { editedTime = nil }) {
+            Button(action: { time.wrappedValue = nil }) {
                 Image(systemName: "xmark.circle.fill")
                     .foregroundColor(themeManager.currentTheme.secondaryText)
                     .padding(.leading, 6)
@@ -749,27 +876,41 @@ struct PlanDetailView: View {
         .cornerRadius(12)
     }
 
+    /// まだ設定していない時刻を足す口
+    private func editAddTimeRow(_ label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Image(systemName: "clock")
+                    .foregroundColor(planColor)
+                    .frame(width: 22)
+                Text(label)
+                    .font(.subheadline)
+                    .foregroundColor(editTextColor)
+                Spacer()
+                Image(systemName: "plus.circle.fill")
+                    .foregroundColor(planColor)
+            }
+            .padding(14)
+            .background(editFieldBg)
+            .cornerRadius(12)
+        }
+    }
+
     // MARK: - Edit Mode View
     private var editModeView: some View {
         VStack(spacing: 0) {
-            editHeaderImageView
+            VStack(spacing: 0) {
 
-            VStack(spacing: 14) {
-
-                // プランタイプ
-                editSectionCard {
-                    VStack(alignment: .leading, spacing: 12) {
-                        editSectionLabel("プランタイプ", icon: "tag.fill")
-                        HStack(spacing: 10) {
-                            editTypeButton(type: .outing, icon: PlanType.outing.icon, label: PlanType.outing.displayName)
-                            editTypeButton(type: .daily,  icon: PlanType.daily.icon,  label: PlanType.daily.displayName)
-                            editTypeButton(type: .anniversary, icon: PlanType.anniversary.icon, label: PlanType.anniversary.displayName)
-                        }
+                // 写真
+                editSection {
+                    VStack(alignment: .leading, spacing: 10) {
+                        editSectionLabel("写真", icon: "photo")
+                        photoEditRow
                     }
                 }
 
                 // タイトル
-                editSectionCard {
+                editSection {
                     VStack(alignment: .leading, spacing: 10) {
                         editSectionLabel("プラン名", icon: "pencil")
                         TextField("例：東京観光", text: $editedTitle)
@@ -791,7 +932,7 @@ struct PlanDetailView: View {
                 }
 
                 // 日程
-                editSectionCard {
+                editSection {
                     VStack(alignment: .leading, spacing: 10) {
                         editSectionLabel(editDateSectionLabel, icon: "calendar")
                         VStack(spacing: 8) {
@@ -810,24 +951,19 @@ struct PlanDetailView: View {
                             } else {
                                 editDateRow("日付", icon: "calendar", date: $editedStartDate)
                                 if editedTime != nil {
-                                    editTimeRow()
-                                } else {
-                                    Button(action: { editedTime = Date() }) {
-                                        HStack {
-                                            Image(systemName: "clock")
-                                                .foregroundColor(planColor)
-                                                .frame(width: 22)
-                                            Text("時刻を設定")
-                                                .font(.subheadline)
-                                                .foregroundColor(editTextColor)
-                                            Spacer()
-                                            Image(systemName: "plus.circle.fill")
-                                                .foregroundColor(planColor)
+                                    editTimeRow("始まり", time: $editedTime)
+
+                                    // 終わりは始まりがあって初めて意味を持つ
+                                    if editedEndTime != nil {
+                                        editTimeRow("終わり", time: $editedEndTime)
+                                    } else {
+                                        editAddTimeRow("終わりの時間を追加") {
+                                            let base = editedTime ?? Date()
+                                            editedEndTime = Calendar.current.date(byAdding: .hour, value: 1, to: base) ?? base
                                         }
-                                        .padding(14)
-                                        .background(editFieldBg)
-                                        .cornerRadius(12)
                                     }
+                                } else {
+                                    editAddTimeRow("時刻を設定") { editedTime = Date() }
                                 }
                             }
                         }
@@ -836,7 +972,7 @@ struct PlanDetailView: View {
 
                 // 繰り返し（記念日は毎年で固定なので出さない）
                 if editedPlanType == .daily {
-                    editSectionCard {
+                    editSection {
                         VStack(alignment: .leading, spacing: 10) {
                             editSectionLabel("繰り返し", icon: "repeat")
                             HStack(spacing: 8) {
@@ -866,56 +1002,16 @@ struct PlanDetailView: View {
                 }
 
                 // タグ
-                editSectionCard {
+                editSection {
                     VStack(alignment: .leading, spacing: 10) {
-                        editSectionLabel("タグ（任意）", icon: "number")
+                        editSectionLabel("タグ", icon: "number")
 
-                        if !editedTags.isEmpty {
-                            HStack(spacing: 6) {
-                                ForEach(editedTags, id: \.self) { tag in
-                                    Button {
-                                        editedTags.removeAll { $0 == tag }
-                                    } label: {
-                                        HStack(spacing: 4) {
-                                            Text(tag)
-                                                .font(.system(size: 12, weight: .semibold))
-                                            Image(systemName: "xmark")
-                                                .font(.system(size: 9, weight: .bold))
-                                        }
-                                        .foregroundColor(themeManager.currentTheme.secondaryText)
-                                        .padding(.horizontal, 9)
-                                        .padding(.vertical, 5)
-                                        .background(themeManager.currentTheme.secondaryText.opacity(0.12), in: Capsule())
-                                    }
-                                    .buttonStyle(PlainButtonStyle())
-                                }
-
-                                Spacer(minLength: 0)
-                            }
-                        }
-
-                        HStack(spacing: 8) {
-                            TextField("仕事、家事、健康…", text: $editedTagInput)
-                                .foregroundColor(editTextColor)
-                                .submitLabel(.done)
-                                .onSubmit { addEditedTag() }
-
-                            Button("追加", action: addEditedTag)
-                                .font(.system(size: 13, weight: .bold))
-                                .foregroundColor(editedTagInput.trimmingCharacters(in: .whitespaces).isEmpty
-                                                 ? themeManager.currentTheme.secondaryText
-                                                 : planColor)
-                                .disabled(editedTagInput.trimmingCharacters(in: .whitespaces).isEmpty)
-                        }
-                        .padding(14)
-                        .background(editFieldBg)
-                        .cornerRadius(12)
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(planColor.opacity(0.2), lineWidth: 1))
+                        PlanTagPicker(selectedIDs: $editedTagIDs, accentColor: editTextColor)
                     }
                 }
 
                 // 予定内容
-                editSectionCard {
+                editSection {
                     VStack(alignment: .leading, spacing: 10) {
                         editSectionLabel("予定内容", icon: "text.alignleft")
                         ZStack(alignment: .topLeading) {
@@ -941,7 +1037,7 @@ struct PlanDetailView: View {
 
                 // 関連リンク（日常のみ）
                 if editedPlanType == .daily {
-                    editSectionCard {
+                    editSection {
                         VStack(alignment: .leading, spacing: 10) {
                             editSectionLabel("関連リンク（任意）", icon: "link")
                             HStack(spacing: 12) {
@@ -962,7 +1058,7 @@ struct PlanDetailView: View {
 
                 // 訪問場所。記念日は場所を持たない
                 if editedPlanType != .anniversary {
-                editSectionCard {
+                editSection {
                     VStack(alignment: .leading, spacing: 10) {
                         editSectionLabel("訪問場所", icon: "mappin.circle.fill")
 
@@ -1024,6 +1120,19 @@ struct PlanDetailView: View {
                 }
                 }
 
+                // プランタイプ。
+                // 作るときにどの項目を聞くかの区別でしかなく、後から変えるものではないので末尾に置く
+                editSection {
+                    VStack(alignment: .leading, spacing: 12) {
+                        editSectionLabel("プランタイプ", icon: "tag.fill")
+                        HStack(spacing: 10) {
+                            editTypeButton(type: .outing, icon: PlanType.outing.icon, label: PlanType.outing.displayName)
+                            editTypeButton(type: .daily,  icon: PlanType.daily.icon,  label: PlanType.daily.displayName)
+                            editTypeButton(type: .anniversary, icon: PlanType.anniversary.icon, label: PlanType.anniversary.displayName)
+                        }
+                    }
+                }
+
                 // 削除ボタン
                 Button(action: { showDeleteConfirmation = true }) {
                     Label("プランを削除", systemImage: "trash.fill")
@@ -1037,7 +1146,7 @@ struct PlanDetailView: View {
                                 .shadow(color: themeManager.currentTheme.error.opacity(0.3), radius: 8, x: 0, y: 4)
                         )
                 }
-                .padding(.top, 4)
+                .padding(.top, 24)
             }
             .padding(.horizontal, 20)
             .padding(.top, 20)
@@ -1045,9 +1154,14 @@ struct PlanDetailView: View {
         }
     }
 
+    /// 写真の表紙。
+    ///
+    /// 以前はここにタイトルと日付を白抜きで重ねていたが、すぐ下の `planHeaderArea` が
+    /// 同じものを出すので、**写真を入れた予定だけタイトルと日付が二重に出ていた**。
+    /// 見出しは `planHeaderArea` に一本化し、ここは写真だけを見せる。
+    /// 種別ピル・タグ・状態・日常の時刻はあちらにしか無いので、消すならこちら側になる
     private var headerImageView: some View {
-        ZStack(alignment: .bottomLeading) {
-            // Background Image
+        Group {
             if let image = displayImage {
                 Image(uiImage: image)
                     .resizable()
@@ -1073,111 +1187,89 @@ struct PlanDetailView: View {
                             .foregroundColor(themeManager.currentTheme.light.opacity(0.3))
                     )
             }
-
-            // Gradient Overlay for better text readability
-            LinearGradient(
-                gradient: Gradient(colors: [
-                    Color.black.opacity(0),
-                    Color.black.opacity(0.7)
-                ]),
-                startPoint: .top,
-                endPoint: .bottom
-            )
-            .frame(height: 150)
-            .frame(maxHeight: .infinity, alignment: .bottom)
-
-            // Title and Date Overlay
-            VStack(alignment: .leading, spacing: 8) {
-                Text(plan.title)
-                    .font(.system(size: 28, weight: .bold))
-                    .foregroundColor(.white)
-                    .shadow(color: Color.black.opacity(0.3), radius: 4, x: 0, y: 2)
-
-                HStack(spacing: 6) {
-                    Image(systemName: "calendar")
-                        .font(.subheadline)
-
-                    if plan.planType == .outing {
-                        Text(dateRangeString(plan.startDate, plan.endDate))
-                            .font(.subheadline)
-                    } else {
-                        Text(formatDate(plan.startDate))
-                            .font(.subheadline)
-                    }
-
-                    if plan.planType == .daily, let time = plan.time {
-                        HStack(spacing: 4) {
-                            Image(systemName: "clock.fill")
-                                .font(.caption)
-                            Text(formatTime(time))
-                                .font(.subheadline)
-                                .lineLimit(1)
-                        }
-                        .padding(.leading, 4)
-                    }
-                }
-                .foregroundColor(.white.opacity(0.9))
-                .shadow(color: themeManager.currentTheme.accent1.opacity(0.3), radius: 4, x: 0, y: 2)
-            }
-            .padding(24)
         }
         .frame(height: 250)
     }
 
     // MARK: - Header Image (Edit Mode)
-    private var editHeaderImageView: some View {
-        ZStack(alignment: .bottom) {
-            // 背景：写真 or プランカラーグラデーション
-            if let image = displayImage {
+    /// 編集画面の写真。
+    ///
+    /// 以前は編集画面の一番上を高さ260ptの写真枠が占めていて、写真が無い予定でも
+    /// 種別色のグラデーションと「写真を変更」ボタンが常に出ていた。
+    /// **大きな枠を置くこと自体が写真の追加を誘っていた**ので、
+    /// 他の項目と同じ1セクションに落とした。位置は先頭のまま。
+    ///
+    /// 機能は残す。すでに写真を入れて使っている人がいる
+    @ViewBuilder
+    private var photoEditRow: some View {
+        if let image = displayImage {
+            HStack(spacing: 12) {
                 Image(uiImage: image)
                     .resizable()
                     .scaledToFill()
-                    .frame(height: 260)
-                    .clipped()
-            } else {
-                LinearGradient(
-                    gradient: Gradient(colors: [planColor.opacity(0.75), planColor.opacity(0.4)]),
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-                .frame(height: 260)
-                .overlay(
-                    Image(systemName: editedPlanType.icon)
-                        .font(.system(size: 80))
-                        .foregroundColor(.white.opacity(0.2))
-                )
-            }
+                    .frame(width: 56, height: 56)
+                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
 
-            // 下部グラデーションオーバーレイ（ボタン視認性確保）
-            LinearGradient(
-                gradient: Gradient(colors: [.clear, .black.opacity(0.45)]),
-                startPoint: .center,
-                endPoint: .bottom
-            )
-            .frame(height: 260)
+                Text("設定済み")
+                    .font(.subheadline)
+                    .foregroundColor(editTextColor)
 
-            // 写真変更ボタン（右下）
-            HStack {
-                Spacer()
+                Spacer(minLength: 0)
+
                 Button(action: { showImagePicker = true }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "camera.fill")
-                            .font(.subheadline)
-                        Text("写真を変更")
-                            .font(.subheadline.weight(.semibold))
-                    }
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 16)
-                    .padding(.vertical, 9)
-                    .background(.ultraThinMaterial)
-                    .clipShape(Capsule())
-                    .overlay(Capsule().stroke(Color.white.opacity(0.3), lineWidth: 1))
+                    Text("変更")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(planColor)
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 8)
+                        .background(planColor.opacity(colorScheme == .dark ? 0.22 : 0.12), in: Capsule())
                 }
-                .padding(.trailing, 16)
-                .padding(.bottom, 14)
+                .buttonStyle(PlainButtonStyle())
+
+                // 写真を外す口。これまでは差し替えしかできず、
+                // 一度入れた写真を「無し」に戻す方法がどこにも無かった
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        selectedImage = nil
+                        displayImage = nil
+                        isRemovingPhoto = true
+                    }
+                } label: {
+                    Image(systemName: "trash")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(themeManager.currentTheme.error)
+                        .padding(8)
+                }
+                .buttonStyle(PlainButtonStyle())
+                .accessibilityLabel("写真を削除")
+            }
+        } else {
+            VStack(alignment: .leading, spacing: 8) {
+                // 無いときは控えめに。種別色で塗らず、文字だけの口にする
+                Button(action: { showImagePicker = true }) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "plus")
+                            .font(.system(size: 11, weight: .bold))
+                        Text("写真を追加")
+                            .font(.system(size: 14, weight: .semibold))
+                    }
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .background(
+                        Capsule().strokeBorder(themeManager.currentTheme.secondaryText.opacity(0.25), lineWidth: 1)
+                    )
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                // 消したことと、まだ取り消せることを伝える
+                if isRemovingPhoto {
+                    Text("保存すると写真が削除されます")
+                        .font(.caption)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                }
             }
         }
-        .frame(height: 260)
     }
 
     // MARK: - Date & Time Section
@@ -1304,113 +1396,53 @@ struct PlanDetailView: View {
     //
     // 旅行計画には無い行。当日その場で開いて押すものを、見出しのすぐ下に並べる。
     // 経路案内は最初の場所へ、通知はその場で入切できる
-    private var quickActionRow: some View {
-        HStack(spacing: 10) {
-            quickAction(
-                icon: "arrow.triangle.turn.up.right.diamond.fill",
-                title: "経路案内",
-                subtitle: plan.places.first?.name,
-                isEnabled: plan.places.first != nil,
-                isOn: false
-            ) {
-                openRouteToFirstPlace()
-            }
-
-            quickAction(
-                icon: "link",
-                title: "リンク",
-                subtitle: (plan.linkURL?.isEmpty == false) ? "1件" : "なし",
-                isEnabled: plan.linkURL?.isEmpty == false,
-                isOn: false
-            ) {
-                guard let raw = plan.linkURL, let url = URL(string: raw) else { return }
-                UIApplication.shared.open(url)
-            }
-
-            quickAction(
-                icon: isNotificationOn ? "bell.fill" : "bell.slash",
-                title: "通知",
-                subtitle: isNotificationOn ? "入" : "切",
-                isEnabled: true,
-                isOn: isNotificationOn
-            ) {
-                toggleNotification()
-            }
-        }
-        .task {
-            isNotificationOn = await NotificationService.shared.hasPendingPlanNotifications(for: plan.id)
-        }
-    }
-
-    private func quickAction(
-        icon: String,
-        title: String,
-        subtitle: String?,
-        isEnabled: Bool,
-        isOn: Bool,
-        action: @escaping () -> Void
-    ) -> some View {
-        Button(action: action) {
-            VStack(spacing: 7) {
-                Image(systemName: icon)
-                    .font(.system(size: 17, weight: .semibold))
-                    .foregroundColor(isEnabled ? planColor : themeManager.currentTheme.secondaryText.opacity(0.5))
-
-                Text(title)
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(isEnabled
-                                     ? (colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-                                     : themeManager.currentTheme.secondaryText.opacity(0.5))
-
-                if let subtitle {
-                    Text(subtitle)
-                        .font(.system(size: 10, weight: .semibold))
-                        .foregroundColor(themeManager.currentTheme.secondaryText)
-                        .lineLimit(1)
-                }
-            }
-            .frame(maxWidth: .infinity)
-            .frame(height: 76)
-            .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
-                    .fill(isOn
-                          ? AnyShapeStyle(planColor.opacity(colorScheme == .dark ? 0.22 : 0.12))
-                          : AnyShapeStyle(colorScheme == .dark
-                                          ? themeManager.currentTheme.secondaryBackgroundDark
-                                          : themeManager.currentTheme.backgroundLight))
-            )
-            .shadow(
-                color: colorScheme == .dark || isOn ? .clear : Color.black.opacity(0.06),
-                radius: 10,
-                x: 0,
-                y: 4
-            )
-        }
-        .buttonStyle(PlainButtonStyle())
-        .disabled(!isEnabled)
-    }
-
     /// 最初の場所へ地図アプリで案内させる。
     /// 座標を持っているので、URLを組み立てる必要はない
-    private func openRouteToFirstPlace() {
-        guard let place = plan.places.first else { return }
+    /// 経路案内タイルの副題。最初の行き先と、2件以上あるならその数
+    private var routeSubtitle: String? {
+        let places = routeDestinations
+        guard let first = places.first else { return nil }
+        return places.count > 1 ? "\(first.name) ほか\(places.count - 1)件" : first.name
+    }
 
+    /// 案内できる行き先。タイムスケジュールに出てくる順（＝回る順）を優先し、
+    /// そこに出てこない場所は後ろに足す
+    private var routeDestinations: [PlannedPlace] {
+        var seen = Set<String>()
+        var ordered: [PlannedPlace] = []
+
+        for item in plan.scheduleItems.sorted(by: { $0.time < $1.time }) {
+            guard let id = item.placeId,
+                  let place = plan.places.first(where: { $0.id == id }),
+                  seen.insert(id).inserted else { continue }
+            ordered.append(place)
+        }
+
+        ordered += plan.places.filter { seen.insert($0.id).inserted }
+        return ordered
+    }
+
+    /// 経路案内。
+    ///
+    /// 以前は問答無用で1件目へ案内していたので、2件目以降に行きたいときに使えなかった。
+    ///
+    /// 全部をまとめて1本の経路にはしない。`MKMapItem.openMaps` で経路を出せるのは
+    /// 2地点までで、3地点以上を渡したときの挙動は保証されていない
+    private func startRouteGuidance() {
+        let places = routeDestinations
+        guard !places.isEmpty else { return }
+
+        if places.count == 1 {
+            openRoute(to: places[0])
+        } else {
+            showRoutePicker = true
+        }
+    }
+
+    private func openRoute(to place: PlannedPlace) {
         let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: place.coordinate))
         mapItem.name = place.name
         mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving])
-    }
-
-    private func toggleNotification() {
-        if isNotificationOn {
-            NotificationService.shared.cancelPlanNotifications(for: plan.id)
-            isNotificationOn = false
-        } else {
-            NotificationService.shared.schedulePlanNotifications(for: plan)
-            // 予定日が過ぎていると何も予約されないため、結果を見てから戻す
-            Task {
-                isNotificationOn = await NotificationService.shared.hasPendingPlanNotifications(for: plan.id)
-            }
-        }
     }
 
     // MARK: - 記念日
@@ -1538,10 +1570,23 @@ struct PlanDetailView: View {
     // MARK: - Schedule Section
     private var scheduleSection: some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack {
+            HStack(spacing: 8) {
                 Text("タイムスケジュール")
                     .font(.headline.weight(.semibold))
                     .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+
+                // 何件あるかは、開かなくても分かるほうがいい
+                if !plan.scheduleItems.isEmpty {
+                    Text("\(plan.scheduleItems.count)件")
+                        .font(.system(size: 12, weight: .bold))
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 3)
+                        .background(
+                            themeManager.currentTheme.secondaryText.opacity(colorScheme == .dark ? 0.18 : 0.10),
+                            in: Capsule()
+                        )
+                }
 
                 Spacer()
 
@@ -1549,15 +1594,15 @@ struct PlanDetailView: View {
                     editingScheduleItem = nil
                     showScheduleEditor = true
                 }) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.body)
-                        Text("追加")
-                            .font(.subheadline.weight(.semibold))
-                    }
-                    .foregroundColor(planColor)
+                    Image(systemName: "plus")
+                        .font(.system(size: 17, weight: .bold))
+                        .foregroundColor(planColor)
+                        .frame(width: 32, height: 32)
+                        .contentShape(Rectangle())
                 }
             }
+            // 上の操作タイルと近すぎたので離す
+            .padding(.top, 10)
 
             if plan.scheduleItems.isEmpty {
                 VStack(spacing: 12) {
@@ -1839,137 +1884,135 @@ struct PlanDetailView: View {
     }
 
     // MARK: - Sidebar View
+    /// 横スワイプで出る予定の切り替え。
+    ///
+    /// 見出しに種別色を敷いて白抜き文字を載せていたが、詳細の見出しを
+    /// フラットにしたのと揃えて面を塗るのをやめた。
+    /// 行も一覧のカード（`PlanEventCardView`）と同じ組みにしてある
     private var sidebarView: some View {
         VStack(alignment: .leading, spacing: 0) {
             // Header
-            VStack(alignment: .leading, spacing: 8) {
-                HStack {
-                    Text("スケジュール")
-                        .font(.title2.bold())
-                        .foregroundColor(themeManager.currentTheme.light)
+            VStack(alignment: .leading, spacing: 4) {
+                Text("予定の切り替え")
+                    .font(.title3.bold())
+                    .foregroundColor(titleColor)
 
-                    Spacer()
-                }
-
-                Text("\(sortedPlans.count)件のプラン")
+                Text("\(sortedPlans.count)件")
                     .font(.subheadline)
-                    .foregroundColor(themeManager.currentTheme.light)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
             }
-            .padding(20)
-            .background(
-                LinearGradient(
-                    gradient: Gradient(colors: [
-                        planColor,
-                        planColor.opacity(0.8)
-                    ]),
-                    startPoint: .topLeading,
-                    endPoint: .bottomTrailing
-                )
-            )
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 16)
+            .padding(.top, 20)
+            .padding(.bottom, 14)
+
+            Rectangle()
+                .fill(themeManager.currentTheme.secondaryText.opacity(0.15))
+                .frame(height: 1)
 
             // Schedule List
             ScrollView(showsIndicators: false) {
-                VStack(spacing: 10) {
+                VStack(spacing: 6) {
                     ForEach(sortedPlans) { schedulePlan in
                         sidebarPlanItem(plan: schedulePlan)
                     }
                 }
-                .padding(12)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 12)
             }
-            .background(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
         }
         .frame(width: 280)
-        .background(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
+        .background(themeManager.currentTheme.elevatedSurface(for: colorScheme))
         .shadow(color: .black.opacity(0.2), radius: 15, x: 5, y: 0)
     }
 
     private func sidebarPlanItem(plan schedulePlan: Plan) -> some View {
-        Button(action: {
+        let isCurrent = schedulePlan.id == plan.id
+        let typeColor = schedulePlan.planType.color(themeManager.currentTheme)
+        let tags = tagManager.tags(for: schedulePlan.tagIDs)
+
+        return Button(action: {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 plan = schedulePlan
                 showSidebar = false
                 loadLocalImage()
             }
         }) {
-            HStack(alignment: .top, spacing: 12) {
-                // Plan type icon
-                ZStack {
-                    Circle()
-                        .fill(
-                            LinearGradient(
-                                colors: [
-                                    schedulePlan.planType.color(themeManager.currentTheme),
-                                    schedulePlan.planType.color(themeManager.currentTheme).opacity(0.7)
-                                ],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 50, height: 50)
-
+            VStack(alignment: .leading, spacing: 5) {
+                HStack(spacing: 6) {
+                    // 50ptのグラデーション円をやめた。280ptの幅では場所を取りすぎるうえ、
+                    // 一覧のカードは同じ情報を11ptのアイコンで足りている
                     Image(systemName: schedulePlan.planType.icon)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(.white)
-                }
-                .shadow(color: schedulePlan.planType.color(themeManager.currentTheme).opacity(0.4), radius: 6, x: 0, y: 3)
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(typeColor)
 
-                VStack(alignment: .leading, spacing: 6) {
                     Text(schedulePlan.title)
                         .font(.system(size: 15, weight: .semibold))
-                        // light は全テーマで白のため、明るいカード背景では読めなかった
                         .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
                         .lineLimit(1)
 
-                    HStack(spacing: 4) {
-                        Image(systemName: "calendar")
-                            .font(.caption2)
-                            .foregroundColor(themeManager.currentTheme.secondaryText)
-                        if schedulePlan.planType == .outing {
-                            Text(dateRangeString(schedulePlan.startDate, schedulePlan.endDate))
-                                .font(.caption)
-                                .foregroundColor(themeManager.currentTheme.secondaryText)
-                        } else {
-                            Text(formatDate(schedulePlan.startDate))
-                                .font(.caption)
-                                .foregroundColor(themeManager.currentTheme.secondaryText)
-                        }
-                    }
+                    Spacer(minLength: 0)
 
-                    if !schedulePlan.places.isEmpty {
-                        HStack(spacing: 4) {
-                            Image(systemName: "mappin.circle.fill")
-                                .font(.caption2)
-                                .foregroundColor(schedulePlan.planType.color(themeManager.currentTheme))
-                            Text("\(schedulePlan.places.count)件")
-                                .font(.caption)
-                                .foregroundColor(themeManager.currentTheme.secondaryText)
-                        }
+                    if isCurrent {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 15))
+                            .foregroundColor(typeColor)
                     }
                 }
 
-                Spacer()
+                HStack(spacing: 6) {
+                    if let tag = tags.first {
+                        Text(tag.name)
+                            .font(.system(size: 10, weight: .bold))
+                            .lineLimit(1)
+                            .foregroundColor(tag.color)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(
+                                tag.color.opacity(colorScheme == .dark ? 0.24 : 0.14),
+                                in: RoundedRectangle(cornerRadius: 5)
+                            )
+                    }
 
-                if schedulePlan.id == plan.id {
-                    Image(systemName: "checkmark.circle.fill")
-                        .font(.system(size: 22))
-                        .foregroundColor(schedulePlan.planType.color(themeManager.currentTheme))
+                    Text(sidebarDateText(for: schedulePlan))
+                        .font(.system(size: 11))
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .lineLimit(1)
+
+                    Spacer(minLength: 0)
                 }
             }
-            .padding(14)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
             .background(
-                RoundedRectangle(cornerRadius: 14)
-                    .fill(schedulePlan.id == plan.id ?
-                          schedulePlan.planType.color(themeManager.currentTheme).opacity(0.1) :
-                          Color(.tertiarySystemBackground))
+                RoundedRectangle(cornerRadius: 12)
+                    // 選んでいる1件だけ塗る。他は面を持たせない
+                    .fill(isCurrent ? typeColor.opacity(colorScheme == .dark ? 0.20 : 0.10) : Color.clear)
             )
-            .overlay(
-                RoundedRectangle(cornerRadius: 14)
-                    .stroke(schedulePlan.id == plan.id ?
-                            schedulePlan.planType.color(themeManager.currentTheme).opacity(0.4) :
-                            Color.clear, lineWidth: 1.5)
-            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(PlainButtonStyle())
+    }
+
+    /// 行に添える日付。日常は時刻、おでかけは期間、場所があれば件数を足す
+    private func sidebarDateText(for schedulePlan: Plan) -> String {
+        var parts: [String] = []
+
+        if schedulePlan.planType == .outing {
+            parts.append(dateRangeString(schedulePlan.startDate, schedulePlan.endDate))
+        } else {
+            parts.append(formatDate(schedulePlan.startDate))
+        }
+
+        if let timeText = schedulePlan.timeRangeText {
+            parts.append(timeText)
+        }
+
+        if !schedulePlan.places.isEmpty {
+            parts.append("\(schedulePlan.places.count)か所")
+        }
+
+        return parts.joined(separator: " · ")
     }
 
     // MARK: - Computed Properties for Sidebar
@@ -1999,15 +2042,9 @@ struct PlanDetailView: View {
         }
     }
 
-    private func addEditedTag() {
-        let trimmed = editedTagInput.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty, !editedTags.contains(trimmed) else { return }
-        editedTags.append(trimmed)
-        editedTagInput = ""
-    }
-
     // MARK: - Edit Mode Functions
     private func enterEditMode() {
+        isRemovingPhoto = false
         editedTitle = plan.title
         editedDescription = plan.description ?? ""
         editedLinkURL = plan.linkURL ?? ""
@@ -2015,9 +2052,9 @@ struct PlanDetailView: View {
         editedStartDate = plan.startDate
         editedEndDate = plan.endDate
         editedTime = plan.time
+        editedEndTime = plan.endTime
         editedPlaces = plan.places
-        editedTags = plan.tags
-        editedTagInput = ""
+        editedTagIDs = plan.tagIDs
         editedRecurrence = plan.recurrence
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             isEditMode = true
@@ -2026,6 +2063,7 @@ struct PlanDetailView: View {
 
     private func cancelEdit() {
         selectedImage = nil
+        isRemovingPhoto = false
         displayImage = loadImageFromLocal()
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             isEditMode = false
@@ -2047,6 +2085,15 @@ struct PlanDetailView: View {
                     handleSaveError(error)
                 }
             }
+        } else if isRemovingPhoto {
+            // 参照を外してから実体を消す。
+            // 先にファイルを消すと、保存に失敗したときに写真だけ失われる
+            let removedFileName = plan.localImageFileName
+            updatePlanData(with: nil)
+
+            if let removedFileName {
+                try? FileManager.removeDocumentFile(named: removedFileName)
+            }
         } else {
             updatePlanData(with: plan.localImageFileName)
         }
@@ -2061,17 +2108,31 @@ struct PlanDetailView: View {
         updatedPlan.startDate = editedStartDate
         updatedPlan.endDate = editedEndDate
         updatedPlan.time = editedTime
+        // 始まりを消したら終わりも残さない
+        updatedPlan.endTime = editedTime == nil ? nil : editedEndTime
         updatedPlan.places = editedPlaces
         updatedPlan.localImageFileName = localFileName
-        updatedPlan.tags = editedTags
+        updatedPlan.tagIDs = editedTagIDs
         // 記念日は毎年で固定。種別を変えたときに古い設定が残らないようにする
         updatedPlan.recurrence = editedPlanType == .anniversary ? .yearly : editedRecurrence
+
+        // 日常と記念日は1日で完結する。終了日の欄はおでかけにしか出ないので、
+        // ここで揃えないと日付を変えたときに古い終了日が残り、
+        // 一覧が「◯◯まで」の複数日表示になったり、期間の判定から外れたりする
+        if editedPlanType != .outing {
+            updatedPlan.endDate = editedStartDate
+        }
 
         // 記念日は時刻も場所も持たない
         if editedPlanType == .anniversary {
             updatedPlan.time = nil
+            updatedPlan.endTime = nil
             updatedPlan.places = []
-            updatedPlan.endDate = editedStartDate
+        }
+
+        // おでかけも時刻は持たない。日常から変えたときに残らないようにする
+        if editedPlanType == .outing {
+            updatedPlan.endTime = nil
         }
 
         if let userId = authVM.userId {
@@ -2082,6 +2143,7 @@ struct PlanDetailView: View {
             isSaving = false
             plan = updatedPlan
             selectedImage = nil
+            isRemovingPhoto = false
             displayImage = loadImageFromLocal()
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 isEditMode = false
@@ -2214,6 +2276,7 @@ struct PlanDetailView: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     // MARK: - Map Search Bar

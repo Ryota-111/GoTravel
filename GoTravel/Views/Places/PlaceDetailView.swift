@@ -53,7 +53,7 @@ struct PlaceDetailView: View {
             }
         }
         .background(
-            (colorScheme == .dark ? themeManager.currentTheme.dark : themeManager.currentTheme.light)
+            themeManager.currentTheme.backgroundGradient(for: colorScheme)
                 .ignoresSafeArea()
         )
         .navigationBarTitleDisplayMode(.inline)

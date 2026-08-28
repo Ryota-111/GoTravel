@@ -89,6 +89,7 @@ struct ManageCategoriesView: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
         .sheet(isPresented: $showAddSheet) {
             CategoryEditorView(categoryManager: categoryManager, editing: nil)
         }
@@ -195,6 +196,7 @@ struct CategoryEditorView: View {
                 selectedHex = editing.colorHex ?? PlaceCategoryPalette.fallbackHex(forCategoryId: editing.id)
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     /// 選んだ色とアイコンでできあがりを見せる。

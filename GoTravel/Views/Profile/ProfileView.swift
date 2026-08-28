@@ -19,18 +19,24 @@ struct ProfileView: View {
                 VStack(spacing: 0) {
                     profileHeaderSection
 
+                    // 上から「本人のこと」「できること」「設定」「困ったとき」「その他」。
+                    //
+                    // 設定がヘルプやチップより下にあると、いちばん開く用事のものが
+                    // 一番下になる。アカウント（削除を含む）は最後に置く
                     VStack(spacing: 16) {
                         profileEditCard
 
-                        accountCard
-
                         joinTravelPlanCard
+
+                        appsettingCard
+
+                        reminderDefaultsCard
 
                         helpSupportCard
 
                         tipJarCard
 
-                        appsettingCard
+                        accountCard
 
                         // cloudKitTestCard // 開発用：必要時にコメント解除
                     }
@@ -249,7 +255,7 @@ struct ProfileView: View {
         .opacity(animateCards ? 1 : 0)
         .scaleEffect(animateCards ? 1 : 0.8)
         .offset(y: animateCards ? 0 : 30)
-        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.25), value: animateCards)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.45), value: animateCards)
     }
 
     // MARK: - Help & Support Card
@@ -282,7 +288,23 @@ struct ProfileView: View {
         .opacity(animateCards ? 1 : 0)
         .scaleEffect(animateCards ? 1 : 0.8)
         .offset(y: animateCards ? 0 : 30)
-        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.45), value: animateCards)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.25), value: animateCards)
+    }
+
+    private var reminderDefaultsCard: some View {
+        NavigationLink(destination: PlanReminderDefaultsView()) {
+            GlassMenuCard(
+                icon: "bell.badge.fill",
+                title: "通知の初期設定",
+                subtitle: "新しい予定に入れる通知",
+                gradientColors: [Color.orange, Color.pink.opacity(0.8)]
+            )
+        }
+        .buttonStyle(CardButtonStyle())
+        .opacity(animateCards ? 1 : 0)
+        .scaleEffect(animateCards ? 1 : 0.8)
+        .offset(y: animateCards ? 0 : 30)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.30), value: animateCards)
     }
 
     // MARK: - Join Travel Plan Card
@@ -299,7 +321,7 @@ struct ProfileView: View {
         .opacity(animateCards ? 1 : 0)
         .scaleEffect(animateCards ? 1 : 0.8)
         .offset(y: animateCards ? 0 : 30)
-        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.30), value: animateCards)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.20), value: animateCards)
     }
 
     // MARK: - Tip Jar Card
@@ -421,13 +443,21 @@ struct ProfileEditView: View {
     @State private var showRemoveAvatarConfirm = false
     @State private var animateContent = false
 
+    // 名前とメールは Apple から初回しか貰えないので、自分で直せるようにしてある
+    @State private var editedName = ""
+    @State private var editedEmail = ""
+
+    private var hasProfileChanges: Bool {
+        editedName.trimmingCharacters(in: .whitespacesAndNewlines) != (authVM.userFullName ?? "")
+            || editedEmail.trimmingCharacters(in: .whitespacesAndNewlines) != (authVM.userEmail ?? "")
+    }
+
     var body: some View {
         ZStack {
             backgroundGradient
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 25) {
-                    // User Info (read-only)
                     userInfoSection
 
                     avatarSection
@@ -442,8 +472,24 @@ struct ProfileEditView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .onAppear {
+            editedName = authVM.userFullName ?? ""
+            editedEmail = authVM.userEmail ?? ""
+
             withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
                 animateContent = true
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("保存") {
+                    authVM.updateProfile(fullName: editedName, email: editedEmail)
+                    presentationMode.wrappedValue.dismiss()
+                }
+                .fontWeight(.semibold)
+                .foregroundColor(hasProfileChanges
+                                 ? themeManager.currentTheme.xprimary
+                                 : themeManager.currentTheme.secondaryText)
+                .disabled(!hasProfileChanges)
             }
         }
         .sheet(isPresented: $showImagePicker) {
@@ -481,9 +527,10 @@ struct ProfileEditView: View {
                         .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
 
-                Text(authVM.userFullName ?? "ユーザー")
+                TextField("ユーザー", text: $editedName)
                     .font(.body)
                     .foregroundColor(themeManager.currentTheme.text)
+                    .textInputAutocapitalization(.never)
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
@@ -506,9 +553,12 @@ struct ProfileEditView: View {
                         .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
 
-                Text(authVM.userEmail ?? "")
+                TextField("未設定", text: $editedEmail)
                     .font(.body)
                     .foregroundColor(themeManager.currentTheme.text)
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
@@ -556,7 +606,9 @@ struct ProfileEditView: View {
                     .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
             }
 
-            Text("名前とメールアドレスはApple IDから取得されます。変更する場合は、Apple IDの設定から変更してください。")
+            // Apple から名前とメールを貰えるのは初回の1回きりで、取り直す手段がない。
+            // 「Apple IDの設定から変更してください」は実際には効かない案内だった
+            Text("名前とメールアドレスは、初回のサインイン時にApple IDから取得したものです。この端末での表示にだけ使うので、ここで自由に変更できます。")
                 .font(.caption)
                 .foregroundColor(themeManager.currentTheme.secondaryText)
         }
@@ -1355,6 +1407,7 @@ struct UserGuideView: View {
             }
             .navigationBarItems(trailing: closeButton)
         }
+        .navigationViewStyle(.stack)
     }
 
     private var closeButton: some View {

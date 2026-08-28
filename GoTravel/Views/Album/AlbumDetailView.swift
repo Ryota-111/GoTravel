@@ -106,6 +106,7 @@ struct AlbumDetailView: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
         .sheet(isPresented: $showImagePicker) {
             MultiPhotoPicker { images in
                 guard !images.isEmpty else { return }

@@ -98,8 +98,11 @@ struct ThemePreset {
             
             backgroundLight = Color(red: 1, green: 1, blue: 1)
             secondaryBackgroundLight = Color(red: 0.95, green: 0.95, blue: 0.97)
-            backgroundDark = Color(red:0.0, green: 0.0, blue: 0.0)
-            secondaryBackgroundDark = Color(red: 0.11, green: 0.11, blue: 0.12)
+            // 純黒(0.0)をやめる。白文字がにじんで読みにくいうえ、
+            // ダークモードで影を消している画面（`colorScheme == .dark ? .clear : ...`）が多く、
+            // カードとの差が色だけで付く。地を持ち上げたぶん、カード側も少し上げて段差を保つ
+            backgroundDark = Color(red: 0.07, green: 0.07, blue: 0.08)
+            secondaryBackgroundDark = Color(red: 0.13, green: 0.13, blue: 0.14)
             tertiaryBackground = Color(red: 0.85, green: 0.88, blue: 0.96)
             separatorLight = Color(red: 0.24, green: 0.24, blue: 0.26).opacity(0.29)
             separatorDark = Color(red: 0.33, green: 0.33, blue: 0.35).opacity(0.6)
@@ -318,6 +321,32 @@ extension ThemePreset {
     /// accent1 は黒固定のため、ダークモードで背景に溶ける
     func adaptiveText(for scheme: ColorScheme) -> Color {
         scheme == .dark ? accent2 : accent1
+    }
+
+    /// 画面の地に敷くグラデーション。詳細画面はすべてこれを使う。
+    ///
+    /// 以前は画面ごとに `dark`（＝純黒）を直に敷いたり、同じ式を各画面に写したりしていた。
+    /// テーマ側の背景色を調整しても効かない画面が出るので、ここに1つだけ置く。
+    ///
+    /// 白黒テーマだけ別扱いなのは、このテーマが `backgroundDark` に白を入れていて、
+    /// ダークモードでも明るい画面を保つ作りになっているため
+    func backgroundGradient(for colorScheme: ColorScheme) -> LinearGradient {
+        let colors: [Color]
+        switch type {
+        case .whiteBlack:
+            colors = [Color(white: 0.96), Color(white: 0.91)]
+        default:
+            colors = colorScheme == .dark
+                ? [backgroundDark, secondaryBackgroundDark]
+                : [backgroundLight, secondaryBackgroundLight]
+        }
+        return LinearGradient(gradient: Gradient(colors: colors), startPoint: .top, endPoint: .bottom)
+    }
+
+    /// 地の上に重ねる面（下部シートなど）の色。
+    /// 地と同じ色にすると、境目が影だけになって見えなくなる
+    func elevatedSurface(for colorScheme: ColorScheme) -> Color {
+        colorScheme == .dark ? secondaryBackgroundDark : light
     }
 
     /// 指定した背景色の上で必ず読める文字色。

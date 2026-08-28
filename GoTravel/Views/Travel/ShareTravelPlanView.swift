@@ -78,6 +78,7 @@ struct ShareTravelPlanView: View {
                 Text(publishErrorMessage)
             }
         }
+        .navigationViewStyle(.stack)
         .onAppear {
             if let code = currentPlan.shareCode {
                 shareCode = code

@@ -35,6 +35,9 @@ final class CloudKitMigrationService {
 
     /// 全データをCloudKitからCore Dataに移行
     func migrateAllData(userId: String) async throws {
+        // 空データモードでは走らせない。中身は空なのに「移行済み」の印だけが
+        // 端末に残り、実データでの移行が二度と走らなくなる
+        guard !CoreDataManager.isEmptyDataMode else { return }
         guard !hasMigrated else {
             return
         }

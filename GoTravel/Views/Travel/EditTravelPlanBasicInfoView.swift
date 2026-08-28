@@ -65,10 +65,6 @@ struct EditTravelPlanBasicInfoView: View {
         colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight
     }
 
-    private var cardBg: Color {
-        colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight
-    }
-
     private var bgGradient: some View {
         LinearGradient(
             gradient: Gradient(colors: colorScheme == .dark
@@ -89,8 +85,9 @@ struct EditTravelPlanBasicInfoView: View {
                 headerView
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 14) {
+                    VStack(spacing: 0) {
                         coverImageSection
+                            .padding(.bottom, 6)
                         titleSection
                         destinationSection
                         dateSection
@@ -345,15 +342,21 @@ struct EditTravelPlanBasicInfoView: View {
     }
 
     // MARK: - Helper Views
-    @ViewBuilder
+    /// 1区切り。
+    ///
+    /// 以前はセクションごとに影付きのカードを敷いていたが、中の入力欄も箱を持つため
+    /// 箱が二重になっていた。面を塗るのはやめて薄い区切り線だけにする。
+    /// スケジュールの追加・編集画面と同じ組み
     private func sectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        content()
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(cardBg)
-                    .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
-            )
+        VStack(alignment: .leading, spacing: 0) {
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 16)
+
+            Rectangle()
+                .fill(themeManager.currentTheme.secondaryText.opacity(0.15))
+                .frame(height: 1)
+        }
     }
 
     private func sectionLabel(_ text: String, icon: String) -> some View {

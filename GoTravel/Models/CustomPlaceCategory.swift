@@ -92,6 +92,9 @@ final class PlaceCategoryManager: NSObject, ObservableObject {
     // MARK: - Migration
 
     private func migrateLegacyCategoriesIfNeeded(userId: String) {
+        // 空データモードでは走らせない。中身は空なのに「移行済み」の印だけが
+        // 端末に残り、実データでの移行が二度と走らなくなる
+        guard !CoreDataManager.isEmptyDataMode else { return }
         guard !UserDefaults.standard.bool(forKey: migrationDoneKey) else { return }
 
         // 移行対象がない場合だけ、ここで「済み」にして終える

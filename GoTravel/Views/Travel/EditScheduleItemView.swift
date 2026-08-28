@@ -100,10 +100,6 @@ struct EditScheduleItemView: View {
         colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight
     }
 
-    private var cardBg: Color {
-        colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight
-    }
-
     private var bgGradient: some View {
         LinearGradient(
             gradient: Gradient(colors: colorScheme == .dark
@@ -124,7 +120,7 @@ struct EditScheduleItemView: View {
                 headerView
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 14) {
+                    VStack(spacing: 0) {
                         titleSection
                         timeSection
                         locationSection
@@ -423,7 +419,8 @@ struct EditScheduleItemView: View {
                     .fill(themeManager.currentTheme.error.opacity(0.08))
             )
         }
-        .padding(.top, 8)
+        // セクションが区切り線だけになったぶん、削除は少し離す
+        .padding(.top, 24)
     }
 
     // MARK: - Save Button
@@ -453,14 +450,21 @@ struct EditScheduleItemView: View {
 
     // MARK: - Helper Views
     @ViewBuilder
+    /// 1区切り。
+    ///
+    /// 以前はセクションごとに影付きのカードを敷いていたが、中の入力欄も箱を持つため
+    /// 箱が二重になっていた。面を塗るのはやめて薄い区切り線だけにする。
+    /// 予定計画の編集画面（`PlanDetailView.editSection`）と同じ組み
     private func sectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        content()
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(cardBg)
-                    .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
-            )
+        VStack(alignment: .leading, spacing: 0) {
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 16)
+
+            Rectangle()
+                .fill(themeManager.currentTheme.secondaryText.opacity(0.15))
+                .frame(height: 1)
+        }
     }
 
     private func sectionLabel(_ text: String, icon: String) -> some View {
@@ -709,6 +713,7 @@ struct EditScheduleItemView: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     /// 保存済みの場所を行き先として設定する。

@@ -96,6 +96,7 @@ struct SaveAsVisitedFromScheduleView: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     private func formatTime(_ date: Date) -> String {

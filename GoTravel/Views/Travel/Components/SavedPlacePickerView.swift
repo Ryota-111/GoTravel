@@ -85,6 +85,7 @@ struct SavedPlacePickerView: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     // MARK: - Category Filter

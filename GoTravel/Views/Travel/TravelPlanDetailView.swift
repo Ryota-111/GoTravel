@@ -104,10 +104,18 @@ struct TravelPlanDetailView: View {
     @State private var editingItem: ScheduleItem?
 
     // Weather Properties
-    @State private var planWeather: WeatherService.DayWeather?
+    /// 日程の各日ぶんの天気。取れなかった日は入らないので、日番号とは対応しない
+    @State private var planWeatherDays: [WeatherService.DayWeather] = []
     @State private var isLoadingPlanWeather = false
-    @State private var planWeatherError: String?
+    /// 出せなかった理由。文言とアイコンは種類ごとに変える
+    @State private var planWeatherNote: WeatherNote?
     @State private var weatherAttribution: WeatherService.WeatherAttribution?
+
+    /// 天気が出せないときに1行で出す説明
+    private struct WeatherNote {
+        let text: String
+        let icon: String
+    }
 
     let planId: String
 
@@ -136,16 +144,7 @@ struct TravelPlanDetailView: View {
     }
 
     private var backgroundGradient: some View {
-        let colors: [Color]
-        switch themeManager.currentTheme.type {
-        case .whiteBlack:
-            colors = [Color(white: 0.96), Color(white: 0.91)]
-        default:
-            colors = colorScheme == .dark
-                ? [themeManager.currentTheme.backgroundDark, themeManager.currentTheme.secondaryBackgroundDark]
-                : [themeManager.currentTheme.backgroundLight, themeManager.currentTheme.secondaryBackgroundLight]
-        }
-        return LinearGradient(gradient: Gradient(colors: colors), startPoint: .top, endPoint: .bottom)
+        themeManager.currentTheme.backgroundGradient(for: colorScheme)
             .ignoresSafeArea()
     }
 
@@ -1311,12 +1310,91 @@ struct TravelPlanDetailView: View {
                         .font(.caption)
                         .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
-            } else if planWeatherError != nil {
-                weatherNote("10日前になると天気が表示されます", icon: "calendar")
-            } else if let weather = planWeather {
+            } else if let note = planWeatherNote {
+                weatherNote(note.text, icon: note.icon)
+            } else if plan.dayCount == 1, let weather = planWeatherDays.first {
+                // 1日だけの旅行に「1日目」と付けても意味がないので、今までどおり1行で出す
                 weatherSummary(weather)
+            } else if !planWeatherDays.isEmpty {
+                tripWeatherRow(plan: plan)
             }
         }
+    }
+
+    /// 日程ぶんの天気を横に並べる。
+    ///
+    /// 開始日1日ぶんしか出していなかったため、旅行中は何日目にいても
+    /// 初日の予報を見せられていた（しかも過去日なので取得に失敗していた）
+    private func tripWeatherRow(plan: TravelPlan) -> some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(1...plan.dayCount, id: \.self) { dayNumber in
+                    let date = plan.date(forDay: dayNumber)
+                    if let weather = weather(forDay: date) {
+                        weatherDayCell(dayNumber: dayNumber, date: date, weather: weather)
+                    }
+                }
+            }
+        }
+    }
+
+    /// その日の予報。取れていない日は nil（10日より先など）
+    private func weather(forDay date: Date) -> WeatherService.DayWeather? {
+        planWeatherDays.first {
+            Calendar.current.isDate($0.date, inSameDayAs: date)
+        }
+    }
+
+    private func weatherDayCell(dayNumber: Int, date: Date, weather: WeatherService.DayWeather) -> some View {
+        let isToday = Calendar.current.isDateInToday(date)
+
+        // 日付と気温・降水をそれぞれ1行にまとめて、3行に畳んでいる。
+        // 5行（日番号・日付・アイコン・気温・降水）だと縦を取りすぎる
+        return VStack(spacing: 3) {
+            HStack(spacing: 4) {
+                Text("\(dayNumber)日目")
+                    .font(.system(size: 11, weight: .bold))
+                    .foregroundColor(isToday ? scheduleAccentColor : themeManager.currentTheme.secondaryText)
+
+                Text(DateFormatter.japaneseMonthDayCompact.string(from: date))
+                    .font(.system(size: 10))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+
+            Image(systemName: weather.symbolName)
+                .resizable()
+                .scaledToFit()
+                .foregroundColor(scheduleAccentColor)
+                .frame(width: 26, height: 20)
+
+            HStack(spacing: 4) {
+                Text("\(Int(weather.highTemperature))°")
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(accentColor)
+                Text("\(Int(weather.lowTemperature))°")
+                    .font(.system(size: 11))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+
+                HStack(spacing: 1) {
+                    Image(systemName: "umbrella.fill")
+                        .font(.system(size: 8))
+                    Text(weather.precipitationText)
+                        .font(.system(size: 10))
+                }
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+            // 気温と降水を1行に詰めたので、セルの最小幅より広くなる日がある。
+            // 理想幅を確保しないと、末尾の降水確率が「…」に潰れる
+            .fixedSize(horizontal: true, vertical: false)
+        }
+        .frame(minWidth: 76)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 7)
+        .background(
+            RoundedRectangle(cornerRadius: 12, style: .continuous)
+                // 今日の1枚だけ薄く敷いて、何日目にいるか分かるようにする
+                .fill(isToday ? scheduleAccentColor.opacity(colorScheme == .dark ? 0.20 : 0.10) : Color.clear)
+        )
     }
 
     private func weatherNote(_ text: String, icon: String) -> some View {
@@ -1633,38 +1711,65 @@ struct TravelPlanDetailView: View {
 
         guard let latitude = plan.latitude,
               let longitude = plan.longitude else {
-            planWeather = nil
+            planWeatherDays = []
             isLoadingPlanWeather = false
-            planWeatherError = nil
+            planWeatherNote = nil
             weatherAttribution = nil
             return
         }
 
         isLoadingPlanWeather = true
-        planWeatherError = nil
+        planWeatherNote = nil
 
         Task { @MainActor in
             // WeatherKitの準備が完了するまで少し待機
             try? await Task.sleep(nanoseconds: 500_000_000) // 0.5秒
 
             do {
-                // Fetch weather data
-                let fetchedWeather = try await WeatherService.shared.fetchDayWeather(
+                // 日程ぶんまとめて取る。1日ずつ問い合わせると同じ予報を人数分叩くうえ、
+                // 開始日だけを見ていた頃は旅行が始まった瞬間に「過去の日付」になって落ちていた
+                let fetchedDays = try await WeatherService.shared.fetchWeatherForTrip(
                     latitude: latitude,
                     longitude: longitude,
-                    date: plan.startDate
+                    startDate: plan.startDate,
+                    endDate: plan.endDate
                 )
 
                 // Fetch attribution
                 let fetchedAttribution = try await WeatherService.shared.getWeatherAttribution()
 
-                self.planWeather = fetchedWeather
+                self.planWeatherDays = fetchedDays
                 self.weatherAttribution = fetchedAttribution
+                self.planWeatherNote = fetchedDays.isEmpty
+                    ? WeatherNote(text: "10日前になると天気が表示されます", icon: "calendar")
+                    : nil
                 self.isLoadingPlanWeather = false
             } catch {
-                self.planWeatherError = error.localizedDescription
+                self.planWeatherDays = []
+                self.planWeatherNote = Self.note(for: error)
                 self.isLoadingPlanWeather = false
             }
+        }
+    }
+
+    /// 失敗の理由をそのまま出す。
+    ///
+    /// 以前はどんな失敗でも「10日前になると天気が表示されます」と出していたため、
+    /// 通信断も認証エラーも日付が先すぎるように読めていた
+    private static func note(for error: Error) -> WeatherNote {
+        guard let weatherError = error as? WeatherError else {
+            return WeatherNote(text: error.localizedDescription, icon: "cloud.slash")
+        }
+
+        switch weatherError {
+        case .dateTooFarInFuture:
+            return WeatherNote(text: "10日前になると天気が表示されます", icon: "calendar")
+        case .networkError:
+            return WeatherNote(text: "通信できないため天気を取得できませんでした", icon: "wifi.slash")
+        case .locationNotAvailable, .invalidCoordinates:
+            return WeatherNote(text: "設定された場所には天気の情報がありませんでした", icon: "cloud.slash")
+        default:
+            return WeatherNote(text: "天気を取得できませんでした", icon: "cloud.slash")
         }
     }
 }
@@ -1772,6 +1877,7 @@ struct TravelPlanDetailView: View {
             .environmentObject(viewModel)
             .environmentObject(authVM)
     }
+    .navigationViewStyle(.stack)
 }
 
 // MARK: - Native Swipe Back Enabler

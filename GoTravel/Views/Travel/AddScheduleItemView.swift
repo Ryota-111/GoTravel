@@ -78,10 +78,6 @@ struct AddScheduleItemView: View {
         colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight
     }
 
-    private var cardBg: Color {
-        colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight
-    }
-
     private var bgGradient: some View {
         LinearGradient(
             gradient: Gradient(colors: colorScheme == .dark
@@ -102,8 +98,7 @@ struct AddScheduleItemView: View {
                 headerView
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 14) {
-                        dayInfoCard
+                    VStack(spacing: 0) {
                         titleSection
                         timeSection
                         locationSection
@@ -166,37 +161,6 @@ struct AddScheduleItemView: View {
         .padding(.horizontal, 20)
         .padding(.vertical, 14)
         .background(travelColor.opacity(0.15))
-    }
-
-    // MARK: - Day Info Card
-    private var dayInfoCard: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(travelColor.opacity(0.15))
-                    .frame(width: 50, height: 50)
-                Text("\(dayNumber)")
-                    .font(.title2.weight(.bold))
-                    .foregroundColor(travelColor)
-            }
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Day \(dayNumber)")
-                    .font(.headline.weight(.bold))
-                    .foregroundColor(textColor)
-                Text(formattedDayDate)
-                    .font(.subheadline)
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-            }
-
-            Spacer()
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(cardBg)
-                .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
-        )
     }
 
     // MARK: - Title Section
@@ -411,14 +375,21 @@ struct AddScheduleItemView: View {
 
     // MARK: - Helper Views
     @ViewBuilder
+    /// 1区切り。
+    ///
+    /// 以前はセクションごとに影付きのカードを敷いていたが、中の入力欄も箱を持つため
+    /// 箱が二重になっていた。面を塗るのはやめて薄い区切り線だけにする。
+    /// 予定計画の編集画面（`PlanDetailView.editSection`）と同じ組み
     private func sectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        content()
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(cardBg)
-                    .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
-            )
+        VStack(alignment: .leading, spacing: 0) {
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 16)
+
+            Rectangle()
+                .fill(themeManager.currentTheme.secondaryText.opacity(0.15))
+                .frame(height: 1)
+        }
     }
 
     private func sectionLabel(_ text: String, icon: String) -> some View {
@@ -643,6 +614,7 @@ struct AddScheduleItemView: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     /// 保存済みの場所を行き先として設定する。

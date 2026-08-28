@@ -8,13 +8,17 @@ import SwiftUI
 // 色の受け持ちを2つに分けている。
 // - カードの主役色（日付タイル・面の色味・影）は **テーマ色**。
 //   白黒テーマを選んだ人の一覧が青やオレンジで埋まらないようにする
-// - 種別（おでかけ／日常）の色は **小さなタグだけ**。
-//   一覧を見分ける手がかりとしては、この大きさで足りる
+// - 分類の色は **タグの小さなチップ**。
+//   一覧を見分ける手がかりとしては、この大きさで足りる。
+//   以前はここに種別（おでかけ／日常）の名前を色つきで出していたが、
+//   種別は作るときにどの項目を聞くかの区別でしかないので、
+//   名前を外してアイコンだけにした。色は3種類の区別のために残してある
 struct PlanEventCardView: View {
     let plan: Plan
     var onDelete: (() -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
     @ObservedObject var themeManager = ThemeManager.shared
+    @ObservedObject var tagManager = PlanTagManager.shared
 
     // メインテーマ色（カード全体の主役。種別カラーはアクセントに限定）
     private var mainColor: Color {
@@ -64,13 +68,14 @@ struct PlanEventCardView: View {
                     .lineLimit(1)
 
                 HStack(spacing: 7) {
-                    // 種別色を使うのはここだけ
-                    Text(typeName)
-                        .font(.system(size: 10, weight: .bold))
+                    // 種別はアイコンだけに落としたが、無色だと3種類の区別がつかない。
+                    // 名前を出さないぶん、色で見分けられるようにしておく
+                    Image(systemName: plan.planType.icon)
+                        .font(.system(size: 11, weight: .semibold))
                         .foregroundColor(typeColor)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 2)
-                        .background(typeColor.opacity(colorScheme == .dark ? 0.24 : 0.14), in: RoundedRectangle(cornerRadius: 6))
+                        .accessibilityLabel(typeName)
+
+                    tagChip
 
                     Text(subtitle)
                         .font(.system(size: 12))
@@ -236,8 +241,8 @@ struct PlanEventCardView: View {
             parts.append("\(days)日間")
         }
 
-        if let time = plan.time {
-            parts.append(DateFormatter.japaneseTime.string(from: time))
+        if let timeText = plan.timeRangeText {
+            parts.append(timeText)
         }
 
         if !plan.places.isEmpty {
@@ -248,15 +253,44 @@ struct PlanEventCardView: View {
             parts.append(plan.recurrence.displayName)
         }
 
-        if !plan.tags.isEmpty {
-            parts.append(plan.tags.map { "#\($0)" }.joined(separator: " "))
-        }
-
         return parts.joined(separator: " · ")
     }
 
     private var typeColor: Color {
         plan.planType.color(themeManager.currentTheme)
+    }
+
+    /// 分類の色。一覧で「どの仕分けの予定か」を見分ける手がかりはタグが受け持つ
+    @ViewBuilder
+    private var tagChip: some View {
+        if let tag = primaryTag {
+            Text(tag.name)
+                .font(.system(size: 10, weight: .bold))
+                .lineLimit(1)
+                .foregroundColor(tag.color)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 2)
+                .background(
+                    tag.color.opacity(colorScheme == .dark ? 0.24 : 0.14),
+                    in: RoundedRectangle(cornerRadius: 6)
+                )
+
+            // 2つ目以降は数だけ。名前を全部出すと日付や時刻が押し出される
+            if extraTagCount > 0 {
+                Text("+\(extraTagCount)")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(subTextColor)
+            }
+        }
+    }
+
+    /// 一覧に出す代表タグ。予定が持つ並びの先頭を使う
+    private var primaryTag: PlanTag? {
+        tagManager.tags(for: plan.tagIDs).first
+    }
+
+    private var extraTagCount: Int {
+        max(tagManager.tags(for: plan.tagIDs).count - 1, 0)
     }
 
     /// タイルに出す日。今日にかかっている予定は今日を指す

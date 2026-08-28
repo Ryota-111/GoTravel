@@ -40,7 +40,9 @@ struct BottomTimelineCard: View {
                 .frame(maxWidth: .infinity)
                 .background(
                     RoundedRectangle(cornerRadius: 24)
-                        .fill(colorScheme == .dark ? themeManager.currentTheme.dark : themeManager.currentTheme.light)
+                        // 背後のカレンダーより一段明るい面にする。
+                        // 同じ色だと、シートの上端が影だけになって境目が見えない
+                        .fill(themeManager.currentTheme.elevatedSurface(for: colorScheme))
                         .shadow(color: themeManager.currentTheme.accent1.opacity(0.15), radius: 20, x: 0, y: -5)
                 )
                 .offset(y: max(0, dragOffset))
@@ -238,6 +240,7 @@ struct TimelineItemCard: View {
     @EnvironmentObject var plansViewModel: PlansViewModel
     @EnvironmentObject var travelViewModel: TravelPlanViewModel
     @ObservedObject var themeManager = ThemeManager.shared
+    @ObservedObject var tagManager = PlanTagManager.shared
     @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
@@ -247,22 +250,47 @@ struct TimelineItemCard: View {
         .buttonStyle(PlainButtonStyle())
     }
 
+    /// この行の予定に付いているタグ。旅行計画はタグを持たない
+    private var planTags: [PlanTag] {
+        guard let plan = item.relatedPlan else { return [] }
+        return tagManager.tags(for: plan.tagIDs)
+    }
+
+    /// 終わりの時刻。日常の予定だけが持つ
+    private var endTimeText: String? {
+        guard let endTime = item.relatedPlan?.endTime else { return nil }
+        return DateFormatter.japaneseTime.string(from: endTime)
+    }
+
     /// 旅行計画・予定計画と同じ時刻レール。
     ///
     /// 以前は1件ごとに50ptの丸と影付きカードを積んでいたため、
     /// 閉じた高さでは2件しか見えず、時刻もカードの中に埋もれていた
     private var cardContent: some View {
         HStack(alignment: .top, spacing: 0) {
-            Text(formatTimeOrDate(item.time, type: item.type))
-                .font(.system(size: 13, weight: .bold))
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .foregroundColor(state == .past
-                                 ? themeManager.currentTheme.secondaryText.opacity(0.6)
-                                 : themeManager.currentTheme.secondaryText)
-                .frame(width: 52, alignment: .trailing)
-                .padding(.top, 1)
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(formatTimeOrDate(item.time, type: item.type))
+                    .font(.system(size: 13, weight: .bold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .foregroundColor(state == .past
+                                     ? themeManager.currentTheme.secondaryText.opacity(0.6)
+                                     : themeManager.currentTheme.secondaryText)
+
+                // 終わりの時刻はレールの下に小さく続ける。
+                // 「14:00 〜 15:30」と1行にすると52ptの時刻欄に収まらない
+                if let endTimeText {
+                    Text("〜" + endTimeText)
+                        .font(.system(size: 11))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.7))
+                }
+            }
+            .frame(width: 52, alignment: .trailing)
+            .padding(.top, 1)
 
             // レール
             VStack(spacing: 0) {
@@ -295,6 +323,8 @@ struct TimelineItemCard: View {
                                          ? themeManager.currentTheme.secondaryText
                                          : (colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1))
                         .lineLimit(1)
+
+                    tagChip
                 }
 
                 if let subtitle = item.subtitle, !subtitle.isEmpty {
@@ -316,6 +346,29 @@ struct TimelineItemCard: View {
         }
     }
 
+    /// 代表タグ。一覧のカード（`PlanEventCardView`）と同じ大きさ・同じ出し方に揃える
+    @ViewBuilder
+    private var tagChip: some View {
+        if let tag = planTags.first {
+            Text(tag.name)
+                .font(.system(size: 10, weight: .bold))
+                .lineLimit(1)
+                .foregroundColor(state == .past ? themeManager.currentTheme.secondaryText : tag.color)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 2)
+                .background(
+                    tag.color.opacity(state == .past ? 0.08 : (colorScheme == .dark ? 0.24 : 0.14)),
+                    in: RoundedRectangle(cornerRadius: 6)
+                )
+
+            if planTags.count > 1 {
+                Text("+\(planTags.count - 1)")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+        }
+    }
+
     /// レールの点。過ぎた分は塗り、次の1件は光らせ、これからは中を抜く
     @ViewBuilder
     private var dot: some View {
@@ -331,7 +384,8 @@ struct TimelineItemCard: View {
                 .frame(width: 12, height: 12)
         case .future, .flat:
             Circle()
-                .fill(colorScheme == .dark ? themeManager.currentTheme.dark : themeManager.currentTheme.light)
+                // 中を抜いて見せる点なので、シートの面と同じ色でなければならない
+                .fill(themeManager.currentTheme.elevatedSurface(for: colorScheme))
                 .frame(width: 12, height: 12)
                 .overlay(
                     Circle().strokeBorder(

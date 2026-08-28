@@ -32,11 +32,13 @@ struct AddPlanView: View {
     @State private var places: [PlannedPlace] = []
     @State private var dailyDate: Date = Date()
     @State private var dailyTime: Date = Date()
+    /// 終わりの時間は任意。付けた人だけが持つ
+    @State private var hasDailyEndTime: Bool = false
+    @State private var dailyEndTime: Date = Date()
     @State private var description: String = ""
     @State private var linkURL: String = ""
     @State private var recurrence: PlanRecurrence = .none
-    @State private var tags: [String] = []
-    @State private var tagInput: String = ""
+    @State private var selectedTagIDs: [String] = []
 
     // Map state
     @State private var showMapPicker: Bool = false
@@ -213,6 +215,18 @@ struct AddPlanView: View {
                 endDate = newValue
             }
         }
+        .onChange(of: dailyTime) { _, newValue in
+            // 始まりを終わりより後にしたら、終わりを1時間後へ追従させる。
+            // 日をまたぐ用事はここでは扱わない
+            guard hasDailyEndTime, minutesOfDay(dailyEndTime) < minutesOfDay(newValue) else { return }
+            dailyEndTime = Calendar.current.date(byAdding: .hour, value: 1, to: newValue) ?? newValue
+        }
+    }
+
+    /// 時刻の比較用。`dailyTime` と `dailyEndTime` は日付部分がばらばらなので、時分だけを見る
+    private func minutesOfDay(_ date: Date) -> Int {
+        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
+        return (components.hour ?? 0) * 60 + (components.minute ?? 0)
     }
 
     // MARK: - Header
@@ -395,17 +409,33 @@ struct AddPlanView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 stepHeading(
-                    "種類と名前",
-                    question: "何のプランを\n作りますか？",
-                    sub: "選んだ種類で、この先の質問が変わります。"
+                    "名前とタグ",
+                    question: "何の予定を\n作りますか？"
                 )
 
-                VStack(spacing: 10) {
-                    typeCard(type: .outing, icon: "figure.walk", title: "おでかけ", subtitle: "旅行・お出かけ計画")
-                    typeCard(type: .daily, icon: "house.fill", title: "日常", subtitle: "日常のタスク・用事")
-                    typeCard(type: .anniversary, icon: "heart.fill", title: "記念日", subtitle: "毎年めぐってくる日")
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(spacing: 8) {
+                        typeSegment(type: .outing, icon: "figure.walk", title: "おでかけ")
+                        typeSegment(type: .daily, icon: "house.fill", title: "日常")
+                        typeSegment(type: .anniversary, icon: "heart.fill", title: "記念日")
+                    }
+
+                    // 選んだ結果をその場に出す。3つの違いは入力項目そのものなので、
+                    // 名前から想像させずに済む
+                    HStack(spacing: 6) {
+                        Image(systemName: "arrow.turn.down.right")
+                            .font(.system(size: 10, weight: .bold))
+                        Text(selectedPlanType.inputSummary)
+                            .font(.system(size: 13))
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    .foregroundColor(uiAccentColor.opacity(0.55))
+                    .padding(.leading, 2)
+                    .id(selectedPlanType)
+                    .transition(.opacity)
                 }
                 .padding(.horizontal, 20)
+                .animation(.easeInOut(duration: 0.2), value: selectedPlanType)
 
                 // 箱をやめて直接書く。文字を大きくすると、
                 // ここが今答える場所だと一目で分かる
@@ -416,7 +446,7 @@ struct AddPlanView: View {
 
                     ZStack(alignment: .leading) {
                         if title.isEmpty {
-                            Text(selectedPlanType == .outing ? "大阪旅行" : "ジム")
+                            Text(selectedPlanType.titlePlaceholder)
                                 .font(.system(size: 26, weight: .bold))
                                 .foregroundColor(uiAccentColor.opacity(0.22))
                         }
@@ -448,95 +478,18 @@ struct AddPlanView: View {
         }
     }
 
-    /// 自由タグ。種別（画面が変わる）とは別軸で、分類したいだけのもの。
-    /// 色は付けない（種別が色つき、タグは中立の灰色）
+    /// タグ。**予定の分類はここが本命**で、この上の種別は
+    /// 次の質問で何を聞くかを決めるためだけのもの。
+    /// そのため見出しに「任意」とは書かない
     private var tagField: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("タグ（任意）")
+            Text("タグ")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundColor(uiAccentColor.opacity(0.5))
 
-            if !tags.isEmpty {
-                HStack(spacing: 6) {
-                    ForEach(tags, id: \.self) { tag in
-                        Button {
-                            tags.removeAll { $0 == tag }
-                        } label: {
-                            HStack(spacing: 4) {
-                                Text(tag)
-                                    .font(.system(size: 12, weight: .semibold))
-                                Image(systemName: "xmark")
-                                    .font(.system(size: 9, weight: .bold))
-                            }
-                            .foregroundColor(uiAccentColor.opacity(0.75))
-                            .padding(.horizontal, 9)
-                            .padding(.vertical, 5)
-                            .background(uiAccentColor.opacity(0.08), in: Capsule())
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                }
-            }
-
-            HStack(spacing: 8) {
-                TextField("仕事、家事、健康…", text: $tagInput)
-                    .font(.system(size: 15))
-                    .foregroundColor(uiAccentColor)
-                    .submitLabel(.done)
-                    .onSubmit { addTag() }
-
-                Button("追加", action: addTag)
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundColor(tagInput.trimmingCharacters(in: .whitespaces).isEmpty
-                                     ? uiAccentColor.opacity(0.3)
-                                     : effectivePlanColor)
-                    .disabled(tagInput.trimmingCharacters(in: .whitespaces).isEmpty)
-            }
-            .padding(.bottom, 6)
-            .overlay(alignment: .bottom) {
-                Rectangle()
-                    .fill(uiAccentColor.opacity(0.15))
-                    .frame(height: 1)
-            }
-
-            // 過去に使ったタグから選べるようにする。表記ゆれを減らすため
-            if !tagSuggestions.isEmpty {
-                HStack(spacing: 6) {
-                    ForEach(tagSuggestions.prefix(4), id: \.self) { tag in
-                        Button {
-                            tags.append(tag)
-                        } label: {
-                            Text("＋ \(tag)")
-                                .font(.system(size: 12))
-                                .foregroundColor(uiAccentColor.opacity(0.55))
-                                .padding(.horizontal, 9)
-                                .padding(.vertical, 5)
-                                .background(
-                                    Capsule().strokeBorder(uiAccentColor.opacity(0.15), lineWidth: 1)
-                                )
-                        }
-                        .buttonStyle(PlainButtonStyle())
-                    }
-                }
-            }
+            PlanTagPicker(selectedIDs: $selectedTagIDs, accentColor: uiAccentColor)
         }
         .padding(.horizontal, 20)
-    }
-
-    /// これまでに使ったタグ（今のこの予定に付いていないもの）
-    private var tagSuggestions: [String] {
-        let used = Set(tags)
-        var seen = Set<String>()
-        return historyPlans
-            .flatMap(\.tags)
-            .filter { !used.contains($0) && seen.insert($0).inserted }
-    }
-
-    private func addTag() {
-        let trimmed = tagInput.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty, !tags.contains(trimmed) else { return }
-        tags.append(trimmed)
-        tagInput = ""
     }
 
     /// 繰り返し。日常の用事は繰り返すが、おでかけには無い概念
@@ -609,13 +562,16 @@ struct AddPlanView: View {
         }
     }
 
-    /// 選ぶとそのカードがベタ塗りに変わる。
-    /// 正方形2枚を横に並べていたときより、選んだ結果が先に見える
-    private func typeCard(type: PlanType, icon: String, title: String, subtitle: String) -> some View {
+    /// 種別の選択。
+    ///
+    /// 以前は説明文つきのカードを縦に3枚積んでいたが、種別は
+    /// この先どの項目を聞くかを決めるだけのものになったので、
+    /// 3つ横並びの小さな選択に落とした。名前とタグを同じ画面に収めるためでもある
+    private func typeSegment(type: PlanType, icon: String, title: String) -> some View {
         let isSelected = selectedPlanType == type
         // 塗りは白文字が読める濃さまで落とす。
         // オレンジのまま白を載せると比 2.1 で読めず、かといって
-        // 黒文字にすると3枚のうち日常と記念日だけ黒になって揃わない
+        // 黒文字にすると3つのうち日常と記念日だけ黒になって揃わない
         let cardColor = ThemePreset.readableTint(planColorFor(type), on: .white)
         let onColor = Color.white
 
@@ -624,42 +580,21 @@ struct AddPlanView: View {
                 selectedPlanType = type
             }
         }) {
-            HStack(spacing: 14) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 13, style: .continuous)
-                        .fill(isSelected ? onColor.opacity(0.22) : cardColor.opacity(0.14))
-                        .frame(width: 46, height: 46)
-                    Image(systemName: icon)
-                        .font(.system(size: 20, weight: .semibold))
-                        .foregroundColor(isSelected ? onColor : cardColor)
-                }
+            VStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundColor(isSelected ? onColor : cardColor)
 
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
-                        .font(.system(size: 17, weight: .bold))
-                        .foregroundColor(isSelected ? onColor : uiAccentColor)
-                    Text(subtitle)
-                        .font(.system(size: 12))
-                        .foregroundColor(isSelected ? onColor.opacity(0.75) : uiAccentColor.opacity(0.5))
-                }
-
-                Spacer(minLength: 0)
-
-                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
-                    .font(.system(size: 20))
-                    .foregroundColor(isSelected ? onColor : uiAccentColor.opacity(0.2))
+                Text(title)
+                    .font(.system(size: 13, weight: .bold))
+                    .lineLimit(1)
+                    .foregroundColor(isSelected ? onColor : uiAccentColor.opacity(0.7))
             }
-            .padding(14)
+            .padding(.vertical, 12)
             .frame(maxWidth: .infinity)
             .background(
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                RoundedRectangle(cornerRadius: 16, style: .continuous)
                     .fill(isSelected ? AnyShapeStyle(cardColor) : AnyShapeStyle(uiAccentColor.opacity(0.05)))
-            )
-            .shadow(
-                color: isSelected && colorScheme != .dark ? cardColor.opacity(0.28) : .clear,
-                radius: 12,
-                x: 0,
-                y: 6
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -756,7 +691,26 @@ struct AddPlanView: View {
                     .background(uiAccentColor.opacity(0.08))
                     .padding(.leading, 16)
 
-                dateField(.dailyTime, label: "時間", date: $dailyTime, components: .hourAndMinute)
+                dateField(.dailyTime, label: "始まり", date: $dailyTime, components: .hourAndMinute)
+
+                if hasDailyEndTime {
+                    Divider()
+                        .background(uiAccentColor.opacity(0.08))
+                        .padding(.leading, 16)
+
+                    dateField(
+                        .dailyEndTime,
+                        label: "終わり",
+                        date: $dailyEndTime,
+                        components: .hourAndMinute,
+                        onClear: {
+                            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                                hasDailyEndTime = false
+                                expandedField = nil
+                            }
+                        }
+                    )
+                }
             }
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
@@ -765,6 +719,10 @@ struct AddPlanView: View {
             .shadow(color: colorScheme == .dark ? .clear : Color.black.opacity(0.06), radius: 12, x: 0, y: 5)
             .padding(.horizontal, 20)
 
+            if !hasDailyEndTime {
+                addEndTimeButton
+            }
+
             if selectedPlanType == .daily {
                 recurrenceField
                     .padding(.top, 6)
@@ -772,6 +730,34 @@ struct AddPlanView: View {
 
             Spacer()
         }
+    }
+
+    /// 終わりの時間を足す口。
+    /// 最初から欄を出すと、終わりを決めていない用事にも入力を強いることになる
+    private var addEndTimeButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                // 1時間後を初期値にする。ここから縮める人のほうが多い
+                dailyEndTime = Calendar.current.date(byAdding: .hour, value: 1, to: dailyTime) ?? dailyTime
+                hasDailyEndTime = true
+                expandedField = .dailyEndTime
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "plus")
+                    .font(.system(size: 11, weight: .bold))
+                Text("終わりの時間を追加")
+                    .font(.system(size: 13, weight: .semibold))
+            }
+            .foregroundColor(effectivePlanColor)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background(
+                Capsule().strokeBorder(effectivePlanColor.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [4, 3]))
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .padding(.horizontal, 20)
     }
 
     private var cardSurface: Color {
@@ -790,7 +776,8 @@ struct AddPlanView: View {
         label: String,
         date: Binding<Date>,
         range: PartialRangeFrom<Date>? = nil,
-        components: DatePickerComponents = .date
+        components: DatePickerComponents = .date,
+        onClear: (() -> Void)? = nil
     ) -> some View {
         let isExpanded = expandedField == field
 
@@ -828,6 +815,19 @@ struct AddPlanView: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(PlainButtonStyle())
+            .overlay(alignment: .trailing) {
+                // 任意の欄だけ、外す口を出す
+                if let onClear {
+                    Button(action: onClear) {
+                        Image(systemName: "xmark.circle.fill")
+                            .font(.system(size: 16))
+                            .foregroundColor(uiAccentColor.opacity(0.28))
+                    }
+                    .buttonStyle(PlainButtonStyle())
+                    .padding(.trailing, 44)
+                    .accessibilityLabel("終わりの時間を外す")
+                }
+            }
 
             if isExpanded {
                 Group {
@@ -853,7 +853,7 @@ struct AddPlanView: View {
 
     /// 開いているカレンダーは常に1つだけにする
     private enum DateField {
-        case start, end, dailyDate, dailyTime
+        case start, end, dailyDate, dailyTime, dailyEndTime
     }
 
     private func fieldValueText(_ date: Date, components: DatePickerComponents) -> String {
@@ -1025,6 +1025,7 @@ struct AddPlanView: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     private func historyRow(_ entry: HistoryEntry) -> some View {
@@ -1079,6 +1080,8 @@ struct AddPlanView: View {
         places = source.places
         description = source.description ?? ""
         linkURL = source.linkURL ?? ""
+        // 同じ予定をまた作るなら仕分けも同じはず。付け直させない
+        selectedTagIDs = source.tagIDs
 
         // 日付は引き継がない（毎回変わるため）
         startDate = today
@@ -1094,6 +1097,19 @@ struct AddPlanView: View {
                 second: 0,
                 of: today
             ) ?? today
+        }
+
+        if let previousEndTime = source.endTime {
+            let components = calendar.dateComponents([.hour, .minute], from: previousEndTime)
+            dailyEndTime = calendar.date(
+                bySettingHour: components.hour ?? 0,
+                minute: components.minute ?? 0,
+                second: 0,
+                of: today
+            ) ?? today
+            hasDailyEndTime = true
+        } else {
+            hasDailyEndTime = false
         }
 
         showHistoryPicker = false
@@ -1130,6 +1146,7 @@ struct AddPlanView: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     private var mapSearchBarView: some View {
@@ -1305,7 +1322,8 @@ struct AddPlanView: View {
                 endDate: endDate < startDate ? startDate : endDate,
                 places: places,
                 planType: .outing,
-                tags: tags
+                tagIDs: selectedTagIDs,
+                reminders: PlanReminderDefaults.shared.reminders(for: selectedPlanType)
             )
         case .daily:
             plan = Plan(
@@ -1315,10 +1333,12 @@ struct AddPlanView: View {
                 places: places,
                 planType: .daily,
                 time: dailyTime,
+                endTime: hasDailyEndTime ? dailyEndTime : nil,
                 description: trimmedDescription,
                 linkURL: normalizedLinkURL(),
-                tags: tags,
-                recurrence: recurrence
+                tagIDs: selectedTagIDs,
+                recurrence: recurrence,
+                reminders: PlanReminderDefaults.shared.reminders(for: selectedPlanType)
             )
         case .anniversary:
             // 記念日は時刻も場所も持たない。毎年めぐってくるものなので繰り返しは固定
@@ -1328,8 +1348,9 @@ struct AddPlanView: View {
                 endDate: dailyDate,
                 places: [],
                 planType: .anniversary,
-                tags: tags,
-                recurrence: .yearly
+                tagIDs: selectedTagIDs,
+                recurrence: .yearly,
+                reminders: PlanReminderDefaults.shared.reminders(for: selectedPlanType)
             )
         }
 

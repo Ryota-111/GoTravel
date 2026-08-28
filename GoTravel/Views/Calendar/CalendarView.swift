@@ -23,6 +23,7 @@ struct CalendarView: View {
     @EnvironmentObject var travelViewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
+    @ObservedObject var tagManager = PlanTagManager.shared
     @State private var selectedDate = Date()
     @State private var currentMonth = Date()
     @State private var showAddSheet = false
@@ -44,7 +45,9 @@ struct CalendarView: View {
         NavigationView {
             ZStack(alignment: .bottom) {
                 LinearGradient(
-                    gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.gradientDark, themeManager.currentTheme.dark] : [themeManager.currentTheme.gradientLight, themeManager.currentTheme.light]),
+                    // 下端は純黒（dark）ではなくテーマの地の色に落とす。
+                    // 下部シートと同じ色だと境目が消えるので、シート側は一段上げた面を使う
+                    gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.gradientDark, themeManager.currentTheme.backgroundDark] : [themeManager.currentTheme.gradientLight, themeManager.currentTheme.light]),
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -425,7 +428,7 @@ struct CalendarView: View {
     private func calendarDayCell(date: Date) -> some View {
         let isSelected = calendar.isDate(date, inSameDayAs: selectedDate)
         let isToday = calendar.isDateInToday(date)
-        let eventTypes = getEventTypesForDate(date: date)
+        let dotColors = dotColors(for: date)
         let dayNumber = calendar.component(.day, from: date)
 
         return VStack(spacing: 4) {
@@ -453,9 +456,9 @@ struct CalendarView: View {
             // 週の高さは一番高いマスで決まるため、予定のある日の数字が
             // 上へ、無い日の数字が下へずれて見えていた。高さは常に確保する
             HStack(spacing: 2) {
-                ForEach(eventTypes.prefix(3).indices, id: \.self) { index in
+                ForEach(dotColors.prefix(3).indices, id: \.self) { index in
                     Circle()
-                        .fill(colorForEventType(eventTypes[index]))
+                        .fill(dotColors[index])
                         .frame(width: 4, height: 4)
                 }
             }
@@ -491,30 +494,37 @@ struct CalendarView: View {
     }
 
     // 指定日のイベントタイプのリストを取得（種別ごとに1つ、色分けが機能するよう重複排除）
-    private func getEventTypesForDate(date: Date) -> [CalendarItemType] {
-        var eventTypes: [CalendarItemType] = []
+    /// その日のマスに出す点の色。
+    ///
+    /// 予定の分類はタグが担うので、点もタグの色にする。
+    /// 種別（おでかけ／日常／記念日）で塗り分けていた頃は、月を見渡しても
+    /// 「日常が多い週」までしか分からなかった。
+    /// 同じ画面の下にある予定リストもタグの色なので、そちらとも揃う
+    private func dotColors(for date: Date) -> [Color] {
+        var colors: [Color] = []
 
-        // Travel plans (期間中のすべての日に表示)
+        // 旅行計画はタグを持たないので、専用の色を1つだけ
         if travelViewModel.travelPlans.contains(where: { isDateInTravelPlanRange(date: date, travelPlan: $0) }) {
-            eventTypes.append(.travel)
+            colors.append(themeManager.currentTheme.travelColor)
         }
 
-        // Outing plans
-        if viewModel.plans.contains(where: { $0.planType == .outing && isDateInPlanRange(date: date, plan: $0) }) {
-            eventTypes.append(.outingPlan)
+        let plansOfDay = viewModel.plans.filter { isDateInPlanRange(date: date, plan: $0) }
+        guard !plansOfDay.isEmpty else { return colors }
+
+        // 同じタグは1つにまとめる。並びは絞り込み行と同じ順にしたいので、
+        // その日のタグを拾うのではなくタグ側の並びを走る
+        let idsOfDay = Set(plansOfDay.flatMap(\.tagIDs))
+        for tag in tagManager.tags where idsOfDay.contains(tag.id) {
+            colors.append(tag.color)
         }
 
-        // Daily plans
-        if viewModel.plans.contains(where: { $0.planType == .daily && isDateInPlanRange(date: date, plan: $0) }) {
-            eventTypes.append(.dailyPlan)
+        // タグの付いていない予定は中立の灰色でまとめて1つ。
+        // 出さないと「予定があるのに点が無い日」ができる
+        if plansOfDay.contains(where: { tagManager.tags(for: $0.tagIDs).isEmpty }) {
+            colors.append(themeManager.currentTheme.secondaryText.opacity(0.55))
         }
 
-        // 記念日
-        if viewModel.plans.contains(where: { $0.planType == .anniversary && isDateInPlanRange(date: date, plan: $0) }) {
-            eventTypes.append(.anniversary)
-        }
-
-        return eventTypes
+        return colors
     }
 
     /// 「10回目の結婚記念日」。開始年からの経過で数える
@@ -522,20 +532,6 @@ struct CalendarView: View {
         let years = calendar.component(.year, from: selectedDate) - calendar.component(.year, from: plan.startDate)
         return years > 0 ? "\(years + 1)回目" : "1回目"
     }
-
-    private func colorForEventType(_ type: CalendarItemType) -> Color {
-        switch type {
-        case .dailyPlan:
-            return themeManager.currentTheme.dailyPlanColor
-        case .outingPlan:
-            return themeManager.currentTheme.outingPlanColor
-        case .anniversary:
-            return themeManager.currentTheme.anniversaryPlanColor
-        case .travel:
-            return themeManager.currentTheme.travelColor
-        }
-    }
-
 
     // MARK: - Helper Methods
     private func changeMonth(by value: Int) {

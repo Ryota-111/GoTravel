@@ -82,6 +82,7 @@ struct SaveAsVisitedView: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     private func saveVisitedPlace() {

@@ -20,8 +20,10 @@ struct EnjoyWorldView: View {
     @EnvironmentObject var plansViewModel: PlansViewModel
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
+    @ObservedObject var tagManager = PlanTagManager.shared
     @State private var selectedTab: TabType = .all
-    @State private var selectedPlanTab: PlanTabType = .all
+    @State private var selectedPlanFilter: PlanFilter = .all
+    @State private var showManagePlanTags = false
     @StateObject private var taskManager = TaskManager.shared
     @State private var showAddTravelPlan = false
     @State private var showAddPlan = false
@@ -60,18 +62,20 @@ struct EnjoyWorldView: View {
     }
 
     private var filteredPlans: [Plan] {
-        let filtered: [Plan]
-        switch selectedPlanTab {
+        switch selectedPlanFilter {
         case .all:
-            filtered = plansViewModel.plans
-        case .goingout:
-            filtered = plansViewModel.plans.filter { $0.planType == .outing }
-        case .everyday:
-            filtered = plansViewModel.plans.filter { $0.planType == .daily }
-        case .anniversary:
-            filtered = plansViewModel.plans.filter { $0.planType == .anniversary }
+            return plansViewModel.plans
+        case .tag(let tagId):
+            return plansViewModel.plans.filter { $0.tagIDs.contains(tagId) }
+        case .untagged:
+            return plansViewModel.plans.filter { tagManager.tags(for: $0.tagIDs).isEmpty }
         }
-        return filtered
+    }
+
+    /// タグの付いていない予定があるときだけ「未分類」を出す。
+    /// 全部に付けている人の絞り込み行に、押しても何も出ない口を残さない
+    private var hasUntaggedPlans: Bool {
+        plansViewModel.plans.contains { tagManager.tags(for: $0.tagIDs).isEmpty }
     }
 
     private var currentFilteredPlans: [Plan] {
@@ -239,6 +243,16 @@ struct EnjoyWorldView: View {
             .sheet(isPresented: $showJoinPlan) {
                 JoinTravelPlanView()
                     .environmentObject(travelPlanViewModel)
+            }
+            .sheet(isPresented: $showManagePlanTags) {
+                ManagePlanTagsView()
+            }
+            .onChange(of: tagManager.tags) { _, _ in
+                // 絞り込みに使っていたタグが消えたら、何も出ない一覧のまま取り残される
+                if case .tag(let id) = selectedPlanFilter,
+                   !tagManager.tags.contains(where: { $0.id == id }) {
+                    selectedPlanFilter = .all
+                }
             }
             .alert("認証が必要です", isPresented: $showAuthError) {
                 Button("OK", role: .cancel) {}
@@ -503,16 +517,61 @@ struct EnjoyWorldView: View {
         .padding(.top, 10)
     }
 
+    /// 予定の絞り込みはタグで行う。
+    ///
+    /// 以前は種別（おでかけ／日常／記念日）のタブだったが、種別は作るときに
+    /// どの項目を聞くかの区別でしかない。仕事か遊びかで探したい人にとっては
+    /// 絞り込みの軸にならないので、タグに置き換えた。
     /// 旅行計画のタブと同じ理由で横スクロールにする（`tabSelectionSection` を参照）
     private var planTabSelectionSection: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                ForEach(PlanTabType.allCases) { tab in
-                    planTabButton(for: tab)
+                planFilterButton(
+                    for: .all,
+                    label: "すべて",
+                    fill: themeManager.currentTheme.secondary,
+                    onFill: themeManager.currentTheme.light
+                )
+
+                ForEach(tagManager.tags) { tag in
+                    planFilterButton(
+                        for: .tag(tag.id),
+                        label: tag.name,
+                        // 塗りは白文字が読める濃さまで落とす
+                        fill: ThemePreset.readableTint(tag.color, on: .white),
+                        onFill: .white
+                    )
                 }
+
+                if hasUntaggedPlans {
+                    planFilterButton(
+                        for: .untagged,
+                        label: "未分類",
+                        fill: themeManager.currentTheme.secondary,
+                        onFill: themeManager.currentTheme.light
+                    )
+                }
+
+                managePlanTagsButton
             }
             .padding(.horizontal, 20)
         }
+    }
+
+    /// 絞り込み行の末尾に置くタグ管理の口。
+    /// 絞り込みたいと思った場所で、そのまま整理までできるようにする
+    private var managePlanTagsButton: some View {
+        Button(action: { showManagePlanTags = true }) {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(
+                    Capsule().strokeBorder(themeManager.currentTheme.secondaryText.opacity(0.25), lineWidth: 1)
+                )
+        }
+        .accessibilityLabel("タグを管理")
     }
 
     private var planEventsListSection: some View {
@@ -563,24 +622,26 @@ struct EnjoyWorldView: View {
         }
     }
 
-    private func planTabButton(for tab: PlanTabType) -> some View {
-        Button(action: {
+    private func planFilterButton(for filter: PlanFilter, label: String, fill: Color, onFill: Color) -> some View {
+        let isSelected = selectedPlanFilter == filter
+
+        return Button(action: {
             withAnimation(.spring(response: 0.7, dampingFraction: 0.7)) {
-                selectedPlanTab = tab
+                selectedPlanFilter = filter
             }
         }) {
-            Text(tab.displayName)
+            Text(label)
                 .font(.callout)
-                .fontWeight(selectedPlanTab == tab ? .semibold : .regular)
-                .foregroundColor(selectedPlanTab == tab ? themeManager.currentTheme.light : themeManager.currentTheme.secondaryText)
+                .fontWeight(isSelected ? .semibold : .regular)
+                .foregroundColor(isSelected ? onFill : themeManager.currentTheme.secondaryText)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
                 .background {
-                    if selectedPlanTab == tab {
+                    if isSelected {
                         Capsule()
-                            .fill(themeManager.currentTheme.secondary)
+                            .fill(fill)
                             .matchedGeometryEffect(id: "PLAN_TAB", in: animation)
                     }
                 }
@@ -908,15 +969,12 @@ extension EnjoyWorldView {
         var displayName: String { rawValue }
     }
 
-    enum PlanTabType: String, CaseIterable, Identifiable {
-        case all = "すべて"
-        case goingout = "おでかけ"
-        case everyday = "日常"
-        case anniversary = "記念日"
-
-        var id: String { rawValue }
-
-        var displayName: String { rawValue }
+    /// 予定一覧の絞り込み。タグ1つか、全部か、タグの付いていないものか。
+    /// 複数のタグを同時に選べるようにすると AND か OR かの説明が要るので、単一選択にしている
+    enum PlanFilter: Hashable {
+        case all
+        case tag(String)
+        case untagged
     }
 }
 

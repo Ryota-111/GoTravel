@@ -52,9 +52,11 @@ struct MainTabView: View {
             }
         }
         .task {
-            // カテゴリーはどのタブからも参照されるためここで用意する
+            // カテゴリーとタグはどのタブからも参照されるためここで用意する。
+            // タグ側は初回に、文字列だった頃のタグを実体へ移す処理も走る
             if let userId = authVM.userId {
                 PlaceCategoryManager.shared.setup(userId: userId)
+                PlanTagManager.shared.setup(userId: userId)
             }
 
             if !hasCheckedICloud {

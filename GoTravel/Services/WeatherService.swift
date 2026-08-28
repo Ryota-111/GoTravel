@@ -174,9 +174,21 @@ final class WeatherService {
             throw WeatherError.networkError
         }
 
+        guard roundedLatitude >= -90 && roundedLatitude <= 90,
+              roundedLongitude >= -180 && roundedLongitude <= 180 else {
+            throw WeatherError.invalidCoordinates
+        }
+
         // ローカルタイムゾーンでの日付を使用（UTC のズレを補正）
         let normalizedStartDate = startDate.startOfDayInLocalTimezone
-        let normalizedEndDate = endDate.startOfDayInLocalTimezone
+
+        // 期間の終端は含まれない。最終日の0時までを頼むと最終日が落ちるので、
+        // 翌日の0時まで頼む
+        let normalizedEndDate = Calendar.current.date(
+            byAdding: .day,
+            value: 1,
+            to: endDate.startOfDayInLocalTimezone
+        ) ?? endDate.startOfDayInLocalTimezone
 
         let location = CLLocation(latitude: roundedLatitude, longitude: roundedLongitude)
 
@@ -200,6 +212,12 @@ final class WeatherService {
         } catch {
             // Check for authentication errors
             let errorString = "\(error)"
+
+            // HTTP 404 - 座標が無効か、天気データが無い場所
+            if errorString.contains("404") {
+                throw WeatherError.locationNotAvailable
+            }
+
             if errorString.contains("WDSJWTAuthenticatorServiceListener") ||
                errorString.contains("error 2") ||
                errorString.contains("authentication") {

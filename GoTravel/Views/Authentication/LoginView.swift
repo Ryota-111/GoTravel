@@ -14,6 +14,10 @@ struct LoginView: View {
             }
             .navigationBarHidden(true)
         }
+        // iPad では `NavigationView` が既定で2列に割れる。
+        // 左のサイドバー幅に画面が押し込まれ、右半分が白いまま残ってしまうため、
+        // 1列に固定する
+        .navigationViewStyle(.stack)
     }
 
     // MARK: - View Components
