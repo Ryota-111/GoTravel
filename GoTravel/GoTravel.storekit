@@ -4,7 +4,7 @@
   "products" : [
     {
       "displayPrice" : "120",
-      "familySharable" : false,
+      "familyShareable" : false,
       "internalID" : "tip_small",
       "localizations" : [
         {
@@ -19,7 +19,7 @@
     },
     {
       "displayPrice" : "250",
-      "familySharable" : false,
+      "familyShareable" : false,
       "internalID" : "tip_medium",
       "localizations" : [
         {
@@ -34,7 +34,7 @@
     },
     {
       "displayPrice" : "610",
-      "familySharable" : false,
+      "familyShareable" : false,
       "internalID" : "tip_large",
       "localizations" : [
         {
@@ -49,7 +49,7 @@
     },
     {
       "displayPrice" : "1220",
-      "familySharable" : false,
+      "familyShareable" : false,
       "internalID" : "tip_xlarge",
       "localizations" : [
         {
@@ -64,7 +64,7 @@
     },
     {
       "displayPrice" : "490",
-      "familySharable" : false,
+      "familyShareable" : false,
       "internalID" : "pro_themes",
       "localizations" : [
         {
