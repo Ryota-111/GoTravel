@@ -38,7 +38,7 @@ struct TravelPlanCard: View {
         .frame(width: 200, height: 200)
         .overlay(
             // ガラス風のハイライト縁取り
-            RoundedRectangle(cornerRadius: 25)
+            RoundedRectangle(cornerRadius: theme.style.cardRadius)
                 .stroke(
                     LinearGradient(
                         colors: [Color.white.opacity(0.45), Color.white.opacity(0.05)],
@@ -129,13 +129,27 @@ struct TravelPlanCard: View {
         .clipped()
     }
 
+    // 写真には必ず実寸の frame を付ける。
+    //
+    // scaledToFill は元画像の縦横比のまま広がるので、frame が無いと
+    // ZStack 自体が写真の実寸まで押し広げられる。すると上のスタンプと
+    // 下のタイトル・日程が 216×170 の外に押し出され、`clipped()` で切れていた。
+    // 写真の無いカードでは起きないので気づきにくい
     @ViewBuilder
     private var ticketArtBackground: some View {
         if let planId = plan.id, let image = viewModel.planImages[planId] {
-            Image(uiImage: image).resizable().scaledToFill()
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 216, height: 170)
+                .clipped()
         } else if let name = plan.localImageFileName,
                   let image = FileManager.documentsImage(named: name) {
-            Image(uiImage: image).resizable().scaledToFill()
+            Image(uiImage: image)
+                .resizable()
+                .scaledToFill()
+                .frame(width: 216, height: 170)
+                .clipped()
         } else {
             LinearGradient(
                 colors: [
@@ -282,7 +296,7 @@ struct TravelPlanCard: View {
                     .scaledToFill()
                     .frame(width: 200, height: 200)
                     .clipped()
-                    .cornerRadius(25)
+                    .cornerRadius(theme.style.cardRadius)
             } else if let localImageFileName = plan.localImageFileName,
                       let image = FileManager.documentsImage(named: localImageFileName) {
                 // フォールバック：ローカルストレージから画像を取得
@@ -291,10 +305,10 @@ struct TravelPlanCard: View {
                     .scaledToFill()
                     .frame(width: 200, height: 200)
                     .clipped()
-                    .cornerRadius(25)
+                    .cornerRadius(theme.style.cardRadius)
             } else {
                 // 画像がない場合はグラデーション背景を表示
-                RoundedRectangle(cornerRadius: 25)
+                RoundedRectangle(cornerRadius: theme.style.cardRadius)
                     .fill(
                         LinearGradient(
                             colors: [
@@ -309,7 +323,7 @@ struct TravelPlanCard: View {
             }
 
             // 下部のみ暗くするスクリム（写真を活かしつつ文字の可読性を確保）
-            RoundedRectangle(cornerRadius: 25)
+            RoundedRectangle(cornerRadius: theme.style.cardRadius)
                 .fill(
                     LinearGradient(
                         stops: [
@@ -408,7 +422,9 @@ struct TravelPlanCard: View {
                     Image(systemName: "calendar")
                         .font(.caption2)
                     Text(dateRangeString(from: plan.startDate, to: plan.endDate))
-                        .font(.caption.weight(.semibold))
+                        // 日程は等幅を持つテーマならその書体で。
+                        // 持たないテーマは今までの caption のまま
+                        .font(theme.style.tabularFont(size: 12, weight: .semibold))
                 }
                 .foregroundStyle(.white)
                 .padding(.horizontal, 9)
