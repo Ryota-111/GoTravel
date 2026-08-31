@@ -97,13 +97,19 @@ struct ThemePreset {
             }
         }
 
-        /// 明暗の扱い。ダーク配色を持たないテーマはライト固定、
-        /// 暗いことが前提のテーマ（ネオン夜市）はダーク固定にする。
+        /// 明暗の扱い。
+        ///
+        /// **追加テーマはダークモードに対応しない。** 紙・切符・旅券といった
+        /// 「そのものの色」を写した配色なので、暗く沈めると成立しなくなる。
+        /// 端末の設定にかかわらず、いつも同じ見た目になるよう明暗を固定する。
+        /// 暗いことが前提のネオン夜市だけダーク固定。
+        ///
+        /// 既定の3テーマ（デフォルトカラー）だけがシステムに従う。
         var preferredColorScheme: ColorScheme? {
             switch self {
-            case .whiteBlack, .pastelPink: return .light
-            case .neonNight: return .dark
-            default: return nil     // システムに従う
+            case .originalColor: return nil     // システムに従う
+            case .neonNight: return .dark       // 暗いことが前提の配色
+            default: return .light              // 追加テーマと白黒・パステルはライト固定
             }
         }
 
