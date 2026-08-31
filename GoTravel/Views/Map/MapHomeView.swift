@@ -102,12 +102,14 @@ struct MapHomeView: View {
 
     private func mapBody(proxy: MapProxy) -> some View {
         Map(position: $position, selection: $selectedResult) {
-            UserAnnotation(anchor: .top) { userLocation in
-                EmptyView()
-                    .onAppear {
-                        location = userLocation.location?.coordinate ?? .tokyoStation
-                    }
-            }
+            // 現在地の青い点。
+            //
+            // **中身を渡してはいけない。** 渡すと標準の青い点がそれに
+            // 置き換わる。以前はここで `EmptyView()` を返していたため、
+            // 現在地が画面上に何も描かれていなかった
+            // （座標を横流しするためだけに使われていた）。
+            // 座標は `locationManager` から受け取るようにした
+            UserAnnotation()
 
             // 検索結果マーカー（赤）
             ForEach(searchResults, id: \.self) { result in
@@ -162,8 +164,17 @@ struct MapHomeView: View {
             }
         }
         .navigationTitle("マップ")
+        // 「この付近を検索」の基準に使う。地図を動かしていなければ現在地から探す
+        .onChange(of: locationManager.currentLocation?.latitude) { _, _ in
+            if let coordinate = locationManager.currentLocation {
+                location = coordinate
+            }
+        }
         .onAppear {
-            locationManager.requestPermission()
+            // 許可を求めるだけでなく、取得までやる。
+            // `requestPermission()` は許可済みの再訪で何も起こさないため、
+            // 2回目以降に現在地が入らなかった
+            locationManager.requestCurrentLocation()
             if !hasLoadedPlaces, let userId = auth.userId {
                 vm.setupFetchedResultsController(userId: userId)
                 hasLoadedPlaces = true
