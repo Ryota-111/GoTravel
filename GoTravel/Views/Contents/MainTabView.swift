@@ -57,6 +57,16 @@ struct MainTabView: View {
             if let userId = authVM.userId {
                 PlaceCategoryManager.shared.setup(userId: userId)
                 PlanTagManager.shared.setup(userId: userId)
+                // やることリストはホームのバッジからも数を出すので、ここで用意する。
+                // 初回は UserDefaults に残っているぶんを Core Data へ移す
+                TaskManager.shared.setup(userId: userId)
+
+                // 写真の預け直し。
+                // `ProStore` は起動直後に所有状態を確かめるが、そのときまだ
+                // サインインが復元されておらず userId が無いことがある。
+                // そこで一度取りこぼすと次の購入まで追いつく機会が来ないので、
+                // ユーザーが確定したここでもう一度声をかける（済んでいれば何もしない）
+                PhotoSyncService.shared.backfill()
             }
 
             if !hasCheckedICloud {
