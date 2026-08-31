@@ -433,7 +433,7 @@ struct EnjoyWorldView: View {
         HStack {
             Text("旅行計画")
                 .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-                .font(chipStyle.decor == .ticket
+                .font(chipStyle.hasDisplayFont
                       ? chipStyle.displayFont(size: 23)
                       : .title.weight(.semibold))
                 // 罫が横幅を取りに行くので、見出しは縮ませない
@@ -538,7 +538,7 @@ struct EnjoyWorldView: View {
         HStack {
             Text("予定計画")
                 .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-                .font(chipStyle.decor == .ticket
+                .font(chipStyle.hasDisplayFont
                       ? chipStyle.displayFont(size: 23)
                       : .title.weight(.semibold))
                 .lineLimit(1)

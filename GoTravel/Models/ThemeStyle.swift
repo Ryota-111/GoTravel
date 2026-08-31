@@ -18,6 +18,14 @@ struct ThemeStyle {
     var radiusMedium: CGFloat
     var radiusLarge: CGFloat
 
+    /// ホームの予定行の面。
+    /// 一覧で最初に目に入る形なので、`radiusLarge` とは別に持たせる。
+    /// 既定は今までの 20 なので、値を書かないテーマは何も変わらない
+    var rowRadius: CGFloat = 20
+
+    /// ホームの旅行計画カード（200×200）の面。既定は今までの 25
+    var cardRadius: CGFloat = 25
+
     // MARK: - 罫線
     /// 0 にすると縁を描かない
     var borderWidth: CGFloat
@@ -67,6 +75,14 @@ struct ThemeStyle {
     /// 予定行の右に置く、日付の半券の幅。0 で描かない
     var dateStubWidth: CGFloat = 0
 
+    /// 予定行に落とす影。
+    ///
+    /// 行の影だけは、他の面より一回り広く敷いてある（既定テーマで半径13）。
+    /// `shadowRadius` は既定テーマで10なので、その比率を保ったまま
+    /// テーマごとの濃さ・広さを反映させる。
+    /// 影を持たないテーマは `shadowStrength` が 0 なので、ここも 0 になる
+    var rowShadowRadius: CGFloat { shadowRadius * 1.3 }
+
     func radius(_ r: Radius) -> CGFloat {
         switch r {
         case .small: return radiusSmall
@@ -91,70 +107,90 @@ struct ThemeStyle {
         case .originalColor, .whiteBlack, .pastelPink:
             return .standard
 
-        // 和のテーマは明朝寄りに。墨は影を捨てて罫線で区切る
+        // 和のテーマは明朝と、かなの表情が出る書体に。墨は影を捨てて罫線で区切る
         case .aiKinari:
+            // 藍染の布。角はわずかに丸く、影は薄い
             return ThemeStyle(
                 radiusSmall: 7, radiusMedium: 11, radiusLarge: 15,
+                rowRadius: 14, cardRadius: 18,
                 borderWidth: 1,
                 shadowStrength: 0.7, shadowRadius: 12, shadowY: 5,
                 fontDesign: .serif,
-                displayFontName: nil, bodyFontName: nil
+                displayFontName: "ZenAntique-Regular",
+                bodyFontName: "ZenKakuGothicNew-Regular"
             )
 
         case .sumi:
+            // 墨。角を落とし、影を捨て、種別は左の帯だけで示す
             return ThemeStyle(
                 radiusSmall: 4, radiusMedium: 6, radiusLarge: 8,
+                rowRadius: 4, cardRadius: 6,
                 borderWidth: 1,
                 shadowStrength: 0, shadowRadius: 0, shadowY: 0,
                 fontDesign: .serif,
-                displayFontName: nil, bodyFontName: nil
+                displayFontName: "ZenAntique-Regular",
+                bodyFontName: "ZenKakuGothicNew-Regular",
+                typeSpineWidth: 5
             )
 
         case .momiji:
             return ThemeStyle(
                 radiusSmall: 8, radiusMedium: 12, radiusLarge: 16,
+                rowRadius: 16, cardRadius: 20,
                 borderWidth: 1,
                 shadowStrength: 0.8, shadowRadius: 12, shadowY: 5,
                 fontDesign: .serif,
-                displayFontName: nil, bodyFontName: nil
+                displayFontName: "ZenAntique-Regular",
+                bodyFontName: "ZenKakuGothicNew-Regular"
             )
 
         // やわらかいものは丸く
         case .sakura:
             return ThemeStyle(
                 radiusSmall: 11, radiusMedium: 16, radiusLarge: 22,
+                rowRadius: 26, cardRadius: 30,
                 borderWidth: 0,
                 shadowStrength: 0.8, shadowRadius: 14, shadowY: 6,
                 fontDesign: .rounded,
-                displayFontName: nil, bodyFontName: nil
+                displayFontName: nil,
+                bodyFontName: "ZenKakuGothicNew-Regular"
             )
 
         case .setouchi:
             return ThemeStyle(
                 radiusSmall: 10, radiusMedium: 15, radiusLarge: 20,
+                rowRadius: 24, cardRadius: 28,
                 borderWidth: 0,
                 shadowStrength: 0.6, shadowRadius: 14, shadowY: 6,
                 fontDesign: .rounded,
-                displayFontName: nil, bodyFontName: nil
+                displayFontName: nil,
+                bodyFontName: "ZenKakuGothicNew-Regular"
             )
 
         // 雪国は影をほとんど消して、余白で区切る
         case .yukiguni:
             return ThemeStyle(
                 radiusSmall: 9, radiusMedium: 14, radiusLarge: 18,
+                rowRadius: 18, cardRadius: 22,
                 borderWidth: 1,
                 shadowStrength: 0.25, shadowRadius: 8, shadowY: 3,
                 fontDesign: .default,
-                displayFontName: nil, bodyFontName: nil
+                displayFontName: nil,
+                bodyFontName: "ZenKakuGothicNew-Regular"
             )
 
         case .yakouRessha:
+            // 夜行の時刻表。日付と時刻は等幅で桁を揃える
             return ThemeStyle(
                 radiusSmall: 7, radiusMedium: 11, radiusLarge: 14,
+                rowRadius: 12, cardRadius: 15,
                 borderWidth: 1,
                 shadowStrength: 1, shadowRadius: 14, shadowY: 6,
                 fontDesign: .default,
-                displayFontName: nil, bodyFontName: nil
+                displayFontName: "ZenAntique-Regular",
+                bodyFontName: "ZenKakuGothicNew-Regular",
+                monoFontName: "SpaceMono-Bold",
+                typeSpineWidth: 5
             )
 
         // ここから下は形と書体で個性を出すテーマ。
@@ -167,6 +203,7 @@ struct ThemeStyle {
             // 角丸もカード6／行5／チップ3まで下げて、切符らしい直線的な輪郭にする
             return ThemeStyle(
                 radiusSmall: 3, radiusMedium: 5, radiusLarge: 6,
+                rowRadius: 5, cardRadius: 6,
                 borderWidth: 1.5,
                 shadowStrength: 0, shadowRadius: 0, shadowY: 0,
                 fontDesign: .serif,
@@ -181,65 +218,85 @@ struct ThemeStyle {
             )
 
         case .guidebook:
-            // 紙の地図。罫線で区切る印刷物の作り
+            // 紙の地図。罫線で区切る印刷物の作り。
+            // 縮尺や距離の数字が揃うように等幅を当てる
             return ThemeStyle(
                 radiusSmall: 5, radiusMedium: 8, radiusLarge: 11,
+                rowRadius: 8, cardRadius: 11,
                 borderWidth: 1,
                 shadowStrength: 0.4, shadowRadius: 8, shadowY: 3,
                 fontDesign: .default,
                 displayFontName: nil,
-                bodyFontName: "ZenKakuGothicNew-Regular"
+                bodyFontName: "ZenKakuGothicNew-Regular",
+                monoFontName: "SpaceMono-Bold",
+                typeSpineWidth: 4
             )
 
         case .passport:
-            // 旅券。角ばって、箔押しの縁
+            // 旅券。角ばって、箔押しの縁。
+            // 旅券の機械読取部と同じく、英数字は等幅で並べる
             return ThemeStyle(
                 radiusSmall: 3, radiusMedium: 5, radiusLarge: 8,
+                rowRadius: 5, cardRadius: 8,
                 borderWidth: 1.5,
                 shadowStrength: 0.3, shadowRadius: 8, shadowY: 3,
                 fontDesign: .serif,
                 displayFontName: "ZenAntique-Regular",
-                bodyFontName: "ZenKakuGothicNew-Regular"
+                bodyFontName: "ZenKakuGothicNew-Regular",
+                monoFontName: "SpaceMono-Bold",
+                typeSpineWidth: 6
             )
 
         case .film:
-            // 写真の角。縁は無く、影はやわらかく広い
+            // 写真の角。縁は無く、影はやわらかく広い。
+            // 日付はフィルムに写し込まれた数字のつもりで等幅にする
             return ThemeStyle(
                 radiusSmall: 2, radiusMedium: 4, radiusLarge: 6,
+                rowRadius: 3, cardRadius: 5,
                 borderWidth: 0,
                 shadowStrength: 0.55, shadowRadius: 18, shadowY: 7,
                 fontDesign: .serif,
-                displayFontName: nil, bodyFontName: nil
+                displayFontName: nil, bodyFontName: nil,
+                monoFontName: "SpaceMono-Bold"
             )
 
         case .morningAirport:
-            // ガラスと光。影を持たず、細い罫線だけで区切る
+            // ガラスと光。影を持たず、細い罫線だけで区切る。
+            // 時刻は出発案内板の書体に寄せる
             return ThemeStyle(
                 radiusSmall: 10, radiusMedium: 14, radiusLarge: 18,
+                rowRadius: 16, cardRadius: 20,
                 borderWidth: 1,
                 shadowStrength: 0, shadowRadius: 0, shadowY: 0,
                 fontDesign: .default,
-                displayFontName: nil, bodyFontName: nil
+                displayFontName: nil, bodyFontName: nil,
+                monoFontName: "SpaceMono-Bold"
             )
 
         case .mountainHut:
-            // 地形図と木。太めの縁で図面らしく
+            // 地形図と木。太めの縁で図面らしく。標高の数字は等幅で
             return ThemeStyle(
                 radiusSmall: 6, radiusMedium: 10, radiusLarge: 14,
+                rowRadius: 10, cardRadius: 14,
                 borderWidth: 1.5,
                 shadowStrength: 0.4, shadowRadius: 10, shadowY: 4,
                 fontDesign: .default,
-                displayFontName: nil, bodyFontName: nil
+                displayFontName: nil, bodyFontName: nil,
+                monoFontName: "SpaceMono-Bold",
+                typeSpineWidth: 5
             )
 
         case .neonNight:
             // 発光。縁を光らせ、影を広く強く
             return ThemeStyle(
                 radiusSmall: 8, radiusMedium: 12, radiusLarge: 16,
+                rowRadius: 14, cardRadius: 18,
                 borderWidth: 1.5,
                 shadowStrength: 1, shadowRadius: 20, shadowY: 0,
                 fontDesign: .monospaced,
-                displayFontName: nil, bodyFontName: nil
+                displayFontName: nil, bodyFontName: nil,
+                monoFontName: "SpaceMono-Bold",
+                typeSpineWidth: 3
             )
         }
     }
@@ -316,6 +373,27 @@ extension ThemeStyle {
             return .custom(name, size: size)
         }
         return .system(size: size, weight: weight, design: .monospaced)
+    }
+
+    /// 数字の桁だけ揃えたい箇所で使う。
+    ///
+    /// `monoFont` との違いは、同梱の等幅を持たないテーマの落とし先。
+    /// あちらは等幅のシステムフォントに落ちるので、字面まで変わってしまう。
+    /// こちらは既定のシステムフォントのまま数字だけ等幅にするので、
+    /// 書体を指定していないテーマの見た目は今までと変わらない
+    func tabularFont(size: CGFloat, weight: Font.Weight = .bold) -> Font {
+        if let name = monoFontName, Self.isBundled(name) {
+            return .custom(name, size: size)
+        }
+        return .system(size: size, weight: weight).monospacedDigit()
+    }
+
+    /// 見出し用の同梱フォントが実際に使えるか。
+    /// 「書体を持つテーマかどうか」でビューを分けるための入口。
+    /// テーマ名で分岐しないための判定なので、`if theme == ...` の代わりに使う
+    var hasDisplayFont: Bool {
+        guard let name = displayFontName else { return false }
+        return Self.isBundled(name)
     }
 
     func displayFont(size: CGFloat, weight: Font.Weight = .bold) -> Font {

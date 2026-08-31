@@ -165,55 +165,68 @@ struct PlanEventCardView: View {
     // MARK: - これまでの行
 
     private var plainRow: some View {
-        // 中身をたたむ今日のカードだけ、タイルと「⋯」を上に寄せる
-        HStack(alignment: isToday && !todayItems.isEmpty ? .top : .center, spacing: 12) {
-            dateTile
+        // 角丸と影はテーマのトークンから引く。
+        // 既定値は今までの値そのものなので、値を書いていないテーマは何も変わらない
+        let radius = theme.style.rowRadius
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
 
-            rowText
+        return HStack(spacing: 0) {
+            // 種別を示す左の帯。
+            // 幅 0 のテーマでは見えないだけで、常に置いたままにしておく。
+            // if で付け外しするとビューの同一性が変わり、テーマを変えた瞬間に
+            // 部分木が作り直されてしまう
+            Rectangle()
+                .fill(typeColor)
+                .frame(width: theme.style.typeSpineWidth)
 
-            Spacer(minLength: 0)
+            // 中身をたたむ今日のカードだけ、タイルと「⋯」を上に寄せる
+            HStack(alignment: isToday && !todayItems.isEmpty ? .top : .center, spacing: 12) {
+                dateTile
 
-            menuButton
+                rowText
+
+                Spacer(minLength: 0)
+
+                menuButton
+            }
+            .padding(.leading, 12)
+            .padding(.vertical, 9)
+            .padding(.trailing, 4)
         }
-        .padding(.leading, 12)
-        .padding(.vertical, 9)
-        .padding(.trailing, 4)
         .background(
             ZStack {
-                RoundedRectangle(cornerRadius: 20, style: .continuous)
-                    .fill(surfaceColor)
+                shape.fill(surfaceColor)
 
                 // 今日の1枚だけ、面にも薄く色を流す
                 if isToday {
-                    RoundedRectangle(cornerRadius: 20, style: .continuous)
-                        .fill(
-                            LinearGradient(
-                                colors: [mainColor.opacity(colorScheme == .dark ? 0.18 : 0.10), .clear],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
+                    shape.fill(
+                        LinearGradient(
+                            colors: [mainColor.opacity(colorScheme == .dark ? 0.18 : 0.10), .clear],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
                         )
+                    )
                 }
             }
         )
-        .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        .clipShape(shape)
         // ダークでは影が沈んで効かないので、細い輪郭に置き換える
         .overlay(
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(
-                    colorScheme == .dark
-                        ? mainColor.opacity(isToday ? 0.48 : 0.10)
-                        : .clear,
-                    lineWidth: 1
-                )
+            shape.strokeBorder(
+                colorScheme == .dark
+                    ? mainColor.opacity(isToday ? 0.48 : 0.10)
+                    : .clear,
+                lineWidth: 1
+            )
         )
         .shadow(
             color: colorScheme == .dark
                 ? .clear
-                : (isToday ? mainColor.opacity(0.16) : Color.black.opacity(0.07)),
-            radius: 13,
+                : (isToday ? mainColor.opacity(0.16) : Color.black.opacity(0.07))
+                    .opacity(theme.style.shadowStrength),
+            radius: theme.style.rowShadowRadius,
             x: 0,
-            y: 5
+            y: theme.style.shadowY
         )
     }
 
@@ -282,8 +295,9 @@ struct PlanEventCardView: View {
                 .opacity(isToday ? 0.86 : 0.78)
 
             Text(dayText)
-                .font(.system(size: 21, weight: .heavy))
-                .monospacedDigit()
+                // 日付は等幅を持つテーマならその書体で。
+                // 持たないテーマは今までどおり、数字だけ桁を揃える
+                .font(theme.style.tabularFont(size: 21, weight: .heavy))
         }
         .foregroundColor(isToday ? ThemePreset.readableText(on: mainColor) : mainColor)
         .padding(.vertical, 6)
