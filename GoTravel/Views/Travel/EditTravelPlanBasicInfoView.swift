@@ -88,6 +88,9 @@ struct EditTravelPlanBasicInfoView: View {
                     VStack(spacing: 0) {
                         coverImageSection
                             .padding(.bottom, 6)
+                        // 未購入のときだけ出る
+                        DeviceOnlyPhotoNote()
+                            .padding(.bottom, 6)
                         titleSection
                         destinationSection
                         dateSection
@@ -418,7 +421,7 @@ struct EditTravelPlanBasicInfoView: View {
     }
 
     private func saveNewImage(_ image: UIImage) {
-        guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+        guard let imageData = image.storedPhotoData() else {
             saveUpdatedPlan(with: plan.localImageFileName)
             return
         }

@@ -12,7 +12,19 @@ final class ProStore: ObservableObject {
     static let productId = "com.gmail.taismryotasis.Travory.pro.themes"
 
     @Published private(set) var product: Product?
-    @Published private(set) var isPurchased = false
+
+    /// 購入済みか。
+    ///
+    /// 起動直後は StoreKit への問い合わせがまだ終わっていない。
+    /// false から始めると、**購入済みの人にも一瞬「未購入向けの表示」が見える**
+    /// （写真の注意書きなど）。前回の結果を覚えておいて、そこから始める。
+    /// 数百ミリ秒後に `refreshEntitlements()` が本当の値で上書きする。
+    ///
+    /// **この値は表示にだけ使う。** 写真を預けるかどうかの判定は
+    /// `refreshEntitlements()` が確かめた結果だけで決める（`PhotoSyncService`）
+    @Published private(set) var isPurchased = UserDefaults.standard.bool(forKey: ProStore.purchasedCacheKey)
+
+    private static let purchasedCacheKey = "ProPurchasedCache_v1"
     @Published private(set) var loadingState: LoadingState = .loading
     @Published private(set) var purchaseState: PurchaseState = .idle
 
@@ -83,7 +95,11 @@ final class ProStore: ObservableObject {
             }
         }
         isPurchased = owned
+        UserDefaults.standard.set(owned, forKey: ProStore.purchasedCacheKey)
         ThemeManager.shared.setPremiumUnlocked(owned)
+        // 写真の iCloud 同期も買い切りに含まれる。
+        // 買った直後は、それまでの写真を預けるところから始まる
+        PhotoSyncService.shared.setEnabled(owned)
     }
 
     // MARK: - Purchase

@@ -25,8 +25,6 @@ final class AlbumManager: NSObject, ObservableObject {
 
     /// サムネイルの一辺の最大ピクセル数（グリッド表示用）
     private let thumbnailMaxPixel: CGFloat = 400
-    /// 保存時に長辺をこのサイズまで縮小する（原寸のままだと容量とメモリを圧迫する）
-    private let storedImageMaxPixel: CGFloat = 2048
 
     private let thumbnailCache = NSCache<NSString, UIImage>()
 
@@ -306,6 +304,9 @@ final class AlbumManager: NSObject, ObservableObject {
     /// 原寸の画像。全画面表示など本当に必要な場面だけで使う
     func loadPhoto(fileName: String) -> UIImage? {
         let fileURL = albumsDirectory.appendingPathComponent(fileName)
+        // ファイルが無いときだけ、預けてあるものから書き戻す
+        PhotoSyncService.shared.restoreIfMissing(fileName: fileName, folder: .albums)
+
         guard let data = try? Data(contentsOf: fileURL) else { return nil }
         return UIImage(data: data)
     }
@@ -317,6 +318,8 @@ final class AlbumManager: NSObject, ObservableObject {
         }
 
         let fileURL = albumsDirectory.appendingPathComponent(fileName)
+        PhotoSyncService.shared.restoreIfMissing(fileName: fileName, folder: .albums)
+
         guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, nil) else { return nil }
 
         let options: [CFString: Any] = [
@@ -345,11 +348,12 @@ final class AlbumManager: NSObject, ObservableObject {
     private func savePhoto(_ image: UIImage, fileName: String) -> Bool {
         let fileURL = albumsDirectory.appendingPathComponent(fileName)
 
-        let resized = downscaled(image, maxPixel: storedImageMaxPixel)
-        guard let data = resized.jpegData(compressionQuality: 0.8) else { return false }
+        guard let data = image.storedPhotoData(compressionQuality: 0.8) else { return false }
 
         do {
             try data.write(to: fileURL)
+            // 書き込めてから預ける。Pro を持っていなければ何もしない
+            PhotoSyncService.shared.store(data: data, fileName: fileName, folder: .albums)
             return true
         } catch {
             return false
@@ -360,23 +364,13 @@ final class AlbumManager: NSObject, ObservableObject {
         let fileURL = albumsDirectory.appendingPathComponent(fileName)
         try? fileManager.removeItem(at: fileURL)
         thumbnailCache.removeObject(forKey: fileName as NSString)
+
+        // ローカルに無くても預け先には在りうるので、必ず消しに行く
+        PhotoSyncService.shared.remove(fileName: fileName, folder: .albums)
     }
 
-    /// 長辺が maxPixel を超える場合だけ縮小する
-    private func downscaled(_ image: UIImage, maxPixel: CGFloat) -> UIImage {
-        let longestSide = max(image.size.width, image.size.height)
-        guard longestSide > maxPixel else { return image }
-
-        let scale = maxPixel / longestSide
-        let newSize = CGSize(width: image.size.width * scale, height: image.size.height * scale)
-
-        let format = UIGraphicsImageRendererFormat.default()
-        format.scale = 1
-        let renderer = UIGraphicsImageRenderer(size: newSize, format: format)
-        return renderer.image { _ in
-            image.draw(in: CGRect(origin: .zero, size: newSize))
-        }
-    }
+    // 縮小は `UIImage.storedPhotoData()` に移した。
+    // アルバム以外の写真（旅行のカバー・場所の写真）も同じ大きさで揃える
 
     // MARK: - Default Albums
 

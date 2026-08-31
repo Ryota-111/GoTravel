@@ -597,6 +597,9 @@ struct PrefecturePhotoEditorView: View {
 
     private var actionButtonsSection: some View {
         VStack(spacing: 12) {
+            // 未購入のときだけ出る
+            DeviceOnlyPhotoNote()
+
             Button(action: { showImagePicker = true }) {
                 HStack(spacing: 6) {
                     Image(systemName: "photo.on.rectangle")

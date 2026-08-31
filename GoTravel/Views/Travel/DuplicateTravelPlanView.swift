@@ -200,7 +200,7 @@ struct DuplicateTravelPlanView: View {
     private func copiedImageFileName() -> String? {
         guard let original = plan.localImageFileName,
               let image = FileManager.documentsImage(named: original),
-              let data = image.jpegData(compressionQuality: 0.9) else { return nil }
+              let data = image.storedPhotoData(compressionQuality: 0.9) else { return nil }
 
         let fileName = "travel_plan_\(UUID().uuidString).jpg"
         do {

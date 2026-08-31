@@ -415,6 +415,15 @@ struct AddTravelPlanView: View {
     }
 
     private var imagePickerButton: some View {
+        VStack(spacing: 10) {
+            // 未購入のときだけ出る
+            DeviceOnlyPhotoNote()
+
+            imagePickerTapArea
+        }
+    }
+
+    private var imagePickerTapArea: some View {
         Button(action: { showImagePicker = true }) {
             VStack(spacing: 14) {
                 ZStack {
@@ -455,7 +464,7 @@ struct AddTravelPlanView: View {
     }
 
     private func saveWithImage(_ image: UIImage) {
-        guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+        guard let imageData = image.storedPhotoData() else {
             createAndSavePlan(withImageFileName: nil)
             return
         }

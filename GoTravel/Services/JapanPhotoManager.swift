@@ -47,6 +47,8 @@ final class JapanPhotoManager: ObservableObject {
 
         do {
             try data.write(to: fileURL)
+            // 書き込めてから預ける。Pro を持っていなければ何もしない
+            PhotoSyncService.shared.store(data: data, fileName: fileName, folder: .japanPhotos)
             // 同じ都道府県を撮り直した場合に古いサムネイルが残らないようにする
             thumbnailCache.removeObject(forKey: prefecture as NSString)
             savePrefectureToList(prefecture)
@@ -60,6 +62,9 @@ final class JapanPhotoManager: ObservableObject {
     func loadPhoto(for prefecture: String) -> UIImage? {
         let fileName = "\(prefecture).jpg"
         let fileURL = photosDirectory.appendingPathComponent(fileName)
+
+        // ファイルが無いときだけ、預けてあるものから書き戻す
+        PhotoSyncService.shared.restoreIfMissing(fileName: fileName, folder: .japanPhotos)
 
         guard let data = try? Data(contentsOf: fileURL),
               let image = UIImage(data: data) else {
@@ -76,6 +81,8 @@ final class JapanPhotoManager: ObservableObject {
 
         do {
             try fileManager.removeItem(at: fileURL)
+            // ローカルに無くても預け先には在りうるので、必ず消しに行く
+            PhotoSyncService.shared.remove(fileName: fileName, folder: .japanPhotos)
             removePrefectureFromList(prefecture)
             return true
         } catch {
@@ -105,7 +112,10 @@ final class JapanPhotoManager: ObservableObject {
             return cached
         }
 
-        let fileURL = photosDirectory.appendingPathComponent("\(prefecture).jpg")
+        let fileName = "\(prefecture).jpg"
+        let fileURL = photosDirectory.appendingPathComponent(fileName)
+        PhotoSyncService.shared.restoreIfMissing(fileName: fileName, folder: .japanPhotos)
+
         guard let source = CGImageSourceCreateWithURL(fileURL as CFURL, nil) else { return nil }
 
         let options: [CFString: Any] = [

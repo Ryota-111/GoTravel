@@ -906,6 +906,8 @@ struct PlanDetailView: View {
                     VStack(alignment: .leading, spacing: 10) {
                         editSectionLabel("写真", icon: "photo")
                         photoEditRow
+                        // 未購入のときだけ出る
+                        DeviceOnlyPhotoNote()
                     }
                 }
 
@@ -2161,7 +2163,7 @@ struct PlanDetailView: View {
 
     // MARK: - Image Storage Functions
     private func saveImageLocally(_ image: UIImage, completion: @escaping (Result<String, Error>) -> Void) {
-        guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+        guard let imageData = image.storedPhotoData() else {
             completion(.failure(NSError(domain: "PlanDetailView", code: -1, userInfo: [NSLocalizedDescriptionKey: "画像データの変換に失敗しました"])))
             return
         }

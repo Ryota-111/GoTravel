@@ -40,10 +40,17 @@ struct AlbumDetailView: View {
             ZStack {
                 backgroundGradient
 
-                if photos.isEmpty {
-                    emptyStateView
-                } else {
-                    photoGridView
+                VStack(spacing: 0) {
+                    // 未購入のときだけ出る。写真を入れる場所に置いておく
+                    DeviceOnlyPhotoNote()
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+
+                    if photos.isEmpty {
+                        emptyStateView
+                    } else {
+                        photoGridView
+                    }
                 }
             }
             .navigationTitle(navigationTitleText)

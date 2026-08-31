@@ -19,7 +19,7 @@ final class ProfileViewModel: ObservableObject {
         isSaving = true
         DispatchQueue.global(qos: .userInitiated).async {
             defer { DispatchQueue.main.async { self.isSaving = false } }
-            guard let data = image.jpegData(compressionQuality: 0.85) else { return }
+            guard let data = image.storedPhotoData(compressionQuality: 0.85) else { return }
             let fileName = "profile_avatar.jpg"
             do {
                 try FileManager.saveImageDataToDocuments(data: data, named: fileName)

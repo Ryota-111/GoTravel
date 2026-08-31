@@ -452,6 +452,9 @@ struct PlaceDetailView: View {
                     }
                 }
 
+                // 未購入のときだけ出る
+                DeviceOnlyPhotoNote()
+
                 Button(action: {
                     enterEditMode()
                     showImagePicker = true
@@ -883,7 +886,7 @@ struct PlaceDetailView: View {
 
     // MARK: - Image Storage Functions
     private func saveImageLocally(_ image: UIImage, completion: @escaping (Result<String, Error>) -> Void) {
-        guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+        guard let imageData = image.storedPhotoData() else {
             completion(.failure(NSError(domain: "PlaceDetailView", code: -1, userInfo: [NSLocalizedDescriptionKey: "画像データの変換に失敗しました"])))
             return
         }
