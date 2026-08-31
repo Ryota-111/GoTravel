@@ -1,11 +1,19 @@
 import SwiftUI
 import StoreKit
 
-/// 追加テーマの購入画面。
-/// 未購入でも全テーマを一覧に出したうえで、選ばれたときにここを開く。
-struct ThemeStoreView: View {
-    /// どのテーマから開かれたか。見出しに出す
-    let highlighted: ThemePreset.ThemeType?
+/// Travory Pro の紹介ページ。
+///
+/// これまで買い切りへの入口は「アプリ設定 → テーマ」の中だけで、
+/// テーマを選びに行った人しか存在に気づけなかった。
+/// **何が入っているのかを一枚で説明する場所**として独立させ、
+/// プロフィールから直接開けるようにしている。
+///
+/// 購入の処理そのものは `ProStore` が持つ。ここは説明と入口だけ。
+struct ProView: View {
+
+    /// テーマ一覧から「このテーマを使いたい」で開かれたときに、そのテーマ名を見出しに出す。
+    /// プロフィールから開いたときは nil
+    var highlighted: ThemePreset.ThemeType? = nil
 
     @ObservedObject private var store = ProStore.shared
     @ObservedObject private var themeManager = ThemeManager.shared
@@ -14,53 +22,54 @@ struct ThemeStoreView: View {
     private var theme: ThemePreset { themeManager.currentTheme }
 
     var body: some View {
-        NavigationStack {
-            ScrollView {
-                VStack(spacing: 24) {
-                    header
-                    swatches
-                    benefits
+        ScrollView {
+            VStack(spacing: 24) {
+                header
+
+                if store.isPurchased {
+                    purchasedNotice
+                }
+
+                featureThemes
+                featurePhotoSync
+                onceOnlyCard
+
+                if !store.isPurchased {
                     purchaseArea
-                    footnote
                 }
-                .padding(20)
+
+                footnote
             }
-            .background(theme.backgroundLight.ignoresSafeArea())
-            .navigationTitle("テーマを追加")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("閉じる") { dismiss() }
-                        .foregroundColor(theme.secondaryText)
-                }
-            }
+            .padding(20)
         }
+        .background(theme.backgroundLight.ignoresSafeArea())
+        .navigationTitle("Travory Pro")
+        .navigationBarTitleDisplayMode(.inline)
         .onChange(of: store.isPurchased) { _, purchased in
-            // 購入できたら、開くきっかけになったテーマをそのまま当てる
-            if purchased {
-                if let highlighted {
-                    themeManager.setTheme(highlighted)
-                }
+            // テーマから開かれていたら、買えたその場で当てる
+            if purchased, let highlighted {
+                themeManager.setTheme(highlighted)
                 dismiss()
             }
         }
     }
 
     // MARK: - Header
+
     private var header: some View {
         VStack(spacing: 10) {
-            Image(systemName: "paintpalette.fill")
+            Image(systemName: "sparkles")
                 .font(.system(size: 34))
                 .foregroundColor(theme.primary)
                 .padding(20)
                 .background(Circle().fill(theme.primary.opacity(0.12)))
 
-            Text(highlighted.map { "「\($0.displayName)」を使う" } ?? "テーマを増やす")
+            Text(highlighted.map { "「\($0.displayName)」を使う" } ?? "Travory Pro")
                 .font(theme.displayFont(.title2))
                 .foregroundColor(theme.text)
                 .multilineTextAlignment(.center)
 
-            Text("一度の購入で、追加テーマがすべて使えます。これから増えるぶんも含まれます。")
+            Text("一度のお支払いで、追加テーマ14種と写真のiCloud保管が使えるようになります。月額や年額はありません。")
                 .font(.subheadline)
                 .foregroundColor(theme.secondaryText)
                 .multilineTextAlignment(.center)
@@ -69,12 +78,30 @@ struct ThemeStoreView: View {
         .padding(.top, 8)
     }
 
-    // MARK: - Swatches
-    private var swatches: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text("入っているテーマ")
-                .font(theme.displayFont(.subheadline))
+    private var purchasedNotice: some View {
+        HStack(spacing: 10) {
+            Image(systemName: "checkmark.seal.fill")
+                .foregroundColor(theme.success)
+            Text("ご購入ありがとうございます。すべての機能をお使いいただけます。")
+                .font(.subheadline)
                 .foregroundColor(theme.text)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(16)
+        .themedCard()
+    }
+
+    // MARK: - 入っているもの①：テーマ
+
+    private var featureThemes: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            featureHeading(
+                icon: "paintpalette.fill",
+                title: "テーマが14種類増えます",
+                detail: "色だけではありません。書体・角の丸み・縁・影・カードの形まで変わるので、"
+                      + "同じアプリでも別物のように見えます。"
+            )
 
             // 色の点だけでは、どんな画面になるのかが伝わらない。
             // 買う前にいちばん知りたいのはそこなので、実際の見え方を並べる
@@ -117,32 +144,91 @@ struct ThemeStoreView: View {
             }
             // カードの内側の余白を打ち消して、見本を端まで流す
             .padding(.horizontal, -16)
+
+            bullet("季節のテーマ（桜・瀬戸内・紅葉・雪国）は、旬のあいだ購入なしでもお試しいただけます。ご購入いただくと一年中お使いいただけます。")
+            bullet("これから増えるテーマも、追加のお支払いなしで使えます。")
         }
         .padding(16)
         .themedCard()
     }
 
-    // MARK: - Benefits
-    private var benefits: some View {
+    // MARK: - 入っているもの②：写真の保管
+
+    private var featurePhotoSync: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            featureHeading(
+                icon: "icloud.and.arrow.up.fill",
+                title: "写真をiCloudでお預かりします",
+                detail: "旅行計画のカバー写真、保存した場所の写真、アルバムの写真を、"
+                      + "お客様ご自身のiCloudにも保管します。"
+            )
+
+            bullet("**機種変更やアプリの入れ直しでも写真が残ります。** これまで写真は端末の中だけにあり、端末を変えると記録は残っても写真が消えていました。")
+            bullet("同じApple Accountの端末どうしで、同じ写真が見られます。")
+            bullet("預け先はお客様のiCloudです。開発者が見ることはできません。")
+            bullet("ご購入いただいた時点で、それまでに保存した写真もまとめてお預かりします。")
+        }
+        .padding(16)
+        .themedCard()
+    }
+
+    // MARK: - 買い方の説明
+
+    private var onceOnlyCard: some View {
         VStack(alignment: .leading, spacing: 14) {
             benefitRow(
-                icon: "infinity",
-                title: "これから増えるテーマも込み",
-                detail: "追加のたびに買い直す必要はありません。"
-            )
-            benefitRow(
-                icon: "leaf",
-                title: "季節のテーマは、その季節だけ無料",
-                detail: "桜・瀬戸内・紅葉・雪国は、旬のあいだ購入なしで使えます。購入すると一年中使えます。"
+                icon: "checkmark.circle",
+                title: "買い切りです",
+                detail: "月額・年額の支払いはありません。一度だけです。"
             )
             benefitRow(
                 icon: "iphone",
-                title: "同じ Apple ID の端末で使えます",
+                title: "同じApple Accountの端末で使えます",
                 detail: "買い直しは不要です。機種を変えたら「購入を復元」から戻せます。"
+            )
+            benefitRow(
+                icon: "lock.open",
+                title: "買わなくても、記録と計画の機能はすべて使えます",
+                detail: "旅行計画・予定・場所の保存・アルバム・共有・やることリストは無料のままです。標準のテーマも3種類そのままお使いいただけます。"
             )
         }
         .padding(16)
         .themedCard()
+    }
+
+    // MARK: - 部品
+
+    private func featureHeading(icon: String, title: String, detail: String) -> some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 9) {
+                Image(systemName: icon)
+                    .font(.body)
+                    .foregroundColor(theme.primary)
+                Text(title)
+                    .font(theme.displayFont(.headline))
+                    .foregroundColor(theme.text)
+            }
+
+            Text(detail)
+                .font(.subheadline)
+                .foregroundColor(theme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// 行頭に点を置いた説明文。**強調** はそのまま太字になる
+    private func bullet(_ text: String) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            Circle()
+                .fill(theme.primary.opacity(0.45))
+                .frame(width: 5, height: 5)
+                .padding(.top, 6)
+
+            Text(.init(text))
+                .font(.caption)
+                .foregroundColor(theme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
     }
 
     private func benefitRow(icon: String, title: String, detail: String) -> some View {
@@ -165,6 +251,7 @@ struct ThemeStoreView: View {
     }
 
     // MARK: - Purchase
+
     @ViewBuilder
     private var purchaseArea: some View {
         VStack(spacing: 12) {
@@ -234,10 +321,33 @@ struct ThemeStoreView: View {
     }
 
     private var footnote: some View {
-        Text("買い切りです。月額や年額の支払いはありません。")
+        Text("お支払いはAppleが取り扱います。開発者がクレジットカード番号などを受け取ることはありません。")
             .font(.caption2)
             .foregroundColor(theme.tertiaryText)
             .multilineTextAlignment(.center)
             .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - シートで開くとき
+
+/// テーマ一覧から開かれる購入画面。
+/// 中身は `ProView` そのままで、閉じるボタンだけ足す
+struct ProSheet: View {
+    let highlighted: ThemePreset.ThemeType?
+
+    @ObservedObject private var themeManager = ThemeManager.shared
+    @Environment(\.dismiss) private var dismiss
+
+    var body: some View {
+        NavigationStack {
+            ProView(highlighted: highlighted)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("閉じる") { dismiss() }
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
+                    }
+                }
+        }
     }
 }

@@ -5,6 +5,8 @@ struct ProfileView: View {
     @StateObject private var vm = ProfileViewModel()
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
+    /// Pro のカードの文言が購入の直後に切り替わるように見張る
+    @ObservedObject private var proStore = ProStore.shared
     @Environment(\.colorScheme) var colorScheme
     @State private var animateCards = false
     @State private var showJoinPlan = false
@@ -25,6 +27,8 @@ struct ProfileView: View {
                     // 一番下になる。アカウント（削除を含む）は最後に置く
                     VStack(spacing: 16) {
                         profileEditCard
+
+                        proCard
 
                         joinTravelPlanCard
 
@@ -305,6 +309,29 @@ struct ProfileView: View {
         .scaleEffect(animateCards ? 1 : 0.8)
         .offset(y: animateCards ? 0 : 30)
         .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.30), value: animateCards)
+    }
+
+    // MARK: - Pro Card
+    //
+    // これまで買い切りの入口は「アプリ設定 → テーマ」の中だけで、
+    // テーマを見に行った人しか存在に気づけなかった。
+    // 購入済みかどうかで文言だけ変え、カード自体は常に置いておく
+    private var proCard: some View {
+        NavigationLink(destination: ProView()) {
+            GlassMenuCard(
+                icon: proStore.isPurchased ? "checkmark.seal.fill" : "sparkles",
+                title: "Travory Pro",
+                subtitle: proStore.isPurchased
+                    ? "ご利用中です"
+                    : "テーマ14種と写真のiCloud保管",
+                gradientColors: [Color.yellow, Color.orange.opacity(0.8)]
+            )
+        }
+        .buttonStyle(CardButtonStyle())
+        .opacity(animateCards ? 1 : 0)
+        .scaleEffect(animateCards ? 1 : 0.8)
+        .offset(y: animateCards ? 0 : 30)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.15), value: animateCards)
     }
 
     // MARK: - Join Travel Plan Card
@@ -1155,7 +1182,7 @@ struct AppSettingView: View {
             }
         }
         .sheet(item: $storeTargetTheme) { target in
-            ThemeStoreView(highlighted: target)
+            ProSheet(highlighted: target)
         }
     }
 
