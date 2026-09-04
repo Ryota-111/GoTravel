@@ -14,7 +14,8 @@ class CoreDataManager {
     /// ダミーレコードの作成と削除を行うため起動に数十秒かかる。
     /// リリースビルドには含まれないので本番の動作には影響しない。
     ///
-    /// `TaskEntity` と `PhotoAssetEntity` は 2026年8月31日に Production へ deploy 済み。
+    /// deploy 済み: `TaskEntity` と `PhotoAssetEntity`（2026年8月31日）、
+    /// `PackingPresetEntity`（2026年9月5日）。
     private static let initializesCloudKitSchemaOnLaunch = false
     #endif
 

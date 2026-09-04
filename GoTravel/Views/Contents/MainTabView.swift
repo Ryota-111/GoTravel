@@ -60,6 +60,9 @@ struct MainTabView: View {
                 // やることリストはホームのバッジからも数を出すので、ここで用意する。
                 // 初回は UserDefaults に残っているぶんを Core Data へ移す
                 TaskManager.shared.setup(userId: userId)
+                // 持ち物・お土産・やりたいことの「よく使う」候補。
+                // 旅行ごとではなくユーザーに紐づく
+                PackingPresetManager.shared.setup(userId: userId)
 
                 // 写真の預け直し。
                 // `ProStore` は起動直後に所有状態を確かめるが、そのときまだ
