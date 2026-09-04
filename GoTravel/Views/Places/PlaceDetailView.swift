@@ -18,6 +18,8 @@ struct PlaceDetailView: View {
     @State private var isSaving = false
     @State private var showAlert = false
     @State private var alertMessage = ""
+    /// ネット検索の結果を出すシート。アプリの中で開いて、戻ってこられるようにする
+    @State private var webSearchURL: URL?
 
     // 編集用の一時変数
     @State private var editedTitle: String = ""
@@ -98,6 +100,9 @@ struct PlaceDetailView: View {
         .sheet(isPresented: $showImagePicker) {
             ImagePicker(image: $selectedImage)
         }
+        .sheet(item: $webSearchURL) { url in
+            SafariView(url: url)
+        }
         .alert("エラー", isPresented: $showAlert) {
             Button("OK", role: .cancel) {}
         } message: {
@@ -130,6 +135,12 @@ struct PlaceDetailView: View {
                 } else {
                     Color.clear.frame(height: 8)
                 }
+
+                // 場所の名前でそのまま調べに行ける口。
+                // 営業時間や口コミは持っていないので、ここから先はネットに任せる
+                webSearchButton
+                    .padding(.horizontal, 24)
+                    .padding(.top, 12)
 
                 // Gradient Separator
                 gradientSeparator
@@ -614,6 +625,59 @@ struct PlaceDetailView: View {
         .cornerRadius(15)
         .padding(.horizontal, 24)
         .padding(.vertical, 24)
+    }
+
+    // MARK: - ネットで検索
+
+    /// 場所の名前をそのまま検索にかける。
+    ///
+    /// 保存してあるのは名前・座標・メモだけで、営業時間も口コミも持っていない。
+    /// 「ここ何時までだっけ」を調べるのに、名前をコピーして
+    /// ブラウザに貼り直す手間が要っていた。
+    ///
+    /// 検索語は**名前だけ**にしてある。住所を足すと絞り込みすぎて、
+    /// 引っ越した店や施設が見つからなくなる
+    private var webSearchButton: some View {
+        Button {
+            webSearchURL = Self.searchURL(for: place.title)
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "magnifyingglass")
+                    .font(.subheadline.weight(.semibold))
+
+                Text("「\(place.title)」を検索")
+                    .font(.subheadline.weight(.semibold))
+                    .lineLimit(1)
+
+                Spacer(minLength: 4)
+
+                Image(systemName: "arrow.up.right")
+                    .font(.caption.weight(.bold))
+            }
+            .foregroundColor(ThemePreset.readableTint(
+                themeManager.currentTheme.actionFill,
+                on: themeManager.currentTheme.backgroundLight
+            ))
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
+            .background(
+                RoundedRectangle(cornerRadius: themeManager.currentTheme.radius(.medium),
+                                 style: .continuous)
+                    .fill(themeManager.currentTheme.actionFill.opacity(0.10))
+            )
+        }
+        .buttonStyle(.plain)
+        // 名前が空の場所は検索しても意味がないので出さない
+        .opacity(place.title.trimmingCharacters(in: .whitespaces).isEmpty ? 0 : 1)
+        .disabled(place.title.trimmingCharacters(in: .whitespaces).isEmpty)
+    }
+
+    /// 検索エンジンに渡すURL。記号や日本語が入るので必ずエスケープする
+    private static func searchURL(for query: String) -> URL? {
+        let encoded = query.addingPercentEncoding(
+            withAllowedCharacters: .alphanumerics
+        ) ?? ""
+        return URL(string: "https://www.google.com/search?q=\(encoded)")
     }
 
     // MARK: - Gradient Separator
