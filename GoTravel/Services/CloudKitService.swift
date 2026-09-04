@@ -722,7 +722,17 @@ final class CloudKitService {
            let reservationsJSON = String(data: reservationsData, encoding: .utf8) {
             record["reservationsJSON"] = reservationsJSON
         }
-        if let packingItemsData = try? encoder.encode(plan.packingItems),
+        // **持ち主のいる項目はパブリックDBに載せない。**
+        //
+        // 持ち物とお土産は各自のもので、同行者に見せない約束になっている。
+        // 画面で隠すだけだと実体はレコードに残るため、書く手前で落とす。
+        // お土産の「誰に」は同行者へのサプライズを書く場所でもあり、
+        // ここが漏れると台無しになる。
+        //
+        // 残るのは持ち主のいない項目、つまり「やりたいこと」と、
+        // 持ち主を持たせる前からある古い項目だけ。
+        let shareableItems = plan.packingItems.filter { $0.ownerId == nil }
+        if let packingItemsData = try? encoder.encode(shareableItems),
            let packingItemsJSON = String(data: packingItemsData, encoding: .utf8) {
             record["packingItemsJSON"] = packingItemsJSON
         }

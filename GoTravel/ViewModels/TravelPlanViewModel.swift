@@ -421,6 +421,17 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
         var localPlan = plan
         localPlan.userId = currentUserId
 
+        // **自分だけの持ち物・お土産を、共有側の内容で消さない。**
+        //
+        // パブリックDBには持ち主のいない項目（やりたいこと）しか載っていない。
+        // 降りてきたものでそのまま置き換えると、自分の持ち物が毎回消える。
+        // 共有ぶんはリモートを正とし、自分のぶんは手元のものを残す
+        let myItems = await MainActor.run {
+            self.travelPlans.first(where: { $0.id == plan.id })?
+                .packingItems.filter { $0.ownerId != nil } ?? []
+        }
+        localPlan.packingItems = plan.packingItems.filter { $0.ownerId == nil } + myItems
+
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             context.perform {
                 do {

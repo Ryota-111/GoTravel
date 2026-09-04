@@ -8,19 +8,40 @@ struct PackingListView: View {
     @EnvironmentObject var viewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
+    @ObservedObject private var presetManager = PackingPresetManager.shared
     let plan: TravelPlan
+    /// 持ち物・お土産・やりたいことのどれを出すか。
+    /// 3つとも形が同じなので、この1つの画面を使い回す
+    var kind: PackingItem.Kind = .packing
 
     @State private var newItemName: String = ""
+    /// お土産の「誰に」。使わない種類では欄ごと出さない
+    @State private var newItemNote: String = ""
     /// 「よく使う持ち物」で選択中のもの。まとめて追加するまで保持する
     @State private var selectedPresets: Set<String> = []
+    @State private var showPresetEditor = false
+    @State private var showImport = false
     @FocusState private var isInputFocused: Bool
 
     private var currentPlan: TravelPlan? {
         viewModel.travelPlans.first(where: { $0.id == plan.id })
     }
 
+    /// この種類で、かつ自分に見えてよいものだけ。
+    /// 3つのリストは1つの配列に混ざって入っている
     private var items: [PackingItem] {
-        currentPlan?.packingItems ?? []
+        (currentPlan?.packingItems ?? [])
+            .filter { $0.kind == kind && $0.isVisible(to: authVM.userId) }
+    }
+
+    /// 新しく足す項目の持ち主。
+    /// やりたいことは「みんなのもの」にしたいので持ち主を付けない
+    private var newItemOwnerId: String? {
+        kind.isSharedWithMembers ? nil : authVM.userId
+    }
+
+    private var presets: [String] {
+        presetManager.names(for: kind)
     }
 
     /// 済んだものは下へ送る。まだ入れていないものを上に集めて見やすくする
@@ -56,6 +77,12 @@ struct PackingListView: View {
     // MARK: - Body
     var body: some View {
         VStack(spacing: 14) {
+            // 共有中の旅行でだけ、このリストが同行者に見えるのかを書いておく。
+            // お土産に同行者へのぶんを書く人がいるので、黙っていてはいけない
+            if currentPlan?.isShared == true {
+                sharingBadge
+            }
+
             if !items.isEmpty {
                 progressHeader
             }
@@ -66,8 +93,45 @@ struct PackingListView: View {
                 emptyStateView
             } else {
                 itemsList
+
+                // 候補は空のときだけ出していたが、それだと
+                // 1件でも足した瞬間に候補へ戻れなくなる
+                presetSection
             }
         }
+        .sheet(isPresented: $showPresetEditor) {
+            PackingPresetEditorView(kind: kind)
+        }
+        .sheet(isPresented: $showImport) {
+            PackingImportView(kind: kind,
+                              currentPlan: currentPlan ?? plan,
+                              onImport: importItems)
+                .environmentObject(viewModel)
+                .environmentObject(authVM)
+        }
+    }
+
+    // MARK: - 共有の状態
+
+    private var sharingBadge: some View {
+        HStack(spacing: 7) {
+            Image(systemName: kind.isSharedWithMembers ? "person.2.fill" : "lock.fill")
+                .font(.system(size: 11, weight: .semibold))
+
+            Text(kind.sharingNote)
+                .font(.system(size: 12))
+                .fixedSize(horizontal: false, vertical: true)
+
+            Spacer(minLength: 0)
+        }
+        .foregroundColor(themeManager.currentTheme.secondaryText)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(themeManager.currentTheme.secondaryText.opacity(0.08))
+        )
     }
 
     // MARK: - 進捗
@@ -86,7 +150,7 @@ struct PackingListView: View {
                 Spacer()
 
                 if checkedCount == items.count {
-                    Label("準備完了", systemImage: "checkmark.circle.fill")
+                    Label(kind.doneLabel, systemImage: "checkmark.circle.fill")
                         .font(.caption.weight(.semibold))
                         .foregroundColor(themeManager.currentTheme.success)
                 }
@@ -100,8 +164,30 @@ struct PackingListView: View {
     // MARK: - 追加
 
     private var addItemSection: some View {
+        VStack(spacing: 8) {
+            addNameRow
+
+            // お土産だけ「誰に」を書ける。買う前に決めておくと店で迷わない
+            if kind.usesNote {
+                TextField(kind.notePlaceholder, text: $newItemNote)
+                    .font(.system(size: 13))
+                    .submitLabel(.done)
+                    .onSubmit(addItem)
+                    .foregroundColor(textColor)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 9)
+                    .background(
+                        RoundedRectangle(cornerRadius: 12)
+                            .fill(cardFill)
+                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(cardStroke, lineWidth: 1))
+                    )
+            }
+        }
+    }
+
+    private var addNameRow: some View {
         HStack(spacing: 10) {
-            TextField("持ち物を追加", text: $newItemName)
+            TextField(kind.addPlaceholder, text: $newItemName)
                 .font(.system(size: 15))
                 .focused($isInputFocused)
                 .submitLabel(.done)
@@ -150,11 +236,11 @@ struct PackingListView: View {
 
     private var emptyStateView: some View {
         VStack(spacing: 14) {
-            Image(systemName: "bag")
+            Image(systemName: kind.emptyIcon)
                 .font(.system(size: 34))
                 .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
 
-            Text("忘れ物を防ぐために、持ち物を書き出しておきましょう")
+            Text(kind.emptyMessage)
                 .font(.caption)
                 .foregroundColor(themeManager.currentTheme.secondaryText)
                 .multilineTextAlignment(.center)
@@ -180,12 +266,27 @@ struct PackingListView: View {
     /// まとめて選んでから確定する形にしている
     private var presetSection: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("よく使う持ち物")
-                .font(.caption2.weight(.semibold))
-                .foregroundColor(themeManager.currentTheme.secondaryText)
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack {
+                Text("よく使う\(kind.title)")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
 
-            FlowChips(items: Self.presets, selected: selectedPresets) { preset in
+                Spacer()
+
+                // 毎回だいたい同じものを持っていく人には、候補を1つずつ選ぶより
+                // 前の旅行を指すほうが早い
+                Button("前の旅行から") { showImport = true }
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(ThemePreset.readableTint(accent, on: cardFill))
+
+                // 人によって要る物は違う。候補そのものを組み替えられるようにする
+                Button("編集") { showPresetEditor = true }
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(ThemePreset.readableTint(accent, on: cardFill))
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            FlowChips(items: presets, selected: selectedPresets) { preset in
                 if selectedPresets.contains(preset) {
                     selectedPresets.remove(preset)
                 } else {
@@ -221,8 +322,10 @@ struct PackingListView: View {
               var updatedPlan = currentPlan ?? Optional(plan) else { return }
 
         // Set は順番を持たないので、候補に並んでいる順で足す
-        for name in Self.presets where selectedPresets.contains(name) {
-            updatedPlan.packingItems.append(PackingItem(name: name))
+        for name in presets where selectedPresets.contains(name) {
+            updatedPlan.packingItems.append(
+                PackingItem(name: name, kind: kind, ownerId: newItemOwnerId)
+            )
         }
 
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
@@ -232,16 +335,47 @@ struct PackingListView: View {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
-    private static let presets = [
-        "充電器", "モバイルバッテリー", "常備薬", "歯ブラシ",
-        "着替え", "洗面用具", "傘", "身分証", "現金"
-    ]
+    // MARK: - 前の旅行から取り込む
+
+    /// 前の旅行の項目を、いまの旅行に足す。
+    ///
+    /// - **チェックは外す。** 前回入れ終えたことは、今回の準備には関係ない
+    /// - **同じ名前は重ねない。** すでに「充電器」があるところに
+    ///   もう1つ増えても困るだけ
+    /// - **持ち主は自分にする。** 前の旅行で共有だった項目でも、
+    ///   持ち物とお土産は各自のものという扱いに揃える
+    private func importItems(_ incoming: [PackingItem]) {
+        guard let userId = authVM.userId,
+              var updatedPlan = currentPlan ?? Optional(plan) else { return }
+
+        let existingNames = Set(items.map(\.name))
+        var added = 0
+
+        for item in incoming where !existingNames.contains(item.name) {
+            updatedPlan.packingItems.append(
+                PackingItem(name: item.name,
+                            isChecked: false,
+                            kind: kind,
+                            note: item.note,
+                            ownerId: newItemOwnerId)
+            )
+            added += 1
+        }
+
+        guard added > 0 else { return }
+
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            viewModel.update(updatedPlan, userId: userId)
+        }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
 
     // MARK: - Actions
 
     private func addItem() {
         add(name: trimmedNewItemName)
         newItemName = ""
+        newItemNote = ""
     }
 
     private func add(name: String) {
@@ -249,7 +383,13 @@ struct PackingListView: View {
         guard !trimmed.isEmpty else { return }
         guard var updatedPlan = currentPlan ?? Optional(plan) else { return }
 
-        updatedPlan.packingItems.append(PackingItem(name: trimmed))
+        let note = newItemNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        updatedPlan.packingItems.append(
+            PackingItem(name: trimmed,
+                        kind: kind,
+                        note: note.isEmpty ? nil : note,
+                        ownerId: newItemOwnerId)
+        )
 
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             if let userId = authVM.userId {
@@ -334,12 +474,22 @@ struct PackingItemRow: View {
         HStack(spacing: 12) {
             checkmark
 
-            Text(item.name)
-                .font(.system(size: 15))
-                .foregroundColor(item.isChecked ? themeManager.currentTheme.secondaryText : textColor)
-                .strikethrough(item.isChecked, color: themeManager.currentTheme.secondaryText)
-                .lineLimit(2)
-                .multilineTextAlignment(.leading)
+            VStack(alignment: .leading, spacing: 2) {
+                Text(item.name)
+                    .font(.system(size: 15))
+                    .foregroundColor(item.isChecked ? themeManager.currentTheme.secondaryText : textColor)
+                    .strikethrough(item.isChecked, color: themeManager.currentTheme.secondaryText)
+                    .lineLimit(2)
+                    .multilineTextAlignment(.leading)
+
+                // お土産の「誰に」。入っているときだけ出す
+                if let note = item.note, !note.isEmpty {
+                    Text(note)
+                        .font(.system(size: 12))
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .lineLimit(1)
+                }
+            }
 
             Spacer(minLength: 0)
 
