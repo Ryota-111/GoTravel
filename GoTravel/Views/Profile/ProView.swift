@@ -21,6 +21,17 @@ struct ProView: View {
 
     private var theme: ThemePreset { themeManager.currentTheme }
 
+    /// この画面の差し色。
+    ///
+    /// **`primary` を直接使わないこと。** 白黒テーマは `primary` が白で、
+    /// 背景も白なので、アイコンも購入ボタンも見えなくなる。
+    /// `actionFill` は白黒のときだけ黒を返す
+    private var accent: Color { theme.actionFill }
+
+    /// 差し色で塗った面の上に置く文字の色。
+    /// 白地に白文字（白黒テーマ）を出さないために、明るさから決める
+    private var onAccent: Color { ThemePreset.readableText(on: accent) }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 24) {
@@ -60,9 +71,9 @@ struct ProView: View {
         VStack(spacing: 10) {
             Image(systemName: "sparkles")
                 .font(.system(size: 34))
-                .foregroundColor(theme.primary)
+                .foregroundColor(accent)
                 .padding(20)
-                .background(Circle().fill(theme.primary.opacity(0.12)))
+                .background(Circle().fill(accent.opacity(0.12)))
 
             Text(highlighted.map { "「\($0.displayName)」を使う" } ?? "Travory Pro")
                 .font(theme.displayFont(.title2))
@@ -203,7 +214,7 @@ struct ProView: View {
             HStack(spacing: 9) {
                 Image(systemName: icon)
                     .font(.body)
-                    .foregroundColor(theme.primary)
+                    .foregroundColor(accent)
                 Text(title)
                     .font(theme.displayFont(.headline))
                     .foregroundColor(theme.text)
@@ -220,7 +231,7 @@ struct ProView: View {
     private func bullet(_ text: String) -> some View {
         HStack(alignment: .top, spacing: 8) {
             Circle()
-                .fill(theme.primary.opacity(0.45))
+                .fill(accent.opacity(0.45))
                 .frame(width: 5, height: 5)
                 .padding(.top, 6)
 
@@ -235,7 +246,7 @@ struct ProView: View {
         HStack(alignment: .top, spacing: 12) {
             Image(systemName: icon)
                 .font(.body)
-                .foregroundColor(theme.primary)
+                .foregroundColor(accent)
                 .frame(width: 26, height: 26)
 
             VStack(alignment: .leading, spacing: 3) {
@@ -274,7 +285,7 @@ struct ProView: View {
                         Task { await store.loadProduct() }
                     }
                     .font(.subheadline.bold())
-                    .foregroundColor(theme.primary)
+                    .foregroundColor(accent)
                 }
                 .frame(maxWidth: .infinity)
                 .padding(16)
@@ -285,7 +296,7 @@ struct ProView: View {
                 } label: {
                     HStack(spacing: 8) {
                         if store.purchaseState == .purchasing {
-                            ProgressView().tint(.white)
+                            ProgressView().tint(onAccent)
                         } else {
                             Text(store.displayPrice.map { "\($0) で購入" } ?? "購入")
                                 .font(.headline)
@@ -293,9 +304,9 @@ struct ProView: View {
                     }
                     .frame(maxWidth: .infinity, minHeight: 54)
                     .background(
-                        RoundedRectangle(cornerRadius: theme.radius(.large)).fill(theme.primary)
+                        RoundedRectangle(cornerRadius: theme.radius(.large)).fill(accent)
                     )
-                    .foregroundColor(.white)
+                    .foregroundColor(onAccent)
                 }
                 .disabled(store.purchaseState == .purchasing || store.purchaseState == .restoring)
 
