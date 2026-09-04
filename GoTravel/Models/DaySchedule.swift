@@ -34,6 +34,21 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
         case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL
     }
 
+    /// 書き出しや共有カードに出す金額。
+    ///
+    /// **旅行が終わったあとに残したいのは、予定額ではなく実際に使った額。**
+    /// 実績が入っていればそちらを、まだ無ければ予算を出す。
+    /// 出発前は予算しか無いので今までどおりに見え、
+    /// 記録を付けた項目から順に実績へ入れ替わる
+    var displayCost: Double? {
+        actualCost ?? cost
+    }
+
+    /// 出している金額が実績かどうか。見出しの言い回しを変えるのに使う
+    var isShowingActualCost: Bool {
+        actualCost != nil
+    }
+
     init(id: String = UUID().uuidString,
          time: Date,
          title: String,
