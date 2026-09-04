@@ -66,7 +66,7 @@ struct ExportOptionsView: View {
     /// 予約と持ち物は1枚にまとめるので、どちらか入っていれば1枚
     private var hasExtrasPage: Bool {
         (includesReservations && !plan.reservations.isEmpty)
-            || (includesPacking && !plan.packingItems.isEmpty)
+            || (includesPacking && !plan.items(of: .packing).isEmpty)
     }
 
     /// 予定が入っている日だけ書き出す。空の日を1枚にしても意味がない
@@ -175,9 +175,9 @@ struct ExportOptionsView: View {
 
             Divider().padding(.leading, 14)
 
-            toggleRow("持ち物リスト", detail: "\(plan.packingItems.count)件", isOn: $includesPacking)
-                .disabled(plan.packingItems.isEmpty)
-                .opacity(plan.packingItems.isEmpty ? 0.5 : 1)
+            toggleRow("持ち物リスト", detail: "\(plan.items(of: .packing).count)件", isOn: $includesPacking)
+                .disabled(plan.items(of: .packing).isEmpty)
+                .opacity(plan.items(of: .packing).isEmpty ? 0.5 : 1)
         }
         .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
     }

@@ -42,7 +42,8 @@ struct TravelPlanDetailView: View {
     enum DetailTab: String, CaseIterable, Identifiable {
         case schedule = "日程"
         case map = "地図"
-        case packing = "持ち物"
+        // 持ち物・お土産・やりたいことをまとめて出すので「リスト」にした
+        case packing = "リスト"
         case reservation = "予約確認"
         case budget = "費用"
 
@@ -63,6 +64,8 @@ struct TravelPlanDetailView: View {
     @ObservedObject var themeManager = ThemeManager.shared
     @State private var selectedDay: Int = 1
     @State private var selectedTab: DetailTab = .schedule
+    /// 「リスト」タブの中で見ているもの（持ち物／お土産／やりたいこと）
+    @State private var selectedListKind: PackingItem.Kind = .packing
     /// 地図タブで、地図と行程表のどちらから選んでも共有する項目
     @State private var focusedItemID: String?
     /// 1回のドラッグで何度もタブが飛ばないようにする目印
@@ -1201,11 +1204,22 @@ struct TravelPlanDetailView: View {
     }
 
     private func packingTab(plan: TravelPlan) -> some View {
-        PackingListView(plan: plan)
-            .environmentObject(viewModel)
-            .environmentObject(authVM)
-            .padding(16)
-            .padding(.bottom, 30)
+        VStack(spacing: 14) {
+            // 持ち物・お土産・やりたいことは、どれも「名前とチェック」で形が同じ。
+            // 上のタブを3つ増やすと窮屈になるので、ここで切り替える
+            Picker("リストの種類", selection: $selectedListKind) {
+                ForEach(PackingItem.Kind.allCases) { kind in
+                    Text(kind.title).tag(kind)
+                }
+            }
+            .pickerStyle(.segmented)
+
+            PackingListView(plan: plan, kind: selectedListKind)
+                .environmentObject(viewModel)
+                .environmentObject(authVM)
+        }
+        .padding(16)
+        .padding(.bottom, 30)
     }
 
     private func reservationTab(plan: TravelPlan) -> some View {
@@ -1465,27 +1479,6 @@ struct TravelPlanDetailView: View {
                 }
             }
         }
-    }
-
-    // MARK: - Packing List Section
-    private func packingListSection(plan: TravelPlan) -> some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack {
-                Text("持ち物リスト")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundColor(accentColor)
-                Spacer()
-            }
-
-            if let currentPlan = currentPlan {
-                PackingListView(plan: currentPlan)
-                    .environmentObject(viewModel)
-            }
-        }
-        .padding(.top, 20)
-        .opacity(animateContent ? 1 : 0)
-        .offset(y: animateContent ? 0 : 10)
-        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.35), value: animateContent)
     }
 
     // MARK: - Helper Methods

@@ -32,7 +32,7 @@ enum TravelPlanTextExporter {
                     if let location = item.location, !location.isEmpty {
                         row += "  @\(location)"
                     }
-                    if let cost = item.cost, cost > 0 {
+                    if let cost = item.displayCost, cost > 0 {
                         row += "  \(currency(cost))"
                     }
                     lines.append(row)
@@ -48,12 +48,12 @@ enum TravelPlanTextExporter {
 
             let total = plan.daySchedulesInRange
                 .flatMap(\.scheduleItems)
-                .compactMap(\.cost)
+                .compactMap(\.displayCost)
                 .reduce(0, +)
 
             if total > 0 {
                 lines.append("")
-                lines.append("合計: \(currency(total))")
+                lines.append("\(costTotalLabel(for: plan)): \(currency(total))")
             }
         }
 
@@ -66,10 +66,10 @@ enum TravelPlanTextExporter {
             }
         }
 
-        if includesPacking && !plan.packingItems.isEmpty {
+        if includesPacking && !plan.items(of: .packing).isEmpty {
             lines.append("")
             lines.append("◆ 持ち物")
-            for packing in plan.packingItems {
+            for packing in plan.items(of: .packing) {
                 lines.append("\(packing.isChecked ? "☑" : "☐") \(packing.name)")
             }
         }
@@ -144,6 +144,18 @@ enum TravelPlanTextExporter {
         return formatter.string(from: date)
     }
 
+    /// 合計の見出し。
+    ///
+    /// 旅行が終わったあとに残す画像では「予定していた額」と
+    /// 「実際に使った額」が混ざると読めなくなる。
+    /// 1件でも実績が入っていれば、実績として出していることを明示する
+    static func costTotalLabel(for plan: TravelPlan) -> String {
+        let hasActual = plan.daySchedulesInRange
+            .flatMap(\.scheduleItems)
+            .contains(where: \.isShowingActualCost)
+        return hasActual ? "実際に使った額" : "合計（予定）"
+    }
+
     static func currency(_ amount: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
@@ -168,7 +180,7 @@ struct TravelPlanShareCard: View {
     }
 
     private var dayTotal: Double {
-        daySchedule.scheduleItems.compactMap(\.cost).reduce(0, +)
+        daySchedule.scheduleItems.compactMap(\.displayCost).reduce(0, +)
     }
 
     var body: some View {
@@ -305,7 +317,7 @@ struct TravelPlanShareCard: View {
                         .foregroundColor(.secondary)
                 }
 
-                if let cost = item.cost, cost > 0 {
+                if let cost = item.displayCost, cost > 0 {
                     Text(TravelPlanTextExporter.currency(cost))
                         .font(.caption.weight(.bold))
                         .foregroundColor(accentColor)
@@ -365,7 +377,7 @@ struct TravelPlanFullShareCard: View {
     private var total: Double {
         plan.daySchedulesInRange
             .flatMap { $0.scheduleItems }
-            .compactMap(\.cost)
+            .compactMap(\.displayCost)
             .reduce(0, +)
     }
 
@@ -390,7 +402,7 @@ struct TravelPlanFullShareCard: View {
             ShareCardFooter(accentColor: accentColor) {
                 if total > 0 {
                     HStack {
-                        Text("合計")
+                        Text(TravelPlanTextExporter.costTotalLabel(for: plan))
                             .font(.caption)
                             .foregroundColor(.secondary)
                         Spacer()
@@ -431,13 +443,13 @@ struct TravelPlanExtrasShareCard: View {
                 }
             }
 
-            if includesPacking && !plan.packingItems.isEmpty {
-                section(title: "持ち物（\(plan.packingItems.count)件）") {
+            if includesPacking && !plan.items(of: .packing).isEmpty {
+                section(title: "持ち物（\(plan.items(of: .packing).count)件）") {
                     // 2列にして縦に伸びすぎないようにする
                     LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading),
                                         GridItem(.flexible(), alignment: .leading)],
                               spacing: 6) {
-                        ForEach(plan.packingItems) { item in
+                        ForEach(plan.items(of: .packing)) { item in
                             HStack(spacing: 6) {
                                 Image(systemName: item.isChecked ? "checkmark.square.fill" : "square")
                                     .font(.caption)

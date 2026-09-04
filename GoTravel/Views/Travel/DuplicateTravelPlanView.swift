@@ -136,7 +136,8 @@ struct DuplicateTravelPlanView: View {
             VStack(spacing: 0) {
                 toggleRow("タイムスケジュール", count: scheduleItemCount, isOn: $includeSchedule)
                 Divider().padding(.leading, 14)
-                toggleRow("持ち物リスト", count: plan.packingItems.count, isOn: $includePacking)
+                // 持ち物・お土産・やりたいことをまとめて引き継ぐ
+                toggleRow("リスト", count: plan.packingItems.count, isOn: $includePacking)
                 Divider().padding(.leading, 14)
                 toggleRow("予約", count: plan.reservations.count, isOn: $includeReservations)
             }

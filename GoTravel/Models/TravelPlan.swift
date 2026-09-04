@@ -2,15 +2,136 @@ import Foundation
 import SwiftUI
 
 // MARK: - Packing Item
+/// 旅行につく「名前とチェック」だけのリスト項目。
+///
+/// 持ち物・お土産・やりたいことは、どれも同じ形をしている。
+/// 別々の入れ物を作らず、1つの配列に混ぜて `kind` で分ける。
+///
+/// **こうすると CloudKit のスキーマ変更が要らない。**
+/// `TravelPlanEntity.packingItemsData` は JSON を詰めた Binary なので、
+/// この構造体に項目を足しても保存先は増えない。
+/// 新しい配列を足すと Binary 属性が増え、本番への deploy が必要になる。
 struct PackingItem: Identifiable, Codable {
+
+    enum Kind: String, Codable, CaseIterable, Identifiable {
+        case packing
+        case souvenir
+        case wish
+
+        var id: String { rawValue }
+
+        var title: String {
+            switch self {
+            case .packing:  return "持ち物"
+            case .souvenir: return "お土産"
+            case .wish:     return "やりたいこと"
+            }
+        }
+
+        var addPlaceholder: String {
+            switch self {
+            case .packing:  return "持ち物を追加"
+            case .souvenir: return "買うものを追加"
+            case .wish:     return "やりたいことを追加"
+            }
+        }
+
+        var emptyIcon: String {
+            switch self {
+            case .packing:  return "bag"
+            case .souvenir: return "gift"
+            case .wish:     return "star"
+            }
+        }
+
+        var emptyMessage: String {
+            switch self {
+            case .packing:  return "忘れ物を防ぐために、持ち物を書き出しておきましょう"
+            case .souvenir: return "誰に何を買うか決めておくと、お店で迷いません"
+            case .wish:     return "行く前にやりたいことを並べておくと、予定を立てやすくなります"
+            }
+        }
+
+        /// 済んだときの言い方。持ち物は「入れた」、お土産は「買った」
+        var doneLabel: String {
+            switch self {
+            case .packing:  return "準備完了"
+            case .souvenir: return "買い終えました"
+            case .wish:     return "ぜんぶ叶いました"
+            }
+        }
+
+        /// 補足を入れる欄を出すか。お土産は「誰に」を書けると実用的
+        var usesNote: Bool { self == .souvenir }
+
+        var notePlaceholder: String { "誰に・メモ" }
+
+        /// 同行者と分け合うリストか。
+        ///
+        /// やりたいことは**みんなで出し合いたい**ので共有する。
+        /// 持ち物は各自が自分のぶんを持つ（充電器は全員それぞれ要る）ので個人のもの。
+        /// お土産は同行者へのぶんを書くことがあり、本人に見えると台無しになる。
+        var isSharedWithMembers: Bool { self == .wish }
+
+        /// 共有中の旅行で、このリストの立ち位置を一言で説明する
+        var sharingNote: String {
+            isSharedWithMembers
+                ? "同行者にも見えます。みんなで書き足せます"
+                : "自分だけに見えます。同行者には共有されません"
+        }
+    }
+
     var id: String
     var name: String
     var isChecked: Bool
+    var kind: Kind
+    /// 一言の補足。お土産の「誰に」に使う
+    var note: String?
 
-    init(id: String = UUID().uuidString, name: String, isChecked: Bool = false) {
+    /// この項目の持ち主。
+    ///
+    /// `nil` は「みんなのもの」。やりたいことと、共有を始める前からあった
+    /// 古い項目がこれにあたる。
+    /// 値が入っているものは**その人だけのもの**で、共有レコードには載らない
+    /// （`CloudKitService.publishSharedTravelPlan` が落とす）。
+    var ownerId: String?
+
+    /// 自分に見えてよい項目か
+    func isVisible(to userId: String?) -> Bool {
+        guard let ownerId else { return true }
+        return ownerId == userId
+    }
+
+    init(id: String = UUID().uuidString,
+         name: String,
+         isChecked: Bool = false,
+         kind: Kind = .packing,
+         note: String? = nil,
+         ownerId: String? = nil) {
         self.id = id
         self.name = name
         self.isChecked = isChecked
+        self.kind = kind
+        self.note = note
+        self.ownerId = ownerId
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, isChecked, kind, note, ownerId
+    }
+
+    /// `kind` と `note` を足す前に保存されたデータには、そのキーが無い。
+    /// 既定で読めるようにしておかないと、既存の持ち物が全部消える
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decodeIfPresent(String.self, forKey: .id) ?? UUID().uuidString
+        name = try container.decodeIfPresent(String.self, forKey: .name) ?? ""
+        isChecked = try container.decodeIfPresent(Bool.self, forKey: .isChecked) ?? false
+        kind = try container.decodeIfPresent(Kind.self, forKey: .kind) ?? .packing
+        note = try container.decodeIfPresent(String.self, forKey: .note)
+        // 持ち主を持たせる前の項目は「みんなのもの」として扱う。
+        // 既に同行者に見えていたものを、後から隠すほうが混乱する
+        ownerId = try container.decodeIfPresent(String.self, forKey: .ownerId)
     }
 }
 
@@ -193,6 +314,16 @@ struct TravelPlan: Identifiable, Codable {
     /// **表示・書き出しは必ずこれを使う。**
     func date(forDay dayNumber: Int) -> Date {
         Calendar.current.date(byAdding: .day, value: dayNumber - 1, to: startDate) ?? startDate
+    }
+
+    /// 種類ごとのリスト。
+    ///
+    /// 持ち物・お土産・やりたいことは `packingItems` に混ざって入っている。
+    /// **「持ち物」を出したい場所では必ずこれを通すこと。**
+    /// `packingItems` をそのまま数えると、お土産とやりたいことまで
+    /// 持ち物として数えてしまう
+    func items(of kind: PackingItem.Kind) -> [PackingItem] {
+        packingItems.filter { $0.kind == kind }
     }
 
     /// 旅行の日数（出発日と帰宅日を含む）
