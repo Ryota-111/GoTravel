@@ -124,6 +124,15 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
             return
         }
 
+        // **中身が変わったかは、上書きする前に見る。**
+        //
+        // 更新時刻を保存のたびに進めていたため、画面を開いて閉じただけでも
+        // 手元が「新しい」ことになっていた。共有では更新時刻の大小で
+        // 取り込みを決めるので、それだけで相手の編集が取り込まれなくなる。
+        // しかも手元の古い内容が「新しい」として相手に送られ、上書きしていた。
+        let previous = travelPlans.first(where: { $0.id == planId })
+        let hasChanges = previous.map { !$0.isContentEqual(to: plan) } ?? true
+
         // Core Data保存は非同期なので、ローカル配列を即時更新（楽観的更新）
         // これにより連続追加時に stale な plan を参照するのを防ぐ
         if let index = travelPlans.firstIndex(where: { $0.id == planId }) {
@@ -131,7 +140,9 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
         }
 
         var planToSave = plan
-        planToSave.updatedAt = Date()
+        if hasChanges || image != nil {
+            planToSave.updatedAt = Date()
+        }
 
         // 画像を保存（新しい画像がある場合）
         if let image = image {
@@ -369,8 +380,13 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
                     try await CloudKitService.shared.publishSharedTravelPlan(plan)
                 }
 
-                // 自分のローカルストアにコピーを保存（一覧に表示される）
-                try await self.saveSharedPlanLocally(plan, currentUserId: userId)
+                // 自分のローカルストアにコピーを保存（一覧に表示される）。
+                // 参加した直後なので手元には無い。マージの入口を通して
+                // userId の付け替えを一箇所に寄せる
+                let adopted = SharedPlanMerge
+                    .decide(local: nil, remote: plan, myUserId: userId)
+                    .takenPlan ?? plan
+                try await self.saveSharedPlanLocally(adopted)
 
                 await MainActor.run {
                     completion(.success(plan))
@@ -395,42 +411,39 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
                     self.travelPlans.first(where: { $0.id == planId })
                 }
 
-                if let local = local {
-                    if remote.updatedAt > local.updatedAt {
-                        // リモートの方が新しい → ローカルへ取り込み
-                        try await saveSharedPlanLocally(remote, currentUserId: userId)
-                    } else if local.updatedAt > remote.updatedAt {
-                        // ローカルの方が新しい（オフライン編集など） → パブリックDBへ反映
-                        try? await CloudKitService.shared.publishSharedTravelPlan(local)
-                    }
-                } else {
-                    // まだローカルにない共有プラン → 取り込み
-                    try await saveSharedPlanLocally(remote, currentUserId: userId)
+                // どうするかは `SharedPlanMerge` が決める。
+                // ここは決まったことを実行するだけにしておくと、
+                // 判断の正しさをテストで確かめられる（実機2台が要らない）
+                switch SharedPlanMerge.decide(local: local, remote: remote, myUserId: userId) {
+                case .takeRemote(let merged):
+                    try await saveSharedPlanLocally(merged)
+                    CloudKitService.shareLogger.notice(
+                        "取り込み planId=\(planId, privacy: .public)")
+
+                case .pushLocal(let plan):
+                    try? await CloudKitService.shared.publishSharedTravelPlan(plan)
+                    CloudKitService.shareLogger.notice(
+                        "手元が新しいので送信 planId=\(planId, privacy: .public)")
+
+                case .doNothing:
+                    CloudKitService.shareLogger.notice(
+                        "同じ更新時刻なので何もしない planId=\(planId, privacy: .public)")
                 }
             }
         } catch {
-            // オフライン時などは次回のrefreshで再同期される
+            // オフライン時などは次回のrefreshで再同期される。
+            // 黙って諦めると「引っぱっても何も起きない」の原因が追えない
+            CloudKitService.shareLogger.error(
+                "共有の同期に失敗 error=\(String(describing: error), privacy: .public)")
         }
     }
 
-    /// 共有プランをローカルのCore Dataに保存（新規 or 上書き）
-    private func saveSharedPlanLocally(_ plan: TravelPlan, currentUserId: String) async throws {
-        // ローカルストアの行は常に端末ユーザーのuserIdで保持する
-        // （FetchedResultsControllerのpredicateにマッチさせるため。
-        //   本来のオーナーはownerIdが保持している）
-        var localPlan = plan
-        localPlan.userId = currentUserId
-
-        // **自分だけの持ち物・お土産を、共有側の内容で消さない。**
-        //
-        // パブリックDBには持ち主のいない項目（やりたいこと）しか載っていない。
-        // 降りてきたものでそのまま置き換えると、自分の持ち物が毎回消える。
-        // 共有ぶんはリモートを正とし、自分のぶんは手元のものを残す
-        let myItems = await MainActor.run {
-            self.travelPlans.first(where: { $0.id == plan.id })?
-                .packingItems.filter { $0.ownerId != nil } ?? []
-        }
-        localPlan.packingItems = plan.packingItems.filter { $0.ownerId == nil } + myItems
+    /// 共有プランをローカルのCore Dataに保存（新規 or 上書き）。
+    ///
+    /// **渡ってくる時点でマージは済んでいる**（`SharedPlanMerge.decide`）。
+    /// ここは保存だけを担当する
+    private func saveSharedPlanLocally(_ plan: TravelPlan) async throws {
+        let localPlan = plan
 
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             context.perform {

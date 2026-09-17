@@ -788,7 +788,7 @@ final class CloudKitService {
 
     /// 共有まわりのログ。Console.app で
     /// subsystem: com.gmail.taismryotasis.Travory / category: sharing を見る
-    private static let shareLogger = Logger(
+    static let shareLogger = Logger(
         subsystem: "com.gmail.taismryotasis.Travory",
         category: "sharing"
     )
@@ -868,7 +868,17 @@ final class CloudKitService {
             recordsMap[record.recordID.recordName] = record
         }
 
-        return recordsMap.values.compactMap { parseSharedTravelPlan(from: $0) }
+        let plans = recordsMap.values.compactMap { parseSharedTravelPlan(from: $0) }
+
+        // 「引っぱっても更新されない」の切り分け用。
+        // 0件なのか、取れているのに解釈で落ちているのかで原因が全く違う
+        Self.shareLogger.notice("""
+            共有プランを取得 \(Self.environmentHint, privacy: .public) \
+            自分がオーナー=\(ownedRecords.count) 参加中=\(sharedRecords.count) \
+            解釈できた=\(plans.count)
+            """)
+
+        return plans
     }
 
     /// 共有プランをパブリックDBから削除（オーナーが共有解除・削除した時）
