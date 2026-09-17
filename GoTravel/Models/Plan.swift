@@ -278,6 +278,61 @@ extension Plan {
         return max(days + 1, 1)
     }
 
+    /// 前に作った予定を、別の日に作り直す。
+    ///
+    /// カレンダーの日付を長押しして履歴から選んだときに使う。
+    /// 「またジム」「また同じ店」のような繰り返しを、打ち直さずに置けるようにする。
+    ///
+    /// **日付だけを差し替えて、中身はそのまま持っていく。**
+    /// 期間の長さ（2泊3日など）も保つので、おでかけの予定でも形が崩れない。
+    ///
+    /// 引き継がないものが3つある。
+    /// - `id`：別の予定として扱う
+    /// - `isCompleted`：前回終えたことは、今回の予定には関係ない
+    /// - `localImageFileName`：写真のファイル名を共有すると、
+    ///   片方を消したときにもう片方の写真まで消える。**必要なら呼び出し側で複製する**
+    func recreated(on newStartDate: Date) -> Plan {
+        let calendar = Calendar.current
+        let newStart = calendar.startOfDay(for: newStartDate)
+        let oldStart = calendar.startOfDay(for: startDate)
+        let offsetDays = calendar.dateComponents([.day], from: oldStart, to: newStart).day ?? 0
+
+        /// 元の日付との差だけ、そのままずらす。時刻は元のまま残る
+        func shifted(_ date: Date?) -> Date? {
+            guard let date else { return nil }
+            return calendar.date(byAdding: .day, value: offsetDays, to: date)
+        }
+
+        var copy = self
+        copy.id = UUID().uuidString
+        copy.createdAt = Date()
+        copy.isCompleted = false
+        copy.localImageFileName = nil
+
+        copy.startDate = shifted(startDate) ?? newStartDate
+        copy.endDate = shifted(endDate) ?? newStartDate
+        copy.time = shifted(time)
+        copy.endTime = shifted(endTime)
+
+        // タイムスケジュールも同じ幅でずらす。
+        // 2日目に入れた予定は、新しい2日目に残る
+        copy.scheduleItems = scheduleItems.map { item in
+            var moved = item
+            moved.id = UUID().uuidString
+            moved.time = shifted(item.time) ?? item.time
+            return moved
+        }
+
+        // 場所は座標なので日付に関係なくそのまま使える
+        copy.places = places.map { place in
+            var moved = place
+            moved.id = UUID().uuidString
+            return moved
+        }
+
+        return copy
+    }
+
     /// 2日以上にまたがるか。日付の選択欄や見出しを出すかの判定に使う
     var isMultiDay: Bool { dayCount > 1 }
 

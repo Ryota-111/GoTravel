@@ -9,6 +9,14 @@ struct CalendarTimelineItem: Identifiable {
     let type: CalendarItemType
     let relatedPlan: Plan?
     let relatedTravelPlan: TravelPlan?
+
+    /// 本当に時刻を持っているか。
+    ///
+    /// おでかけ・記念日・旅行は日付だけの予定で、`time` には並べ替えのために
+    /// その日の 0:00 を入れている。**これを時刻として扱ってはいけない。**
+    /// 「過ぎた予定」の判定に混ぜると、日付が変わった瞬間に
+    /// 0:00 の予定として過去扱いになり、当日なのに薄く表示されてしまう
+    var hasTime: Bool = false
 }
 
 enum CalendarItemType {
@@ -25,6 +33,14 @@ struct CalendarView: View {
     @ObservedObject var themeManager = ThemeManager.shared
     @ObservedObject var tagManager = PlanTagManager.shared
     @State private var selectedDate = Date()
+    /// 長押しされた日。履歴から作る一覧を出すために持つ。
+    /// `Date` は Identifiable ではないので、シートに渡すために包む
+    @State private var historyTarget: HistoryTarget?
+
+    private struct HistoryTarget: Identifiable {
+        let id = UUID()
+        let date: Date
+    }
     @State private var currentMonth = Date()
     @State private var showAddSheet = false
     @State private var dragOffset: CGFloat = 0
@@ -122,6 +138,12 @@ struct CalendarView: View {
                     .accessibilityLabel("予定を追加")
                 }
             }
+            .sheet(item: $historyTarget) { target in
+                PlanHistoryPickerView(date: target.date) { plan in
+                    createFromHistory(plan, on: target.date)
+                }
+                .environmentObject(viewModel)
+            }
             .sheet(isPresented: $showAddSheet) {
                 // 選んでいる日で始める。今日の日付で始まると、
                 // 8月30日を見ていても8月30日の予定は作れない
@@ -184,7 +206,9 @@ struct CalendarView: View {
                     subtitle: plan.description,
                     type: .dailyPlan,
                     relatedPlan: plan,
-                    relatedTravelPlan: nil
+                    relatedTravelPlan: nil,
+                    // 日常の予定だけが時刻を持つ。それも入力は任意
+                    hasTime: plan.time != nil
                 )
             }
 
@@ -203,7 +227,8 @@ struct CalendarView: View {
                     subtitle: dateInfo,
                     type: .outingPlan,
                     relatedPlan: plan,
-                    relatedTravelPlan: nil
+                    relatedTravelPlan: nil,
+                    hasTime: plan.time != nil
                 )
             }
 
@@ -469,6 +494,25 @@ struct CalendarView: View {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 selectedDate = date
             }
+        }
+        // 長押しで、これまでの予定からその日に置ける。
+        // 「またジム」「また同じ店」を毎回打ち直さずに済ませるため。
+        // 月をめくる横スワイプとは競合しない（長押しは指が動くと成立しない）
+        .onLongPressGesture(minimumDuration: 0.45) {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            historyTarget = HistoryTarget(date: date)
+        }
+    }
+
+    /// 履歴から作る。選ばれた予定を、長押しした日付で作り直す
+    private func createFromHistory(_ plan: Plan, on date: Date) {
+        guard let userId = authVM.userId else { return }
+
+        viewModel.add(plan.recreated(on: date), userId: userId)
+
+        // 作った日を開いて、増えたことがその場で見えるようにする
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            selectedDate = date
         }
     }
 
