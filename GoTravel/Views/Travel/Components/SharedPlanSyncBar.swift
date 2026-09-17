@@ -17,9 +17,14 @@ import SwiftUI
 /// ほとんどの時間に出るのは「2人で共有中・3分前」という平常の情報で、
 /// それを箱で囲って色を付けると、常に注意書きが出ているように見える。
 /// この画面で静かな情報は枠なしの1行（天気のメモ）なので、それに揃える。
-/// 背景と色が出るのは、更新中・失敗・**中身が変わったとき**の3つだけ。
-/// 「確かめたが変わっていなかった」は知らせない。時刻が「たった今更新」に
-/// 変わることがそのまま答えになっているため。
+///
+/// **状態が変わっても、位置と大きさを動かさない。**
+/// 背景の箱を出し入れしていたときは、そのたびに余白ぶん中身がずれて、
+/// 別の部品に見えていた。変えるのは色と言葉とアイコンだけにする。
+/// アイコンの幅も固定して、文字の始まりがぶれないようにしている。
+///
+/// 「確かめたが変わっていなかった」は知らせない。
+/// 時刻が「たった今更新」に変わることが、そのまま答えになっているため。
 ///
 /// **共有していない計画では何も描かない。** 置く側に分岐は要らない。
 struct SharedPlanSyncBar: View {
@@ -42,6 +47,8 @@ struct SharedPlanSyncBar: View {
             HStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.caption)
+                    // 記号ごとに幅が違う。揃えないと文字の始まりが動く
+                    .frame(width: 14)
 
                 Text(message)
                     .font(.caption)
@@ -53,16 +60,10 @@ struct SharedPlanSyncBar: View {
                 trailingControl
             }
             .foregroundColor(tint)
-            .padding(.horizontal, isCalm ? 0 : 12)
-            .padding(.vertical, isCalm ? 0 : 8)
-            // 平常時は背景を描かない。
-            // **付けたり外したりせず、透明にして消す。**
-            // 分岐でビューの同一性が変わると、状態が移るたびに作り直される
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(tint.opacity(isCalm ? 0 : 0.10))
-            )
-            .animation(.easeInOut(duration: 0.2), value: isCalm)
+            // 行の高さも固定する。ぐるぐると矢印と「もう一度」で高さが違うと、
+            // 状態が移るたびに下の内容が上下する
+            .frame(height: 24)
+            .animation(.easeInOut(duration: 0.2), value: tint)
             .task(id: planId) {
                 // 開いたときに一度だけそろえる。
                 // 以降はボタンを押したときだけにして、開くたびの通信を避ける
@@ -70,23 +71,6 @@ struct SharedPlanSyncBar: View {
                 await viewModel.refreshSharedPlan(planId: planId, userId: userId)
                 flashResultIfUpdated()
             }
-        }
-    }
-
-    /// 平常（共有中・◯分前に更新）かどうか。
-    /// ここが true のあいだは枠も色も出さない
-    private var isCalm: Bool {
-        switch state {
-        case .syncing, .failed, .unshared:
-            return false
-        case .updated:
-            // 中身が変わったときだけ知らせる
-            return !showsResult
-        case .upToDate, .none:
-            // **変わっていないことは、わざわざ知らせない。**
-            // 時刻が「たった今更新」に変わることが、そのまま答えになっている。
-            // ここで箱を出すと、押すたびに注意書きが出るように見える
-            return true
         }
     }
 
@@ -105,6 +89,7 @@ struct SharedPlanSyncBar: View {
             Button("もう一度", action: refresh)
                 .font(.caption.weight(.semibold))
                 .foregroundColor(theme.error)
+                .frame(height: 24)
 
         case .unshared:
             EmptyView()
