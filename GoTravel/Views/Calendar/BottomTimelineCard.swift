@@ -146,9 +146,16 @@ struct BottomTimelineCard: View {
         .buttonStyle(PlainButtonStyle())
     }
 
-    /// 今日を選んでいるときだけ、過ぎた分と次の1件を出し分ける
+    /// 今日を選んでいるときだけ、過ぎた分と次の1件を出し分ける。
+    ///
+    /// **時刻を持たない予定は対象にしない。** おでかけ・記念日・旅行は
+    /// 日付だけの予定で、並べ替えのために 0:00 を入れてある。
+    /// これを時刻として数えると、日付が変わった瞬間に「0:00 に終わった予定」
+    /// と見なされ、当日なのに薄く表示されてしまう
     private func rowState(index: Int) -> CalendarRowState {
         guard Calendar.current.isDateInToday(selectedDate) else { return .flat }
+        guard timelineItems.indices.contains(index),
+              timelineItems[index].hasTime else { return .flat }
 
         let calendar = Calendar.current
         func minutes(of date: Date) -> Int {
@@ -157,7 +164,10 @@ struct BottomTimelineCard: View {
         }
 
         let nowMinutes = minutes(of: Date())
-        guard let nowIndex = timelineItems.firstIndex(where: { minutes(of: $0.time) >= nowMinutes }) else {
+        // 次に来るのは「時刻を持つ予定」だけ。終日の予定を挟んで判定しない
+        guard let nowIndex = timelineItems.firstIndex(where: {
+            $0.hasTime && minutes(of: $0.time) >= nowMinutes
+        }) else {
             return .past
         }
 
