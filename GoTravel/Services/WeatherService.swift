@@ -179,6 +179,27 @@ final class WeatherService {
             throw WeatherError.invalidCoordinates
         }
 
+        // **先すぎる日付は頼まない。**
+        //
+        // WeatherKit の日別予報は10日先までで、それを超えると 400 が返る。
+        // 1日ぶんを取る `fetchDayWeather` には上限の判定があるのに、
+        // 旅行全体を取るこちらには無かった。
+        // そのため先の旅行を開くたびに 400 が出て、画面には
+        // 「天気を取得できませんでした」とだけ表示されていた。
+        // 「10日前になったら見られます」と正しく案内する
+        let daysUntilStart = Calendar.current.dateComponents(
+            [.day],
+            from: Calendar.current.startOfDay(for: Date()),
+            to: startDate.startOfDayInLocalTimezone
+        ).day ?? 0
+
+        guard daysUntilStart <= 10 else {
+            throw WeatherError.dateTooFarInFuture
+        }
+        guard daysUntilStart >= -90 else {
+            throw WeatherError.dateTooFarInPast
+        }
+
         // ローカルタイムゾーンでの日付を使用（UTC のズレを補正）
         let normalizedStartDate = startDate.startOfDayInLocalTimezone
 
