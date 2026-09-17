@@ -194,8 +194,9 @@ struct TravelPlanDetailView: View {
                         SharedPlanSyncBar(plan: plan)
                             .environmentObject(viewModel)
                             .environmentObject(authVM)
-                            .padding(.horizontal, 16)
-                            .padding(.top, 10)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 12)
+                            .padding(.bottom, 2)
 
                         // タブバーを上に貼り付けたいので Section の見出しに置く
                         LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {

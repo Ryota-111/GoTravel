@@ -10,6 +10,15 @@ import SwiftUI
 /// 最新なのか古いのかを判断する材料がゼロだった。
 /// 「3分前に更新」が出ていれば、古ければ自分で押せばよいと分かる。
 ///
+/// ## 見せ方
+///
+/// **普段は限りなく静かに、何か起きたときだけ目立つ。**
+///
+/// ほとんどの時間に出るのは「2人で共有中・3分前」という平常の情報で、
+/// それを箱で囲って色を付けると、常に注意書きが出ているように見える。
+/// この画面で静かな情報は枠なしの1行（天気のメモ）なので、それに揃える。
+/// 更新中と失敗のときだけ背景と色が出る。
+///
 /// **共有していない計画では何も描かない。** 置く側に分岐は要らない。
 struct SharedPlanSyncBar: View {
     let plan: TravelPlan
@@ -18,7 +27,7 @@ struct SharedPlanSyncBar: View {
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject private var themeManager = ThemeManager.shared
 
-    /// 「最新にしました」を数秒だけ出すためのもの。
+    /// 結果を数秒だけ出すためのもの。
     /// 出しっぱなしだと、いつの結果なのか分からなくなる
     @State private var showsResult = false
 
@@ -28,27 +37,30 @@ struct SharedPlanSyncBar: View {
 
     var body: some View {
         if plan.isShared {
-            HStack(spacing: 8) {
+            HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundColor(tint)
+                    .font(.caption)
 
                 Text(message)
-                    .font(.system(size: 12))
-                    .foregroundColor(tint)
+                    .font(.caption)
                     .lineLimit(1)
                     .minimumScaleFactor(0.85)
 
                 Spacer(minLength: 4)
 
-                refreshButton
+                trailingControl
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 9)
+            .foregroundColor(tint)
+            .padding(.horizontal, isCalm ? 0 : 12)
+            .padding(.vertical, isCalm ? 0 : 8)
+            // 平常時は背景を描かない。
+            // **付けたり外したりせず、透明にして消す。**
+            // 分岐でビューの同一性が変わると、状態が移るたびに作り直される
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(tint.opacity(0.10))
+                    .fill(tint.opacity(isCalm ? 0 : 0.10))
             )
+            .animation(.easeInOut(duration: 0.2), value: isCalm)
             .task(id: planId) {
                 // 開いたときに一度だけそろえる。
                 // 以降はボタンを押したときだけにして、開くたびの通信を避ける
@@ -59,32 +71,60 @@ struct SharedPlanSyncBar: View {
         }
     }
 
-    private var refreshButton: some View {
-        Button {
-            guard let userId = authVM.userId else { return }
-            Task {
-                await viewModel.refreshSharedPlan(planId: planId, userId: userId)
-                flashResult()
-            }
-        } label: {
-            if state == .syncing {
-                ProgressView()
-                    .controlSize(.small)
-                    .frame(width: 26, height: 26)
-            } else {
+    /// 平常（共有中・◯分前に更新）かどうか。
+    /// ここが true のあいだは枠も色も出さない
+    private var isCalm: Bool {
+        switch state {
+        case .syncing, .failed, .unshared:
+            return false
+        case .updated, .upToDate:
+            return !showsResult
+        case .none:
+            return true
+        }
+    }
+
+    // MARK: - 右端
+
+    @ViewBuilder
+    private var trailingControl: some View {
+        switch state {
+        case .syncing:
+            ProgressView()
+                .controlSize(.small)
+                .frame(width: 24, height: 24)
+
+        case .failed:
+            // 失敗のときは文字にする。何をすればいいかが一目で分かる
+            Button("もう一度", action: refresh)
+                .font(.caption.weight(.semibold))
+                .foregroundColor(theme.error)
+
+        case .unshared:
+            EmptyView()
+
+        default:
+            Button(action: refresh) {
                 Image(systemName: "arrow.clockwise")
                     .font(.system(size: 13, weight: .semibold))
                     .foregroundColor(ThemePreset.readableTint(theme.actionFill, on: theme.backgroundLight))
-                    .frame(width: 26, height: 26)
+                    .frame(width: 24, height: 24)
                     .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityLabel("共有の内容を更新")
         }
-        .buttonStyle(.plain)
-        .disabled(state == .syncing)
-        .accessibilityLabel("共有の内容を更新")
     }
 
-    /// 結果は数秒で引っ込め、そのあとは「◯分前に更新」に戻す
+    private func refresh() {
+        guard let userId = authVM.userId else { return }
+        Task {
+            await viewModel.refreshSharedPlan(planId: planId, userId: userId)
+            flashResult()
+        }
+    }
+
+    /// 結果は数秒で引っ込め、そのあとは経過時間に戻す
     private func flashResult() {
         showsResult = true
         Task {
@@ -119,6 +159,7 @@ struct SharedPlanSyncBar: View {
 
     private var icon: String {
         switch state {
+        case .syncing:  return "arrow.triangle.2.circlepath"
         case .failed:   return "exclamationmark.triangle.fill"
         case .unshared: return "person.2.slash"
         case .updated where showsResult, .upToDate where showsResult:
@@ -129,11 +170,12 @@ struct SharedPlanSyncBar: View {
 
     private var tint: Color {
         switch state {
-        case .failed:   return theme.error
-        case .unshared: return theme.secondaryText
+        case .failed:
+            return theme.error
         case .updated where showsResult, .upToDate where showsResult:
             return theme.success
-        default:        return theme.secondaryText
+        default:
+            return theme.secondaryText
         }
     }
 
