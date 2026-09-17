@@ -188,6 +188,15 @@ struct TravelPlanDetailView: View {
                     VStack(spacing: 0) {
                         planHeaderSection(plan: plan)
 
+                        // 共有中だけ、同期の様子と更新ボタンを出す。
+                        // 更新の手段がホームを引っぱることしか無く、
+                        // 共有した計画を見ている画面から更新できなかった
+                        SharedPlanSyncBar(plan: plan)
+                            .environmentObject(viewModel)
+                            .environmentObject(authVM)
+                            .padding(.horizontal, 16)
+                            .padding(.top, 10)
+
                         // タブバーを上に貼り付けたいので Section の見出しに置く
                         LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
                             Section {

@@ -58,5 +58,28 @@ enum SharedPlanBaseStore {
     /// 共有をやめた・計画を消したときに片付ける
     static func remove(planId: String) {
         try? FileManager.default.removeItem(at: fileURL(planId: planId))
+        UserDefaults.standard.removeObject(forKey: syncedAtKey(planId: planId))
+    }
+
+    // MARK: - 最後にそろえた時刻
+
+    /// 「3分前に更新」を出すために持つ。
+    ///
+    /// これが無いと、いま見ている内容が最新なのか古いのか判断する材料がゼロで、
+    /// ユーザーは更新を押すべきかどうかも分からない
+    private static func syncedAtKey(planId: String) -> String {
+        "SharedPlanSyncedAt_\(planId)"
+    }
+
+    static func lastSyncedAt(planId: String) -> Date? {
+        let value = UserDefaults.standard.double(forKey: syncedAtKey(planId: planId))
+        return value > 0 ? Date(timeIntervalSince1970: value) : nil
+    }
+
+    /// 相手と突き合わせ終えた時点で記録する。
+    /// **取り込んだときだけでなく、何もしなかったときも記録する。**
+    /// 「確かめた結果、変わっていなかった」も立派な最新確認なので
+    static func markSynced(planId: String, at date: Date = Date()) {
+        UserDefaults.standard.set(date.timeIntervalSince1970, forKey: syncedAtKey(planId: planId))
     }
 }

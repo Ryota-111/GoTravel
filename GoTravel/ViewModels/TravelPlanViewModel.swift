@@ -11,6 +11,21 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
     @Published var planImages: [String: UIImage] = [:] // planId: image
     @Published var isLoading: Bool = false
 
+    /// 共有計画ごとの同期の様子。画面に出すために持つ。
+    /// いままで失敗しても完全に無音で、古いのか最新なのかも分からなかった
+    @Published var syncStates: [String: SyncState] = [:]
+
+    enum SyncState: Equatable {
+        case syncing
+        /// 相手の変更を取り込んだ
+        case updated
+        /// 確かめたが、変わっていなかった
+        case upToDate
+        case failed
+        /// 共有が解除された、または計画ごと消された
+        case unshared
+    }
+
     // MARK: - Private Properties
     private let context: NSManagedObjectContext
     private var fetchedResultsController: NSFetchedResultsController<TravelPlanEntity>?
@@ -408,6 +423,80 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
         }
     }
 
+    /// 1件の共有計画をそろえる。
+    ///
+    /// 旅行計画の画面から更新を押したときに使う。
+    /// 全件を取りに行く `refreshSharedPlans` と違い、開いている計画だけを見る
+    @MainActor
+    func refreshSharedPlan(planId: String, userId: String) async {
+        syncStates[planId] = .syncing
+        do {
+            guard let remote = try await CloudKitService.shared
+                .fetchSharedTravelPlan(planId: planId) else {
+                // 共有が解除された、または相手が計画ごと消した
+                syncStates[planId] = .unshared
+                return
+            }
+
+            let tookRemote = try await reconcile(remote: remote, userId: userId)
+            SharedPlanBaseStore.markSynced(planId: planId)
+            syncStates[planId] = tookRemote ? .updated : .upToDate
+
+        } catch {
+            CloudKitService.shareLogger.error("""
+                1件の同期に失敗 planId=\(planId, privacy: .public) \
+                error=\(String(describing: error), privacy: .public)
+                """)
+            syncStates[planId] = .failed
+        }
+    }
+
+    /// 相手の内容と手元を突き合わせる。戻り値は取り込んだかどうか
+    @discardableResult
+    private func reconcile(remote: TravelPlan, userId: String) async throws -> Bool {
+        guard let planId = remote.id else { return false }
+
+        let local = await MainActor.run {
+            self.travelPlans.first(where: { $0.id == planId })
+        }
+
+        // どうするかは `SharedPlanMerge` が決める。
+        // ここは決まったことを実行するだけにしておくと、
+        // 判断の正しさをテストで確かめられる（実機2台が要らない）。
+        // 前回そろえたときの内容が無いと「自分が足した」と
+        // 「相手が消した」を区別できない
+        let base = SharedPlanBaseStore.load(planId: planId)
+
+        switch SharedPlanMerge.decide(local: local,
+                                      remote: remote,
+                                      base: base,
+                                      myUserId: userId) {
+        case .takeRemote(let merged):
+            try await saveSharedPlanLocally(merged)
+            // **覚えるのは受け取った姿そのまま。** マージ後の姿を覚えると、
+            // 次回に自分が足したぶんを相手のものと取り違える
+            SharedPlanBaseStore.save(remote)
+            CloudKitService.shareLogger.notice(
+                "取り込み planId=\(planId, privacy: .public)")
+            return true
+
+        case .pushLocal(let plan):
+            try? await CloudKitService.shared.publishSharedTravelPlan(plan)
+            // 送ったぶんは相手も持っている状態になる
+            SharedPlanBaseStore.save(plan)
+            CloudKitService.shareLogger.notice(
+                "手元が新しいので送信 planId=\(planId, privacy: .public)")
+            return false
+
+        case .doNothing:
+            // 同じ内容でそろっているので、これを基準にできる
+            SharedPlanBaseStore.save(remote)
+            CloudKitService.shareLogger.notice(
+                "同じ更新時刻なので何もしない planId=\(planId, privacy: .public)")
+            return false
+        }
+    }
+
     /// パブリックDBから共有プランの最新状態を取得してローカルにマージ
     func refreshSharedPlans(userId: String) async {
         do {
@@ -415,43 +504,8 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
 
             for remote in remotePlans {
                 guard let planId = remote.id else { continue }
-
-                let local = await MainActor.run {
-                    self.travelPlans.first(where: { $0.id == planId })
-                }
-
-                // どうするかは `SharedPlanMerge` が決める。
-                // ここは決まったことを実行するだけにしておくと、
-                // 判断の正しさをテストで確かめられる（実機2台が要らない）
-                // 前回そろえたときの内容。これが無いと「自分が足した」と
-                // 「相手が消した」を区別できない
-                let base = SharedPlanBaseStore.load(planId: planId)
-
-                switch SharedPlanMerge.decide(local: local,
-                                              remote: remote,
-                                              base: base,
-                                              myUserId: userId) {
-                case .takeRemote(let merged):
-                    try await saveSharedPlanLocally(merged)
-                    // **覚えるのは受け取った姿そのまま。** マージ後の姿を覚えると、
-                    // 次回に自分が足したぶんを相手のものと取り違える
-                    SharedPlanBaseStore.save(remote)
-                    CloudKitService.shareLogger.notice(
-                        "取り込み planId=\(planId, privacy: .public)")
-
-                case .pushLocal(let plan):
-                    try? await CloudKitService.shared.publishSharedTravelPlan(plan)
-                    // 送ったぶんは相手も持っている状態になる
-                    SharedPlanBaseStore.save(plan)
-                    CloudKitService.shareLogger.notice(
-                        "手元が新しいので送信 planId=\(planId, privacy: .public)")
-
-                case .doNothing:
-                    // 同じ内容でそろっているので、これを基準にできる
-                    SharedPlanBaseStore.save(remote)
-                    CloudKitService.shareLogger.notice(
-                        "同じ更新時刻なので何もしない planId=\(planId, privacy: .public)")
-                }
+                try await reconcile(remote: remote, userId: userId)
+                SharedPlanBaseStore.markSynced(planId: planId)
             }
         } catch {
             // オフライン時などは次回のrefreshで再同期される。

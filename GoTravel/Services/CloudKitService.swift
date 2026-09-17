@@ -836,6 +836,20 @@ final class CloudKitService {
     }
 
     /// 共有コードでパブリックDBから共有プランを検索
+    /// 1件だけ取りに行く。旅行計画の画面から更新を押したときに使う。
+    ///
+    /// 見つからなければ nil。共有が解除された場合と、相手が計画ごと
+    /// 消した場合のどちらでもこうなる
+    func fetchSharedTravelPlan(planId: String) async throws -> TravelPlan? {
+        let recordID = CKRecord.ID(recordName: "shared_\(planId)")
+        do {
+            let record = try await publicDatabase.record(for: recordID)
+            return parseSharedTravelPlan(from: record)
+        } catch let ckError as CKError where ckError.code == .unknownItem {
+            return nil
+        }
+    }
+
     func fetchSharedTravelPlan(byShareCode shareCode: String) async throws -> TravelPlan? {
         let predicate = NSPredicate(format: "shareCode == %@", shareCode)
         let records = try await queryPublic(recordType: Self.sharedPlanRecordType, predicate: predicate)
