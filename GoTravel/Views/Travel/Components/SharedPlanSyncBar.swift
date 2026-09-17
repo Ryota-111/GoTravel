@@ -17,7 +17,9 @@ import SwiftUI
 /// ほとんどの時間に出るのは「2人で共有中・3分前」という平常の情報で、
 /// それを箱で囲って色を付けると、常に注意書きが出ているように見える。
 /// この画面で静かな情報は枠なしの1行（天気のメモ）なので、それに揃える。
-/// 更新中と失敗のときだけ背景と色が出る。
+/// 背景と色が出るのは、更新中・失敗・**中身が変わったとき**の3つだけ。
+/// 「確かめたが変わっていなかった」は知らせない。時刻が「たった今更新」に
+/// 変わることがそのまま答えになっているため。
 ///
 /// **共有していない計画では何も描かない。** 置く側に分岐は要らない。
 struct SharedPlanSyncBar: View {
@@ -66,7 +68,7 @@ struct SharedPlanSyncBar: View {
                 // 以降はボタンを押したときだけにして、開くたびの通信を避ける
                 guard let userId = authVM.userId, state == nil else { return }
                 await viewModel.refreshSharedPlan(planId: planId, userId: userId)
-                flashResult()
+                flashResultIfUpdated()
             }
         }
     }
@@ -77,9 +79,13 @@ struct SharedPlanSyncBar: View {
         switch state {
         case .syncing, .failed, .unshared:
             return false
-        case .updated, .upToDate:
+        case .updated:
+            // 中身が変わったときだけ知らせる
             return !showsResult
-        case .none:
+        case .upToDate, .none:
+            // **変わっていないことは、わざわざ知らせない。**
+            // 時刻が「たった今更新」に変わることが、そのまま答えになっている。
+            // ここで箱を出すと、押すたびに注意書きが出るように見える
             return true
         }
     }
@@ -120,12 +126,14 @@ struct SharedPlanSyncBar: View {
         guard let userId = authVM.userId else { return }
         Task {
             await viewModel.refreshSharedPlan(planId: planId, userId: userId)
-            flashResult()
+            flashResultIfUpdated()
         }
     }
 
-    /// 結果は数秒で引っ込め、そのあとは経過時間に戻す
-    private func flashResult() {
+    /// 取り込みがあったときだけ、数秒だけ知らせる。
+    /// 変わっていなければ時刻の表示が新しくなるだけで足りる
+    private func flashResultIfUpdated() {
+        guard state == .updated else { return }
         showsResult = true
         Task {
             try? await Task.sleep(for: .seconds(3))
@@ -150,8 +158,6 @@ struct SharedPlanSyncBar: View {
             return "この共有は解除されました"
         case .updated where showsResult:
             return "最新の内容にしました"
-        case .upToDate where showsResult:
-            return "最新です"
         default:
             return "\(memberText)・\(lastSyncedText)"
         }
@@ -162,7 +168,7 @@ struct SharedPlanSyncBar: View {
         case .syncing:  return "arrow.triangle.2.circlepath"
         case .failed:   return "exclamationmark.triangle.fill"
         case .unshared: return "person.2.slash"
-        case .updated where showsResult, .upToDate where showsResult:
+        case .updated where showsResult:
             return "checkmark.circle.fill"
         default:        return "person.2.fill"
         }
@@ -172,7 +178,7 @@ struct SharedPlanSyncBar: View {
         switch state {
         case .failed:
             return theme.error
-        case .updated where showsResult, .upToDate where showsResult:
+        case .updated where showsResult:
             return theme.success
         default:
             return theme.secondaryText
