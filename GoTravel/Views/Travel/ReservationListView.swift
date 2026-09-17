@@ -352,6 +352,11 @@ struct ReservationListView: View {
         guard let userId = authVM.userId else { return }
         var updated = currentPlan
         updated.reservations.removeAll { $0.id == reservation.id }
+        // 行程にも出していた予約なら、そちらも一緒に片付ける。
+        // 消した予約の予定だけが行程に residual として残ると、
+        // どこから来たものか分からなくなる。
+        // 「行程にも追加する」を使っていない予約では、消すものが無いので何も起きない
+        updated.removeScheduleItems(forReservation: reservation.id)
         viewModel.update(updated, userId: userId)
     }
 

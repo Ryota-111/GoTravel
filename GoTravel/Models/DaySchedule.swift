@@ -30,8 +30,21 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
     var mapURL: String?
     var linkURL: String?
 
+    /// この予定を作った予約の id。
+    ///
+    /// 予約から「行程にも追加する」で作られたものだけが値を持つ。
+    /// 手で書いた予定は nil。
+    ///
+    /// これがあるおかげで、予約側のトグルを外したときや予約を消したときに
+    /// **その予約から作った予定だけ**を消せる。
+    /// 名前や時刻での照合だと、手で書いた同名の予定まで巻き込む。
+    ///
+    /// `daySchedulesData` は JSON なので、増やしても CloudKit のスキーマは変わらない。
+    /// 省略可能なので、この項目を持たない古いデータもそのまま読める
+    var reservationId: String?
+
     enum CodingKeys: String, CodingKey {
-        case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL
+        case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId
     }
 
     /// 書き出しや共有カードに出す金額。
@@ -59,7 +72,8 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
          cost: Double? = nil,
          actualCost: Double? = nil,
          mapURL: String? = nil,
-         linkURL: String? = nil) {
+         linkURL: String? = nil,
+         reservationId: String? = nil) {
         self.id = id
         self.time = time
         self.title = title
@@ -71,5 +85,6 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
         self.actualCost = actualCost
         self.mapURL = mapURL
         self.linkURL = linkURL
+        self.reservationId = reservationId
     }
 }

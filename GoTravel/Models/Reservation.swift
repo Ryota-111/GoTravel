@@ -144,3 +144,59 @@ extension Reservation.Kind {
         self == .flight || self == .train
     }
 }
+
+// MARK: - 行程へ持っていく
+
+extension Reservation {
+
+    /// 行程（タイムスケジュール）に並べる形にする。
+    ///
+    /// 予約から先に登録した人が、同じ内容を行程にもう一度打ち直さずに済むようにする。
+    /// 逆向き（行程 → 予約）は `ScheduleItemPickerView` が既に担っている。
+    ///
+    /// **飛行機と新幹線で到着時刻もあるときは、出発と到着の2件に分ける。**
+    /// 1件にすると、行程の上では「羽田10:00」としか出ず、
+    /// 何時に着くのかが分からなくなる。
+    ///
+    /// 時刻が決まっていない予約（宿の予約番号だけ控えた場合など）は空を返す。
+    /// 置く場所が決められないため
+    func itineraryItems() -> [ScheduleItem] {
+        guard let date else { return [] }
+
+        let note = confirmationNumber
+            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .flatMap { $0.isEmpty ? nil : "予約番号 \($0)" }
+
+        guard kind.usesRoute else {
+            return [ScheduleItem(time: date,
+                                 title: title,
+                                 location: nil,
+                                 notes: note,
+                                 reservationId: id)]
+        }
+
+        // 経路のある予約は、便名を見出しにしたほうが行程で読みやすい。
+        // タイトルは「ANA123 羽田空港 → 那覇空港」のように長い
+        let label = transportNumber?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let name = (label?.isEmpty == false ? label! : title)
+
+        var items = [
+            ScheduleItem(time: date,
+                         title: "\(name) 出発",
+                         location: departurePlace,
+                         notes: note,
+                         reservationId: id)
+        ]
+
+        if let arrivalDate {
+            items.append(
+                ScheduleItem(time: arrivalDate,
+                             title: "\(name) 到着",
+                             location: arrivalPlace,
+                             notes: nil,
+                             reservationId: id)
+            )
+        }
+        return items
+    }
+}

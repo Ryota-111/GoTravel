@@ -18,6 +18,13 @@ struct ReservationEditorView: View {
     @State private var arrivalDate = Date()
 
     @State private var showSchedulePicker = false
+    /// 保存と同時に行程へも入れるか。
+    ///
+    /// **既定はオフ。** 予約を控えただけのつもりの人の行程が、保存のたびに
+    /// 勝手に増えるのは驚きが大きい。とくに前から入っている予約を
+    /// 開いて閉じただけで増えるのは事故に近い。
+    /// 行程に出したいかどうかは予約ごとに違うので、その都度選んでもらう
+    @State private var addsToItinerary = false
 
     private var plan: TravelPlan? {
         viewModel.travelPlans.first(where: { $0.id == planId })
@@ -42,6 +49,9 @@ struct ReservationEditorView: View {
 
     private var textColor: Color { ThemePreset.readableText(on: cardFill) }
     private var accent: Color { themeManager.currentTheme.actionFill }
+
+    /// 白黒テーマは背景とカードの明るさがほぼ同じなので、必ず縁を引く
+    private var cardStroke: Color { textColor.opacity(0.12) }
 
     private var canSave: Bool {
         if reservation.kind.usesRoute {
@@ -91,6 +101,7 @@ struct ReservationEditorView: View {
                         }
                         numberField
                         optionalFields
+                        addToItinerarySection
                     }
                     .padding(20)
                 }
@@ -118,6 +129,9 @@ struct ReservationEditorView: View {
                     hasArrivalDate = true
                     arrivalDate = existing
                 }
+                // いま行程に出ているかどうかを、そのままトグルの状態にする。
+                // これをしないと、一度オンにしたものをオフに戻せない
+                addsToItinerary = plan?.hasScheduleItems(forReservation: reservation.id) ?? false
             }
             .sheet(isPresented: $showSchedulePicker) {
                 if let plan {
@@ -158,6 +172,80 @@ struct ReservationEditorView: View {
             .background(RoundedRectangle(cornerRadius: 12).fill(accent.opacity(0.12)))
         }
         .buttonStyle(.plain)
+    }
+
+    // MARK: - 行程にも追加する
+    //
+    // 逆向き（行程 → 予約）は取り込みボタンが担っていたが、予約から先に
+    // 登録した人は行程にもう一度打ち直すことになっていた。
+    // 予約と行程を1つのデータに統合はしない。時刻の決まっていない予約
+    // （宿の予約番号だけ控える等）や、行程に出したくない予約があるため。
+
+    /// 保存したときに行程へ入れる内容。時刻が無ければ空
+    private var itineraryPreview: [ScheduleItem] {
+        var draft = reservation
+        draft.date = (hasDate || reservation.kind.usesRoute) ? date : nil
+        draft.arrivalDate = hasArrivalDate ? arrivalDate : nil
+        if draft.kind.usesRoute { draft.title = composedRouteTitle }
+        return draft.itineraryItems()
+    }
+
+    /// 行程に置ける日か。旅行の期間から外れた日時だと置き場所が無い
+    private var itineraryDayNumber: Int? {
+        guard let plan, let first = itineraryPreview.first else { return nil }
+        return plan.dayNumber(forDate: first.time)
+    }
+
+    @ViewBuilder
+    private var addToItinerarySection: some View {
+        if itineraryPreview.isEmpty {
+            EmptyView()
+        } else if let dayNumber = itineraryDayNumber {
+            VStack(alignment: .leading, spacing: 10) {
+                Toggle(isOn: $addsToItinerary) {
+                    Text("行程にも追加する")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(textColor)
+                }
+                .tint(accent)
+
+                Text(addsToItinerary
+                     ? "\(dayNumber)日目のタイムスケジュールに、"
+                       + itineraryPreview.map { "「\($0.title)」" }.joined(separator: "と")
+                       + "が並びます。予約を消すと、この予定も一緒に消えます。"
+                     : "オンにすると、\(dayNumber)日目のタイムスケジュールにも並びます。")
+                    .font(.system(size: 12))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding(16)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .fill(cardFill)
+                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(cardStroke, lineWidth: 1))
+            )
+        } else {
+            itineraryNote(icon: "exclamationmark.circle",
+                          text: "この日時は旅行の期間から外れているため、行程には追加できません")
+        }
+    }
+
+    private func itineraryNote(icon: String, text: String) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: icon)
+                .font(.system(size: 13))
+            Text(text)
+                .font(.system(size: 12))
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 0)
+        }
+        .foregroundColor(themeManager.currentTheme.secondaryText)
+        .padding(.horizontal, 14)
+        .padding(.vertical, 11)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(themeManager.currentTheme.secondaryText.opacity(0.08))
+        )
     }
 
     /// 予約番号だけは行程に無いので、そこへ入力を促す形で残す
@@ -428,6 +516,11 @@ struct ReservationEditorView: View {
         } else {
             plan.reservations.append(edited)
         }
+
+        // 行程との連動。オンなら入れ直し、オフなら消す。
+        // 予約の時刻や便名を書き換えたときに古い予定が残らないよう、
+        // どちらの場合もいったん消してから作り直す
+        plan.syncScheduleItems(for: edited, isOn: addsToItinerary)
 
         viewModel.update(plan, userId: userId)
         dismiss()
