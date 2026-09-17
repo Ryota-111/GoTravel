@@ -270,6 +270,18 @@ struct TravelPlanDetailView: View {
         .onChange(of: selectedTab) { _, tab in
             if tab != .map { pinnedHeaderFrame = .zero }
         }
+        // 日数を減らしたとき、選んでいた Day が無くなることがある。
+        //
+        // `selectedDay` は日タブを押したときしか変わらないので、
+        // 4日間の旅行で Day 4 を見ている状態で日程を2日に縮めると、
+        // タブは Day 1・2 しか出ないのに中身は Day 4 のまま残っていた。
+        // どのタブも選択されていないのに、消したはずの日の予定が並ぶ。
+        //
+        // 範囲外の日程は消さずに持っている（期間を戻せば復活させるため）ので、
+        // 見えている日に寄せ直すのはここの仕事になる
+        .onChange(of: tripDuration) { _, days in
+            if selectedDay > days { selectedDay = max(days, 1) }
+        }
         .fullScreenCover(isPresented: $showAddScheduleItem) {
             AddScheduleItemView(plan: plan, dayNumber: selectedDay)
                 .environmentObject(viewModel)
@@ -1316,7 +1328,7 @@ struct TravelPlanDetailView: View {
     private var weatherBody: some View {
         if let plan = currentPlan {
             if plan.latitude == nil || plan.longitude == nil {
-                weatherNote("設定された場所には天気の情報がありませんでした", icon: "cloud.slash")
+                weatherNote("設定された場所には天気の情報がありませんでした", icon: "exclamationmark.icloud")
             } else if isLoadingPlanWeather {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
@@ -1751,7 +1763,7 @@ struct TravelPlanDetailView: View {
     /// 通信断も認証エラーも日付が先すぎるように読めていた
     private static func note(for error: Error) -> WeatherNote {
         guard let weatherError = error as? WeatherError else {
-            return WeatherNote(text: error.localizedDescription, icon: "cloud.slash")
+            return WeatherNote(text: error.localizedDescription, icon: "exclamationmark.icloud")
         }
 
         switch weatherError {
@@ -1760,9 +1772,9 @@ struct TravelPlanDetailView: View {
         case .networkError:
             return WeatherNote(text: "通信できないため天気を取得できませんでした", icon: "wifi.slash")
         case .locationNotAvailable, .invalidCoordinates:
-            return WeatherNote(text: "設定された場所には天気の情報がありませんでした", icon: "cloud.slash")
+            return WeatherNote(text: "設定された場所には天気の情報がありませんでした", icon: "exclamationmark.icloud")
         default:
-            return WeatherNote(text: "天気を取得できませんでした", icon: "cloud.slash")
+            return WeatherNote(text: "天気を取得できませんでした", icon: "exclamationmark.icloud")
         }
     }
 }

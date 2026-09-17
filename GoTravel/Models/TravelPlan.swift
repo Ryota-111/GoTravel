@@ -316,6 +316,103 @@ struct TravelPlan: Identifiable, Codable {
         Calendar.current.date(byAdding: .day, value: dayNumber - 1, to: startDate) ?? startDate
     }
 
+    /// 中身が同じか。**更新時刻と最終編集者は見ない。**
+    ///
+    /// 「保存されたが何も変わっていない」を見分けるために使う。
+    /// これを更新時刻の判断に使わないと、画面を開いて閉じただけで
+    /// 手元が「新しい」ことになり、共有相手の編集を取り込めなくなる。
+    ///
+    /// `TravelPlan` は `Equatable` ではない（`Color` を持つため）ので、
+    /// 比べる必要のあるものだけを並べている。**項目を足したらここにも足すこと。**
+    /// 漏れると、その項目を直しても相手に伝わらない
+    func isContentEqual(to other: TravelPlan) -> Bool {
+        title == other.title
+            && startDate == other.startDate
+            && endDate == other.endDate
+            && destination == other.destination
+            && latitude == other.latitude
+            && longitude == other.longitude
+            && localImageFileName == other.localImageFileName
+            && cardColorHex == other.cardColorHex
+            && customSplitCount == other.customSplitCount
+            && isShared == other.isShared
+            && shareCode == other.shareCode
+            && sharedWith == other.sharedWith
+            && ownerId == other.ownerId
+            && daySchedules == other.daySchedules
+            && reservations == other.reservations
+            && packingItems.count == other.packingItems.count
+            && zip(packingItems, other.packingItems).allSatisfy { lhs, rhs in
+                lhs.id == rhs.id
+                    && lhs.name == rhs.name
+                    && lhs.isChecked == rhs.isChecked
+                    && lhs.kind == rhs.kind
+                    && lhs.note == rhs.note
+                    && lhs.ownerId == rhs.ownerId
+            }
+    }
+
+    /// その日付が旅行の何日目か。範囲外なら nil。
+    /// 予約の日時から、行程のどの日に置くかを決めるのに使う
+    func dayNumber(forDate date: Date) -> Int? {
+        let calendar = Calendar.current
+        let start = calendar.startOfDay(for: startDate)
+        let target = calendar.startOfDay(for: date)
+        guard let diff = calendar.dateComponents([.day], from: start, to: target).day else { return nil }
+        let number = diff + 1
+        return (1...dayCount).contains(number) ? number : nil
+    }
+
+    /// その日のタイムスケジュールに予定を足す
+    mutating func addScheduleItem(_ item: ScheduleItem, onDay dayNumber: Int) {
+        if let dayIndex = daySchedules.firstIndex(where: { $0.dayNumber == dayNumber }) {
+            daySchedules[dayIndex].scheduleItems.append(item)
+        } else {
+            daySchedules.append(
+                DaySchedule(dayNumber: dayNumber,
+                            date: date(forDay: dayNumber),
+                            scheduleItems: [item])
+            )
+            daySchedules.sort { $0.dayNumber < $1.dayNumber }
+        }
+    }
+
+    // MARK: - 予約と行程の連動
+    //
+    // 「行程にも追加する」で作った予定は `reservationId` を持つ。
+    // 名前や時刻ではなく id で辿るので、手で書いた同名の予定を巻き込まない。
+
+    /// その予約から作られた予定が行程にあるか
+    func hasScheduleItems(forReservation reservationId: String) -> Bool {
+        daySchedules.contains { day in
+            day.scheduleItems.contains { $0.reservationId == reservationId }
+        }
+    }
+
+    /// その予約から作られた予定を、行程から全部消す。
+    /// トグルを外したときと、予約そのものを消したときに使う
+    mutating func removeScheduleItems(forReservation reservationId: String) {
+        for index in daySchedules.indices {
+            daySchedules[index].scheduleItems.removeAll { $0.reservationId == reservationId }
+        }
+    }
+
+    /// 予約の内容を行程に反映する。
+    ///
+    /// **いったん消してから入れ直す。** 予約の時刻や便名を書き換えたときに、
+    /// 古い予定が残ったまま新しいものが増えるのを防ぐ。
+    /// `isOn` が false なら消すだけ
+    mutating func syncScheduleItems(for reservation: Reservation, isOn: Bool) {
+        removeScheduleItems(forReservation: reservation.id)
+        guard isOn else { return }
+
+        for item in reservation.itineraryItems() {
+            if let dayNumber = dayNumber(forDate: item.time) {
+                addScheduleItem(item, onDay: dayNumber)
+            }
+        }
+    }
+
     /// 種類ごとのリスト。
     ///
     /// 持ち物・お土産・やりたいことは `packingItems` に混ざって入っている。
@@ -352,6 +449,44 @@ struct TravelPlan: Identifiable, Codable {
         daySchedules
             .filter { $0.dayNumber > newDayCount && !$0.scheduleItems.isEmpty }
             .sorted { $0.dayNumber < $1.dayNumber }
+    }
+
+    /// 日程を変えたとき、予定をどう動かすか。
+    ///
+    /// **アプリには決められない。** 出発日をずらしたとき、
+    /// 「12/25 に取ったホテルは 12/25 のままにしたい」人と、
+    /// 「2日目に入れた予定は2日目のまま動かしたい」人の両方がいる。
+    /// 期間の長さなどから推測すると、必ずどちらかを裏切るので、保存前に選んでもらう
+    enum ScheduleShift {
+        /// 予定の日付を守る。日番号のほうを振り直す
+        case keepDates
+        /// 日番号を守る。予定は旅行ごと動く
+        case keepDayNumbers
+    }
+
+    /// 日程を変えたあと、予定を置き直す
+    mutating func realignDaySchedules(previousStartDate: Date, shift: ScheduleShift) {
+        guard shift == .keepDates else {
+            realignDayScheduleDates()
+            return
+        }
+
+        let calendar = Calendar.current
+        let newStart = calendar.startOfDay(for: startDate)
+
+        for index in daySchedules.indices {
+            let oldDate = calendar.date(byAdding: .day,
+                                        value: daySchedules[index].dayNumber - 1,
+                                        to: calendar.startOfDay(for: previousStartDate)) ?? newStart
+            let diff = calendar.dateComponents([.day], from: newStart, to: oldDate).day ?? 0
+            let newNumber = diff + 1
+
+            daySchedules[index].dayNumber = newNumber
+            daySchedules[index].date = date(forDay: newNumber)
+        }
+
+        // 範囲から外れた日（日番号が0以下）も消さない。期間を戻せば復活する
+        daySchedules.sort { $0.dayNumber < $1.dayNumber }
     }
 
     /// 保存してある日付を出発日に合わせ直す。

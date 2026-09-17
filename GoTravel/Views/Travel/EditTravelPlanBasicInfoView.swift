@@ -18,6 +18,9 @@ struct EditTravelPlanBasicInfoView: View {
     @State private var showImagePicker = false
     @State private var isUploading = false
     @State private var showShortenWarning = false
+    /// 出発日を動かしたとき、予定をどう扱うかの確認
+    @State private var showShiftChoice = false
+    @State private var pendingShift: TravelPlan.ScheduleShift?
     @State private var destinationCoordinate: (latitude: Double, longitude: Double)?
     @State private var destinationSearchTask: Task<Void, Never>?
 
@@ -106,6 +109,19 @@ struct EditTravelPlanBasicInfoView: View {
         .navigationBarHidden(true)
         .sheet(isPresented: $showImagePicker) {
             ImageCropPickerView(image: $selectedImage, aspectRatio: 1.0)
+        }
+        .confirmationDialog("出発日が変わります", isPresented: $showShiftChoice, titleVisibility: .visible) {
+            Button("予定の日付はそのまま") {
+                pendingShift = .keepDates
+                continueSaveAfterShiftChoice()
+            }
+            Button("予定も日程に合わせてずらす") {
+                pendingShift = .keepDayNumbers
+                continueSaveAfterShiftChoice()
+            }
+            Button("キャンセル", role: .cancel) { }
+        } message: {
+            Text("入れてある予定をどう扱いますか。\n\n「日付はそのまま」だと、12/25 に入れた予定は 12/25 に残ります。\n「日程に合わせてずらす」だと、2日目の予定は新しい2日目に移ります。")
         }
         .alert("旅行の日数が減ります", isPresented: $showShortenWarning) {
             Button("キャンセル", role: .cancel) { }
@@ -391,9 +407,28 @@ struct EditTravelPlanBasicInfoView: View {
         daysLeavingRange.reduce(0) { $0 + $1.scheduleItems.count }
     }
 
+    /// 出発日を動かすと、予定を「日付のまま」にするか「◯日目のまま」に
+    /// するかで結果が変わる。**どちらが正しいかはアプリには決められない。**
+    /// 予定が入っているときだけ聞く
+    private var needsShiftChoice: Bool {
+        guard !Calendar.current.isDate(startDate, inSameDayAs: plan.startDate) else { return false }
+        return plan.daySchedules.contains { !$0.scheduleItems.isEmpty }
+    }
+
     /// 日数を縮めると、範囲外の日の予定が画面から消える。
     /// 黙って消えると気付けないので、保存前に知らせる
     private func saveTravelPlan() {
+        if needsShiftChoice {
+            showShiftChoice = true
+        } else if daysLeavingRange.isEmpty {
+            performSave()
+        } else {
+            showShortenWarning = true
+        }
+    }
+
+    /// 予定の扱いを選んでもらったあと、日数が減る確認へ進む
+    private func continueSaveAfterShiftChoice() {
         if daysLeavingRange.isEmpty {
             performSave()
         } else {
@@ -449,17 +484,22 @@ struct EditTravelPlanBasicInfoView: View {
     }
 
     private func saveUpdatedPlan(with fileName: String?) {
+        let shift = pendingShift ?? .keepDayNumbers
         var updatedPlan = plan
         updatedPlan.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         updatedPlan.destination = destination.trimmingCharacters(in: .whitespacesAndNewlines)
         updatedPlan.latitude = destinationCoordinate?.latitude
         updatedPlan.longitude = destinationCoordinate?.longitude
+        // 置き直しの判断に、変更前の出発日が要る
+        let previousStartDate = plan.startDate
+
         updatedPlan.startDate = startDate
         updatedPlan.endDate = normalizedEndDate
         updatedPlan.localImageFileName = fileName
-        // 日程が持っている日付も出発日に合わせる。
-        // ここを忘れると、変更前の日付が保存されたまま残る
-        updatedPlan.realignDayScheduleDates()
+        // 予定をどの日に置くか決め直す。
+        // 旅行ごとずらしたなら日番号のまま、期間の長さが変わったなら
+        // 予定の日付のほうを守る（出発日を1日早めただけでホテルが動かないように）
+        updatedPlan.realignDaySchedules(previousStartDate: previousStartDate, shift: shift)
 
         if let userId = authVM.userId {
             viewModel.update(updatedPlan, userId: userId, image: selectedImage)
