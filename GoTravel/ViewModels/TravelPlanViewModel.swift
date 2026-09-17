@@ -203,6 +203,10 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
         // この旅行に紐づくアルバムも一緒に片付ける（travelPlanIdが宙に浮くのを防ぐ）
         AlbumManager.shared.deleteAlbums(forTravelPlanId: planId)
 
+        // 共有の突き合わせに使う覚え書きも片付ける。
+        // 残っていても実害は無いが、同じIDで作り直したときに古い基準が効いてしまう
+        SharedPlanBaseStore.remove(planId: planId)
+
         // Core Dataから削除
         context.perform {
             do {
@@ -331,6 +335,10 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
         // isShared = false なので update() からパブリックDBへは公開されない
         update(plan, userId: userId)
 
+        // 突き合わせの覚え書きを捨てる。
+        // 共有を作り直したときに、前の共有のときの基準が効いてしまうのを防ぐ
+        SharedPlanBaseStore.remove(planId: planId)
+
         // 削除は待たずに返すが、再発行時に順序を保証できるよう覚えておく
         pendingShareDeletions[planId] = Task {
             try? await CloudKitService.shared.deleteSharedTravelPlan(planId: planId)
@@ -387,6 +395,7 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
                     .decide(local: nil, remote: plan, myUserId: userId)
                     .takenPlan ?? plan
                 try await self.saveSharedPlanLocally(adopted)
+                SharedPlanBaseStore.save(plan)
 
                 await MainActor.run {
                     completion(.success(plan))
@@ -414,18 +423,32 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
                 // どうするかは `SharedPlanMerge` が決める。
                 // ここは決まったことを実行するだけにしておくと、
                 // 判断の正しさをテストで確かめられる（実機2台が要らない）
-                switch SharedPlanMerge.decide(local: local, remote: remote, myUserId: userId) {
+                // 前回そろえたときの内容。これが無いと「自分が足した」と
+                // 「相手が消した」を区別できない
+                let base = SharedPlanBaseStore.load(planId: planId)
+
+                switch SharedPlanMerge.decide(local: local,
+                                              remote: remote,
+                                              base: base,
+                                              myUserId: userId) {
                 case .takeRemote(let merged):
                     try await saveSharedPlanLocally(merged)
+                    // **覚えるのは受け取った姿そのまま。** マージ後の姿を覚えると、
+                    // 次回に自分が足したぶんを相手のものと取り違える
+                    SharedPlanBaseStore.save(remote)
                     CloudKitService.shareLogger.notice(
                         "取り込み planId=\(planId, privacy: .public)")
 
                 case .pushLocal(let plan):
                     try? await CloudKitService.shared.publishSharedTravelPlan(plan)
+                    // 送ったぶんは相手も持っている状態になる
+                    SharedPlanBaseStore.save(plan)
                     CloudKitService.shareLogger.notice(
                         "手元が新しいので送信 planId=\(planId, privacy: .public)")
 
                 case .doNothing:
+                    // 同じ内容でそろっているので、これを基準にできる
+                    SharedPlanBaseStore.save(remote)
                     CloudKitService.shareLogger.notice(
                         "同じ更新時刻なので何もしない planId=\(planId, privacy: .public)")
                 }

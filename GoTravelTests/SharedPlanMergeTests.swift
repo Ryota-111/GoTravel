@@ -161,6 +161,90 @@ struct SharedPlanMergeTests {
         #expect(merged.sharedWith.contains("me"))
     }
 
+    // MARK: - 同時に編集したとき
+    //
+    // ここが共有でいちばん怖いところ。
+    // 計画まるごとを更新時刻で比べて置き換えていると、
+    // 別々の場所を触っただけで片方の編集が黙って消える。
+
+    private func makeItem(id: String, title: String, hour: Int) -> ScheduleItem {
+        ScheduleItem(id: id,
+                     time: Self.base.addingTimeInterval(TimeInterval(hour * 3600)),
+                     title: title)
+    }
+
+    private func makeDay(_ items: [ScheduleItem]) -> DaySchedule {
+        DaySchedule(dayNumber: 1, date: Self.base, scheduleItems: items)
+    }
+
+    @Test("相手が足した予定と、自分が足した予定の両方が残る")
+    func keepsBothAddedScheduleItems() {
+        // 前回そろえたときは「朝ごはん」だけだった
+        let original = makeItem(id: "item-A", title: "朝ごはん", hour: 8)
+        var base = makePlan(updatedAt: t(0))
+        base.daySchedules = [makeDay([original])]
+
+        // 自分は「水族館」を足した
+        var local = makePlan(updatedAt: t(5))
+        local.daySchedules = [makeDay([original, makeItem(id: "item-B", title: "水族館", hour: 10)])]
+
+        // 相手は「夕食」を足して、先に公開した
+        var remote = makePlan(updatedAt: t(10))
+        remote.daySchedules = [makeDay([original, makeItem(id: "item-C", title: "夕食", hour: 18)])]
+
+        let merged = try! #require(
+            SharedPlanMerge.decide(local: local, remote: remote, base: base, myUserId: "me").takenPlan
+        )
+        let titles = merged.daySchedules.flatMap { $0.scheduleItems }.map(\.title)
+
+        #expect(titles.contains("夕食"))      // 相手のぶん
+        #expect(titles.contains("水族館"))    // 自分のぶん（いまは消える）
+    }
+
+    @Test("相手が足した予約と、自分が足した予約の両方が残る")
+    func keepsBothAddedReservations() {
+        let base = makePlan(updatedAt: t(0))   // 前回はどちらも空だった
+
+        var local = makePlan(updatedAt: t(5))
+        local.reservations = [Reservation(id: "res-A", kind: .hotel, title: "〇〇ホテル")]
+
+        var remote = makePlan(updatedAt: t(10))
+        remote.reservations = [Reservation(id: "res-B", kind: .flight, title: "ANA123")]
+
+        let merged = try! #require(
+            SharedPlanMerge.decide(local: local, remote: remote, base: base, myUserId: "me").takenPlan
+        )
+        let titles = merged.reservations.map(\.title)
+
+        #expect(titles.contains("ANA123"))      // 相手のぶん
+        #expect(titles.contains("〇〇ホテル"))  // 自分のぶん（いまは消える）
+    }
+
+    @Test("相手が消した予定は、取り込んでも復活しない")
+    func doesNotResurrectDeletedItems() {
+        let kept = makeItem(id: "item-A", title: "朝ごはん", hour: 8)
+        let removed = makeItem(id: "item-B", title: "水族館", hour: 10)
+
+        // 前回そろえたときは2件あった
+        var base = makePlan(updatedAt: t(0))
+        base.daySchedules = [makeDay([kept, removed])]
+
+        // 手元にはまだ2件ある
+        var local = makePlan(updatedAt: t(5))
+        local.daySchedules = [makeDay([kept, removed])]
+
+        // 相手が「水族館」を消して公開した
+        var remote = makePlan(updatedAt: t(10))
+        remote.daySchedules = [makeDay([kept])]
+
+        let merged = try! #require(
+            SharedPlanMerge.decide(local: local, remote: remote, base: base, myUserId: "me").takenPlan
+        )
+        let titles = merged.daySchedules.flatMap { $0.scheduleItems }.map(\.title)
+
+        #expect(!titles.contains("水族館"))
+    }
+
     // MARK: - 繰り返しても落ち着くか
 
     /// 同じ結果を2回通しても答えが変わらないこと。
