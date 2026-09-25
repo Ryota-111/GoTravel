@@ -130,17 +130,27 @@ class CoreDataManager {
 
     // MARK: - Save Context
 
-    /// メインコンテキストを保存
-    func saveContext() {
+    /// メインコンテキストを保存する。
+    ///
+    /// 戻り値は保存できたかどうか。
+    /// **消す処理の前には必ずこれを見ること。** Core Data の検索は未保存の
+    /// 変更も返すため、保存が失敗していても「在る」と判定されてしまう。
+    /// それを根拠に元データを消すと、本当に失われる
+    @discardableResult
+    func saveContext() -> Bool {
         let context = viewContext
 
-        if context.hasChanges {
-            do {
-                try context.save()
-                // CloudKitに自動的に同期される
-            } catch {
-                _ = error as NSError
-            }
+        guard context.hasChanges else { return true }
+
+        do {
+            try context.save()
+            // CloudKitに自動的に同期される
+            return true
+        } catch {
+            #if DEBUG
+            print("[CoreDataManager] 保存に失敗: \(error)")
+            #endif
+            return false
         }
     }
 

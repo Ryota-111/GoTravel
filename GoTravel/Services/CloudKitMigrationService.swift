@@ -1,5 +1,6 @@
 import Foundation
 import CoreData
+import os
 import UIKit
 
 /// CloudKitの既存データをCore Dataに移行するサービス
@@ -143,6 +144,8 @@ final class CloudKitMigrationService {
             return []
         }
 
+        var saved = false
+
         // 共有されて見えているだけの計画は、持ち主が別にいる。
         // 移行元を消すと相手の計画を消すことになるので、自分のものだけ返す
         let ownedIds = results.compactMap { (plan, _) -> String? in
@@ -182,9 +185,17 @@ final class CloudKitMigrationService {
             }
 
             // 保存
-            CoreDataManager.shared.saveContext()
+            saved = CoreDataManager.shared.saveContext()
         }
 
+        // **保存できなければ、移行元を消してよいとは言わない。**
+        // ここで ID を返すと、保存に失敗しているのに旧レコードだけが消え、
+        // データが本当に失われる
+        guard saved else {
+            Logger(subsystem: "com.gmail.taismryotasis.Travory", category: "migration")
+                .error("旅行計画の保存に失敗したため、移行元は残します")
+            return []
+        }
         return ownedIds
     }
 
@@ -202,6 +213,8 @@ final class CloudKitMigrationService {
             return []
         }
 
+        var saved = false
+
         // Core Dataに保存
         await context.perform {
             for plan in plans {
@@ -218,9 +231,10 @@ final class CloudKitMigrationService {
             }
 
             // 保存
-            CoreDataManager.shared.saveContext()
+            saved = CoreDataManager.shared.saveContext()
         }
 
+        guard saved else { return [] }
         return plans.map { $0.id }
     }
 
@@ -237,6 +251,8 @@ final class CloudKitMigrationService {
         guard !results.isEmpty else {
             return []
         }
+
+        var saved = false
 
         // Core Dataに保存
         await context.perform {
@@ -270,9 +286,10 @@ final class CloudKitMigrationService {
             }
 
             // 保存
-            CoreDataManager.shared.saveContext()
+            saved = CoreDataManager.shared.saveContext()
         }
 
+        guard saved else { return [] }
         return results.compactMap { $0.place.id }
     }
 
