@@ -115,11 +115,11 @@ struct SharedPlanMergeTests {
             PackingItem(name: "相手の歯ブラシ", kind: .packing, ownerId: "owner")
         ])
 
-        let merged = try! #require(
-            SharedPlanMerge.decide(local: local, remote: remote, myUserId: "me").takenPlan
-        )
+        // 共有ぶんに違いが無いので、取り込むものも送るものも無い
+        let decision = SharedPlanMerge.decide(local: local, remote: remote, myUserId: "me")
 
-        #expect(merged.packingItems.isEmpty)
+        #expect(decision.takenPlan?.packingItems.isEmpty ?? true)
+        #expect(decision.pushedPlan == nil)
     }
 
     /// 手元の行は端末ユーザーの userId で持つ。
@@ -243,6 +243,128 @@ struct SharedPlanMergeTests {
         let titles = merged.daySchedules.flatMap { $0.scheduleItems }.map(\.title)
 
         #expect(!titles.contains("水族館"))
+    }
+
+    // MARK: - 送る側（手元のほうが新しいとき）
+    //
+    // 2.6 で「共有した計画を後から変えても、相手には最初の内容のまま」と
+    // 報告があった件。手元が新しいと計画まるごとを送っていたため、
+    // 参加者が自分の持ち物にチェックを入れただけで、古い日程が
+    // オーナーの編集を上書きしていた。
+
+    @Test("自分の持ち物を触っただけなら、相手の予定を古い内容で上書きしない")
+    func personalChangeDoesNotOverwriteRemote() {
+        let original = makeItem(id: "item-A", title: "朝ごはん", hour: 8)
+        let added = makeItem(id: "item-B", title: "水族館", hour: 10)
+
+        var base = makePlan(updatedAt: t(0))
+        base.daySchedules = [makeDay([original])]
+
+        // オーナーが「水族館」を足して公開した
+        var remote = makePlan(updatedAt: t(10))
+        remote.daySchedules = [makeDay([original, added])]
+
+        // 参加者はまだ取り込んでいないまま、自分の持ち物にチェックを入れた
+        var local = makePlan(updatedAt: t(20), packingItems: [
+            PackingItem(name: "充電器", isChecked: true, kind: .packing, ownerId: "me")
+        ])
+        local.daySchedules = [makeDay([original])]
+
+        let decision = SharedPlanMerge.decide(local: local, remote: remote, base: base, myUserId: "me")
+        let titles = decision.takenPlan?.daySchedules.flatMap { $0.scheduleItems }.map(\.title) ?? []
+
+        #expect(decision.pushedPlan == nil)   // 共有ぶんは何も変えていないので送らない
+        #expect(titles.contains("水族館"))     // オーナーの追加を取り込む
+    }
+
+    @Test("手元が新しくても、相手が足した予定を消さずに送る")
+    func pushKeepsRemoteAdditions() {
+        let original = makeItem(id: "item-A", title: "朝ごはん", hour: 8)
+
+        var base = makePlan(updatedAt: t(0))
+        base.daySchedules = [makeDay([original])]
+
+        var remote = makePlan(updatedAt: t(10))
+        remote.daySchedules = [makeDay([original, makeItem(id: "item-C", title: "夕食", hour: 18)])]
+
+        var local = makePlan(updatedAt: t(20))
+        local.daySchedules = [makeDay([original, makeItem(id: "item-B", title: "水族館", hour: 10)])]
+
+        let decision = SharedPlanMerge.decide(local: local, remote: remote, base: base, myUserId: "me")
+        let pushed = decision.pushedPlan?.daySchedules.flatMap { $0.scheduleItems }.map(\.title) ?? []
+        let taken = decision.takenPlan?.daySchedules.flatMap { $0.scheduleItems }.map(\.title) ?? []
+
+        #expect(pushed.contains("夕食"))
+        #expect(pushed.contains("水族館"))
+        #expect(taken.contains("夕食"))       // 手元にも相手のぶんが入る
+    }
+
+    /// 送信に失敗して手元にだけ残った変更が、相手の新しい更新で消えないこと。
+    /// 取り込んだあとに送り返さないと、相手には永久に届かない
+    @Test("相手が新しくても、手元にしかない変更は送り返す")
+    func pushesBackUnsentLocalChanges() {
+        let original = makeItem(id: "item-A", title: "朝ごはん", hour: 8)
+
+        var base = makePlan(updatedAt: t(0))
+        base.daySchedules = [makeDay([original])]
+
+        var local = makePlan(updatedAt: t(5))
+        local.daySchedules = [makeDay([original, makeItem(id: "item-B", title: "水族館", hour: 10)])]
+
+        var remote = makePlan(updatedAt: t(10))
+        remote.daySchedules = [makeDay([original, makeItem(id: "item-C", title: "夕食", hour: 18)])]
+
+        let pushed = try! #require(
+            SharedPlanMerge.decide(local: local, remote: remote, base: base, myUserId: "me").pushedPlan
+        )
+        let titles = pushed.daySchedules.flatMap { $0.scheduleItems }.map(\.title)
+
+        #expect(titles.contains("水族館"))
+        #expect(titles.contains("夕食"))
+        // 相手に「新しい」と判断してもらえないと取り込まれない
+        #expect(pushed.updatedAt > remote.updatedAt)
+    }
+
+    /// 後から参加した人が、オーナーの古い手元で外されないこと
+    @Test("手元が新しくても、相手側で増えたメンバーを外さない")
+    func pushKeepsNewMembers() {
+        var base = makePlan(updatedAt: t(0))
+        base.sharedWith = ["owner"]
+
+        var remote = makePlan(updatedAt: t(10))
+        remote.sharedWith = ["owner", "friend"]
+
+        var local = makePlan(title: "沖縄旅行（改）", updatedAt: t(20))
+        local.sharedWith = ["owner"]
+
+        let pushed = try! #require(
+            SharedPlanMerge.decide(local: local, remote: remote, base: base, myUserId: "owner").pushedPlan
+        )
+
+        #expect(pushed.title == "沖縄旅行（改）")
+        #expect(pushed.sharedWith.contains("friend"))
+    }
+
+    @Test("送り返した直後にもう一度突き合わせると、何もしない")
+    func settlesAfterPushBack() {
+        let original = makeItem(id: "item-A", title: "朝ごはん", hour: 8)
+
+        var base = makePlan(updatedAt: t(0))
+        base.daySchedules = [makeDay([original])]
+
+        var local = makePlan(updatedAt: t(5))
+        local.daySchedules = [makeDay([original, makeItem(id: "item-B", title: "水族館", hour: 10)])]
+
+        var remote = makePlan(updatedAt: t(10))
+        remote.daySchedules = [makeDay([original, makeItem(id: "item-C", title: "夕食", hour: 18)])]
+
+        let pushed = try! #require(
+            SharedPlanMerge.decide(local: local, remote: remote, base: base, myUserId: "me").pushedPlan
+        )
+        // 送ったものが相手の最新になり、前回の基準にもなる
+        let second = SharedPlanMerge.decide(local: pushed, remote: pushed, base: pushed, myUserId: "me")
+
+        #expect(second.isDoNothing)
     }
 
     // MARK: - 繰り返しても落ち着くか

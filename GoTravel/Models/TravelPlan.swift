@@ -352,6 +352,24 @@ struct TravelPlan: Identifiable, Codable {
             }
     }
 
+    /// 同行者と共有している部分だけを比べる。
+    ///
+    /// 持ち主のいる持ち物・お土産と写真のファイル名は各自のもので、
+    /// パブリックDBには載せていない（`CloudKitService.applySharedPlanFields`）。
+    /// ここが違うだけなら相手へ送るものは無い。
+    /// 並び順は端末ごとに違ってよいので、共有の持ち物は id 順にそろえて比べる
+    func isSharedContentEqual(to other: TravelPlan) -> Bool {
+        func sharedPart(of plan: TravelPlan) -> TravelPlan {
+            var copy = plan
+            copy.localImageFileName = nil
+            copy.packingItems = plan.packingItems
+                .filter { $0.ownerId == nil }
+                .sorted { $0.id < $1.id }
+            return copy
+        }
+        return sharedPart(of: self).isContentEqual(to: sharedPart(of: other))
+    }
+
     /// その日付が旅行の何日目か。範囲外なら nil。
     /// 予約の日時から、行程のどの日に置くかを決めるのに使う
     func dayNumber(forDate date: Date) -> Int? {

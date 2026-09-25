@@ -97,6 +97,13 @@ struct MainTabView: View {
         .onAppear { updateWidgetSnapshot() }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { updateWidgetSnapshot() }
+
+            // アプリに戻ってきたときに、同行者の編集を取り込む。
+            // ホームの onAppear はバックグラウンドから戻っても呼ばれないため、
+            // ここが無いと、引っぱって更新するまで最初の内容のまま見え続けていた
+            if phase == .active, let userId = authVM.userId {
+                Task { await travelPlanViewModel.refreshSharedPlans(userId: userId) }
+            }
         }
         .alert("iCloudが必要です", isPresented: $showICloudAlert) {
             Button("設定を開く", role: .none) {

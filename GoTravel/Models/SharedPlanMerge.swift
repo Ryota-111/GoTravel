@@ -32,10 +32,13 @@ enum SharedPlanMerge {
 
     /// 突き合わせた結果、何をすべきか
     enum Decision {
-        /// 相手の変更を取り込む（中身はマージ済み）
+        /// 相手の変更を取り込む（中身はマージ済み）。相手へは送らない
         case takeRemote(TravelPlan)
-        /// 手元のほうが新しい。相手へ送る
+        /// 手元にしかない変更がある。相手へ送る（手元はこのままでよい）
         case pushLocal(TravelPlan)
+        /// 手元にも相手にも、もう一方にしかない変更がある。
+        /// マージした結果を手元に保存し、相手へも送る
+        case takeAndPush(TravelPlan)
         /// どちらも同じ。触らない
         case doNothing
     }
@@ -45,6 +48,18 @@ enum SharedPlanMerge {
     ///   - remote: パブリックDBから降りてきた計画
     ///   - base: 前回そろえたときの内容。初回は nil
     ///   - myUserId: この端末のユーザーID
+    ///
+    /// ## 送る側も必ずマージを通す
+    ///
+    /// 以前は手元のほうが新しいと、手元の計画まるごとを送っていた。
+    /// 参加者が**自分の持ち物にチェックを入れただけ**でも手元が「新しい」ことになり、
+    /// まだ取り込んでいない古い日程でオーナーの編集を上書きしていた
+    /// （2.6 で「共有した計画を後から変えても、相手には最初の内容のまま」と報告された件）。
+    ///
+    /// いまは新旧どちらでもマージした結果を作り、
+    /// - 相手と共有しているぶんが相手と違えば **送る**
+    /// - 手元と違えば **保存する**
+    /// をそれぞれ判断する。自分だけの持ち物を触っただけなら、送るものは何もない。
     static func decide(local: TravelPlan?,
                        remote: TravelPlan,
                        base: TravelPlan? = nil,
@@ -54,18 +69,37 @@ enum SharedPlanMerge {
             return .takeRemote(adopt(remote, local: nil, base: nil, myUserId: myUserId))
         }
 
-        if remote.updatedAt > local.updatedAt {
-            return .takeRemote(adopt(remote, local: local, base: base, myUserId: myUserId))
-        }
-        if local.updatedAt > remote.updatedAt {
-            return .pushLocal(local)
-        }
         // 更新時刻が同じ＝どちらも変わっていない。
         // ここで無理に送り合うと、往復し続けて落ち着かなくなる
+        if local.updatedAt == remote.updatedAt {
+            return .doNothing
+        }
+
+        var merged = combine(local: local, remote: remote, base: base, myUserId: myUserId)
+
+        let needsPush = !merged.isSharedContentEqual(to: remote)
+        let needsSave = !merged.isContentEqual(to: local)
+
+        if needsPush {
+            // 相手に「新しい」と判断してもらえないと取り込まれない。
+            // 相手のほうが新しいまま送り返すときは、相手より後ろにずらす
+            merged.updatedAt = local.updatedAt > remote.updatedAt
+                ? local.updatedAt
+                : remote.updatedAt.addingTimeInterval(1)
+            return needsSave ? .takeAndPush(merged) : .pushLocal(merged)
+        }
+
+        if needsSave {
+            // 共有ぶんは相手と同じになったので、更新時刻も相手にそろえる。
+            // 次の突き合わせで「同じ」と判断され、そこで落ち着く
+            merged.updatedAt = remote.updatedAt
+            return .takeRemote(merged)
+        }
+
         return .doNothing
     }
 
-    /// 降りてきた計画を、この端末に置ける形へ整える
+    /// 降りてきた計画を、この端末に置ける形へ整える（手元にまだ無いとき）
     private static func adopt(_ remote: TravelPlan,
                               local: TravelPlan?,
                               base: TravelPlan?,
@@ -79,28 +113,64 @@ enum SharedPlanMerge {
 
         adopted.packingItems = mergePackingItems(local: local, remote: remote, base: base)
 
-        // 前回そろえたときの内容が無ければ、比べようがないので相手を正とする。
-        // 初回の取り込みや、この仕組みを入れる前からある計画がこれにあたる
-        guard let local else { return adopted }
+        return adopted
+    }
 
-        adopted.reservations = merge(
+    /// 手元と相手を1つにまとめる。どちらが新しくても同じ手順を通す
+    private static func combine(local: TravelPlan,
+                                remote: TravelPlan,
+                                base: TravelPlan?,
+                                myUserId: String) -> TravelPlan {
+        // タイトルや日程のような1つしかない値は、新しいほうを採る
+        let newer = local.updatedAt > remote.updatedAt ? local : remote
+        var merged = newer
+
+        merged.userId = myUserId
+        // 写真のファイル名は端末の中の話なので、相手の値を持ち込まない
+        merged.localImageFileName = local.localImageFileName
+
+        // 前回そろえたときの内容が無ければ、比べようがないので新しいほうを正とする。
+        // この仕組みを入れる前からある計画や、覚え書きが消えたときがこれにあたる
+        guard let base else {
+            merged.packingItems = orderedLikeLocal(
+                newer.packingItems.filter { $0.ownerId == nil }
+                    + local.packingItems.filter { $0.ownerId != nil },
+                local: local.packingItems
+            )
+            return merged
+        }
+
+        merged.reservations = merge(
             local: local.reservations,
             remote: remote.reservations,
-            base: base?.reservations ?? [],
+            base: base.reservations,
             id: \.id,
-            hasBase: base != nil
+            hasBase: true
         )
 
-        adopted.daySchedules = mergeDaySchedules(local: local, remote: remote, base: base)
+        merged.daySchedules = mergeDaySchedules(local: local, remote: remote, base: base, frame: newer)
 
-        return adopted
+        // 後から参加した人を、古い手元の内容で外さない
+        merged.sharedWith = merge(
+            local: local.sharedWith,
+            remote: remote.sharedWith,
+            base: base.sharedWith,
+            id: \.self,
+            hasBase: true
+        )
+
+        merged.packingItems = mergePackingItems(local: local, remote: remote, base: base)
+
+        return merged
     }
 
     // MARK: - 予定（日ごとに入れ子になっている）
 
+    /// - Parameter frame: 日数と日付の土台にする計画。新しいほうを渡す
     private static func mergeDaySchedules(local: TravelPlan,
                                           remote: TravelPlan,
-                                          base: TravelPlan?) -> [DaySchedule] {
+                                          base: TravelPlan?,
+                                          frame: TravelPlan) -> [DaySchedule] {
         /// 予定は日ごとに分かれているが、突き合わせは id だけで行う。
         /// 相手が別の日へ動かした予定を、二重に持たないため
         func flatten(_ days: [DaySchedule]) -> [(day: Int, item: ScheduleItem)] {
@@ -115,9 +185,14 @@ enum SharedPlanMerge {
             hasBase: base != nil
         )
 
-        // 相手側の日付を土台にする。日数が変わっていれば相手に合わせる
-        var days = remote.daySchedules.map { day -> DaySchedule in
+        // 新しいほうの日付を土台にする。日数が変わっていればそちらに合わせる。
+        // 日の id は相手のものを引き継ぐ。端末ごとに振られることがあり、
+        // 手元の id のままだと中身が同じでも「違う」ことになって毎回送ってしまう
+        let remoteDayIDs = Dictionary(remote.daySchedules.map { ($0.dayNumber, $0.id) },
+                                      uniquingKeysWith: { first, _ in first })
+        var days = frame.daySchedules.map { day -> DaySchedule in
             var copy = day
+            copy.id = remoteDayIDs[day.dayNumber] ?? day.id
             copy.scheduleItems = []
             return copy
         }
@@ -127,7 +202,7 @@ enum SharedPlanMerge {
                 days[index].scheduleItems.append(entry.item)
             } else {
                 days.append(DaySchedule(dayNumber: entry.day,
-                                        date: remote.date(forDay: entry.day),
+                                        date: frame.date(forDay: entry.day),
                                         scheduleItems: [entry.item]))
             }
         }
@@ -164,7 +239,21 @@ enum SharedPlanMerge {
             isEqual: isSamePackingItem
         )
 
-        return shared + myItems
+        return orderedLikeLocal(shared + myItems, local: local.packingItems)
+    }
+
+    /// 手元の並び順を保つ。相手の項目や新しい項目は後ろに付ける。
+    ///
+    /// 共有ぶんと自分のぶんを継ぎ足すと、自分が並べた順番が崩れるうえ、
+    /// 中身が同じでも「手元と違う」ことになって毎回保存が走る
+    private static func orderedLikeLocal(_ items: [PackingItem], local: [PackingItem]) -> [PackingItem] {
+        let position = Dictionary(local.enumerated().map { ($0.element.id, $0.offset) },
+                                  uniquingKeysWith: { first, _ in first })
+        return items.enumerated().sorted { lhs, rhs in
+            let left = position[lhs.element.id] ?? local.count + lhs.offset
+            let right = position[rhs.element.id] ?? local.count + rhs.offset
+            return left < right
+        }.map(\.element)
     }
 
     /// `PackingItem` は `Equatable` ではないので、比べる項目を並べる。
@@ -267,14 +356,20 @@ private extension SharedPlanMerge {
 // MARK: - テストから中身を取り出すための入口
 
 extension SharedPlanMerge.Decision {
+    /// 手元に保存する計画
     var takenPlan: TravelPlan? {
-        if case .takeRemote(let plan) = self { return plan }
-        return nil
+        switch self {
+        case .takeRemote(let plan), .takeAndPush(let plan): return plan
+        default: return nil
+        }
     }
 
+    /// 相手へ送る計画
     var pushedPlan: TravelPlan? {
-        if case .pushLocal(let plan) = self { return plan }
-        return nil
+        switch self {
+        case .pushLocal(let plan), .takeAndPush(let plan): return plan
+        default: return nil
+        }
     }
 
     var isDoNothing: Bool {

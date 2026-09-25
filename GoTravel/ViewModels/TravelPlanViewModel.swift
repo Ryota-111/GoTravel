@@ -148,15 +148,10 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
         let previous = travelPlans.first(where: { $0.id == planId })
         let hasChanges = previous.map { !$0.isContentEqual(to: plan) } ?? true
 
-        // Core Data保存は非同期なので、ローカル配列を即時更新（楽観的更新）
-        // これにより連続追加時に stale な plan を参照するのを防ぐ
-        if let index = travelPlans.firstIndex(where: { $0.id == planId }) {
-            travelPlans[index] = plan
-        }
-
         var planToSave = plan
         if hasChanges || image != nil {
             planToSave.updatedAt = Date()
+            planToSave.lastEditedBy = userId
         }
 
         // 画像を保存（新しい画像がある場合）
@@ -177,6 +172,14 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
             }
         }
 
+        // Core Data保存は非同期なので、ローカル配列を即時更新（楽観的更新）
+        // これにより連続追加時に stale な plan を参照するのを防ぐ。
+        // **更新時刻を進めたあとの姿を入れる。** 共有の突き合わせはここを
+        // 手元として読むので、古い時刻のままだと自分の編集を「古い」と判断する
+        if let index = travelPlans.firstIndex(where: { $0.id == planId }) {
+            travelPlans[index] = planToSave
+        }
+
         // Core Dataを更新
         context.perform {
             do {
@@ -193,10 +196,11 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
             }
         }
 
-        // 共有中のプランは他メンバーにも見えるようパブリックDBへ反映
-        var sharedPlan = planToSave
-        sharedPlan.lastEditedBy = userId
-        publishSharedPlanIfNeeded(sharedPlan)
+        // 共有中のプランは、相手の最新と突き合わせてから送る。
+        // 手元をそのまま送ると、まだ取り込んでいない相手の編集を上書きしてしまう
+        if planToSave.isShared && hasChanges {
+            scheduleSharedSync(planId: planId, userId: userId)
+        }
     }
 
     /// TravelPlanを削除（Core Dataから削除 → 自動的にCloudKitと同期）
@@ -236,14 +240,18 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
         // 共有中プランのパブリックDB側の処理
         if plan.isShared {
             if let userId = userId, !plan.isOwner(userId: userId) {
-                // メンバーが削除 → 自分をメンバーから外すだけ
-                var updated = plan
-                updated.sharedWith.removeAll { $0 == userId }
-                updated.lastEditedBy = userId
-                updated.updatedAt = Date()
+                // メンバーが削除 → 自分をメンバーから外すだけ。
+                // **相手の最新から外す。** 手元の計画を土台にすると、
+                // まだ取り込んでいない他の人の編集を古い内容で上書きしてしまう
                 Task {
+                    guard var updated = try? await CloudKitService.shared
+                        .fetchSharedTravelPlan(planId: planId) else { return }
+                    updated.sharedWith.removeAll { $0 == userId }
+                    updated.lastEditedBy = userId
+                    updated.updatedAt = Date()
                     try? await CloudKitService.shared.publishSharedTravelPlan(updated)
                 }
+                SharedPlanBaseStore.remove(planId: planId)
             } else {
                 // オーナーが削除 → 共有レコード自体を削除
                 Task {
@@ -429,6 +437,15 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
     /// 全件を取りに行く `refreshSharedPlans` と違い、開いている計画だけを見る
     @MainActor
     func refreshSharedPlan(planId: String, userId: String) async {
+        await runSerialized(planId: planId) {
+            // 始まった時点で「待ち」ではなくなる。ここから先の編集は次の回で送る
+            self.queuedSharedSyncs.remove(planId)
+            await self.syncSharedPlan(planId: planId, userId: userId)
+        }
+    }
+
+    @MainActor
+    private func syncSharedPlan(planId: String, userId: String) async {
         syncStates[planId] = .syncing
         do {
             guard let remote = try await CloudKitService.shared
@@ -440,6 +457,7 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
 
             let tookRemote = try await reconcile(remote: remote, userId: userId)
             SharedPlanBaseStore.markSynced(planId: planId)
+            lastSharedSyncAt[planId] = Date()
             syncStates[planId] = tookRemote ? .updated : .upToDate
 
         } catch {
@@ -451,14 +469,50 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - 共有の同期を1件ずつ順に流す
+
+    /// 計画ごとに、いま走っている（または最後に積んだ）同期
+    @MainActor private var sharedSyncTasks: [String: Task<Void, Never>] = [:]
+    /// 積んだがまだ始まっていない同期。持ち物を続けてチェックしたときなどに、
+    /// 同じ計画の同期を何本も積まないためのもの
+    @MainActor private var queuedSharedSyncs: Set<String> = []
+    /// 計画ごとに、最後に1件の同期を終えた時刻
+    @MainActor private var lastSharedSyncAt: [String: Date] = [:]
+
+    /// 編集を保存したあと、相手の最新と突き合わせて送る。
+    ///
+    /// **手元をそのまま送らない。** まだ取り込んでいない相手の編集があると、
+    /// 古い内容で上書きしてしまう（2.6 で報告された「最初の内容のまま」の原因）。
+    @MainActor
+    private func scheduleSharedSync(planId: String, userId: String) {
+        // まだ始まっていない同期があれば、それが今の手元を拾うので足さなくてよい
+        guard !queuedSharedSyncs.contains(planId) else { return }
+        queuedSharedSyncs.insert(planId)
+        Task { await refreshSharedPlan(planId: planId, userId: userId) }
+    }
+
+    /// 同じ計画の同期を、前のものが終わってから始める。
+    ///
+    /// 並んで走ると、片方が「前回そろえた内容」を書き換えた直後に
+    /// もう片方が古い前提で突き合わせ、相手の予定を「消された」と取り違える
+    @MainActor
+    private func runSerialized(planId: String, _ work: @escaping @MainActor () async -> Void) async {
+        let previous = sharedSyncTasks[planId]
+        let task = Task { @MainActor in
+            await previous?.value
+            await work()
+        }
+        sharedSyncTasks[planId] = task
+        await task.value
+    }
+
     /// 相手の内容と手元を突き合わせる。戻り値は取り込んだかどうか
+    @MainActor
     @discardableResult
     private func reconcile(remote: TravelPlan, userId: String) async throws -> Bool {
         guard let planId = remote.id else { return false }
 
-        let local = await MainActor.run {
-            self.travelPlans.first(where: { $0.id == planId })
-        }
+        let local = travelPlans.first(where: { $0.id == planId })
 
         // どうするかは `SharedPlanMerge` が決める。
         // ここは決まったことを実行するだけにしておくと、
@@ -467,11 +521,19 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
         // 「相手が消した」を区別できない
         let base = SharedPlanBaseStore.load(planId: planId)
 
+        /// 通信している間に手元が編集されていないか。
+        /// 編集されていたら、ここで作った結果で上書きするとその編集が消える。
+        /// 保存も「前回」の更新もせず、積まれている次の同期に任せる
+        func localIsUnchanged() -> Bool {
+            travelPlans.first(where: { $0.id == planId })?.updatedAt == local?.updatedAt
+        }
+
         switch SharedPlanMerge.decide(local: local,
                                       remote: remote,
                                       base: base,
                                       myUserId: userId) {
         case .takeRemote(let merged):
+            guard localIsUnchanged() else { return false }
             try await saveSharedPlanLocally(merged)
             // **覚えるのは受け取った姿そのまま。** マージ後の姿を覚えると、
             // 次回に自分が足したぶんを相手のものと取り違える
@@ -481,31 +543,57 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
             return true
 
         case .pushLocal(let plan):
-            try? await CloudKitService.shared.publishSharedTravelPlan(plan)
+            // 送れなかったときは「前回」を進めない。次の同期で同じ差分をもう一度送る
+            try await CloudKitService.shared.publishSharedTravelPlan(plan)
             // 送ったぶんは相手も持っている状態になる
             SharedPlanBaseStore.save(plan)
             CloudKitService.shareLogger.notice(
-                "手元が新しいので送信 planId=\(planId, privacy: .public)")
+                "手元の変更を送信 planId=\(planId, privacy: .public)")
             return false
+
+        case .takeAndPush(let merged):
+            try await CloudKitService.shared.publishSharedTravelPlan(merged)
+            guard localIsUnchanged() else { return false }
+            try await saveSharedPlanLocally(merged)
+            SharedPlanBaseStore.save(merged)
+            CloudKitService.shareLogger.notice(
+                "取り込んで送り返し planId=\(planId, privacy: .public)")
+            return true
 
         case .doNothing:
             // 同じ内容でそろっているので、これを基準にできる
             SharedPlanBaseStore.save(remote)
             CloudKitService.shareLogger.notice(
-                "同じ更新時刻なので何もしない planId=\(planId, privacy: .public)")
+                "変更なし planId=\(planId, privacy: .public)")
             return false
         }
     }
 
     /// パブリックDBから共有プランの最新状態を取得してローカルにマージ
     func refreshSharedPlans(userId: String) async {
+        let startedAt = Date()
         do {
             let remotePlans = try await CloudKitService.shared.fetchSharedTravelPlans(memberId: userId)
 
             for remote in remotePlans {
                 guard let planId = remote.id else { continue }
-                try await reconcile(remote: remote, userId: userId)
-                SharedPlanBaseStore.markSynced(planId: planId)
+                await runSerialized(planId: planId) {
+                    // 一覧を取ってから順番が回ってくるまでに、この計画だけの同期が
+                    // 済んでいれば、手元の remote はもう古い。取り直す
+                    if let last = self.lastSharedSyncAt[planId], last > startedAt {
+                        await self.syncSharedPlan(planId: planId, userId: userId)
+                        return
+                    }
+                    do {
+                        try await self.reconcile(remote: remote, userId: userId)
+                        SharedPlanBaseStore.markSynced(planId: planId)
+                    } catch {
+                        CloudKitService.shareLogger.error("""
+                            共有の同期に失敗 planId=\(planId, privacy: .public) \
+                            error=\(String(describing: error), privacy: .public)
+                            """)
+                    }
+                }
             }
         } catch {
             // オフライン時などは次回のrefreshで再同期される。
@@ -522,6 +610,15 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
     private func saveSharedPlanLocally(_ plan: TravelPlan) async throws {
         let localPlan = plan
 
+        // 一覧への反映（NSFetchedResultsController 経由）を待たずに手元を差し替える。
+        // 次の同期がこの配列を手元として読むので、古いままだと
+        // 取り込んだばかりの相手の予定を「自分が消した」と取り違える
+        await MainActor.run {
+            if let index = self.travelPlans.firstIndex(where: { $0.id == localPlan.id }) {
+                self.travelPlans[index] = localPlan
+            }
+        }
+
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
             context.perform {
                 do {
@@ -537,14 +634,6 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
                     continuation.resume(throwing: error)
                 }
             }
-        }
-    }
-
-    /// 共有プランの変更をパブリックDBへ非同期に反映
-    private func publishSharedPlanIfNeeded(_ plan: TravelPlan) {
-        guard plan.isShared else { return }
-        Task {
-            try? await CloudKitService.shared.publishSharedTravelPlan(plan)
         }
     }
 }
