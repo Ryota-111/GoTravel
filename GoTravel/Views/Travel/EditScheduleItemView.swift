@@ -24,6 +24,8 @@ struct EditScheduleItemView: View {
     @State private var timeZone: TimeZone
     /// 目的地の時間帯。日本と時差があるときだけ入る
     @State private var destinationTimeZone: TimeZone?
+    /// その日の一番上に固定するか
+    @State private var isPinned: Bool
     @State private var cost: String
     @State private var actualCost: String
     @State private var linkURL: String
@@ -60,6 +62,7 @@ struct EditScheduleItemView: View {
         _notes = State(initialValue: item.notes ?? "")
         _time = State(initialValue: item.time)
         _timeZone = State(initialValue: item.timeZone)
+        _isPinned = State(initialValue: item.isPinned == true)
         _cost = State(initialValue: item.cost != nil ? String(Int(item.cost!)) : "")
         _actualCost = State(initialValue: item.actualCost != nil ? String(Int(item.actualCost!)) : "")
         _linkURL = State(initialValue: item.linkURL ?? "")
@@ -240,6 +243,22 @@ struct EditScheduleItemView: View {
                     fieldBackground: fieldBg
                 )
                 .task { await resolveDestinationTimeZone() }
+
+                // 固定した予定は時刻の並びから外れて、その日の一番上に出る
+                Toggle(isOn: $isPinned) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("この日の一番上に固定")
+                            .font(.subheadline)
+                            .foregroundColor(textColor)
+                        Text("集合場所など、その日ずっと気にしたい予定に")
+                            .font(.caption)
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
+                    }
+                }
+                .tint(travelColor)
+                .padding(14)
+                .background(fieldBg)
+                .cornerRadius(12)
             }
         }
     }
@@ -523,7 +542,9 @@ struct EditScheduleItemView: View {
             // 予約から作った予定は、予約とのつながりを保つ。
             // 以前はここで落としていたため、編集すると予約側のトグルや削除が効かなくなっていた
             reservationId: item.reservationId,
-            timeZoneIdentifier: timeZone.identifier
+            timeZoneIdentifier: timeZone.identifier,
+            // 外したときは nil に戻す（固定したことの無い予定と同じ形にする）
+            isPinned: isPinned ? true : nil
         )
     }
 

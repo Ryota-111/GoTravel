@@ -115,12 +115,17 @@ struct Reservation: Identifiable, Codable, Equatable {
     /// `arrivalDate` の時間帯
     var arrivalTimeZoneIdentifier: String?
 
-    /// 宿泊のチェックアウト日時。チェックインは `date`。
+    /// 期間のある予約の終わり（宿泊ならチェックアウト、レンタカーなら返却）。始まりは `date`。
     ///
-    /// これが無いと何泊するのか分からず、滞在中の各日に宿を出せない
+    /// これが無いと何日にまたがるのか分からず、期間中の各日に出せない
     /// （「滞在先を毎日の一番上に出したい」という要望）。
-    /// 宿は1か所なので、時間帯はチェックインと同じ `timeZoneIdentifier` を使う
-    var checkOutDate: Date?
+    /// 場所は1か所なので、時間帯は始まりと同じ `timeZoneIdentifier` を使う。
+    /// 飛行機・新幹線は `arrivalDate` を使うので、これは使わない
+    var endDate: Date?
+
+    /// 日程の一番上に出すか。**選んだものだけ出す**（無い・false なら出さない）。
+    /// 終わりがあれば期間中の毎日、無ければ始まりの日だけに出る
+    var pinsDuringPeriod: Bool?
 
     /// 経路を表示するかどうか。
     /// 片方しか入っていなくても出す。入れた情報が画面に出ないほうが困る
@@ -143,7 +148,8 @@ struct Reservation: Identifiable, Codable, Equatable {
          terminal: String? = nil,
          timeZoneIdentifier: String? = nil,
          arrivalTimeZoneIdentifier: String? = nil,
-         checkOutDate: Date? = nil) {
+         endDate: Date? = nil,
+         pinsDuringPeriod: Bool? = nil) {
         self.id = id
         self.kind = kind
         self.title = title
@@ -159,7 +165,8 @@ struct Reservation: Identifiable, Codable, Equatable {
         self.terminal = terminal
         self.timeZoneIdentifier = timeZoneIdentifier
         self.arrivalTimeZoneIdentifier = arrivalTimeZoneIdentifier
-        self.checkOutDate = checkOutDate
+        self.endDate = endDate
+        self.pinsDuringPeriod = pinsDuringPeriod
     }
 }
 
@@ -168,6 +175,28 @@ extension Reservation.Kind {
     var usesRoute: Bool {
         self == .flight || self == .train
     }
+
+    /// 始まりと終わりの日時を持てる種類（経路のあるもの以外）
+    var usesPeriod: Bool { !usesRoute }
+
+    /// 始まりの呼び方
+    var startLabel: String {
+        switch self {
+        case .hotel: return "チェックイン"
+        case .rentalCar: return "受け取り"
+        default: return "開始"
+        }
+    }
+
+    /// 終わりの呼び方
+    var endLabel: String {
+        switch self {
+        case .hotel: return "チェックアウト"
+        case .rentalCar: return "返却"
+        default: return "終了"
+        }
+    }
+
 }
 
 // MARK: - 行程へ持っていく

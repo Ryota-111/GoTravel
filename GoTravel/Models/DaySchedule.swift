@@ -53,8 +53,12 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
     /// JSON の中の項目なので、CloudKit のスキーマ変更は要らない
     var timeZoneIdentifier: String?
 
+    /// その日の一番上に固定するか（「集合場所：那覇空港 2F」のように、その日ずっと気にしたいもの）。
+    /// 固定したものは時刻の並びから外して上に出す。無い予定は固定していない扱い
+    var isPinned: Bool?
+
     enum CodingKeys: String, CodingKey {
-        case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId, timeZoneIdentifier
+        case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId, timeZoneIdentifier, isPinned
     }
 
     /// 書き出しや共有カードに出す金額。
@@ -84,7 +88,8 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
          mapURL: String? = nil,
          linkURL: String? = nil,
          reservationId: String? = nil,
-         timeZoneIdentifier: String? = nil) {
+         timeZoneIdentifier: String? = nil,
+         isPinned: Bool? = nil) {
         self.id = id
         self.time = time
         self.title = title
@@ -98,5 +103,6 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
         self.linkURL = linkURL
         self.reservationId = reservationId
         self.timeZoneIdentifier = timeZoneIdentifier
+        self.isPinned = isPinned
     }
 }

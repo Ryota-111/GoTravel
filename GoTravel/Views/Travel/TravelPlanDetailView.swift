@@ -116,6 +116,8 @@ struct TravelPlanDetailView: View {
     @State private var isLoadingPlanWeather = false
     /// 座標が空の計画で、目的地から座標を引き直している最中
     @State private var isResolvingDestination = false
+    /// 一番上に出すものが多いとき、たたまずに全部出すか
+    @State private var showsAllDayPins = false
     /// 出せなかった理由。文言とアイコンは種類ごとに変える
     @State private var planWeatherNote: WeatherNote?
     @State private var weatherAttribution: WeatherService.WeatherAttribution?
@@ -623,6 +625,12 @@ struct TravelPlanDetailView: View {
                 } label: {
                     Label("編集", systemImage: "pencil")
                 }
+                // その日ずっと気にしたい予定（集合場所など）を、時刻の並びから外して上に出す
+                Button {
+                    togglePin(item, in: plan)
+                } label: {
+                    Label("一番上に固定", systemImage: "pin")
+                }
                 Button(role: .destructive) {
                     deleteScheduleItem(item, from: plan)
                 } label: {
@@ -650,26 +658,100 @@ struct TravelPlanDetailView: View {
         .padding(.horizontal, 4)
     }
 
-    /// 滞在先の1行。押すと予約確認へ移る（予約番号を確かめる場面が多いため）
-    private func stayRow(_ stay: StayOnDay) -> some View {
-        Button {
-            withAnimation(.easeInOut(duration: 0.2)) { selectedTab = .reservation }
-        } label: {
+    // MARK: - その日の一番上に出すもの
+
+    /// 一番上に出すのは、この件数まで。増えると予定が画面の下に押し出される
+    private static let visibleDayPinLimit = 3
+
+    private enum DayPin: Identifiable {
+        case reservation(ReservationOnDay)
+        case item(ScheduleItem)
+
+        var id: String {
+            switch self {
+            case .reservation(let entry): return "reservation-\(entry.id)"
+            case .item(let item): return "item-\(item.id)"
+            }
+        }
+    }
+
+    /// 期間のある予約（宿・レンタカーなど）→ 固定した予定 の順
+    private func dayPins(plan: TravelPlan) -> [DayPin] {
+        plan.pinnedReservations(onDay: selectedDay).map(DayPin.reservation)
+            + plan.pinnedScheduleItems(onDay: selectedDay).map(DayPin.item)
+    }
+
+    @ViewBuilder
+    private func dayPinsSection(plan: TravelPlan) -> some View {
+        let pins = dayPins(plan: plan)
+        let visible = showsAllDayPins ? pins : Array(pins.prefix(Self.visibleDayPinLimit))
+
+        if !pins.isEmpty {
+            VStack(spacing: 6) {
+                ForEach(visible) { pin in
+                    switch pin {
+                    case .reservation(let entry):
+                        dayPinRow(icon: entry.icon, title: entry.name, detail: entry.detail) {
+                            // 予約番号を確かめる場面が多いので、予約確認へ移る
+                            withAnimation(.easeInOut(duration: 0.2)) { selectedTab = .reservation }
+                        }
+                    case .item(let item):
+                        dayPinRow(icon: "pin.fill", title: item.title, detail: pinnedItemDetail(item)) {
+                            editingItem = item
+                        }
+                        .contextMenu {
+                            Button {
+                                togglePin(item, in: plan)
+                            } label: {
+                                Label("固定を外す", systemImage: "pin.slash")
+                            }
+                        }
+                    }
+                }
+
+                if pins.count > Self.visibleDayPinLimit {
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.2)) { showsAllDayPins.toggle() }
+                    } label: {
+                        Text(showsAllDayPins ? "たたむ" : "ほか\(pins.count - Self.visibleDayPinLimit)件")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(scheduleAccentColor)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .padding(.horizontal, 4)
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
+    /// 固定した予定の添え書き。時刻と場所
+    private func pinnedItemDetail(_ item: ScheduleItem) -> String {
+        [item.timeText, item.location]
+            .compactMap { $0?.isEmpty == false ? $0 : nil }
+            .joined(separator: "・")
+    }
+
+    private func dayPinRow(icon: String, title: String, detail: String,
+                           action: @escaping () -> Void) -> some View {
+        Button(action: action) {
             HStack(spacing: 10) {
-                Image(systemName: "bed.double.fill")
+                Image(systemName: icon)
                     .font(.system(size: 15))
                     .foregroundColor(scheduleAccentColor)
                     .frame(width: 24)
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(stay.name)
+                    Text(title)
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(accentColor)
                         .lineLimit(1)
-                    Text(stay.detail)
-                        .font(.caption)
-                        .foregroundColor(themeManager.currentTheme.secondaryText)
-                        .lineLimit(1)
+                    if !detail.isEmpty {
+                        Text(detail)
+                            .font(.caption)
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
+                            .lineLimit(1)
+                    }
                 }
 
                 Spacer(minLength: 4)
@@ -686,7 +768,23 @@ struct TravelPlanDetailView: View {
             )
         }
         .buttonStyle(.plain)
-        .accessibilityLabel("\(stay.name)、\(stay.detail)")
+        .accessibilityLabel("\(title)、\(detail)")
+    }
+
+    /// 予定を一番上に固定する・外す
+    private func togglePin(_ item: ScheduleItem, in plan: TravelPlan) {
+        guard let userId = authVM.userId else { return }
+        var updatedPlan = plan
+        for dayIndex in updatedPlan.daySchedules.indices {
+            if let itemIndex = updatedPlan.daySchedules[dayIndex].scheduleItems.firstIndex(where: { $0.id == item.id }) {
+                let pinned = updatedPlan.daySchedules[dayIndex].scheduleItems[itemIndex].isPinned == true
+                // 外すときは nil に戻す。false を入れると、固定したことの無い予定と見分けが要らない差分が出る
+                updatedPlan.daySchedules[dayIndex].scheduleItems[itemIndex].isPinned = pinned ? nil : true
+            }
+        }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            viewModel.update(updatedPlan, userId: userId)
+        }
     }
 
     /// レールの点。過ぎた分は塗り、次の1件は光らせ、これからは中を抜く
@@ -964,15 +1062,13 @@ struct TravelPlanDetailView: View {
 
             dayTabs(plan: plan)
 
-            // その日に泊まっている宿。予定より先に目に入るよう、一番上に固定で出す
-            ForEach(plan.stays(onDay: selectedDay)) { stay in
-                stayRow(stay)
-            }
+            // その日に泊まっている宿や、固定した予定。予定より先に目に入るよう一番上に出す
+            dayPinsSection(plan: plan)
 
-            // スケジュールアイテムリスト
+            // スケジュールアイテムリスト（固定した予定は上に出しているので除く）
+            let sortedItems = plan.timelineScheduleItems(onDay: selectedDay)
             if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }),
-               !daySchedule.scheduleItems.isEmpty {
-                let sortedItems = sortedScheduleItems(daySchedule.scheduleItems)
+               !sortedItems.isEmpty {
                 let nowIndex = nextItemIndex(in: sortedItems, dayDate: daySchedule.date)
                 VStack(spacing: 0) {
                     ForEach(Array(sortedItems.enumerated()), id: \.element.id) { index, item in
