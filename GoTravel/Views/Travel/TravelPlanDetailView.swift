@@ -118,6 +118,10 @@ struct TravelPlanDetailView: View {
     @State private var isResolvingDestination = false
     /// 一番上に出すものが多いとき、たたまずに全部出すか
     @State private var showsAllDayPins = false
+    /// タイムスケジュールの予定をまとめて削除するための選択
+    @State private var isSelectingItems = false
+    @State private var selectedItemIDs: Set<String> = []
+    @State private var showBulkItemDeleteConfirmation = false
     /// 出せなかった理由。文言とアイコンは種類ごとに変える
     @State private var planWeatherNote: WeatherNote?
     @State private var weatherAttribution: WeatherService.WeatherAttribution?
@@ -618,7 +622,17 @@ struct TravelPlanDetailView: View {
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
 
-            // 編集・削除メニュー
+            // 編集・削除メニュー。選択中はチェックに替える
+            if isSelectingItems {
+                let isSelected = selectedItemIDs.contains(item.id)
+                Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                    .font(.system(size: 20))
+                    .foregroundColor(isSelected
+                                     ? themeManager.currentTheme.error
+                                     : themeManager.currentTheme.secondaryText.opacity(0.5))
+                    .padding(.top, 13)
+                    .accessibilityLabel(isSelected ? "選択中" : "未選択")
+            } else {
             Menu {
                 Button {
                     editingItem = item
@@ -643,6 +657,7 @@ struct TravelPlanDetailView: View {
                     .padding(.top, 14)
             }
             }
+            }
             .padding(.horizontal, state == .now ? 12 : 0)
             .background(
                 RoundedRectangle(cornerRadius: 16, style: .continuous)
@@ -656,6 +671,70 @@ struct TravelPlanDetailView: View {
             )
         }
         .padding(.horizontal, 4)
+    }
+
+    // MARK: - まとめて削除
+
+    private func toggleItemSelection(_ item: ScheduleItem) {
+        if selectedItemIDs.contains(item.id) {
+            selectedItemIDs.remove(item.id)
+        } else {
+            selectedItemIDs.insert(item.id)
+        }
+    }
+
+    /// 選んでいて、いま表示している日の予定
+    private func selectedVisibleItems(plan: TravelPlan) -> [ScheduleItem] {
+        plan.timelineScheduleItems(onDay: selectedDay).filter { selectedItemIDs.contains($0.id) }
+    }
+
+    private func bulkItemActionBar(plan: TravelPlan) -> some View {
+        let items = plan.timelineScheduleItems(onDay: selectedDay)
+        let selectedCount = selectedVisibleItems(plan: plan).count
+        let allSelected = !items.isEmpty && selectedCount == items.count
+
+        return HStack {
+            Button(allSelected ? "選択を解除" : "すべて選択") {
+                selectedItemIDs = allSelected ? [] : Set(items.map(\.id))
+            }
+            .font(.subheadline)
+            .foregroundColor(scheduleAccentColor)
+
+            Spacer()
+
+            Button {
+                showBulkItemDeleteConfirmation = true
+            } label: {
+                Label(selectedCount == 0 ? "削除" : "\(selectedCount)件を削除", systemImage: "trash")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .foregroundColor(selectedCount == 0
+                             ? themeManager.currentTheme.secondaryText.opacity(0.5)
+                             : themeManager.currentTheme.error)
+            .disabled(selectedCount == 0)
+        }
+        .padding(.horizontal, 4)
+        .alert("\(selectedCount)件の予定を削除しますか？", isPresented: $showBulkItemDeleteConfirmation) {
+            Button("削除", role: .destructive) { deleteSelectedItems(plan: plan) }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("Day \(selectedDay) のタイムスケジュールから削除します。")
+        }
+    }
+
+    private func deleteSelectedItems(plan: TravelPlan) {
+        guard let userId = authVM.userId else { return }
+        let ids = Set(selectedVisibleItems(plan: plan).map(\.id))
+        var updatedPlan = plan
+        if let dayIndex = updatedPlan.daySchedules.firstIndex(where: { $0.dayNumber == selectedDay }) {
+            updatedPlan.daySchedules[dayIndex].scheduleItems.removeAll { ids.contains($0.id) }
+        }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            viewModel.update(updatedPlan, userId: userId)
+            selectedItemIDs = []
+            isSelectingItems = false
+        }
+        showToast("\(ids.count)件の予定を削除しました")
     }
 
     // MARK: - その日の一番上に出すもの
@@ -1040,6 +1119,20 @@ struct TravelPlanDetailView: View {
                     .foregroundColor(accentColor)
                 Spacer()
 
+                // その日の予定があるときだけ出す
+                if !plan.timelineScheduleItems(onDay: selectedDay).isEmpty || isSelectingItems {
+                    Button(isSelectingItems ? "完了" : "選択") {
+                        withAnimation(.easeInOut(duration: 0.2)) {
+                            isSelectingItems.toggle()
+                            selectedItemIDs = []
+                        }
+                    }
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(scheduleAccentColor)
+                    .padding(.trailing, 4)
+                }
+
+                if !isSelectingItems {
                 Button(action: { showAddScheduleItem = true }) {
                     HStack(spacing: 4) {
                         Image(systemName: "plus")
@@ -1054,6 +1147,11 @@ struct TravelPlanDetailView: View {
                     .clipShape(Capsule())
                 }
                 .buttonStyle(PlainButtonStyle())
+                }
+            }
+
+            if isSelectingItems {
+                bulkItemActionBar(plan: plan)
             }
 
             if shouldShowLocalTimeBanner(plan), let zone = destinationTimeZone {
@@ -1078,6 +1176,15 @@ struct TravelPlanDetailView: View {
                             plan: plan,
                             state: rowState(index: index, nowIndex: nowIndex)
                         )
+                        // 選択中は、行の中のボタン（案内・リンクなど）を止めて、どこを押しても選べるようにする
+                        .allowsHitTesting(!isSelectingItems)
+                        .overlay {
+                            if isSelectingItems {
+                                Color.clear
+                                    .contentShape(Rectangle())
+                                    .onTapGesture { toggleItemSelection(item) }
+                            }
+                        }
                     }
                 }
             } else {

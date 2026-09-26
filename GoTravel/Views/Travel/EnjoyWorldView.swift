@@ -32,6 +32,10 @@ struct EnjoyWorldView: View {
     @State private var showDeleteConfirmation = false
     @State private var planEventToDelete: Plan?
     @State private var showPlanDeleteConfirmation = false
+    /// 予定をまとめて削除するための選択（「予定リストを一括選択で削除したい」という要望）
+    @State private var isSelectingPlans = false
+    @State private var selectedPlanIDs: Set<String> = []
+    @State private var showBulkPlanDeleteConfirmation = false
     @State private var showAuthError = false
     @State private var hasLoadedData = false
     @State private var navigateToTaskList = false
@@ -276,6 +280,12 @@ struct EnjoyWorldView: View {
                 Text(plan.isShared
                      ? "「\(plan.title)」を削除しますか？共有は終了します。\(TravelPlanViewModel.trashRetentionDays)日間は「最近削除した旅行計画」から戻せます。"
                      : "「\(plan.title)」を削除しますか？\(TravelPlanViewModel.trashRetentionDays)日間は「最近削除した旅行計画」から戻せます。")
+            }
+            .alert("\(selectedVisiblePlans.count)件の予定を削除しますか？", isPresented: $showBulkPlanDeleteConfirmation) {
+                Button("削除", role: .destructive) { deleteSelectedPlans() }
+                Button("キャンセル", role: .cancel) {}
+            } message: {
+                Text("選んだ予定と、その通知を削除します。繰り返しの予定は、以降の回もまとめて削除されます。")
             }
             .alert("予定を削除", isPresented: $showPlanDeleteConfirmation, presenting: planEventToDelete) { plan in
                 Button("削除", role: .destructive) {
@@ -575,7 +585,21 @@ struct EnjoyWorldView: View {
 
             Spacer()
 
-            sectionAddButton(label: "予定を追加") { showAddPlan = true }
+            // 予定があるときだけ出す。選択中は追加を隠して、やることを1つにする
+            if !selectablePlans.isEmpty || isSelectingPlans {
+                Button(isSelectingPlans ? "完了" : "選択") {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isSelectingPlans.toggle()
+                        selectedPlanIDs = []
+                    }
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(themeManager.currentTheme.secondary)
+            }
+
+            if !isSelectingPlans {
+                sectionAddButton(label: "予定を追加") { showAddPlan = true }
+            }
         }
         .padding(.horizontal, 20)
         .padding(.top, 10)
@@ -910,10 +934,66 @@ struct EnjoyWorldView: View {
         }
     }
 
+    /// いま一覧に出ている予定（選択の対象）
+    private var selectablePlans: [Plan] {
+        currentFilteredPlans + futureFilteredPlans
+    }
+
+    /// 選んでいて、いま一覧に出ている予定。
+    /// 選択中にタグで絞り込みを変えると、見えなくなった予定の選択が残るため、見えているものだけ数える
+    private var selectedVisiblePlans: [Plan] {
+        selectablePlans.filter { selectedPlanIDs.contains($0.id) }
+    }
+
+    /// 選択中だけ一覧の上に出す。全部選ぶ・まとめて消す
+    private var bulkPlanActionBar: some View {
+        let selectedCount = selectedVisiblePlans.count
+        let allSelected = !selectablePlans.isEmpty && selectedCount == selectablePlans.count
+
+        return HStack {
+            Button(allSelected ? "選択を解除" : "すべて選択") {
+                selectedPlanIDs = allSelected ? [] : Set(selectablePlans.map(\.id))
+            }
+            .font(.subheadline)
+            .foregroundColor(themeManager.currentTheme.secondary)
+
+            Spacer()
+
+            Button {
+                showBulkPlanDeleteConfirmation = true
+            } label: {
+                Label(selectedCount == 0 ? "削除" : "\(selectedCount)件を削除", systemImage: "trash")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .foregroundColor(selectedCount == 0
+                             ? themeManager.currentTheme.secondaryText.opacity(0.5)
+                             : themeManager.currentTheme.error)
+            .disabled(selectedCount == 0)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func deleteSelectedPlans() {
+        let targets = selectedVisiblePlans
+        Task {
+            await plansViewModel.deletePlans(targets)
+            await MainActor.run {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedPlanIDs = []
+                    isSelectingPlans = false
+                }
+            }
+        }
+    }
+
     private func planEventsListView(plans: [Plan]) -> some View {
         // 外側のScrollViewでスクロールするため、ここではVStackのみ
         // （縦ScrollViewのネストはスクロールが取り合いになり操作が不安定になる）
         VStack(spacing: 10) {
+            if isSelectingPlans {
+                bulkPlanActionBar
+            }
+
             PlanEventSectionView(
                 title: "今日の予定",
                 plans: currentFilteredPlans,
@@ -921,7 +1001,8 @@ struct EnjoyWorldView: View {
                 onDelete: { plan in
                     planEventToDelete = plan
                     showPlanDeleteConfirmation = true
-                }
+                },
+                selection: isSelectingPlans ? $selectedPlanIDs : nil
             )
             .animation(.spring(response: 0.7, dampingFraction: 0.6), value: currentFilteredPlans.count)
 
@@ -932,11 +1013,14 @@ struct EnjoyWorldView: View {
                 onDelete: { plan in
                     planEventToDelete = plan
                     showPlanDeleteConfirmation = true
-                }
+                },
+                selection: isSelectingPlans ? $selectedPlanIDs : nil
             )
             .animation(.spring(response: 0.7, dampingFraction: 0.6), value: futureFilteredPlans.count)
 
-            addPlanButton
+            if !isSelectingPlans {
+                addPlanButton
+            }
         }
         .padding(.horizontal, 1)
         .animation(.spring(response: 0.7, dampingFraction: 0.6), value: plans.count)

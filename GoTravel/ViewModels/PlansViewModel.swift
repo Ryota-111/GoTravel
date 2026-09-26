@@ -193,6 +193,24 @@ final class PlansViewModel: NSObject, ObservableObject {
 
 // MARK: - NSFetchedResultsControllerDelegate
 
+extension PlansViewModel {
+    /// まとめて削除する。1件ずつ保存すると同期が件数ぶん走るので、最後に1回だけ保存する
+    func deletePlans(_ plans: [Plan]) async {
+        for plan in plans {
+            NotificationService.shared.cancelPlanNotifications(for: plan.id)
+        }
+
+        await context.perform {
+            for plan in plans {
+                if let entity = try? PlanEntity.fetchById(id: plan.id, context: self.context) {
+                    self.context.delete(entity)
+                }
+            }
+            CoreDataManager.shared.saveContext()
+        }
+    }
+}
+
 extension PlansViewModel: NSFetchedResultsControllerDelegate {
     /// Core Dataの変更を検知してUIを自動更新
     func controllerDidChangeContent(_ controller: NSFetchedResultsController<NSFetchRequestResult>) {
