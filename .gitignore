@@ -1,0 +1,11 @@
+# Xcode のビルド成果物。
+# xcodebuild を -target で動かすと、プロジェクト直下に build/ ができる
+build/
+DerivedData/
+
+# 個人ごとの Xcode の状態
+*.xcuserstate
+xcuserdata/
+
+# macOS
+.DS_Store
