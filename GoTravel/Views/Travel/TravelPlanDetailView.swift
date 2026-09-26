@@ -650,6 +650,45 @@ struct TravelPlanDetailView: View {
         .padding(.horizontal, 4)
     }
 
+    /// 滞在先の1行。押すと予約確認へ移る（予約番号を確かめる場面が多いため）
+    private func stayRow(_ stay: StayOnDay) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) { selectedTab = .reservation }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "bed.double.fill")
+                    .font(.system(size: 15))
+                    .foregroundColor(scheduleAccentColor)
+                    .frame(width: 24)
+
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(stay.name)
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(accentColor)
+                        .lineLimit(1)
+                    Text(stay.detail)
+                        .font(.caption)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .lineLimit(1)
+                }
+
+                Spacer(minLength: 4)
+
+                Image(systemName: "chevron.right")
+                    .font(.caption)
+                    .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.6))
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(scheduleAccentColor.opacity(0.08))
+            )
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(stay.name)、\(stay.detail)")
+    }
+
     /// レールの点。過ぎた分は塗り、次の1件は光らせ、これからは中を抜く
     @ViewBuilder
     private func timelineDot(state: TimelineRowState) -> some View {
@@ -924,6 +963,11 @@ struct TravelPlanDetailView: View {
             }
 
             dayTabs(plan: plan)
+
+            // その日に泊まっている宿。予定より先に目に入るよう、一番上に固定で出す
+            ForEach(plan.stays(onDay: selectedDay)) { stay in
+                stayRow(stay)
+            }
 
             // スケジュールアイテムリスト
             if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }),

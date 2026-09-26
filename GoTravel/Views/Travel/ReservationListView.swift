@@ -179,8 +179,8 @@ struct ReservationListView: View {
                         .foregroundColor(textColor)
                         .lineLimit(2)
 
-                    if let date = reservation.date {
-                        Text(timeText(date, zone: reservation.dateTimeZone, format: "M月d日(E) HH:mm"))
+                    if let date = reservation.date, let line = reservation.dateLineText {
+                        Text(withZoneLabel(line, date: date, zone: reservation.dateTimeZone))
                             .font(.caption)
                             .foregroundColor(themeManager.currentTheme.secondaryText)
                     }
@@ -375,9 +375,8 @@ struct ReservationListView: View {
         viewModel.update(updated, userId: userId)
     }
 
-    /// 予約の時計で整形し、見ている人の時計と違えば「（現地）」などを添える
-    private func timeText(_ date: Date, zone: TimeZone, format: String) -> String {
-        let text = ScheduleClock.text(date, format: format, in: zone)
+    /// 見ている人の時計と違えば「（現地）」などを添える
+    private func withZoneLabel(_ text: String, date: Date, zone: TimeZone) -> String {
         guard let label = ScheduleClock.zoneLabel(zone, at: date, destination: destinationTimeZone) else { return text }
         return "\(text)（\(label)）"
     }

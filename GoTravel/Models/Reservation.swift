@@ -115,6 +115,13 @@ struct Reservation: Identifiable, Codable, Equatable {
     /// `arrivalDate` の時間帯
     var arrivalTimeZoneIdentifier: String?
 
+    /// 宿泊のチェックアウト日時。チェックインは `date`。
+    ///
+    /// これが無いと何泊するのか分からず、滞在中の各日に宿を出せない
+    /// （「滞在先を毎日の一番上に出したい」という要望）。
+    /// 宿は1か所なので、時間帯はチェックインと同じ `timeZoneIdentifier` を使う
+    var checkOutDate: Date?
+
     /// 経路を表示するかどうか。
     /// 片方しか入っていなくても出す。入れた情報が画面に出ないほうが困る
     var hasRoute: Bool {
@@ -135,7 +142,8 @@ struct Reservation: Identifiable, Codable, Equatable {
          seat: String? = nil,
          terminal: String? = nil,
          timeZoneIdentifier: String? = nil,
-         arrivalTimeZoneIdentifier: String? = nil) {
+         arrivalTimeZoneIdentifier: String? = nil,
+         checkOutDate: Date? = nil) {
         self.id = id
         self.kind = kind
         self.title = title
@@ -151,6 +159,7 @@ struct Reservation: Identifiable, Codable, Equatable {
         self.terminal = terminal
         self.timeZoneIdentifier = timeZoneIdentifier
         self.arrivalTimeZoneIdentifier = arrivalTimeZoneIdentifier
+        self.checkOutDate = checkOutDate
     }
 }
 

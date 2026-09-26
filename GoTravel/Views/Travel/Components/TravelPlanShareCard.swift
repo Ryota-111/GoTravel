@@ -86,8 +86,8 @@ enum TravelPlanTextExporter {
         let name = reservation.title.isEmpty ? reservation.kind.label : reservation.title
         lines.append("[\(reservation.kind.label)] \(name)")
 
-        if let date = reservation.date {
-            lines.append("　　\(ScheduleClock.text(date, format: "M月d日(E) HH:mm", in: reservation.dateTimeZone))")
+        if let line = reservation.dateLineText {
+            lines.append("　　\(line)")
         }
 
         if reservation.hasRoute {
@@ -483,8 +483,8 @@ struct TravelPlanExtrasShareCard: View {
                     .font(.system(size: 14, weight: .semibold))
                     .foregroundColor(.primary)
 
-                if let date = reservation.date {
-                    Text(ScheduleClock.text(date, format: "M月d日(E) HH:mm", in: reservation.dateTimeZone))
+                if let line = reservation.dateLineText {
+                    Text(line)
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }

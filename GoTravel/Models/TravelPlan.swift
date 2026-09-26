@@ -381,6 +381,13 @@ struct TravelPlan: Identifiable, Codable {
     /// パリの 23:00 は日本では翌朝なので、どの時計で日付を読むかで何日目かが変わる。
     /// 予約や予定は、それぞれの時計で読んだ日付で置く
     func dayNumber(forDate date: Date, in timeZone: TimeZone) -> Int? {
+        guard let number = unclampedDayNumber(forDate: date, in: timeZone) else { return nil }
+        return (1...dayCount).contains(number) ? number : nil
+    }
+
+    /// 旅行の期間から外れていても数える「何日目」（前日なら 0、翌日なら dayCount + 1）。
+    /// 旅行の前日にチェックインする宿のように、期間をまたぐものを扱うのに使う
+    func unclampedDayNumber(forDate date: Date, in timeZone: TimeZone) -> Int? {
         // 旅行の初日は日本で入れたものとして日付を読む（予定の時刻と同じ考え方）。
         // 端末の暦で読むと、海外にいるときだけ初日が前の日にずれることがある
         let startDay = ScheduleClock.calendar(in: ScheduleClock.legacyTimeZone)
@@ -391,8 +398,7 @@ struct TravelPlan: Identifiable, Codable {
         guard let start = utc.date(from: startDay),
               let target = utc.date(from: targetDay),
               let diff = utc.dateComponents([.day], from: start, to: target).day else { return nil }
-        let number = diff + 1
-        return (1...dayCount).contains(number) ? number : nil
+        return diff + 1
     }
 
     /// その日のタイムスケジュールに予定を足す

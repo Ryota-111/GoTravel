@@ -18,6 +18,9 @@ struct ReservationEditorView: View {
     @State private var arrivalDate = Date()
     /// 日時をどこの時計で入れるか。飛行機は出発と到着で違う
     @State private var dateZone = ScheduleClock.legacyTimeZone
+    /// 宿泊のチェックアウト。時間帯はチェックインと同じ（宿は1か所）
+    @State private var hasCheckOut = false
+    @State private var checkOutDate = Date()
     @State private var arrivalZone = ScheduleClock.legacyTimeZone
     /// 目的地の時間帯。日本と時差があるときだけ入る
     @State private var destinationTimeZone: TimeZone?
@@ -136,6 +139,10 @@ struct ReservationEditorView: View {
                 }
                 dateZone = reservation.dateTimeZone
                 arrivalZone = reservation.arrivalTimeZone
+                if let existing = reservation.checkOutDate {
+                    hasCheckOut = true
+                    checkOutDate = existing
+                }
                 // いま行程に出ているかどうかを、そのままトグルの状態にする。
                 // これをしないと、一度オンにしたものをオフに戻せない
                 addsToItinerary = plan?.hasScheduleItems(forReservation: reservation.id) ?? false
@@ -462,10 +469,13 @@ struct ReservationEditorView: View {
         )
     }
 
+    private var isHotel: Bool { reservation.kind == .hotel }
+
     private var dateSection: some View {
         VStack(alignment: .leading, spacing: 8) {
             Toggle(isOn: $hasDate) {
-                Text("日時を設定する")
+                // 宿泊ではこの日時がチェックイン。滞在中の各日に宿を出すのに使う
+                Text(isHotel ? "チェックインを設定する" : "日時を設定する")
                     .font(.subheadline)
                     .foregroundColor(textColor)
             }
@@ -478,10 +488,81 @@ struct ReservationEditorView: View {
                     .labelsHidden()
                     .frame(maxWidth: .infinity, alignment: .leading)
                 zoneChooser(time: $date, zone: $dateZone)
+
+                if isHotel {
+                    Divider()
+                    checkOutRow
+                }
             }
         }
         .padding(14)
         .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+        // チェックインを現地時間・日本時間で切り替えたら、チェックアウトも同じ時計に付け替える。
+        // 付け替えないと、チェックアウトの時:分だけ時差の分ずれて見える
+        .onChange(of: dateZone) { oldZone, newZone in
+            guard hasCheckOut else { return }
+            checkOutDate = ScheduleClock.keepingWallClock(checkOutDate, from: oldZone, to: newZone)
+        }
+    }
+
+    /// チェックアウト。入れると、泊まっている各日の日程の一番上に宿が出る
+    @ViewBuilder
+    private var checkOutRow: some View {
+        if hasCheckOut {
+            HStack {
+                Text("チェックアウト")
+                    .font(.subheadline)
+                    .foregroundColor(textColor)
+                Spacer()
+                DatePicker("", selection: $checkOutDate, in: date...)
+                    .environment(\.timeZone, dateZone)
+                    .datePickerStyle(.compact)
+                    .labelsHidden()
+                Button {
+                    hasCheckOut = false
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("チェックアウトを消す")
+            }
+            if let nights = nightsText {
+                Text(nights)
+                    .font(.caption)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+        } else {
+            Button {
+                // 翌日の 11:00 から始める。よくあるチェックアウトの時刻
+                let clock = ScheduleClock.calendar(in: dateZone)
+                let nextDay = clock.date(byAdding: .day, value: 1, to: date) ?? date
+                checkOutDate = clock.date(bySettingHour: 11, minute: 0, second: 0, of: nextDay) ?? nextDay
+                hasCheckOut = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "plus.circle")
+                    Text("チェックアウトを追加")
+                }
+                .font(.subheadline)
+                .foregroundColor(accent)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+
+            Text("入れると、泊まっている日の日程の一番上に宿が表示されます")
+                .font(.caption)
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+        }
+    }
+
+    /// 「3泊」。宿の時計で日付を数える
+    private var nightsText: String? {
+        let clock = ScheduleClock.calendar(in: dateZone)
+        let nights = clock.dateComponents([.day],
+                                          from: clock.startOfDay(for: date),
+                                          to: clock.startOfDay(for: checkOutDate)).day ?? 0
+        return nights > 0 ? "\(nights)泊" : nil
     }
 
     private var numberField: some View {
@@ -548,6 +629,8 @@ struct ReservationEditorView: View {
         edited.arrivalDate = hasArrivalDate ? arrivalDate : nil
         edited.timeZoneIdentifier = edited.date == nil ? nil : dateZone.identifier
         edited.arrivalTimeZoneIdentifier = edited.arrivalDate == nil ? nil : arrivalZone.identifier
+        // チェックアウトは宿泊でチェックインがあるときだけ残す
+        edited.checkOutDate = (edited.kind == .hotel && edited.date != nil && hasCheckOut) ? checkOutDate : nil
 
         // 種類を変えたときに、前の種類の入力が残らないようにする
         if !edited.kind.usesRoute {
