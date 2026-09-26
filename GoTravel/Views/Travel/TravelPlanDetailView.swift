@@ -114,6 +114,8 @@ struct TravelPlanDetailView: View {
     /// 日程の各日ぶんの天気。取れなかった日は入らないので、日番号とは対応しない
     @State private var planWeatherDays: [WeatherService.DayWeather] = []
     @State private var isLoadingPlanWeather = false
+    /// 座標が空の計画で、目的地から座標を引き直している最中
+    @State private var isResolvingDestination = false
     /// 出せなかった理由。文言とアイコンは種類ごとに変える
     @State private var planWeatherNote: WeatherNote?
     @State private var weatherAttribution: WeatherService.WeatherAttribution?
@@ -393,9 +395,16 @@ struct TravelPlanDetailView: View {
             }
         }
         .task(id: currentPlan?.id) {
+            await fillMissingDestinationCoordinate()
             if let plan = currentPlan {
                 destinationTimeZone = await DestinationTimeZoneService.shared.timeZone(for: plan)
             }
+        }
+        // 目的地や日程を編集したら天気を取り直す。
+        // 以前は最初に表示したときにしか取らず、編集で目的地を直しても
+        // 画面を開き直すまで天気が出なかった
+        .onChange(of: weatherRequestKey) { _, _ in
+            fetchPlanWeather()
         }
         .onAppear {
             withAnimation {
@@ -1342,7 +1351,22 @@ struct TravelPlanDetailView: View {
     private var weatherBody: some View {
         if let plan = currentPlan {
             if plan.latitude == nil || plan.longitude == nil {
-                weatherNote("設定された場所には天気の情報がありませんでした", icon: "exclamationmark.icloud")
+                if isResolvingDestination {
+                    HStack(spacing: 8) {
+                        ProgressView().controlSize(.small)
+                        Text("目的地の位置を確認しています…")
+                            .font(.caption)
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
+                    }
+                } else {
+                    // 「その場所に天気が無い」のではなく「位置が分からない」。
+                    // 以前は天気が無い場所と同じ文言で、利用者には直しようが無かった
+                    Button { showBasicInfoEditor = true } label: {
+                        weatherNote("目的地「\(plan.destination)」の位置が分からないため、天気を表示できません。タップして目的地を入れ直してください",
+                                    icon: "mappin.slash")
+                    }
+                    .buttonStyle(.plain)
+                }
             } else if isLoadingPlanWeather {
                 HStack(spacing: 8) {
                     ProgressView().controlSize(.small)
@@ -1771,6 +1795,35 @@ struct TravelPlanDetailView: View {
     }
 
     // MARK: - Weather Fetching
+    /// 天気を取り直すきっかけ。目的地の座標か日程が変わったら変わる
+    private var weatherRequestKey: String {
+        guard let plan = currentPlan else { return "" }
+        return "\(plan.latitude ?? .nan),\(plan.longitude ?? .nan),\(plan.startDate.timeIntervalSince1970),\(plan.endDate.timeIntervalSince1970)"
+    }
+
+    /// 座標が空のまま保存された計画を、目的地の文字から補う。
+    ///
+    /// 保存が座標の検索を待っていなかったため、「沖縄」と入れても
+    /// 座標が空の計画ができていた。利用者が何もしなくても直るよう、開いたときに引き直す
+    private func fillMissingDestinationCoordinate() async {
+        guard let plan = currentPlan,
+              plan.latitude == nil || plan.longitude == nil,
+              let userId = authVM.userId else { return }
+        let query = plan.destination.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty else { return }
+
+        isResolvingDestination = true
+        defer { isResolvingDestination = false }
+
+        guard let coordinate = await DestinationGeocoder.coordinate(for: query, debounce: 0),
+              var latest = currentPlan,
+              latest.latitude == nil || latest.longitude == nil else { return }
+
+        latest.latitude = coordinate.latitude
+        latest.longitude = coordinate.longitude
+        viewModel.update(latest, userId: userId)
+    }
+
     private func fetchPlanWeather() {
         guard #available(iOS 16.0, *) else {
             return
@@ -1812,11 +1865,12 @@ struct TravelPlanDetailView: View {
                 self.planWeatherDays = fetchedDays
                 self.weatherAttribution = fetchedAttribution
                 self.planWeatherNote = fetchedDays.isEmpty
-                    ? WeatherNote(text: "10日前になると天気が表示されます", icon: "calendar")
+                    ? WeatherNote(text: Self.notYetAvailableText, icon: "calendar")
                     : nil
                 self.isLoadingPlanWeather = false
             } catch {
                 self.planWeatherDays = []
+                // 失敗の中身は WeatherService がログに残す（category: weather）
                 self.planWeatherNote = Self.note(for: error)
                 self.isLoadingPlanWeather = false
             }
@@ -1825,6 +1879,11 @@ struct TravelPlanDetailView: View {
 
     /// 失敗の理由をそのまま出す。
     ///
+    /// 天気が見られるようになる日の案内。予報の範囲に合わせる（以前は1日ずれて「10日前」と出ていた）
+    private static var notYetAvailableText: String {
+        "出発の\(WeatherService.availableDaysBefore)日前になると天気が表示されます"
+    }
+
     /// 以前はどんな失敗でも「10日前になると天気が表示されます」と出していたため、
     /// 通信断も認証エラーも日付が先すぎるように読めていた
     private static func note(for error: Error) -> WeatherNote {
@@ -1834,7 +1893,7 @@ struct TravelPlanDetailView: View {
 
         switch weatherError {
         case .dateTooFarInFuture:
-            return WeatherNote(text: "10日前になると天気が表示されます", icon: "calendar")
+            return WeatherNote(text: Self.notYetAvailableText, icon: "calendar")
         case .networkError:
             return WeatherNote(text: "通信できないため天気を取得できませんでした", icon: "wifi.slash")
         case .locationNotAvailable, .invalidCoordinates:

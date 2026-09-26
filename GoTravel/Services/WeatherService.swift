@@ -2,6 +2,7 @@ import Foundation
 import WeatherKit
 import CoreLocation
 import Network
+import os
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -23,6 +24,31 @@ final class WeatherService {
     private let networkMonitor = NWPathMonitor()
     private let monitorQueue = DispatchQueue(label: "NetworkMonitor")
     private var isNetworkAvailable = true
+
+    /// 天気の取得に失敗したときの中身。Console.app で
+    /// subsystem: com.gmail.taismryotasis.Travory / category: weather を見る。
+    ///
+    /// 以前は失敗の中身をどこにも残さず、「設定された場所には天気の情報がありませんでした」
+    /// とだけ出ていたため、座標が悪いのか、日付が悪いのか、認証なのか切り分けられなかった
+    static let logger = Logger(subsystem: "com.gmail.taismryotasis.Travory", category: "weather")
+
+
+    /// 日別予報がある日数。**今日を含めて**この日数ぶん（今日〜9日後）。
+    ///
+    /// 以前は「10日後まで」として問い合わせていたため、出発がちょうど10日後の旅行で
+    /// 予報の無い期間を頼み、WeatherKit から 404 が返っていた。その 404 を
+    /// 「その場所には天気が無い」と読んでいたので、「設定された場所には天気の情報が
+    /// ありませんでした」と、場所の問題に見える案内が出ていた
+    static let forecastDays = 10
+
+    /// 天気が見られるようになるのは、出発の何日前からか
+    static var availableDaysBefore: Int { forecastDays - 1 }
+
+    /// 予報がある最後の日の翌日 0:00（問い合わせの終端に使う。終端は含まれない）
+    private static var forecastHorizonEnd: Date {
+        Calendar.current.date(byAdding: .day, value: forecastDays, to: Date.todayInLocalTimezone)
+            ?? Date.todayInLocalTimezone
+    }
 
     private init() {
         networkMonitor.pathUpdateHandler = { [weak self] path in
@@ -98,7 +124,7 @@ final class WeatherService {
             throw WeatherError.dateTooFarInPast
         }
 
-        guard daysUntilDate <= 10 else {
+        guard daysUntilDate <= Self.availableDaysBefore else {
             throw WeatherError.dateTooFarInFuture
         }
 
@@ -129,6 +155,11 @@ final class WeatherService {
         } catch {
             // Check for authentication errors
             let errorString = "\(error)"
+            Self.logger.error("""
+                天気の取得に失敗 lat=\(roundedLatitude, privacy: .public) \
+                lng=\(roundedLongitude, privacy: .public) \
+                error=\(errorString, privacy: .public)
+                """)
 
             // HTTP 404 - リソースが見つからない（座標が無効または天気データが利用できない場所）
             if errorString.contains("404") {
@@ -186,14 +217,14 @@ final class WeatherService {
         // 旅行全体を取るこちらには無かった。
         // そのため先の旅行を開くたびに 400 が出て、画面には
         // 「天気を取得できませんでした」とだけ表示されていた。
-        // 「10日前になったら見られます」と正しく案内する
+        // 「〇日前になったら見られます」と正しく案内する
         let daysUntilStart = Calendar.current.dateComponents(
             [.day],
             from: Calendar.current.startOfDay(for: Date()),
             to: startDate.startOfDayInLocalTimezone
         ).day ?? 0
 
-        guard daysUntilStart <= 10 else {
+        guard daysUntilStart <= Self.availableDaysBefore else {
             throw WeatherError.dateTooFarInFuture
         }
         guard daysUntilStart >= -90 else {
@@ -205,11 +236,14 @@ final class WeatherService {
 
         // 期間の終端は含まれない。最終日の0時までを頼むと最終日が落ちるので、
         // 翌日の0時まで頼む
-        let normalizedEndDate = Calendar.current.date(
+        let requestedEndDate = Calendar.current.date(
             byAdding: .day,
             value: 1,
             to: endDate.startOfDayInLocalTimezone
         ) ?? endDate.startOfDayInLocalTimezone
+        // 予報の無い日まで頼まない。範囲をはみ出すと、そのぶんが 404 になり得る。
+        // 範囲内の日だけ返し、残りの日は近づいてから出す
+        let normalizedEndDate = min(requestedEndDate, Self.forecastHorizonEnd)
 
         let location = CLLocation(latitude: roundedLatitude, longitude: roundedLongitude)
 
@@ -233,6 +267,11 @@ final class WeatherService {
         } catch {
             // Check for authentication errors
             let errorString = "\(error)"
+            Self.logger.error("""
+                天気の取得に失敗 lat=\(roundedLatitude, privacy: .public) \
+                lng=\(roundedLongitude, privacy: .public) \
+                error=\(errorString, privacy: .public)
+                """)
 
             // HTTP 404 - 座標が無効か、天気データが無い場所
             if errorString.contains("404") {
@@ -287,7 +326,7 @@ enum WeatherError: LocalizedError {
         case .locationNotAvailable:
             return "この場所の天気データは利用できません。別の場所を試してください。"
         case .dateTooFarInFuture:
-            return "旅行開始日が10日以上先のため、天気予報はまだ利用できません。出発の10日前になったら確認できます。"
+            return "旅行開始日が先のため、天気予報はまだ利用できません。出発の\(WeatherService.availableDaysBefore)日前になったら確認できます。"
         case .dateTooFarInPast:
             return "指定された日付が古すぎます。過去90日以内の日付を指定してください。"
         case .invalidCoordinates:

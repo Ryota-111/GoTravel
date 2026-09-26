@@ -456,10 +456,13 @@ struct AddTravelPlanView: View {
     // MARK: - Actions
     private func saveTravelPlan() {
         isUploading = true
-        if let image = selectedImage {
-            saveWithImage(image)
-        } else {
-            saveWithoutImage()
+        Task { @MainActor in
+            await settleDestinationCoordinate()
+            if let image = selectedImage {
+                saveWithImage(image)
+            } else {
+                saveWithoutImage()
+            }
         }
     }
 
@@ -511,8 +514,27 @@ struct AddTravelPlanView: View {
             let coordinate = await DestinationGeocoder.coordinate(for: query)
             guard !Task.isCancelled else { return }
             destinationCoordinate = coordinate.map { ($0.latitude, $0.longitude) }
+            // 終わったことを保存側に伝える（検索中なら保存が待つ）
+            destinationSearchTask = nil
         }
     }
+
+    /// 保存の前に、目的地の座標がそろうのを待つ。
+    ///
+    /// 検索は入力が止まって0.5秒後に始まり、通信を経て座標が入る。
+    /// 以前は保存がこれを待たず、「沖縄」と打ってすぐ保存すると座標が空のまま残り、
+    /// 天気が「設定された場所には天気の情報がありませんでした」になっていた。
+    /// 検索中か、座標がまだ無いときは、ここで引き直してから保存する
+    private func settleDestinationCoordinate() async {
+        let query = destination.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty, destinationCoordinate == nil || destinationSearchTask != nil else { return }
+
+        destinationSearchTask?.cancel()
+        destinationSearchTask = nil
+        let coordinate = await DestinationGeocoder.coordinate(for: query, debounce: 0)
+        destinationCoordinate = coordinate.map { ($0.latitude, $0.longitude) }
+    }
+
 }
 
 // MARK: - Preview
