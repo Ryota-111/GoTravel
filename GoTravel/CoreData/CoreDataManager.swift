@@ -15,7 +15,10 @@ class CoreDataManager {
     /// リリースビルドには含まれないので本番の動作には影響しない。
     ///
     /// deploy 済み: `TaskEntity` と `PhotoAssetEntity`（2026年8月31日）、
-    /// `PackingPresetEntity`（2026年9月5日）。
+    /// `PackingPresetEntity`（2026年9月5日）、`TravelPlanEntity.deletedAt`（2026年9月26日）。
+    ///
+    /// 既存のエンティティに項目を足したときも、同じ手順で Production に反映すること。
+    /// 反映しないままリリースすると、その書き出しが Production で失敗し、同期全体が止まる
     private static let initializesCloudKitSchemaOnLaunch = false
     #endif
 

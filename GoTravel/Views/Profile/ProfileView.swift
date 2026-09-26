@@ -40,6 +40,8 @@ struct ProfileView: View {
 
                         mapAppCard
 
+                        recentlyDeletedCard
+
                         helpSupportCard
 
                         tipJarCard
@@ -313,6 +315,24 @@ struct ProfileView: View {
         .scaleEffect(animateCards ? 1 : 0.8)
         .offset(y: animateCards ? 0 : 30)
         .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.30), value: animateCards)
+    }
+
+    private var recentlyDeletedCard: some View {
+        NavigationLink(destination: RecentlyDeletedTravelPlansView().environmentObject(travelPlanViewModel)) {
+            GlassMenuCard(
+                icon: "trash.fill",
+                title: "最近削除した旅行計画",
+                subtitle: travelPlanViewModel.recentlyDeleted.isEmpty
+                    ? "\(TravelPlanViewModel.trashRetentionDays)日間は戻せます"
+                    : "\(travelPlanViewModel.recentlyDeleted.count)件・\(TravelPlanViewModel.trashRetentionDays)日間は戻せます",
+                gradientColors: [Color.gray, Color.gray.opacity(0.7)]
+            )
+        }
+        .buttonStyle(CardButtonStyle())
+        .opacity(animateCards ? 1 : 0)
+        .scaleEffect(animateCards ? 1 : 0.8)
+        .offset(y: animateCards ? 0 : 30)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.35), value: animateCards)
     }
 
     private var mapAppCard: some View {

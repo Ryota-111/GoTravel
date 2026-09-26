@@ -212,6 +212,7 @@ struct EnjoyWorldView: View {
                     travelEventsTitleSection
                     tabSelectionSection
                     travelPlansSection
+                    recentlyDeletedLink
                     planEventsTitleSection
                     planTabSelectionSection
                     planEventsListSection
@@ -272,7 +273,9 @@ struct EnjoyWorldView: View {
                     planToDelete = nil
                 }
             } message: { plan in
-                Text("「\(plan.title)」を本当に削除しますか？")
+                Text(plan.isShared
+                     ? "「\(plan.title)」を削除しますか？共有は終了します。\(TravelPlanViewModel.trashRetentionDays)日間は「最近削除した旅行計画」から戻せます。"
+                     : "「\(plan.title)」を削除しますか？\(TravelPlanViewModel.trashRetentionDays)日間は「最近削除した旅行計画」から戻せます。")
             }
             .alert("予定を削除", isPresented: $showPlanDeleteConfirmation, presenting: planEventToDelete) { plan in
                 Button("削除", role: .destructive) {
@@ -531,6 +534,30 @@ struct EnjoyWorldView: View {
             case .content(let plans):
                 travelPlansListView(plans: plans)
             }
+        }
+    }
+
+    /// ゴミ箱に何か入っているときだけ、旅行計画の下に入口を出す。
+    /// 消した直後に「戻したい」と思う場所はここなので、プロフィールの奥だけに置かない
+    @ViewBuilder
+    private var recentlyDeletedLink: some View {
+        let count = travelPlanViewModel.recentlyDeleted.count
+        if count > 0 {
+            NavigationLink(destination: RecentlyDeletedTravelPlansView().environmentObject(travelPlanViewModel)) {
+                HStack(spacing: 6) {
+                    Image(systemName: "trash")
+                        .font(.caption)
+                    Text("最近削除した旅行計画（\(count)）")
+                        .font(.caption.weight(.semibold))
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
+                }
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+                .padding(.horizontal, 20)
+                .padding(.top, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
         }
     }
 

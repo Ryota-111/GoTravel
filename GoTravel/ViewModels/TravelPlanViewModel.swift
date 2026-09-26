@@ -47,7 +47,11 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
         // ユーザーIDでフィルタリング（自分のプランのみ）
         // 注: sharedWithはBinaryデータなので、NSPredicateで直接フィルタリングできない
         // 共有されたプランは、updateTravelPlans()でメモリ内フィルタリング
-        fetchRequest.predicate = NSPredicate(format: "userId == %@ OR ownerId == %@", userId, userId)
+        // ゴミ箱に入れたものは一覧に出さない（`recentlyDeleted` が受け持つ）
+        fetchRequest.predicate = NSPredicate(
+            format: "(userId == %@ OR ownerId == %@) AND deletedAt == nil", userId, userId
+        )
+        currentUserId = userId
 
         // 開始日で降順ソート
         fetchRequest.sortDescriptors = [NSSortDescriptor(key: "startDate", ascending: false)]
@@ -66,6 +70,10 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
             updateTravelPlans()
         } catch {
         }
+
+        // 30日を過ぎたものを片付けてから、ゴミ箱の中身を読む
+        purgeExpiredDeletions()
+        loadRecentlyDeleted()
 
         // パブリックDB上の共有プランをローカルに取り込む
         Task {
@@ -203,7 +211,13 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
         }
     }
 
-    /// TravelPlanを削除（Core Dataから削除 → 自動的にCloudKitと同期）
+    /// TravelPlanをゴミ箱に入れる。
+    ///
+    /// **すぐには消さない。** 30日間は「最近削除した旅行計画」から戻せる（`restore`）。
+    /// 写真・アルバムは戻したときのために残し、完全に消すときに片付ける（`deletePermanently`）。
+    ///
+    /// 共有していた計画は、ここで共有を切る。戻したときは自分だけの計画になる。
+    /// 共有コードは作り直してもらう（相手側の扱いは今までの削除と同じ）
     @MainActor
     func delete(_ plan: TravelPlan, userId: String? = nil) {
 
@@ -211,30 +225,37 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
             return
         }
 
-        // 通知をキャンセル
+        // 通知をキャンセル（戻したときに入れ直す）
         NotificationService.shared.cancelTravelPlanNotifications(for: planId)
-
-        // ローカル画像を削除
-        if let fileName = plan.localImageFileName {
-            try? FileManager.removeDocumentFile(named: fileName)
-        }
-
-        // この旅行に紐づくアルバムも一緒に片付ける（travelPlanIdが宙に浮くのを防ぐ）
-        AlbumManager.shared.deleteAlbums(forTravelPlanId: planId)
 
         // 共有の突き合わせに使う覚え書きも片付ける。
         // 残っていても実害は無いが、同じIDで作り直したときに古い基準が効いてしまう
         SharedPlanBaseStore.remove(planId: planId)
 
-        // Core Dataから削除
+        // 戻したときに、自分だけの計画として出るようにしておく
+        var detached = plan
+        if plan.isShared {
+            detached.isShared = false
+            detached.shareCode = nil
+            detached.sharedWith = []
+            detached.ownerId = nil
+            // 参加していただけの計画でも、自分のゴミ箱に入るように
+            detached.userId = userId ?? plan.userId
+        }
+
+        // 一覧からはすぐに消す（Core Data の反映を待つと一瞬残って見える）
+        travelPlans.removeAll { $0.id == planId }
+
         context.perform {
             do {
                 if let entity = try TravelPlanEntity.fetchById(id: planId, context: self.context) {
-                    self.context.delete(entity)
+                    if plan.isShared { entity.update(from: detached) }
+                    entity.deletedAt = Date()
                     CoreDataManager.shared.saveContext()
                 }
             } catch {
             }
+            DispatchQueue.main.async { self.loadRecentlyDeleted() }
         }
 
         // 共有中プランのパブリックDB側の処理
@@ -251,7 +272,6 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
                     updated.updatedAt = Date()
                     try? await CloudKitService.shared.publishSharedTravelPlan(updated)
                 }
-                SharedPlanBaseStore.remove(planId: planId)
             } else {
                 // オーナーが削除 → 共有レコード自体を削除
                 Task {
@@ -259,6 +279,125 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
                 }
             }
         }
+    }
+
+    // MARK: - ゴミ箱（最近削除した旅行計画）
+
+    /// ゴミ箱に入れてから、完全に消すまでの日数
+    static let trashRetentionDays = 30
+
+    struct DeletedTravelPlan: Identifiable {
+        let plan: TravelPlan
+        let deletedAt: Date
+
+        var id: String { plan.id ?? UUID().uuidString }
+
+        /// 完全に消えるまでの残り日数（0なら今日中）
+        var daysUntilPurge: Int {
+            let purgeDate = Calendar.current.date(
+                byAdding: .day, value: TravelPlanViewModel.trashRetentionDays, to: deletedAt
+            ) ?? deletedAt
+            let days = Calendar.current.dateComponents([.day], from: Date(), to: purgeDate).day ?? 0
+            return max(0, days)
+        }
+    }
+
+    /// ゴミ箱の中身。新しく消したものが先
+    @Published var recentlyDeleted: [DeletedTravelPlan] = []
+
+    private var currentUserId: String?
+
+    private func loadRecentlyDeleted() {
+        guard let userId = currentUserId else {
+            recentlyDeleted = []
+            return
+        }
+        let request = TravelPlanEntity.fetchRequest()
+        request.predicate = NSPredicate(
+            format: "(userId == %@ OR ownerId == %@) AND deletedAt != nil", userId, userId
+        )
+        request.sortDescriptors = [NSSortDescriptor(key: "deletedAt", ascending: false)]
+
+        let entities = (try? context.fetch(request)) ?? []
+        recentlyDeleted = entities.compactMap { entity in
+            guard let deletedAt = entity.deletedAt else { return nil }
+            return DeletedTravelPlan(plan: entity.toTravelPlan(), deletedAt: deletedAt)
+        }
+    }
+
+    /// ゴミ箱から戻す
+    @MainActor
+    func restore(planId: String) {
+        context.perform {
+            guard let entity = try? TravelPlanEntity.fetchById(id: planId, context: self.context) else { return }
+            entity.deletedAt = nil
+            CoreDataManager.shared.saveContext()
+            let plan = entity.toTravelPlan()
+            DispatchQueue.main.async {
+                NotificationService.shared.scheduleTravelPlanNotifications(for: plan)
+                self.loadRecentlyDeleted()
+            }
+        }
+    }
+
+    /// ゴミ箱から完全に消す。写真とアルバムもここで片付ける
+    @MainActor
+    func deletePermanently(planId: String) {
+        context.perform {
+            if let entity = try? TravelPlanEntity.fetchById(id: planId, context: self.context) {
+                self.removeForever(entity)
+                CoreDataManager.shared.saveContext()
+            }
+            DispatchQueue.main.async { self.loadRecentlyDeleted() }
+        }
+    }
+
+    /// ゴミ箱を空にする
+    @MainActor
+    func emptyTrash() {
+        let ids = recentlyDeleted.map(\.id)
+        context.perform {
+            for id in ids {
+                if let entity = try? TravelPlanEntity.fetchById(id: id, context: self.context) {
+                    self.removeForever(entity)
+                }
+            }
+            CoreDataManager.shared.saveContext()
+            DispatchQueue.main.async { self.loadRecentlyDeleted() }
+        }
+    }
+
+    /// 30日を過ぎたものを完全に消す。起動して一覧を読むたびに呼ぶ
+    private func purgeExpiredDeletions() {
+        guard let threshold = Calendar.current.date(
+            byAdding: .day, value: -Self.trashRetentionDays, to: Date()
+        ) else { return }
+
+        let request = TravelPlanEntity.fetchRequest()
+        request.predicate = NSPredicate(format: "deletedAt != nil AND deletedAt < %@", threshold as NSDate)
+
+        context.perform {
+            let expired = (try? self.context.fetch(request)) ?? []
+            guard !expired.isEmpty else { return }
+            expired.forEach(self.removeForever)
+            CoreDataManager.shared.saveContext()
+            DispatchQueue.main.async { self.loadRecentlyDeleted() }
+        }
+    }
+
+    /// 写真・アルバムごと消す。context.perform の中から呼ぶこと
+    private func removeForever(_ entity: TravelPlanEntity) {
+        if let fileName = entity.localImageFileName {
+            try? FileManager.removeDocumentFile(named: fileName)
+        }
+        if let planId = entity.id {
+            // この旅行に紐づくアルバムも一緒に片付ける（travelPlanIdが宙に浮くのを防ぐ）
+            DispatchQueue.main.async {
+                AlbumManager.shared.deleteAlbums(forTravelPlanId: planId)
+                self.planImages[planId] = nil
+            }
+        }
+        context.delete(entity)
     }
 
     // MARK: - Image Loading
@@ -645,6 +784,8 @@ extension TravelPlanViewModel: NSFetchedResultsControllerDelegate {
     func controllerDidChangeContent(_ controller: NSFetchedResultsController<NSFetchRequestResult>) {
         DispatchQueue.main.async {
             self.updateTravelPlans()
+            // 別の端末でゴミ箱に入れた・戻したものも、ここで拾う
+            self.loadRecentlyDeleted()
         }
     }
 }

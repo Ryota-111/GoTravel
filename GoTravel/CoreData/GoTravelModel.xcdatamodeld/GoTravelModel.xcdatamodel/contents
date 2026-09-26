@@ -22,6 +22,7 @@
         <attribute name="packingItemsData" optional="YES" attributeType="Binary"/>
         <attribute name="reservationsData" optional="YES" attributeType="Binary"/>
         <attribute name="customSplitCount" optional="YES" attributeType="Integer 32" usesScalarValueType="NO"/>
+        <attribute name="deletedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
     </entity>
     <entity name="PlanEntity" representedClassName="PlanEntity" syncable="YES">
         <attribute name="cardColorHex" optional="YES" attributeType="String"/>
