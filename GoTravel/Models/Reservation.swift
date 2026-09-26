@@ -103,6 +103,18 @@ struct Reservation: Identifiable, Codable, Equatable {
     /// ターミナル（例: 第2ターミナル）。飛行機のみ
     var terminal: String?
 
+    // MARK: - 時刻をどこの時計で読むか
+    //
+    // 飛行機は出発と到着で時間帯が違う（羽田 10:00 発 → パリ 16:00 着）。
+    // 端末の時計で読んでいたため、現地に着くと時刻がずれ、所要時間も
+    // 時差の分だけ狂っていた。無い予約（2.7 より前）は日本時間とみなす。
+    // JSON の中の項目なので、CloudKit のスキーマ変更は要らない
+
+    /// `date`（出発・チェックインなど）の時間帯。"Europe/Paris" など
+    var timeZoneIdentifier: String?
+    /// `arrivalDate` の時間帯
+    var arrivalTimeZoneIdentifier: String?
+
     /// 経路を表示するかどうか。
     /// 片方しか入っていなくても出す。入れた情報が画面に出ないほうが困る
     var hasRoute: Bool {
@@ -121,7 +133,9 @@ struct Reservation: Identifiable, Codable, Equatable {
          arrivalPlace: String? = nil,
          arrivalDate: Date? = nil,
          seat: String? = nil,
-         terminal: String? = nil) {
+         terminal: String? = nil,
+         timeZoneIdentifier: String? = nil,
+         arrivalTimeZoneIdentifier: String? = nil) {
         self.id = id
         self.kind = kind
         self.title = title
@@ -135,6 +149,8 @@ struct Reservation: Identifiable, Codable, Equatable {
         self.arrivalDate = arrivalDate
         self.seat = seat
         self.terminal = terminal
+        self.timeZoneIdentifier = timeZoneIdentifier
+        self.arrivalTimeZoneIdentifier = arrivalTimeZoneIdentifier
     }
 }
 
@@ -172,7 +188,8 @@ extension Reservation {
                                  title: title,
                                  location: nil,
                                  notes: note,
-                                 reservationId: id)]
+                                 reservationId: id,
+                                 timeZoneIdentifier: timeZoneIdentifier)]
         }
 
         // 経路のある予約は、便名を見出しにしたほうが行程で読みやすい。
@@ -185,7 +202,8 @@ extension Reservation {
                          title: "\(name) 出発",
                          location: departurePlace,
                          notes: note,
-                         reservationId: id)
+                         reservationId: id,
+                         timeZoneIdentifier: timeZoneIdentifier)
         ]
 
         if let arrivalDate {
@@ -194,7 +212,8 @@ extension Reservation {
                              title: "\(name) 到着",
                              location: arrivalPlace,
                              notes: nil,
-                             reservationId: id)
+                             reservationId: id,
+                             timeZoneIdentifier: arrivalTimeZoneIdentifier)
             )
         }
         return items

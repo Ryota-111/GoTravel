@@ -28,7 +28,7 @@ enum TravelPlanTextExporter {
                 lines.append("◆ Day \(day.dayNumber)  \(dateString(plan.date(forDay: day.dayNumber)))")
 
                 for item in sortedByTime(day.scheduleItems) {
-                    var row = "\(timeString(item.time))  \(item.title)"
+                    var row = "\(item.timeText)  \(item.title)"
                     if let location = item.location, !location.isEmpty {
                         row += "  @\(location)"
                     }
@@ -87,7 +87,7 @@ enum TravelPlanTextExporter {
         lines.append("[\(reservation.kind.label)] \(name)")
 
         if let date = reservation.date {
-            lines.append("　　\(dateString(date)) \(timeString(date))")
+            lines.append("　　\(ScheduleClock.text(date, format: "M月d日(E) HH:mm", in: reservation.dateTimeZone))")
         }
 
         if reservation.hasRoute {
@@ -95,7 +95,7 @@ enum TravelPlanTextExporter {
                 .compactMap { $0 }
                 .joined(separator: " → ")
             if let arrival = reservation.arrivalDate {
-                route += "（到着 \(timeString(arrival))）"
+                route += "（到着 \(ScheduleClock.timeText(arrival, in: reservation.arrivalTimeZone))）"
             }
             lines.append("　　\(route)")
         }
@@ -121,26 +121,15 @@ enum TravelPlanTextExporter {
 
     // MARK: Helpers
 
+    /// 起きる順に並べる。時間帯が違う予定が混ざっていても、実際の順になる
     static func sortedByTime(_ items: [ScheduleItem]) -> [ScheduleItem] {
-        items.sorted { minutes(of: $0.time) < minutes(of: $1.time) }
-    }
-
-    private static func minutes(of date: Date) -> Int {
-        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
-        return (components.hour ?? 0) * 60 + (components.minute ?? 0)
+        items.sorted(by: ScheduleItem.chronologically)
     }
 
     static func dateString(_ date: Date) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ja_JP")
         formatter.dateFormat = "M月d日(E)"
-        return formatter.string(from: date)
-    }
-
-    static func timeString(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ja_JP")
-        formatter.dateFormat = "HH:mm"
         return formatter.string(from: date)
     }
 
@@ -280,7 +269,7 @@ struct TravelPlanShareCard: View {
 
     private func row(item: ScheduleItem, isLast: Bool) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Text(TravelPlanTextExporter.timeString(item.time))
+            Text(item.timeText)
                 .font(.system(size: 13, weight: .bold, design: .rounded).monospacedDigit())
                 .foregroundColor(accentColor)
                 .frame(width: 44, alignment: .leading)
@@ -495,7 +484,7 @@ struct TravelPlanExtrasShareCard: View {
                     .foregroundColor(.primary)
 
                 if let date = reservation.date {
-                    Text(TravelPlanTextExporter.dateString(date) + " " + TravelPlanTextExporter.timeString(date))
+                    Text(ScheduleClock.text(date, format: "M月d日(E) HH:mm", in: reservation.dateTimeZone))
                         .font(.caption2)
                         .foregroundColor(.secondary)
                 }

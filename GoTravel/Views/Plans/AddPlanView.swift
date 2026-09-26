@@ -2,6 +2,8 @@ import SwiftUI
 import MapKit
 
 struct AddPlanView: View {
+    /// 経路案内の行き先。開くアプリはプロフィールの設定に従う（`mapNavigation`）
+    @State private var navigationTarget: MapDestination?
 
     // MARK: - Properties
     @Environment(\.presentationMode) var presentationMode
@@ -1256,12 +1258,13 @@ struct AddPlanView: View {
             Divider()
 
             HStack(spacing: 12) {
-                Button { result.openInMaps() } label: {
+                Button { navigationTarget = MapDestination(result) } label: {
                     Label("経路", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
                         .frame(maxWidth: .infinity).padding(.vertical, 12)
                         .background(themeManager.currentTheme.actionFill.opacity(0.12))
                         .foregroundStyle(themeManager.currentTheme.actionFill).cornerRadius(10)
                 }
+                .mapNavigation($navigationTarget)
                 Button { addPlaceFromMapResult(result) } label: {
                     Label("追加", systemImage: "plus.circle.fill")
                         .frame(maxWidth: .infinity).padding(.vertical, 12)

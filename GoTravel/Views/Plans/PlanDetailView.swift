@@ -2,6 +2,10 @@ import SwiftUI
 import MapKit
 
 struct PlanDetailView: View {
+    /// 経路案内の行き先。開くアプリはプロフィールの設定に従う（`mapNavigation`）
+    @State private var navigationTarget: MapDestination?
+    /// 地図から場所を選ぶ画面（全画面）の中の経路案内。上の画面の選択肢は全画面の上に出せないため分ける
+    @State private var searchResultNavigationTarget: MapDestination?
     @State var plan: Plan
     @State private var showMap = false
     @State private var showStreetView = false
@@ -148,10 +152,18 @@ struct PlanDetailView: View {
         }
         .confirmationDialog("どこへ案内しますか？", isPresented: $showRoutePicker, titleVisibility: .visible) {
             ForEach(routeDestinations) { place in
-                Button(place.name) { openRoute(to: place) }
+                Button(place.name) {
+                    // 閉じきる前に次の選択肢（どのアプリで開くか）を出すと表示されないことがあるので、
+                    // この行き先選びが消えてから渡す
+                    Task {
+                        try? await Task.sleep(for: .milliseconds(350))
+                        openRoute(to: place)
+                    }
+                }
             }
             Button("キャンセル", role: .cancel) {}
         }
+        .mapNavigation($navigationTarget)
         .sheet(isPresented: $showNotificationSettings) {
             PlanNotificationSettingsView(plan: plan) { reminders in
                 saveReminders(reminders)
@@ -1441,10 +1453,9 @@ struct PlanDetailView: View {
         }
     }
 
+    /// 開くアプリはプロフィールの「経路案内のアプリ」に従う（`mapNavigation`）
     private func openRoute(to place: PlannedPlace) {
-        let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: place.coordinate))
-        mapItem.name = place.name
-        mapItem.openInMaps(launchOptions: [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving])
+        navigationTarget = MapDestination(name: place.name, coordinate: place.coordinate)
     }
 
     // MARK: - 記念日
@@ -2411,7 +2422,7 @@ struct PlanDetailView: View {
 
             HStack(spacing: 12) {
                 Button {
-                    result.openInMaps()
+                    searchResultNavigationTarget = MapDestination(result)
                 } label: {
                     Label("経路", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
                         .frame(maxWidth: .infinity)
@@ -2420,6 +2431,7 @@ struct PlanDetailView: View {
                         .foregroundStyle(themeManager.currentTheme.actionFill)
                         .cornerRadius(10)
                 }
+                .mapNavigation($searchResultNavigationTarget)
 
                 Button {
                     addPlaceFromMapResult(result)

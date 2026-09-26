@@ -103,7 +103,11 @@ struct TravelPlanDetailView: View {
     @State private var showExperienceWeb = false
     @State private var exportItems: [Any]?
     @State private var animateContent = false
-    @State private var navigatingItem: ScheduleItem?
+    @State private var navigationTarget: MapDestination?
+    /// 目的地の時間帯。予定に「現地」「日本」を添えるのに使う
+    @State private var destinationTimeZone: TimeZone?
+    /// 「現地時間にそろえますか」の案内を「このままにする」で閉じた計画
+    @AppStorage("dismissedLocalTimeBanners") private var dismissedLocalTimeBanners: String = ""
     @State private var editingItem: ScheduleItem?
 
     // Weather Properties
@@ -376,30 +380,7 @@ struct TravelPlanDetailView: View {
                     .environmentObject(authVM)
             }
         }
-        .confirmationDialog(
-            navigatingItem?.location ?? navigatingItem?.title ?? "",
-            isPresented: Binding(
-                get: { navigatingItem != nil },
-                set: { if !$0 { navigatingItem = nil } }
-            ),
-            titleVisibility: .visible
-        ) {
-            Button("Apple マップで案内") {
-                if let item = navigatingItem, let lat = item.latitude, let lng = item.longitude {
-                    openInAppleMaps(name: item.location ?? item.title, latitude: lat, longitude: lng)
-                }
-            }
-            if UIApplication.shared.canOpenURL(URL(string: "comgooglemaps://")!) {
-                Button("Google マップで案内") {
-                    if let item = navigatingItem, let lat = item.latitude, let lng = item.longitude {
-                        openInGoogleMaps(latitude: lat, longitude: lng)
-                    }
-                }
-            }
-            Button("キャンセル", role: .cancel) { navigatingItem = nil }
-        } message: {
-            Text("案内するアプリを選択してください")
-        }
+        .mapNavigation($navigationTarget)
         .sheet(isPresented: $showShareView) {
             if let currentPlan = currentPlan {
                 ShareTravelPlanView(plan: currentPlan) { shareCode in
@@ -409,6 +390,11 @@ struct TravelPlanDetailView: View {
                     try await viewModel.updateShareCode(planId: planId, shareCode: shareCode, userId: userId)
                 }
                 .environmentObject(viewModel)
+            }
+        }
+        .task(id: currentPlan?.id) {
+            if let plan = currentPlan {
+                destinationTimeZone = await DestinationTimeZoneService.shared.timeZone(for: plan)
             }
         }
         .onAppear {
@@ -476,16 +462,13 @@ struct TravelPlanDetailView: View {
         guard Calendar.current.isDateInToday(dayDate) else { return nil }
 
         let now = Date()
-        let calendar = Calendar.current
 
-        // 項目の時刻は日付を持たないことがあるため、時刻だけで比べる
-        func minutes(of date: Date) -> Int {
-            let parts = calendar.dateComponents([.hour, .minute], from: date)
-            return (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
+        // 項目の時刻は日付を持たないため、時刻だけで比べる。
+        // **予定ごとの時計で比べる。** パリの予定をパリの今と比べないと、
+        // 日本時間の今と比べて「次の1件」が8時間ずれる
+        return items.firstIndex {
+            $0.minutesOfDay >= ScheduleClock.minutesOfDay(now, in: $0.timeZone)
         }
-
-        let nowMinutes = minutes(of: now)
-        return items.firstIndex { minutes(of: $0.time) >= nowMinutes }
     }
 
     private func rowState(index: Int, nowIndex: Int?) -> TimelineRowState {
@@ -499,16 +482,26 @@ struct TravelPlanDetailView: View {
         HStack(alignment: .top, spacing: 0) {
             // 時刻は塗りつぶさず、等幅で右に揃える。
             // カプセルで塗ると1行ごとに色の面ができて、レールが読めなくなる
-            Text(formatTime(item.time))
-                .font(.system(size: 13, weight: .bold))
-                .monospacedDigit()
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-                .foregroundColor(state == .past
-                                 ? themeManager.currentTheme.secondaryText.opacity(0.6)
-                                 : themeManager.currentTheme.secondaryText)
-                .frame(width: 46, alignment: .trailing)
-                .padding(.top, 1)
+            VStack(alignment: .trailing, spacing: 1) {
+                Text(item.timeText)
+                    .font(.system(size: 13, weight: .bold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+
+                // 見ている人の時計と違う予定だけ、どこの時刻かを添える
+                if let zoneLabel = item.zoneLabel(destination: destinationTimeZone) {
+                    Text(zoneLabel)
+                        .font(.system(size: 9, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+            }
+            .foregroundColor(state == .past
+                             ? themeManager.currentTheme.secondaryText.opacity(0.6)
+                             : themeManager.currentTheme.secondaryText)
+            .frame(width: 46, alignment: .trailing)
+            .padding(.top, 1)
 
             // レール。点と点をつなぎ、過ぎた区間だけ色が入る
             VStack(spacing: 0) {
@@ -546,7 +539,14 @@ struct TravelPlanDetailView: View {
                             .lineLimit(1)
                         if item.latitude != nil && item.longitude != nil {
                             Spacer()
-                            Button(action: { navigatingItem = item }) {
+                            Button(action: {
+                                if let lat = item.latitude, let lng = item.longitude {
+                                    navigationTarget = MapDestination(
+                                        name: item.location ?? item.title,
+                                        coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng)
+                                    )
+                                }
+                            }) {
                                 HStack(spacing: 3) {
                                     Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
                                         .font(.system(size: 10))
@@ -901,6 +901,10 @@ struct TravelPlanDetailView: View {
                     .clipShape(Capsule())
                 }
                 .buttonStyle(PlainButtonStyle())
+            }
+
+            if shouldShowLocalTimeBanner(plan), let zone = destinationTimeZone {
+                localTimeBanner(plan: plan, zone: zone)
             }
 
             dayTabs(plan: plan)
@@ -1520,26 +1524,107 @@ struct TravelPlanDetailView: View {
         }
     }
     /// 地図に出せる（座標を持つ）スケジュール項目が1件でもあるか
-    private func sortedScheduleItems(_ items: [ScheduleItem]) -> [ScheduleItem] {
-        let calendar = Calendar.current
+    // MARK: - 現地時間にそろえる案内
+    //
+    // 2.7 より前は予定が時間帯を持てず、海外旅行でも日本時間として入っている。
+    // 「現地の 15:00」のつもりで入れた予定は、現地に着くと 8:00 などと出てしまう。
+    // 必要なのは既存の海外旅行を持つ人で、その人は直せることを知らないので、
+    // メニューの奥ではなくタイムラインの上で聞く
 
-        return items.sorted { item1, item2 in
-            // Extract hour and minute components only (ignore date)
-            let components1 = calendar.dateComponents([.hour, .minute], from: item1.time)
-            let components2 = calendar.dateComponents([.hour, .minute], from: item2.time)
+    /// 現地時間にそろえられる予定の数。目的地が日本と時差の無い場所なら 0
+    private func localTimeConversionCount(_ plan: TravelPlan) -> Int {
+        guard let zone = destinationTimeZone,
+              ScheduleClock.isForeign(zone, at: plan.startDate) else { return 0 }
+        return plan.scheduleItemCount(notIn: zone)
+    }
 
-            let hour1 = components1.hour ?? 0
-            let minute1 = components1.minute ?? 0
-            let hour2 = components2.hour ?? 0
-            let minute2 = components2.minute ?? 0
+    private func shouldShowLocalTimeBanner(_ plan: TravelPlan) -> Bool {
+        guard let planId = plan.id else { return false }
+        return !dismissedLocalTimeBannerIDs.contains(planId) && localTimeConversionCount(plan) > 0
+    }
 
-            // Compare by hour first, then by minute
-            if hour1 != hour2 {
-                return hour1 < hour2
-            } else {
-                return minute1 < minute2
+    private var dismissedLocalTimeBannerIDs: Set<String> {
+        Set(dismissedLocalTimeBanners.split(separator: ",").map(String.init))
+    }
+
+    private func dismissLocalTimeBanner(_ plan: TravelPlan) {
+        guard let planId = plan.id else { return }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            dismissedLocalTimeBanners = dismissedLocalTimeBannerIDs.union([planId]).sorted().joined(separator: ",")
+        }
+    }
+
+    private func localTimeBanner(plan: TravelPlan, zone: TimeZone) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "globe.asia.australia.fill")
+                    .font(.system(size: 18))
+                    .foregroundColor(scheduleAccentColor)
+
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("予定が日本時間で入っています")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(accentColor)
+                    Text("現地（\(ScheduleClock.displayName(of: zone))）の時刻として扱いますか？時刻の数字はそのままです。")
+                        .font(.caption)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+
+            HStack(spacing: 10) {
+                Button {
+                    convertToLocalTime()
+                } label: {
+                    Text("現地時間にそろえる")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(scheduleAccentColor)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                }
+                .buttonStyle(PlainButtonStyle())
+
+                Button {
+                    dismissLocalTimeBanner(plan)
+                } label: {
+                    Text("このままにする")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 10)
+                        .background(scheduleAccentColor.opacity(0.12))
+                        .foregroundColor(scheduleAccentColor)
+                        .cornerRadius(10)
+                }
+                .buttonStyle(PlainButtonStyle())
             }
         }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(scheduleAccentColor.opacity(0.06))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(scheduleAccentColor.opacity(0.25), lineWidth: 1)
+        )
+        .transition(.opacity)
+    }
+
+    private func convertToLocalTime() {
+        guard let plan = currentPlan,
+              let zone = destinationTimeZone,
+              let userId = authVM.userId else { return }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            viewModel.update(plan.withScheduleTimes(keptIn: zone), userId: userId)
+        }
+        showToast("現地時間にそろえました")
+    }
+
+    /// 起きる順に並べる。時間帯が違う予定が混ざっていても、実際の順になる
+    private func sortedScheduleItems(_ items: [ScheduleItem]) -> [ScheduleItem] {
+        items.sorted(by: ScheduleItem.chronologically)
     }
 
     private func formatBudgetAmount(plan: TravelPlan) -> String {
@@ -1578,29 +1663,6 @@ struct TravelPlanDetailView: View {
         return formatter.string(from: date)
     }
 
-    private func openInAppleMaps(name: String, latitude: Double, longitude: Double) {
-        let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-        let placemark = MKPlacemark(coordinate: coordinate)
-        let mapItem = MKMapItem(placemark: placemark)
-        mapItem.name = name
-        mapItem.openInMaps(launchOptions: [
-            MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
-        ])
-    }
-
-    private func openInGoogleMaps(latitude: Double, longitude: Double) {
-        let urlString = "comgooglemaps://?daddr=\(latitude),\(longitude)&directionsmode=driving"
-        if let url = URL(string: urlString) {
-            UIApplication.shared.open(url)
-        }
-    }
-
-    private func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter.japanese
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: date)
-    }
-
     private func dateRangeString(plan: TravelPlan) -> String {
         let formatter = DateFormatter.japanese
         formatter.dateFormat = "M/d"
@@ -1610,12 +1672,6 @@ struct TravelPlanDetailView: View {
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter.japanese
         formatter.dateFormat = "M月d日"
-        return formatter.string(from: date)
-    }
-
-    private func formatDateTime(_ date: Date) -> String {
-        let formatter = DateFormatter.japanese
-        formatter.dateFormat = "M/d HH:mm"
         return formatter.string(from: date)
     }
 

@@ -43,8 +43,18 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
     /// 省略可能なので、この項目を持たない古いデータもそのまま読める
     var reservationId: String?
 
+    /// `time` の時:分を、どこの時計で読むか（"Europe/Paris" など）。
+    ///
+    /// 端末の時計で読んでいたため、日本で「パリ 15:00」と入れた予定が
+    /// パリに着くと 8:00 と出ていた。入れたときの時間帯を覚えておき、
+    /// 端末がどこにあっても入れたとおりに出す。
+    /// 無い予定（2.7 より前に入れたもの）は日本時間とみなす（`ScheduleClock.legacyTimeZone`）。
+    ///
+    /// JSON の中の項目なので、CloudKit のスキーマ変更は要らない
+    var timeZoneIdentifier: String?
+
     enum CodingKeys: String, CodingKey {
-        case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId
+        case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId, timeZoneIdentifier
     }
 
     /// 書き出しや共有カードに出す金額。
@@ -73,7 +83,8 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
          actualCost: Double? = nil,
          mapURL: String? = nil,
          linkURL: String? = nil,
-         reservationId: String? = nil) {
+         reservationId: String? = nil,
+         timeZoneIdentifier: String? = nil) {
         self.id = id
         self.time = time
         self.title = title
@@ -86,5 +97,6 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
         self.mapURL = mapURL
         self.linkURL = linkURL
         self.reservationId = reservationId
+        self.timeZoneIdentifier = timeZoneIdentifier
     }
 }

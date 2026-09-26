@@ -57,6 +57,7 @@ struct TravelPlanMapView: View {
     @State private var scope: Scope
     @State private var selectedGroupID: String?
     @State private var cameraPosition: MapCameraPosition
+    @State private var navigationTarget: MapDestination?
 
     /// 実際に使う絞り込み。行程表と並べているときは向こうの日に従う
     private var effectiveScope: Scope {
@@ -257,6 +258,7 @@ struct TravelPlanMapView: View {
             selectedGroupID = nil
             fitCameraToPins(animated: true)
         }
+        .mapNavigation($navigationTarget)
     }
 
     // MARK: - Map Layer
@@ -539,40 +541,21 @@ struct TravelPlanMapView: View {
                     .padding(.top, 12)
             }
 
-            HStack(spacing: 10) {
-                Button(action: {
-                    openInAppleMaps(
-                        name: group.displayTitle,
-                        latitude: group.coordinate.latitude,
-                        longitude: group.coordinate.longitude
-                    )
-                }) {
-                    Label("経路案内", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(primaryColor)
-                        .foregroundStyle(.white)
-                        .cornerRadius(12)
-                }
-                .buttonStyle(PlainButtonStyle())
-
-                Button(action: {
-                    openInGoogleMaps(
-                        latitude: group.coordinate.latitude,
-                        longitude: group.coordinate.longitude
-                    )
-                }) {
-                    Label("Google", systemImage: "globe")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(primaryColor.opacity(0.12))
-                        .foregroundStyle(primaryColor)
-                        .cornerRadius(12)
-                }
-                .buttonStyle(PlainButtonStyle())
+            // 開くアプリはプロフィールの「経路案内のアプリ」に従う。
+            // 以前は Apple マップと Google の2つを並べていたが、Google は
+            // アプリが入っていないと押しても何も起きなかった
+            Button(action: {
+                navigationTarget = MapDestination(name: group.displayTitle, coordinate: group.coordinate)
+            }) {
+                Label("経路案内", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(primaryColor)
+                    .foregroundStyle(.white)
+                    .cornerRadius(12)
             }
+            .buttonStyle(PlainButtonStyle())
             .padding(.horizontal, 20)
             .padding(.top, 14)
             .padding(.bottom, 20)
@@ -653,7 +636,7 @@ struct TravelPlanMapView: View {
                             .background(color.opacity(0.14), in: Capsule())
                     }
 
-                    Text(DateFormatter.japaneseTime.string(from: item.time))
+                    Text(item.timeText)
                         .font(.caption.weight(.semibold))
                         .foregroundColor(themeManager.currentTheme.secondaryText)
 
@@ -754,18 +737,9 @@ struct TravelPlanMapView: View {
         return "\(latitude),\(longitude)"
     }
 
-    /// 日付部分を無視して時刻だけで並べる（詳細画面のタイムラインと同じ順序）
+    /// 起きる順に並べる（詳細画面のタイムラインと同じ順序）
     private func sortedByTime(_ items: [ScheduleItem]) -> [ScheduleItem] {
-        let calendar = Calendar.current
-
-        return items.sorted { item1, item2 in
-            let components1 = calendar.dateComponents([.hour, .minute], from: item1.time)
-            let components2 = calendar.dateComponents([.hour, .minute], from: item2.time)
-
-            let minutes1 = (components1.hour ?? 0) * 60 + (components1.minute ?? 0)
-            let minutes2 = (components2.hour ?? 0) * 60 + (components2.minute ?? 0)
-            return minutes1 < minutes2
-        }
+        items.sorted(by: ScheduleItem.chronologically)
     }
 
     private func formatCost(_ cost: Double) -> String {
@@ -773,21 +747,5 @@ struct TravelPlanMapView: View {
         formatter.numberStyle = .decimal
         formatter.maximumFractionDigits = 0
         return "¥\(formatter.string(from: NSNumber(value: cost)) ?? "0")"
-    }
-
-    private func openInAppleMaps(name: String, latitude: Double, longitude: Double) {
-        let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-        let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
-        mapItem.name = name
-        mapItem.openInMaps(launchOptions: [
-            MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
-        ])
-    }
-
-    private func openInGoogleMaps(latitude: Double, longitude: Double) {
-        let urlString = "comgooglemaps://?daddr=\(latitude),\(longitude)&directionsmode=driving"
-        if let url = URL(string: urlString) {
-            UIApplication.shared.open(url)
-        }
     }
 }

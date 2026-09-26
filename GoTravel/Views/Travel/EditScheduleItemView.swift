@@ -3,6 +3,8 @@ import MapKit
 
 // タイムスケジュールの予定編集画面（AddScheduleItemViewと同じデザイン言語）
 struct EditScheduleItemView: View {
+    /// 経路案内の行き先。開くアプリはプロフィールの設定に従う（`mapNavigation`）
+    @State private var navigationTarget: MapDestination?
     // MARK: - Properties
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject var viewModel: TravelPlanViewModel
@@ -18,6 +20,10 @@ struct EditScheduleItemView: View {
     @State private var location: String
     @State private var notes: String
     @State private var time: Date
+    /// 時刻をどこの時計で読むか。入れたときのものを引き継ぐ
+    @State private var timeZone: TimeZone
+    /// 目的地の時間帯。日本と時差があるときだけ入る
+    @State private var destinationTimeZone: TimeZone?
     @State private var cost: String
     @State private var actualCost: String
     @State private var linkURL: String
@@ -53,6 +59,7 @@ struct EditScheduleItemView: View {
         _location = State(initialValue: item.location ?? "")
         _notes = State(initialValue: item.notes ?? "")
         _time = State(initialValue: item.time)
+        _timeZone = State(initialValue: item.timeZone)
         _cost = State(initialValue: item.cost != nil ? String(Int(item.cost!)) : "")
         _actualCost = State(initialValue: item.actualCost != nil ? String(Int(item.actualCost!)) : "")
         _linkURL = State(initialValue: item.linkURL ?? "")
@@ -223,22 +230,16 @@ struct EditScheduleItemView: View {
         sectionCard {
             VStack(alignment: .leading, spacing: 10) {
                 sectionLabel("時間", icon: "clock.fill")
-                HStack {
-                    Image(systemName: "clock")
-                        .foregroundColor(travelColor.opacity(0.8))
-                        .frame(width: 24)
-                    Text("時刻")
-                        .font(.subheadline)
-                        .foregroundColor(textColor)
-                    Spacer()
-                    DatePicker("", selection: $time, displayedComponents: .hourAndMinute)
-                        .colorMultiply(travelColor)
-                        .datePickerStyle(.compact)
-                        .labelsHidden()
-                }
-                .padding(14)
-                .background(fieldBg)
-                .cornerRadius(12)
+                ScheduleTimeField(
+                    time: $time,
+                    timeZone: $timeZone,
+                    destination: destinationTimeZone,
+                    tint: travelColor,
+                    textColor: textColor,
+                    secondaryText: themeManager.currentTheme.secondaryText,
+                    fieldBackground: fieldBg
+                )
+                .task { await resolveDestinationTimeZone() }
             }
         }
     }
@@ -495,6 +496,15 @@ struct EditScheduleItemView: View {
         presentationMode.wrappedValue.dismiss()
     }
 
+    /// 目的地が海外なら、現地時間・日本時間の切り替えを出す。
+    /// 予定がどちらの時計で入っているかは変えない
+    private func resolveDestinationTimeZone() async {
+        guard destinationTimeZone == nil,
+              let zone = await DestinationTimeZoneService.shared.timeZone(for: plan),
+              ScheduleClock.isForeign(zone, at: time) else { return }
+        destinationTimeZone = zone
+    }
+
     private func createUpdatedItem() -> ScheduleItem {
         let costValue = cost.isEmpty ? nil : Double(cost)
         let locationName = selectedLocation?.name ?? (location.isEmpty ? nil : location.trimmingCharacters(in: .whitespacesAndNewlines))
@@ -509,7 +519,11 @@ struct EditScheduleItemView: View {
             longitude: selectedCoordinate?.longitude,
             cost: costValue,
             actualCost: actualCost.isEmpty ? nil : Double(actualCost),
-            linkURL: linkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : linkURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            linkURL: linkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : linkURL.trimmingCharacters(in: .whitespacesAndNewlines),
+            // 予約から作った予定は、予約とのつながりを保つ。
+            // 以前はここで落としていたため、編集すると予約側のトグルや削除が効かなくなっていた
+            reservationId: item.reservationId,
+            timeZoneIdentifier: timeZone.identifier
         )
     }
 
@@ -942,7 +956,7 @@ struct EditScheduleItemView: View {
             }
 
             HStack(spacing: 10) {
-                Button { result.openInMaps() } label: {
+                Button { navigationTarget = MapDestination(result) } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.triangle.turn.up.right.diamond")
                         Text("経路")
@@ -954,6 +968,7 @@ struct EditScheduleItemView: View {
                     .foregroundColor(travelColor)
                     .cornerRadius(12)
                 }
+                .mapNavigation($navigationTarget)
                 Button {
                     selectedLocation = result
                     selectedCoordinate = result.placemark.coordinate

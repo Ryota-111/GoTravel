@@ -17,6 +17,8 @@ struct ReservationListView: View {
 
     @State private var editing: Reservation?
     @State private var copiedId: String?
+    /// 目的地の時間帯。時刻に「現地」「日本」を添えるのに使う
+    @State private var destinationTimeZone: TimeZone?
 
     private var currentPlan: TravelPlan {
         viewModel.travelPlans.first(where: { $0.id == plan.id }) ?? plan
@@ -44,10 +46,15 @@ struct ReservationListView: View {
     private var accent: Color { themeManager.currentTheme.actionFill }
 
     var body: some View {
-        if isEmbedded {
-            embeddedContent
-        } else {
-            standaloneContent
+        Group {
+            if isEmbedded {
+                embeddedContent
+            } else {
+                standaloneContent
+            }
+        }
+        .task(id: plan.id) {
+            destinationTimeZone = await DestinationTimeZoneService.shared.timeZone(for: plan)
         }
     }
 
@@ -173,7 +180,7 @@ struct ReservationListView: View {
                         .lineLimit(2)
 
                     if let date = reservation.date {
-                        Text(Self.dateFormatter.string(from: date))
+                        Text(timeText(date, zone: reservation.dateTimeZone, format: "M月d日(E) HH:mm"))
                             .font(.caption)
                             .foregroundColor(themeManager.currentTheme.secondaryText)
                     }
@@ -248,7 +255,8 @@ struct ReservationListView: View {
     /// 出発地 → 到着地。時刻が入っていればその下に添える
     private func routeRow(_ reservation: Reservation) -> some View {
         HStack(alignment: .top, spacing: 8) {
-            endpoint(place: reservation.departurePlace, time: reservation.date, alignment: .leading)
+            endpoint(place: reservation.departurePlace, time: reservation.date,
+                     zone: reservation.dateTimeZone, alignment: .leading)
 
             VStack(spacing: 2) {
                 Image(systemName: reservation.kind == .flight ? "airplane" : "arrow.right")
@@ -262,7 +270,8 @@ struct ReservationListView: View {
             }
             .padding(.top, 6)
 
-            endpoint(place: reservation.arrivalPlace, time: reservation.arrivalDate, alignment: .trailing)
+            endpoint(place: reservation.arrivalPlace, time: reservation.arrivalDate,
+                     zone: reservation.arrivalTimeZone, alignment: .trailing)
         }
         .padding(.vertical, 10)
         .padding(.horizontal, 12)
@@ -270,7 +279,7 @@ struct ReservationListView: View {
         .background(RoundedRectangle(cornerRadius: 10).fill(accent.opacity(0.06)))
     }
 
-    private func endpoint(place: String?, time: Date?, alignment: HorizontalAlignment) -> some View {
+    private func endpoint(place: String?, time: Date?, zone: TimeZone, alignment: HorizontalAlignment) -> some View {
         VStack(alignment: alignment, spacing: 2) {
             Text(place ?? "-")
                 .font(.system(size: 14, weight: .semibold))
@@ -279,11 +288,17 @@ struct ReservationListView: View {
                 .minimumScaleFactor(0.7)
 
             if let time {
-                Text(Self.timeFormatter.string(from: time))
+                Text(ScheduleClock.timeText(time, in: zone))
                     .font(.system(size: 17, weight: .bold, design: .rounded))
                     .foregroundColor(textColor)
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
+
+                if let label = ScheduleClock.zoneLabel(zone, at: time, destination: destinationTimeZone) {
+                    Text(label)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                }
             }
         }
         .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
@@ -360,17 +375,12 @@ struct ReservationListView: View {
         viewModel.update(updated, userId: userId)
     }
 
-    private static let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter.japanese
-        formatter.dateFormat = "M月d日(E) HH:mm"
-        return formatter
-    }()
-
-    private static let timeFormatter: DateFormatter = {
-        let formatter = DateFormatter.japanese
-        formatter.dateFormat = "HH:mm"
-        return formatter
-    }()
+    /// 予約の時計で整形し、見ている人の時計と違えば「（現地）」などを添える
+    private func timeText(_ date: Date, zone: TimeZone, format: String) -> String {
+        let text = ScheduleClock.text(date, format: format, in: zone)
+        guard let label = ScheduleClock.zoneLabel(zone, at: date, destination: destinationTimeZone) else { return text }
+        return "\(text)（\(label)）"
+    }
 }
 
 /// 便名・座席などの短い情報を並べる。

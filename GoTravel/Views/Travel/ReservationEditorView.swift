@@ -16,6 +16,11 @@ struct ReservationEditorView: View {
     @State private var date = Date()
     @State private var hasArrivalDate = false
     @State private var arrivalDate = Date()
+    /// 日時をどこの時計で入れるか。飛行機は出発と到着で違う
+    @State private var dateZone = ScheduleClock.legacyTimeZone
+    @State private var arrivalZone = ScheduleClock.legacyTimeZone
+    /// 目的地の時間帯。日本と時差があるときだけ入る
+    @State private var destinationTimeZone: TimeZone?
 
     @State private var showSchedulePicker = false
     /// 保存と同時に行程へも入れるか。
@@ -129,10 +134,13 @@ struct ReservationEditorView: View {
                     hasArrivalDate = true
                     arrivalDate = existing
                 }
+                dateZone = reservation.dateTimeZone
+                arrivalZone = reservation.arrivalTimeZone
                 // いま行程に出ているかどうかを、そのままトグルの状態にする。
                 // これをしないと、一度オンにしたものをオフに戻せない
                 addsToItinerary = plan?.hasScheduleItems(forReservation: reservation.id) ?? false
             }
+            .task { await resolveDestinationTimeZone() }
             .sheet(isPresented: $showSchedulePicker) {
                 if let plan {
                     ScheduleItemPickerView(plan: plan) { item, dayDate in
@@ -186,6 +194,8 @@ struct ReservationEditorView: View {
         var draft = reservation
         draft.date = (hasDate || reservation.kind.usesRoute) ? date : nil
         draft.arrivalDate = hasArrivalDate ? arrivalDate : nil
+        draft.timeZoneIdentifier = dateZone.identifier
+        draft.arrivalTimeZoneIdentifier = arrivalZone.identifier
         if draft.kind.usesRoute { draft.title = composedRouteTitle }
         return draft.itineraryItems()
     }
@@ -193,7 +203,7 @@ struct ReservationEditorView: View {
     /// 行程に置ける日か。旅行の期間から外れた日時だと置き場所が無い
     private var itineraryDayNumber: Int? {
         guard let plan, let first = itineraryPreview.first else { return nil }
-        return plan.dayNumber(forDate: first.time)
+        return plan.dayNumber(forDate: first.time, in: first.timeZone)
     }
 
     @ViewBuilder
@@ -254,17 +264,19 @@ struct ReservationEditorView: View {
         reservation.kind = Reservation.guessedKind(title: item.title, location: item.location)
 
         // 予定の時刻はその日のものとして扱う。
-        // 日付だけを日程側に合わせ、時刻は予定のものを使う
-        let calendar = Calendar.current
-        let day = calendar.dateComponents([.year, .month, .day], from: dayDate)
-        let time = calendar.dateComponents([.hour, .minute], from: item.time)
+        // 日付だけを日程側に合わせ、時刻は予定のものを使う。
+        // **時:分は予定の時計で読む。** 現地時間の予定を端末の時計で読むと、
+        // 取り込んだ予約の時刻が時差の分ずれる
+        let day = Calendar.current.dateComponents([.year, .month, .day], from: dayDate)
+        let time = ScheduleClock.calendar(in: item.timeZone).dateComponents([.hour, .minute], from: item.time)
         var merged = DateComponents()
         merged.year = day.year
         merged.month = day.month
         merged.day = day.day
         merged.hour = time.hour
         merged.minute = time.minute
-        date = calendar.date(from: merged) ?? item.time
+        date = ScheduleClock.calendar(in: item.timeZone).date(from: merged) ?? item.time
+        dateZone = item.timeZone
         hasDate = true
 
         // 飛行機・新幹線は場所を出発地として扱う。
@@ -353,9 +365,11 @@ struct ReservationEditorView: View {
                     .foregroundColor(textColor)
                 Spacer()
                 DatePicker("", selection: $date)
+                    .environment(\.timeZone, dateZone)
                     .datePickerStyle(.compact)
                     .labelsHidden()
             }
+            zoneChooser(time: $date, zone: $dateZone)
 
             Divider()
 
@@ -366,6 +380,7 @@ struct ReservationEditorView: View {
                         .foregroundColor(textColor)
                     Spacer()
                     DatePicker("", selection: $arrivalDate)
+                        .environment(\.timeZone, arrivalZone)
                         .datePickerStyle(.compact)
                         .labelsHidden()
                     Button {
@@ -377,6 +392,7 @@ struct ReservationEditorView: View {
                     .buttonStyle(.plain)
                     .accessibilityLabel("到着時刻を消す")
                 }
+                zoneChooser(time: $arrivalDate, zone: $arrivalZone)
             } else {
                 Button {
                     // だいたいの目安として2時間後から始める。そのまま使う人は少ないが、
@@ -401,6 +417,43 @@ struct ReservationEditorView: View {
 
     private var isFlight: Bool { reservation.kind == .flight }
 
+    // MARK: - どこの時計で入れるか
+
+    /// 海外の旅行でだけ、現地時間・日本時間の切り替えを出す
+    @ViewBuilder
+    private func zoneChooser(time: Binding<Date>, zone: Binding<TimeZone>) -> some View {
+        if let destinationTimeZone {
+            LocalTimeZoneChooser(
+                time: time,
+                timeZone: zone,
+                destination: destinationTimeZone,
+                secondaryText: themeManager.currentTheme.secondaryText,
+                showsDate: true
+            )
+        }
+    }
+
+    /// 目的地が海外なら切り替えを出し、新しい予約は現地の時計から始める。
+    ///
+    /// 飛行機・新幹線の出発だけは日本時間から始める。海外旅行で予約する便は
+    /// 日本を出る便が多く、帰りの便は切り替えれば済む。
+    /// 時:分は変えないので、開いた直後に入力欄の時刻が動いて見えることはない
+    private func resolveDestinationTimeZone() async {
+        guard destinationTimeZone == nil,
+              let plan,
+              let zone = await DestinationTimeZoneService.shared.timeZone(for: plan),
+              ScheduleClock.isForeign(zone, at: plan.startDate) else { return }
+        destinationTimeZone = zone
+
+        // 行程から取り込んだ直後なら、予定の時計を引き継いでいるので触らない
+        guard isNewReservation, !hasDate else { return }
+        let departureZone = reservation.kind.usesRoute ? ScheduleClock.legacyTimeZone : zone
+        date = ScheduleClock.keepingWallClock(date, from: dateZone, to: departureZone)
+        dateZone = departureZone
+        arrivalDate = ScheduleClock.keepingWallClock(arrivalDate, from: arrivalZone, to: zone)
+        arrivalZone = zone
+    }
+
     /// 任意項目は nil と空文字を行き来するので、まとめて扱えるようにする
     private func binding(_ keyPath: WritableKeyPath<Reservation, String?>) -> Binding<String> {
         Binding(
@@ -420,9 +473,11 @@ struct ReservationEditorView: View {
 
             if hasDate {
                 DatePicker("", selection: $date)
+                    .environment(\.timeZone, dateZone)
                     .datePickerStyle(.compact)
                     .labelsHidden()
                     .frame(maxWidth: .infinity, alignment: .leading)
+                zoneChooser(time: $date, zone: $dateZone)
             }
         }
         .padding(14)
@@ -491,6 +546,8 @@ struct ReservationEditorView: View {
         // 経路のある予約は時刻のトグルが無く、常に入力されている扱い
         edited.date = (hasDate || edited.kind.usesRoute) ? date : nil
         edited.arrivalDate = hasArrivalDate ? arrivalDate : nil
+        edited.timeZoneIdentifier = edited.date == nil ? nil : dateZone.identifier
+        edited.arrivalTimeZoneIdentifier = edited.arrivalDate == nil ? nil : arrivalZone.identifier
 
         // 種類を変えたときに、前の種類の入力が残らないようにする
         if !edited.kind.usesRoute {

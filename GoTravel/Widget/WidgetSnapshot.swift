@@ -17,8 +17,34 @@ struct WidgetSnapshot: Codable, Equatable {
         var title: String
         var subtitle: String?
 
+        /// 時刻を読む時計（"Europe/Paris" など）。旅行のスケジュールだけ入る。
+        ///
+        /// **入っているときは `time` が実際に起きる瞬間になっている**（アプリ側で組み立て済み）。
+        /// 端末の時計で時:分を読むと、海外に着いたとたんに予定の時刻がずれるため
+        var timeZoneIdentifier: String?
+        /// 旅行の何日の予定か（"2026-10-10"）。
+        ///
+        /// 日本の 0:00 という瞬間で持つと、パリでは前日の夕方になり、
+        /// 今日の予定が前の日に出てしまう。日付として持って、見ている場所の今日と比べる
+        var dayKey: String?
+
+        /// 表示する時刻。予定の時計で読む
+        var timeText: String? {
+            guard let time else { return nil }
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "ja_JP")
+            formatter.dateFormat = "HH:mm"
+            if let identifier = timeZoneIdentifier, let zone = TimeZone(identifier: identifier) {
+                formatter.timeZone = zone
+            }
+            return formatter.string(from: time)
+        }
+
         /// 日付と時刻を合成した実際の開始日時。ウィジェットの更新時刻の算出に使う
         var occursAt: Date? {
+            // アプリ側で瞬間まで組み立ててあるものは、そのまま使う
+            if timeZoneIdentifier != nil, let time { return time }
+
             guard let date else { return nil }
             guard let time else { return date }
 
@@ -74,6 +100,10 @@ struct WidgetSnapshot: Codable, Equatable {
     var travelDestination: String?
     var travelStartDate: Date?
     var travelEndDate: Date?
+    /// 旅行の初日と最終日（"2026-10-10"）。
+    /// 瞬間で比べると、海外では最終日が前の日に終わったことになる
+    var travelStartDayKey: String?
+    var travelEndDayKey: String?
 
     /// 旅行期間中の全日分のスケジュール。
     /// 当日分だけを持つと、アプリを起動しないまま日付をまたいだときに
@@ -92,7 +122,12 @@ struct WidgetSnapshot: Codable, Equatable {
 
     /// 旅行中かどうか。保存時の値を持つとアプリ未起動で切り替わらないため、
     /// 表示する時刻から毎回判定する
-    func isTravelOngoing(asOf now: Date) -> Bool {
+    /// - Parameter viewer: 見ている場所の時計。テストで差し替えるためのもの
+    func isTravelOngoing(asOf now: Date, viewer: TimeZone = .current) -> Bool {
+        if let startKey = travelStartDayKey, let endKey = travelEndDayKey {
+            let today = DayKey.string(for: now, in: viewer)
+            return startKey <= today && today <= endKey
+        }
         guard let start = travelStartDate, let end = travelEndDate else { return false }
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: now)
@@ -101,7 +136,8 @@ struct WidgetSnapshot: Codable, Equatable {
 
     /// 出発までの日数。旅行が無い、または進行中の場合は nil
     func daysUntilTravel(asOf now: Date) -> Int? {
-        guard !isTravelOngoing(asOf: now), let start = travelStartDate else { return nil }
+        guard !isTravelOngoing(asOf: now),
+              let start = travelStartDayKey.flatMap(DayKey.date(from:)) ?? travelStartDate else { return nil }
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: now)
         let startDay = calendar.startOfDay(for: start)
@@ -110,9 +146,11 @@ struct WidgetSnapshot: Codable, Equatable {
     }
 
     /// 指定時刻の日にあたる旅行スケジュール
-    func travelItems(on date: Date) -> [Item] {
+    func travelItems(on date: Date, viewer: TimeZone = .current) -> [Item] {
         let calendar = Calendar.current
+        let today = DayKey.string(for: date, in: viewer)
         return travelScheduleItems.filter { item in
+            if let dayKey = item.dayKey { return dayKey == today }
             guard let itemDate = item.date else { return false }
             return calendar.isDate(itemDate, inSameDayAs: date)
         }
@@ -153,7 +191,7 @@ struct WidgetSnapshot: Codable, Equatable {
         if isTravelOngoing(asOf: now) { return true }
 
         let calendar = Calendar.current
-        switch (travelStartDate, upcomingPlans.first?.date) {
+        switch (travelStartDayKey.flatMap(DayKey.date(from:)) ?? travelStartDate, upcomingPlans.first?.date) {
         case (nil, _):
             return false
         case (_, nil):
@@ -161,6 +199,30 @@ struct WidgetSnapshot: Codable, Equatable {
         case let (travelStart?, planDate?):
             return calendar.startOfDay(for: travelStart) <= calendar.startOfDay(for: planDate)
         }
+    }
+}
+
+// MARK: - 日付の文字列
+
+/// 「何月何日か」を、時間帯に左右されない形で受け渡す（"2026-10-10"）
+enum DayKey {
+    private static func formatter(_ timeZone: TimeZone) -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = timeZone
+        formatter.dateFormat = "yyyy-MM-dd"
+        return formatter
+    }
+
+    /// その時計で見た日付。既定は見ている場所の時計
+    static func string(for date: Date, in timeZone: TimeZone = .current) -> String {
+        formatter(timeZone).string(from: date)
+    }
+
+    /// 見ている場所の、その日の 0:00
+    static func date(from key: String) -> Date? {
+        formatter(.current).date(from: key)
     }
 }
 

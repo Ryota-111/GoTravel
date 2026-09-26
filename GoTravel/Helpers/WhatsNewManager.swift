@@ -74,6 +74,21 @@ struct WhatsNew: Identifiable {
 
     private static let all: [WhatsNew] = [
         WhatsNew(
+            version: "2.7",
+            items: [
+                Item(
+                    icon: "person.2.badge.gearshape.fill",
+                    title: "共有した計画の変更が届くようになりました",
+                    detail: "共有した旅行計画に後から予定を足しても、相手には最初の内容のまま表示されることがありました。同行者が自分の持ち物にチェックを入れただけで、古い内容で上書きされてしまっていたためです。お互いの変更が消えずに届くように直しました。ご報告をいただいて修正しました。"
+                ),
+                Item(
+                    icon: "arrow.triangle.2.circlepath",
+                    title: "共有の内容が自動で最新になります",
+                    detail: "アプリを開き直したときや、旅行計画を開いたときに、同行者の変更を自動で取り込みます。旅行計画の画面には最後に更新した時刻と更新ボタンがあり、いつでも最新の内容にできます。"
+                )
+            ]
+        ),
+        WhatsNew(
             version: "2.6",
             items: [
                 Item(

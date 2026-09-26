@@ -63,6 +63,8 @@ class LocationManager: NSObject, ObservableObject, CLLocationManagerDelegate {
 }
 
 struct MapHomeView: View {
+    /// 経路案内の行き先。開くアプリはプロフィールの設定に従う（`mapNavigation`）
+    @State private var navigationTarget: MapDestination?
     @EnvironmentObject var auth: AuthViewModel
     @StateObject private var vm = PlacesViewModel()
     @StateObject private var locationManager = LocationManager()
@@ -311,7 +313,7 @@ struct MapHomeView: View {
                 // アクションボタン
                 HStack(spacing: 10) {
                     Button {
-                        result.openInMaps()
+                        navigationTarget = MapDestination(result)
                     } label: {
                         Label("経路", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
                             .font(.subheadline.weight(.medium))
@@ -321,6 +323,7 @@ struct MapHomeView: View {
                             .foregroundStyle(themeManager.currentTheme.xprimary)
                             .cornerRadius(14)
                     }
+                    .mapNavigation($navigationTarget)
 
                     Button {
                         showingSaveSheet = true

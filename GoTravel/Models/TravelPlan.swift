@@ -373,10 +373,24 @@ struct TravelPlan: Identifiable, Codable {
     /// その日付が旅行の何日目か。範囲外なら nil。
     /// 予約の日時から、行程のどの日に置くかを決めるのに使う
     func dayNumber(forDate date: Date) -> Int? {
-        let calendar = Calendar.current
-        let start = calendar.startOfDay(for: startDate)
-        let target = calendar.startOfDay(for: date)
-        guard let diff = calendar.dateComponents([.day], from: start, to: target).day else { return nil }
+        dayNumber(forDate: date, in: .current)
+    }
+
+    /// その時計で見たときに、旅行の何日目か。範囲外なら nil。
+    ///
+    /// パリの 23:00 は日本では翌朝なので、どの時計で日付を読むかで何日目かが変わる。
+    /// 予約や予定は、それぞれの時計で読んだ日付で置く
+    func dayNumber(forDate date: Date, in timeZone: TimeZone) -> Int? {
+        // 旅行の初日は日本で入れたものとして日付を読む（予定の時刻と同じ考え方）。
+        // 端末の暦で読むと、海外にいるときだけ初日が前の日にずれることがある
+        let startDay = ScheduleClock.calendar(in: ScheduleClock.legacyTimeZone)
+            .dateComponents([.year, .month, .day], from: startDate)
+        let targetDay = ScheduleClock.calendar(in: timeZone).dateComponents([.year, .month, .day], from: date)
+
+        let utc = ScheduleClock.calendar(in: TimeZone(identifier: "UTC")!)
+        guard let start = utc.date(from: startDay),
+              let target = utc.date(from: targetDay),
+              let diff = utc.dateComponents([.day], from: start, to: target).day else { return nil }
         let number = diff + 1
         return (1...dayCount).contains(number) ? number : nil
     }
@@ -425,7 +439,7 @@ struct TravelPlan: Identifiable, Codable {
         guard isOn else { return }
 
         for item in reservation.itineraryItems() {
-            if let dayNumber = dayNumber(forDate: item.time) {
+            if let dayNumber = dayNumber(forDate: item.time, in: item.timeZone) {
                 addScheduleItem(item, onDay: dayNumber)
             }
         }

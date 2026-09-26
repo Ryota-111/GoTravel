@@ -45,7 +45,7 @@ struct SaveAsVisitedFromScheduleView: View {
                         Text("予定時刻")
                             .foregroundColor(.secondary)
                         Spacer()
-                        Text(formatTime(scheduleItem.time))
+                        Text(scheduleItem.timeText)
                     }
                 }
 
@@ -99,12 +99,6 @@ struct SaveAsVisitedFromScheduleView: View {
         .navigationViewStyle(.stack)
     }
 
-    private func formatTime(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.dateStyle = .none
-        formatter.timeStyle = .short
-        return formatter.string(from: date)
-    }
 
     private func saveVisitedPlace() {
         guard let userId = authVM.userId else { return }

@@ -67,7 +67,7 @@ struct ScheduleItemPickerView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundColor(themeManager.currentTheme.secondaryText)
 
-            ForEach(day.scheduleItems.sorted { $0.time < $1.time }) { item in
+            ForEach(day.scheduleItems.sorted(by: ScheduleItem.chronologically)) { item in
                 row(item: item, dayDate: plan.date(forDay: day.dayNumber))
             }
         }
@@ -75,7 +75,7 @@ struct ScheduleItemPickerView: View {
 
     private func row(item: ScheduleItem, dayDate: Date) -> some View {
         HStack(spacing: 12) {
-            Text(timeLabel(item.time))
+            Text(item.timeText)
                 .font(.system(size: 13, weight: .bold, design: .rounded))
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
@@ -147,9 +147,4 @@ struct ScheduleItemPickerView: View {
         return formatter.string(from: date)
     }
 
-    private func timeLabel(_ date: Date) -> String {
-        let formatter = DateFormatter.japanese
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: date)
-    }
 }

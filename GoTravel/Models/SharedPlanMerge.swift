@@ -210,7 +210,7 @@ enum SharedPlanMerge {
         // 予定の無い日も残す。日タブは日数から作るので消しても表示は崩れないが、
         // 保存されている形が変わると差分の比較が毎回ずれる
         for index in days.indices {
-            days[index].scheduleItems.sort { $0.time < $1.time }
+            days[index].scheduleItems.sort(by: ScheduleItem.chronologically)
         }
         return days.sorted { $0.dayNumber < $1.dayNumber }
     }

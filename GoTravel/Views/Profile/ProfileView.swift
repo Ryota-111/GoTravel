@@ -10,6 +10,8 @@ struct ProfileView: View {
     @Environment(\.colorScheme) var colorScheme
     @State private var animateCards = false
     @State private var showJoinPlan = false
+    /// カードの副題を、設定画面から戻ったときに書き換えるため
+    @AppStorage(MapNavigator.preferenceKey) private var mapAppPreference: String = MapApp.ask.rawValue
     @EnvironmentObject var travelPlanViewModel: TravelPlanViewModel
 
     var body: some View {
@@ -35,6 +37,8 @@ struct ProfileView: View {
                         appsettingCard
 
                         reminderDefaultsCard
+
+                        mapAppCard
 
                         helpSupportCard
 
@@ -309,6 +313,22 @@ struct ProfileView: View {
         .scaleEffect(animateCards ? 1 : 0.8)
         .offset(y: animateCards ? 0 : 30)
         .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.30), value: animateCards)
+    }
+
+    private var mapAppCard: some View {
+        NavigationLink(destination: MapAppSettingView()) {
+            GlassMenuCard(
+                icon: "arrow.triangle.turn.up.right.diamond.fill",
+                title: "経路案内のアプリ",
+                subtitle: (MapApp(rawValue: mapAppPreference) ?? .ask).displayName,
+                gradientColors: [Color.teal, Color.blue.opacity(0.8)]
+            )
+        }
+        .buttonStyle(CardButtonStyle())
+        .opacity(animateCards ? 1 : 0)
+        .scaleEffect(animateCards ? 1 : 0.8)
+        .offset(y: animateCards ? 0 : 30)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.35), value: animateCards)
     }
 
     // MARK: - Pro Card

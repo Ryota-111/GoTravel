@@ -2,6 +2,8 @@ import SwiftUI
 import MapKit
 
 struct AddScheduleItemView: View {
+    /// 経路案内の行き先。開くアプリはプロフィールの設定に従う（`mapNavigation`）
+    @State private var navigationTarget: MapDestination?
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject var viewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
@@ -13,6 +15,10 @@ struct AddScheduleItemView: View {
 
     @State private var title = ""
     @State private var time = Date()
+    /// 時刻をどこの時計で入れるか。海外の旅行では現地の時計から始める
+    @State private var timeZone: TimeZone = .current
+    /// 目的地の時間帯。日本と時差があるときだけ入る
+    @State private var destinationTimeZone: TimeZone?
     @State private var cost = ""
     @State private var notes = ""
     @State private var linkURL = ""
@@ -192,22 +198,16 @@ struct AddScheduleItemView: View {
         sectionCard {
             VStack(alignment: .leading, spacing: 10) {
                 sectionLabel("時間", icon: "clock.fill")
-                HStack {
-                    Image(systemName: "clock")
-                        .foregroundColor(travelColor.opacity(0.8))
-                        .frame(width: 24)
-                    Text("時刻")
-                        .font(.subheadline)
-                        .foregroundColor(textColor)
-                    Spacer()
-                    DatePicker("", selection: $time, displayedComponents: .hourAndMinute)
-                        .colorMultiply(travelColor)
-                        .datePickerStyle(.compact)
-                        .labelsHidden()
-                }
-                .padding(14)
-                .background(fieldBg)
-                .cornerRadius(12)
+                ScheduleTimeField(
+                    time: $time,
+                    timeZone: $timeZone,
+                    destination: destinationTimeZone,
+                    tint: travelColor,
+                    textColor: textColor,
+                    secondaryText: themeManager.currentTheme.secondaryText,
+                    fieldBackground: fieldBg
+                )
+                .task { await resolveDestinationTimeZone() }
             }
         }
     }
@@ -410,6 +410,17 @@ struct AddScheduleItemView: View {
         return formatter.string(from: dayDate)
     }
 
+    /// 目的地が海外なら、現地の時計で入れ始める。
+    /// 時:分は変えないので、開いた直後に入力欄の時刻が動いて見えることはない
+    private func resolveDestinationTimeZone() async {
+        guard destinationTimeZone == nil,
+              let zone = await DestinationTimeZoneService.shared.timeZone(for: plan),
+              ScheduleClock.isForeign(zone, at: dayDate) else { return }
+        destinationTimeZone = zone
+        time = ScheduleClock.keepingWallClock(time, from: timeZone, to: zone)
+        timeZone = zone
+    }
+
     // MARK: - Add Action（即時保存）
     private func addScheduleItem() {
         guard let userId = authVM.userId else { return }
@@ -425,7 +436,8 @@ struct AddScheduleItemView: View {
             latitude: selectedCoordinate?.latitude,
             longitude: selectedCoordinate?.longitude,
             cost: cost.isEmpty ? nil : Double(cost),
-            linkURL: linkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : linkURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            linkURL: linkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : linkURL.trimmingCharacters(in: .whitespacesAndNewlines),
+            timeZoneIdentifier: timeZone.identifier
         )
 
         var updatedPlan = basePlan
@@ -831,7 +843,7 @@ struct AddScheduleItemView: View {
             }
 
             HStack(spacing: 10) {
-                Button { result.openInMaps() } label: {
+                Button { navigationTarget = MapDestination(result) } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.triangle.turn.up.right.diamond")
                         Text("経路")
@@ -843,6 +855,7 @@ struct AddScheduleItemView: View {
                     .foregroundColor(travelColor)
                     .cornerRadius(12)
                 }
+                .mapNavigation($navigationTarget)
                 Button {
                     selectedLocation = result
                     selectedCoordinate = result.placemark.coordinate
