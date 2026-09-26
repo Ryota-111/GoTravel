@@ -27,8 +27,24 @@ import SwiftUI
 /// 時刻が「たった今更新」に変わることが、そのまま答えになっているため。
 ///
 /// **共有していない計画では何も描かない。** 置く側に分岐は要らない。
+///
+/// ## 置き場所
+///
+/// 旅行計画の画面では**困ったとき（失敗・共有の解除）だけ**出す（`.problemsOnly`）。
+/// 開いたとき・アプリに戻ったとき・編集したあとに自動で取り込むので、
+/// 平常の「2人で共有中・3分前」を写真の下に出し続ける必要は無かった。
+/// 平常の様子と手動の更新は、共有画面の上部に置く（`.always`）。
+/// 旅行計画の画面では、共有ボタンの印と、引っぱって更新で足りる
 struct SharedPlanSyncBar: View {
     let plan: TravelPlan
+    var presentation: Presentation = .problemsOnly
+
+    enum Presentation {
+        /// 失敗したときと、共有が解除されたときだけ出す
+        case problemsOnly
+        /// 平常の様子も出し、更新ボタンを文字にする（共有画面）
+        case always
+    }
 
     @EnvironmentObject var viewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
@@ -42,8 +58,18 @@ struct SharedPlanSyncBar: View {
     private var planId: String { plan.id ?? "" }
     private var state: TravelPlanViewModel.SyncState? { viewModel.syncStates[planId] }
 
+    private var isVisible: Bool {
+        guard plan.isShared else { return false }
+        switch presentation {
+        case .always:
+            return true
+        case .problemsOnly:
+            return state == .failed || state == .unshared
+        }
+    }
+
     var body: some View {
-        if plan.isShared {
+        if isVisible {
             HStack(spacing: 6) {
                 Image(systemName: icon)
                     .font(.caption)
@@ -64,13 +90,7 @@ struct SharedPlanSyncBar: View {
             // 状態が移るたびに下の内容が上下する
             .frame(height: 24)
             .animation(.easeInOut(duration: 0.2), value: tint)
-            .task(id: planId) {
-                // 開いたときに一度だけそろえる。
-                // 以降はボタンを押したときだけにして、開くたびの通信を避ける
-                guard let userId = authVM.userId, state == nil else { return }
-                await viewModel.refreshSharedPlan(planId: planId, userId: userId)
-                flashResultIfUpdated()
-            }
+            // 開いたときの取り込みは、旅行計画の画面が受け持つ（この行は普段出ないため）
         }
     }
 
@@ -95,15 +115,22 @@ struct SharedPlanSyncBar: View {
             EmptyView()
 
         default:
-            Button(action: refresh) {
-                Image(systemName: "arrow.clockwise")
-                    .font(.system(size: 13, weight: .semibold))
+            if presentation == .always {
+                Button("今すぐ更新", action: refresh)
+                    .font(.caption.weight(.semibold))
                     .foregroundColor(ThemePreset.readableTint(theme.actionFill, on: theme.backgroundLight))
-                    .frame(width: 24, height: 24)
-                    .contentShape(Rectangle())
+                    .frame(height: 24)
+            } else {
+                Button(action: refresh) {
+                    Image(systemName: "arrow.clockwise")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(ThemePreset.readableTint(theme.actionFill, on: theme.backgroundLight))
+                        .frame(width: 24, height: 24)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("共有の内容を更新")
             }
-            .buttonStyle(.plain)
-            .accessibilityLabel("共有の内容を更新")
         }
     }
 

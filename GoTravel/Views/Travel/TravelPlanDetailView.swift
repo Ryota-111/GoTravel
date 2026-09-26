@@ -194,9 +194,8 @@ struct TravelPlanDetailView: View {
                     VStack(spacing: 0) {
                         planHeaderSection(plan: plan)
 
-                        // 共有中だけ、同期の様子と更新ボタンを出す。
-                        // 更新の手段がホームを引っぱることしか無く、
-                        // 共有した計画を見ている画面から更新できなかった
+                        // 共有の同期で困ったとき（失敗・解除）だけ出す。
+                        // 平常の様子と手動の更新は、共有ボタンから開く画面にある
                         SharedPlanSyncBar(plan: plan)
                             .environmentObject(viewModel)
                             .environmentObject(authVM)
@@ -245,6 +244,8 @@ struct TravelPlanDetailView: View {
                 // スワイプは ScrollView に付ける。内側の要素に付けると
                 // ScrollView に取り込まれて、ほとんど反応しなくなる
                 .simultaneousGesture(tabSwipeGesture)
+                // 引っぱって更新。共有中なら相手の変更を取り込み、天気も取り直す
+                .refreshable { await pullToRefresh() }
                 // anchor は割合で指定するので、枠の高さが要る
                 .onScrollGeometryChange(for: CGFloat.self) { geometry in
                     geometry.containerSize.height
@@ -395,6 +396,7 @@ struct TravelPlanDetailView: View {
             }
         }
         .task(id: currentPlan?.id) {
+            await refreshSharedPlanIfNeeded()
             await fillMissingDestinationCoordinate()
             if let plan = currentPlan {
                 destinationTimeZone = await DestinationTimeZoneService.shared.timeZone(for: plan)
@@ -825,7 +827,12 @@ struct TravelPlanDetailView: View {
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundColor(plan.isShared ? themeManager.currentTheme.success : .white)
                         }
+                        // 同期の様子は、写真の下の行ではなくここに小さく出す
+                        .overlay(alignment: .topTrailing) {
+                            shareSyncBadge(plan: plan)
+                        }
                     }
+                    .accessibilityLabel(shareButtonAccessibilityLabel(plan: plan))
                     Button(action: { showBasicInfoEditor = true }) {
                         ZStack {
                             Circle().fill(.ultraThinMaterial).frame(width: 40, height: 40)
@@ -1795,6 +1802,59 @@ struct TravelPlanDetailView: View {
     }
 
     // MARK: - Weather Fetching
+    // MARK: - 共有の同期
+
+    /// 開いたときに、共有の相手の変更を取り込む。
+    /// 以前は同期の行が受け持っていたが、行を普段出さなくしたのでここへ移した
+    private func refreshSharedPlanIfNeeded() async {
+        guard let plan = currentPlan, plan.isShared,
+              let planId = plan.id, let userId = authVM.userId else { return }
+        await viewModel.refreshSharedPlan(planId: planId, userId: userId)
+    }
+
+    private func syncState(of plan: TravelPlan) -> TravelPlanViewModel.SyncState? {
+        plan.id.flatMap { viewModel.syncStates[$0] }
+    }
+
+    /// 共有ボタンの右上の印。同期中はぐるぐる、失敗したら赤い点。平常は何も付けない
+    @ViewBuilder
+    private func shareSyncBadge(plan: TravelPlan) -> some View {
+        if plan.isShared {
+            switch syncState(of: plan) {
+            case .syncing:
+                ProgressView()
+                    .controlSize(.mini)
+                    .tint(.white)
+                    .frame(width: 16, height: 16)
+                    .background(Circle().fill(.black.opacity(0.35)))
+                    .offset(x: 3, y: -3)
+            case .failed:
+                Circle()
+                    .fill(themeManager.currentTheme.error)
+                    .frame(width: 11, height: 11)
+                    .overlay(Circle().stroke(.white, lineWidth: 1.5))
+                    .offset(x: 1, y: -1)
+            default:
+                EmptyView()
+            }
+        }
+    }
+
+    private func shareButtonAccessibilityLabel(plan: TravelPlan) -> String {
+        guard plan.isShared else { return "共有" }
+        switch syncState(of: plan) {
+        case .syncing: return "共有中。更新しています"
+        case .failed: return "共有中。更新できませんでした"
+        default: return "共有中"
+        }
+    }
+
+    /// 引っぱって更新。共有中なら相手の変更を取り込み、天気も取り直す
+    private func pullToRefresh() async {
+        await refreshSharedPlanIfNeeded()
+        fetchPlanWeather()
+    }
+
     /// 天気を取り直すきっかけ。目的地の座標か日程が変わったら変わる
     private var weatherRequestKey: String {
         guard let plan = currentPlan else { return "" }

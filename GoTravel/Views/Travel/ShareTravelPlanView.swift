@@ -42,6 +42,18 @@ struct ShareTravelPlanView: View {
 
                 ScrollView {
                     VStack(spacing: 25) {
+                        // 同期の様子と手動の更新。旅行計画の画面では困ったときしか出さないので、
+                        // 「いつ更新されたか」を確かめたい人はここを見る
+                        if currentPlan.isShared {
+                            SharedPlanSyncBar(plan: currentPlan, presentation: .always)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .fill(themeManager.currentTheme.secondaryText.opacity(0.08))
+                                )
+                        }
+
                         headerSection
 
                         if !shareCode.isEmpty {
