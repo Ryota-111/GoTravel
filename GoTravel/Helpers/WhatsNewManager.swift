@@ -74,6 +74,31 @@ struct WhatsNew: Identifiable {
 
     private static let all: [WhatsNew] = [
         WhatsNew(
+            version: "2.8",
+            items: [
+                Item(
+                    icon: "photo.stack.fill",
+                    title: "1つの県に何枚も写真を残せます",
+                    detail: "日本全国フォトマップで県を選ぶと、その県の写真が一覧で開きます。1つの県に30枚まで追加でき、地図に出す写真は「代表にする」で選べます。ご要望をいただいて追加しました。"
+                ),
+                Item(
+                    icon: "map.fill",
+                    title: "フォトマップをいくつも作れます",
+                    detail: "「家族旅行」「一人旅」のように、フォトマップを分けて作れるようになりました。アルバムの作成で種類に「フォトマップ」を選んでください。2つ目以降は Travory Pro に含まれます。ご要望をいただいて追加しました。"
+                ),
+                Item(
+                    icon: "checklist.checked",
+                    title: "フォトマップの写真をまとめて削除できます",
+                    detail: "県の写真の一覧で「選択」を押すと、いくつかの写真を選んでまとめて削除できます。"
+                ),
+                Item(
+                    icon: "icloud.fill",
+                    title: "フォトマップの登録がiCloudで引き継がれます",
+                    detail: "どの県にどの写真を登録したかを、iCloudで同期するようにしました。これまではアプリを入れ直すと、地図が空に戻ってしまうことがありました。写真そのものの保管は、これまでどおり Travory Pro に含まれます。"
+                )
+            ]
+        ),
+        WhatsNew(
             version: "2.7",
             items: [
                 Item(
