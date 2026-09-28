@@ -1,118 +1,73 @@
 import Foundation
 import UIKit
-import Combine
 import ImageIO
 
 // MARK: - Japan Photo Manager
-/// 日本全国フォトマップの写真は都道府県ごとに1枚だけ保持するため、
-/// アルバムの photoFileNames ではなくここで独自に管理している
-final class JapanPhotoManager: ObservableObject {
+/// 日本全国フォトマップの写真のファイルを扱う。
+///
+/// **どの県にどの写真があるかは、ここでは持たない。** フォトマップはアルバム（種類 `.japan`）で、
+/// 写真の並びはアルバムの `photoFileNames` にある（`docs/設計_フォトマップ.md`）。
+/// ここはファイルの読み書きと、iCloud への預け入れ（Pro）だけを受け持つ。
+///
+/// 2.7 までは県ごとに1枚で、写真のある県の一覧を `UserDefaults` に持っていた。
+/// その一覧は同期されず、入れ直すと地図が空に戻り得た。`legacyPrefectures` は
+/// 移し替えのためだけに残している
+final class JapanPhotoManager {
     static let shared = JapanPhotoManager()
 
-    /// 写真が登録されている都道府県。アルバムカードの枚数表示もこれを見る
-    @Published private(set) var savedPrefectures: [String] = []
-
     private let fileManager = FileManager.default
-    private let userDefaultsKey = "JapanPhotoPrefectures"
+    private let legacyPrefecturesKey = "JapanPhotoPrefectures"
 
     private let thumbnailMaxPixel: CGFloat = 400
     private let thumbnailCache = NSCache<NSString, UIImage>()
 
-    private init() {
-        savedPrefectures = getSavedPrefectures()
-    }
-
-    var photoCount: Int { savedPrefectures.count }
+    private init() {}
 
     private var photosDirectory: URL {
-        let paths = fileManager.urls(for: .documentDirectory, in: .userDomainMask)
-        let documentsDirectory = paths[0]
-        let photosDir = documentsDirectory.appendingPathComponent("JapanPhotos")
-
-        if !fileManager.fileExists(atPath: photosDir.path) {
-            try? fileManager.createDirectory(at: photosDir, withIntermediateDirectories: true)
-        }
-
-        return photosDir
+        PhotoFolder.japanPhotos.url()
     }
 
-    // MARK: - Save Photo
-    func savePhoto(_ image: UIImage, for prefecture: String) -> Bool {
-        let fileName = "\(prefecture).jpg"
-        let fileURL = photosDirectory.appendingPathComponent(fileName)
+    // MARK: - 書く・消す
 
-        guard let data = image.jpegData(compressionQuality: 0.8) else {
-            return false
-        }
+    /// 写真を保存して、ファイル名を返す。書けなければ nil
+    func store(_ image: UIImage, for prefecture: Prefecture) -> String? {
+        guard let data = image.storedPhotoData() else { return nil }
 
+        let fileName = PhotoMapFiles.newFileName(for: prefecture)
         do {
-            try data.write(to: fileURL)
-            // 書き込めてから預ける。Pro を持っていなければ何もしない
-            PhotoSyncService.shared.store(data: data, fileName: fileName, folder: .japanPhotos)
-            // 同じ都道府県を撮り直した場合に古いサムネイルが残らないようにする
-            thumbnailCache.removeObject(forKey: prefecture as NSString)
-            savePrefectureToList(prefecture)
-            return true
+            try data.write(to: photosDirectory.appendingPathComponent(fileName))
         } catch {
-            return false
-        }
-    }
-
-    // MARK: - Load Photo
-    func loadPhoto(for prefecture: String) -> UIImage? {
-        let fileName = "\(prefecture).jpg"
-        let fileURL = photosDirectory.appendingPathComponent(fileName)
-
-        // ファイルが無いときだけ、預けてあるものから書き戻す
-        PhotoSyncService.shared.restoreIfMissing(fileName: fileName, folder: .japanPhotos)
-
-        guard let data = try? Data(contentsOf: fileURL),
-              let image = UIImage(data: data) else {
             return nil
         }
-
-        return image
+        // 書き込めてから預ける。Pro を持っていなければ何もしない
+        PhotoSyncService.shared.store(data: data, fileName: fileName, folder: .japanPhotos)
+        return fileName
     }
 
-    // MARK: - Delete Photo
-    func deletePhoto(for prefecture: String) -> Bool {
-        let fileName = "\(prefecture).jpg"
-        let fileURL = photosDirectory.appendingPathComponent(fileName)
+    /// 写真のファイルを消す。ローカルに無くても預け先には在りうるので、必ず消しに行く
+    func removeFile(_ fileName: String) {
+        try? fileManager.removeItem(at: photosDirectory.appendingPathComponent(fileName))
+        PhotoSyncService.shared.remove(fileName: fileName, folder: .japanPhotos)
+        thumbnailCache.removeObject(forKey: fileName as NSString)
+    }
 
-        do {
-            try fileManager.removeItem(at: fileURL)
-            // ローカルに無くても預け先には在りうるので、必ず消しに行く
-            PhotoSyncService.shared.remove(fileName: fileName, folder: .japanPhotos)
-            removePrefectureFromList(prefecture)
-            return true
-        } catch {
-            return false
+    // MARK: - 読む
+
+    func loadImage(_ fileName: String) -> UIImage? {
+        // ファイルが無いときだけ、預けてあるものから書き戻す
+        PhotoSyncService.shared.restoreIfMissing(fileName: fileName, folder: .japanPhotos)
+        guard let data = try? Data(contentsOf: photosDirectory.appendingPathComponent(fileName)) else {
+            return nil
         }
+        return UIImage(data: data)
     }
 
-    // MARK: - Load All Photos
-    func loadAllPhotos() -> [String: UIImage] {
-        var photos: [String: UIImage] = [:]
-        let savedPrefectures = getSavedPrefectures()
-
-        for prefecture in savedPrefectures {
-            if let image = loadPhoto(for: prefecture) {
-                photos[prefecture] = image
-            }
-        }
-
-        return photos
-    }
-
-    // MARK: - Thumbnails
-
-    /// アルバムカードの表紙用。必要なサイズだけデコードしてキャッシュする
-    func thumbnail(for prefecture: String) -> UIImage? {
-        if let cached = thumbnailCache.object(forKey: prefecture as NSString) {
+    /// 一覧や地図用。必要なサイズだけデコードしてキャッシュする
+    func thumbnail(_ fileName: String) -> UIImage? {
+        if let cached = thumbnailCache.object(forKey: fileName as NSString) {
             return cached
         }
 
-        let fileName = "\(prefecture).jpg"
         let fileURL = photosDirectory.appendingPathComponent(fileName)
         PhotoSyncService.shared.restoreIfMissing(fileName: fileName, folder: .japanPhotos)
 
@@ -130,42 +85,19 @@ final class JapanPhotoManager: ObservableObject {
         }
 
         let image = UIImage(cgImage: cgImage)
-        thumbnailCache.setObject(image, forKey: prefecture as NSString)
+        thumbnailCache.setObject(image, forKey: fileName as NSString)
         return image
     }
 
-    /// 直近に登録された順にサムネイルを返す
-    func recentThumbnails(limit: Int = 4) -> [UIImage] {
-        Array(savedPrefectures.suffix(limit)).compactMap { thumbnail(for: $0) }
+    /// アルバムカードの表紙用。最近足した順
+    func recentThumbnails(in album: Album, limit: Int = 4) -> [UIImage] {
+        Array(album.photoFileNames.suffix(limit)).compactMap { thumbnail($0) }
     }
 
-    // MARK: - Prefecture List Management
-    private func savePrefectureToList(_ prefecture: String) {
-        var prefectures = getSavedPrefectures()
-        if !prefectures.contains(prefecture) {
-            prefectures.append(prefecture)
-            UserDefaults.standard.set(prefectures, forKey: userDefaultsKey)
-        }
-        publishPrefectures(prefectures)
-    }
+    // MARK: - 2.7 までのデータ
 
-    private func removePrefectureFromList(_ prefecture: String) {
-        var prefectures = getSavedPrefectures()
-        prefectures.removeAll { $0 == prefecture }
-        UserDefaults.standard.set(prefectures, forKey: userDefaultsKey)
-        thumbnailCache.removeObject(forKey: prefecture as NSString)
-        publishPrefectures(prefectures)
-    }
-
-    private func publishPrefectures(_ prefectures: [String]) {
-        if Thread.isMainThread {
-            savedPrefectures = prefectures
-        } else {
-            DispatchQueue.main.async { self.savedPrefectures = prefectures }
-        }
-    }
-
-    private func getSavedPrefectures() -> [String] {
-        return UserDefaults.standard.stringArray(forKey: userDefaultsKey) ?? []
+    /// 2.7 までの、写真のある県の一覧（`UserDefaults`）。移し替えのためだけに読む
+    var legacyPrefectures: [String] {
+        UserDefaults.standard.stringArray(forKey: legacyPrefecturesKey) ?? []
     }
 }

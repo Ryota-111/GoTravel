@@ -2,7 +2,9 @@ import SwiftUI
 import Combine
 
 struct JapanPhotoView: View {
-    @StateObject private var viewModel = JapanPhotoViewModel()
+    /// 開いているフォトマップ（種類 `.japan` のアルバム）。複数作れるので、どれを開くかを受け取る
+    let albumId: String
+    @StateObject private var viewModel: JapanPhotoViewModel
     @ObservedObject var themeManager = ThemeManager.shared
     @State private var selectedPrefecture: Prefecture?
     @State private var scale: CGFloat = 1.0
@@ -12,6 +14,11 @@ struct JapanPhotoView: View {
     @State private var animateCards = false
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dismiss) var dismiss
+
+    init(albumId: String) {
+        self.albumId = albumId
+        _viewModel = StateObject(wrappedValue: JapanPhotoViewModel(albumId: albumId))
+    }
 
     var body: some View {
         ZStack {
@@ -39,21 +46,9 @@ struct JapanPhotoView: View {
                 animateCards = true
             }
         }
+        // 県を押したら、その県の写真の一覧を開く（1つの県に複数枚置けるようにした）
         .sheet(item: $selectedPrefecture) { prefecture in
-            PrefecturePhotoEditorView(
-                prefecture: prefecture,
-                existingImage: viewModel.photos[prefecture],
-                onSave: { image in
-                    viewModel.savePhoto(for: prefecture, image: image)
-                    selectedPrefecture = nil
-                    // 地図が1県埋まるのは達成感のある場面
-                    ReviewRequestManager.shared.record(.prefectureAdded)
-                },
-                onDelete: {
-                    viewModel.deletePhoto(for: prefecture)
-                    selectedPrefecture = nil
-                }
-            )
+            PrefectureGalleryView(albumId: albumId, prefecture: prefecture)
         }
     }
 
@@ -97,9 +92,10 @@ struct JapanPhotoView: View {
             Spacer()
 
             VStack(spacing: 2) {
-                Text("日本全国フォトマップ")
+                Text(viewModel.title)
                     .font(.headline)
                     .foregroundColor(accentColor)
+                    .lineLimit(1)
                 Text("訪れた都道府県の思い出を記録")
                     .font(.caption)
                     .foregroundColor(themeManager.currentTheme.secondaryText)
@@ -120,19 +116,19 @@ struct JapanPhotoView: View {
             JapanStatCard(
                 icon: "photo.on.rectangle",
                 title: "登録済み",
-                value: "\(viewModel.photos.count)",
+                value: "\(viewModel.covers.count)",
                 color: themeManager.currentTheme.xprimary
             )
             JapanStatCard(
                 icon: "location.fill",
                 title: "残り",
-                value: "\(47 - viewModel.photos.count)",
+                value: "\(47 - viewModel.covers.count)",
                 color: themeManager.currentTheme.warning
             )
             JapanStatCard(
                 icon: "checkmark.seal.fill",
                 title: "達成率",
-                value: String(format: "%.0f%%", Double(viewModel.photos.count) / 47.0 * 100),
+                value: String(format: "%.0f%%", Double(viewModel.covers.count) / 47.0 * 100),
                 color: themeManager.currentTheme.info
             )
         }
@@ -239,7 +235,7 @@ struct JapanPhotoView: View {
         let prefSize = prefecture.mapSize
 
         return ZStack {
-            if let photo = viewModel.photos[prefecture] {
+            if let photo = viewModel.covers[prefecture] {
                 MaskedPrefectureImage(prefecture: prefecture, photo: photo, size: prefSize)
                     .contentShape(Rectangle().size(prefSize))
                     .onTapGesture { selectedPrefecture = prefecture }
@@ -292,8 +288,9 @@ struct JapanPhotoView: View {
                 ForEach(Array(Prefecture.allCases.enumerated()), id: \.element.id) { index, prefecture in
                     PrefectureGridCard(
                         prefecture: prefecture,
-                        hasPhoto: viewModel.photos[prefecture] != nil,
-                        photo: viewModel.photos[prefecture]
+                        hasPhoto: viewModel.covers[prefecture] != nil,
+                        photo: viewModel.covers[prefecture],
+                        photoCount: viewModel.photoCount(of: prefecture)
                     )
                     .onTapGesture { selectedPrefecture = prefecture }
                     .opacity(animateCards ? 1 : 0)
@@ -371,6 +368,8 @@ struct PrefectureGridCard: View {
     let prefecture: Prefecture
     let hasPhoto: Bool
     let photo: UIImage?
+    /// その県の写真の枚数。2枚以上なら添える
+    var photoCount: Int = 0
     @Environment(\.colorScheme) var colorScheme
     @ObservedObject var themeManager = ThemeManager.shared
 
@@ -407,11 +406,21 @@ struct PrefectureGridCard: View {
                     VStack {
                         HStack {
                             Spacer()
-                            Image(systemName: "checkmark.circle.fill")
-                                .font(.caption)
-                                .foregroundColor(themeManager.currentTheme.xprimary)
-                                .background(Circle().fill(Color.white).frame(width: 16, height: 16))
-                                .padding(5)
+                            if photoCount > 1 {
+                                Text("\(photoCount)枚")
+                                    .font(.system(size: 9, weight: .bold))
+                                    .foregroundColor(.white)
+                                    .padding(.horizontal, 5)
+                                    .padding(.vertical, 2)
+                                    .background(Capsule().fill(Color.black.opacity(0.55)))
+                                    .padding(5)
+                            } else {
+                                Image(systemName: "checkmark.circle.fill")
+                                    .font(.caption)
+                                    .foregroundColor(themeManager.currentTheme.xprimary)
+                                    .background(Circle().fill(Color.white).frame(width: 16, height: 16))
+                                    .padding(5)
+                            }
                         }
                         Spacer()
                     }
@@ -433,247 +442,233 @@ struct PrefectureGridCard: View {
     }
 }
 
-// MARK: - Prefecture Photo Editor View
-struct PrefecturePhotoEditorView: View {
+// MARK: - Prefecture Gallery View
+/// ある県の写真の一覧。先頭が代表で、地図の県の形に切り抜いて出すのはこれ。
+///
+/// 2.7 までは県ごとに1枚で、この画面は1枚を差し替えるだけだった。
+/// 「一つの県に何枚も写真を保存したい」という要望から、一覧にした
+struct PrefectureGalleryView: View {
+    let albumId: String
     let prefecture: Prefecture
-    /// 登録済みの写真。差し替え前でも現在の写真が見えるようにする
-    let existingImage: UIImage?
-    let onSave: (UIImage) -> Void
-    let onDelete: () -> Void
 
-    @State private var selectedImage: UIImage?
-    @State private var showImagePicker = false
-    @State private var showDeleteConfirm = false
-    @Environment(\.presentationMode) var presentationMode
-    @Environment(\.colorScheme) var colorScheme
+    @ObservedObject private var albumManager = AlbumManager.shared
     @ObservedObject var themeManager = ThemeManager.shared
+    @Environment(\.colorScheme) var colorScheme
+    @Environment(\.dismiss) private var dismiss
 
-    /// 選択中があればそれを、なければ登録済みの写真を表示する
-    private var displayedImage: UIImage? {
-        selectedImage ?? existingImage
+    @State private var showPicker = false
+    @State private var previewing: PreviewTarget?
+
+    private struct PreviewTarget: Identifiable {
+        let fileName: String
+        var id: String { fileName }
+    }
+
+    private var allFileNames: [String] {
+        albumManager.albums.first { $0.id == albumId }?.photoFileNames ?? []
+    }
+
+    private var fileNames: [String] {
+        PhotoMapFiles.photos(of: prefecture, in: allFileNames)
+    }
+
+    private var remaining: Int {
+        PhotoMapFiles.remainingSlots(for: prefecture, in: allFileNames)
     }
 
     private var accentColor: Color {
         colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
     }
 
-    private var cardBg: Color {
-        colorScheme == .dark
-            ? themeManager.currentTheme.secondaryBackgroundDark
-            : themeManager.currentTheme.backgroundLight
+    var body: some View {
+        NavigationStack {
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("\(fileNames.count) / \(PhotoMapFiles.maxPhotosPerPrefecture)枚。先頭の写真が地図に出ます")
+                        .font(.caption)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+
+                    // 未購入のときだけ出る
+                    DeviceOnlyPhotoNote()
+
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                        ForEach(Array(fileNames.enumerated()), id: \.element) { index, fileName in
+                            photoCell(fileName, isCover: index == 0)
+                        }
+                        addCell
+                    }
+                }
+                .padding(16)
+            }
+            .navigationTitle(prefecture.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("閉じる") { dismiss() }
+                        .foregroundColor(accentColor)
+                }
+            }
+        }
+        .sheet(isPresented: $showPicker) {
+            MultiPhotoPicker(selectionLimit: remaining) { images in
+                let wasEmpty = fileNames.isEmpty
+                let added = albumManager.addJapanPhotos(images, prefecture: prefecture, to: albumId)
+                // 地図が1県埋まるのは達成感のある場面
+                if wasEmpty && added > 0 {
+                    ReviewRequestManager.shared.record(.prefectureAdded)
+                }
+            }
+        }
+        .sheet(item: $previewing) { target in
+            PhotoMapPhotoPreview(
+                prefecture: prefecture,
+                fileName: target.fileName,
+                isCover: fileNames.first == target.fileName,
+                onMakeCover: { albumManager.makeJapanCover(target.fileName, in: albumId) },
+                onDelete: { albumManager.removeJapanPhoto(target.fileName, from: albumId) }
+            )
+        }
     }
+
+    private func photoCell(_ fileName: String, isCover: Bool) -> some View {
+        Button {
+            previewing = PreviewTarget(fileName: fileName)
+        } label: {
+            Color.clear
+                .aspectRatio(1, contentMode: .fit)
+                .overlay {
+                    if let image = JapanPhotoManager.shared.thumbnail(fileName) {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fill)
+                    } else {
+                        themeManager.currentTheme.xprimary.opacity(0.08)
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .overlay(alignment: .topLeading) {
+                    if isCover {
+                        Text("代表")
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 6)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(themeManager.currentTheme.xprimary))
+                            .padding(5)
+                    }
+                }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(isCover ? "代表の写真" : "写真")
+    }
+
+    private var addCell: some View {
+        Button {
+            showPicker = true
+        } label: {
+            RoundedRectangle(cornerRadius: 10)
+                .fill(themeManager.currentTheme.xprimary.opacity(0.08))
+                .aspectRatio(1, contentMode: .fit)
+                .overlay(
+                    VStack(spacing: 4) {
+                        Image(systemName: "photo.badge.plus")
+                            .font(.title3)
+                        Text(remaining > 0 ? "写真を追加" : "上限です")
+                            .font(.system(size: 11, weight: .semibold))
+                    }
+                    .foregroundColor(themeManager.currentTheme.xprimary.opacity(remaining > 0 ? 0.8 : 0.35))
+                )
+                .overlay(
+                    RoundedRectangle(cornerRadius: 10)
+                        .stroke(themeManager.currentTheme.xprimary.opacity(0.25),
+                                style: StrokeStyle(lineWidth: 1.2, dash: [6, 4]))
+                )
+        }
+        .buttonStyle(.plain)
+        .disabled(remaining == 0)
+    }
+}
+
+/// フォトマップの写真を大きく見る。代表にする・削除する
+struct PhotoMapPhotoPreview: View {
+    let prefecture: Prefecture
+    let fileName: String
+    let isCover: Bool
+    let onMakeCover: () -> Void
+    let onDelete: () -> Void
+
+    @ObservedObject var themeManager = ThemeManager.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var image: UIImage?
+    @State private var showDeleteConfirm = false
 
     var body: some View {
-        ZStack {
-            backgroundGradient
-
-            VStack(spacing: 0) {
-                headerBar
-
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 20) {
-                        prefectureHeaderSection
-                        imagePreviewSection
-                        actionButtonsSection
-                        Spacer(minLength: 40)
+        NavigationStack {
+            VStack(spacing: 16) {
+                Group {
+                    if let image {
+                        Image(uiImage: image)
+                            .resizable()
+                            .aspectRatio(contentMode: .fit)
+                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                    } else {
+                        ProgressView()
+                            .frame(maxWidth: .infinity, maxHeight: .infinity)
                     }
-                    .padding(.horizontal, 20)
-                    .padding(.top, 20)
-                    .padding(.bottom, 40)
+                }
+                .frame(maxHeight: .infinity)
+
+                if isCover {
+                    Label("地図に出ている写真です", systemImage: "map.fill")
+                        .font(.subheadline)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                } else {
+                    Button {
+                        onMakeCover()
+                        dismiss()
+                    } label: {
+                        Label("代表にする（地図に出す）", systemImage: "star.fill")
+                            .font(.headline)
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 14)
+                            .background(RoundedRectangle(cornerRadius: 14).fill(themeManager.currentTheme.xprimary))
+                            .foregroundColor(.white)
+                    }
+                    .buttonStyle(.plain)
+                }
+
+                Button(role: .destructive) {
+                    showDeleteConfirm = true
+                } label: {
+                    Label("写真を削除", systemImage: "trash")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 12)
+                        .foregroundColor(themeManager.currentTheme.error)
+                        .background(RoundedRectangle(cornerRadius: 14).fill(themeManager.currentTheme.error.opacity(0.1)))
+                }
+                .buttonStyle(.plain)
+            }
+            .padding(20)
+            .navigationTitle(prefecture.name)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("閉じる") { dismiss() }
                 }
             }
-        }
-        .sheet(isPresented: $showImagePicker) {
-            PhotoPicker { image in
-                selectedImage = image
-            }
-        }
-    }
-
-    private var backgroundGradient: some View {
-        let colors: [Color]
-        switch themeManager.currentTheme.type {
-        case .whiteBlack:
-            colors = [Color(white: 0.97), Color(white: 0.91)]
-        default:
-            colors = colorScheme == .dark
-                ? [themeManager.currentTheme.backgroundDark, themeManager.currentTheme.secondaryBackgroundDark]
-                : [themeManager.currentTheme.backgroundLight, themeManager.currentTheme.secondaryBackgroundLight]
-        }
-        return LinearGradient(gradient: Gradient(colors: colors), startPoint: .topLeading, endPoint: .bottomTrailing)
-            .ignoresSafeArea()
-    }
-
-    private var headerBar: some View {
-        HStack {
-            Button(action: { presentationMode.wrappedValue.dismiss() }) {
-                Image(systemName: "xmark")
-                    .foregroundColor(accentColor)
-                    .imageScale(.medium)
-                    .padding(8)
-                    .background(accentColor.opacity(0.1))
-                    .clipShape(Circle())
-            }
-            Spacer()
-            Text("写真を登録")
-                .font(.headline)
-                .foregroundColor(accentColor)
-            Spacer()
-            Color.clear.frame(width: 36, height: 36)
-        }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .background(themeManager.currentTheme.xprimary.opacity(0.08))
-    }
-
-    private var prefectureHeaderSection: some View {
-        VStack(spacing: 10) {
-            ZStack {
-                Circle()
-                    .fill(themeManager.currentTheme.xprimary.opacity(0.12))
-                    .frame(width: 68, height: 68)
-                Image(systemName: "location.fill")
-                    .font(.system(size: 28))
-                    .foregroundColor(themeManager.currentTheme.xprimary)
-            }
-            .shadow(color: themeManager.currentTheme.xprimary.opacity(0.3), radius: 8, x: 0, y: 4)
-
-            Text(prefecture.name)
-                .font(.title2.bold())
-                .foregroundColor(accentColor)
-
-            Text("思い出の写真を追加")
-                .font(.subheadline)
-                .foregroundColor(themeManager.currentTheme.secondaryText)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 8)
-    }
-
-    private var imagePreviewSection: some View {
-        Group {
-            if let image = displayedImage {
-                Image(uiImage: image)
-                    .resizable()
-                    .aspectRatio(contentMode: .fill)
-                    .frame(maxWidth: .infinity)
-                    .frame(height: 260)
-                    .clipShape(RoundedRectangle(cornerRadius: 16))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(themeManager.currentTheme.xprimary.opacity(0.4), lineWidth: 1.5)
-                    )
-                    .shadow(color: themeManager.currentTheme.shadow, radius: 8, x: 0, y: 4)
-            } else {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(cardBg)
-                    .frame(height: 260)
-                    .overlay(
-                        VStack(spacing: 14) {
-                            ZStack {
-                                Circle()
-                                    .fill(themeManager.currentTheme.xprimary.opacity(0.1))
-                                    .frame(width: 64, height: 64)
-                                Image(systemName: "photo.on.rectangle.angled")
-                                    .font(.system(size: 28))
-                                    .foregroundColor(themeManager.currentTheme.xprimary.opacity(0.5))
-                            }
-                            Text("写真を選択してください")
-                                .font(.subheadline)
-                                .foregroundColor(themeManager.currentTheme.secondaryText)
-                        }
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(
-                                themeManager.currentTheme.xprimary.opacity(0.2),
-                                style: StrokeStyle(lineWidth: 1.5, dash: [8, 5])
-                            )
-                    )
-                    .shadow(color: themeManager.currentTheme.shadow, radius: 4, x: 0, y: 2)
-            }
-        }
-    }
-
-    private var actionButtonsSection: some View {
-        VStack(spacing: 12) {
-            // 未購入のときだけ出る
-            DeviceOnlyPhotoNote()
-
-            Button(action: { showImagePicker = true }) {
-                HStack(spacing: 6) {
-                    Image(systemName: "photo.on.rectangle")
-                    Text(existingImage == nil ? "写真を選択" : "写真を変更")
+            .confirmationDialog("この写真を削除しますか？", isPresented: $showDeleteConfirm, titleVisibility: .visible) {
+                Button("削除", role: .destructive) {
+                    onDelete()
+                    dismiss()
                 }
-                .font(.headline.weight(.bold))
-                .foregroundColor(.white)
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(themeManager.currentTheme.xprimary)
-                        .shadow(color: themeManager.currentTheme.xprimary.opacity(0.4), radius: 8, x: 0, y: 4)
-                )
+                Button("キャンセル", role: .cancel) {}
+            } message: {
+                Text(isCover ? "代表の写真です。削除すると、次の写真が地図に出ます。元に戻せません。" : "削除した写真は元に戻せません")
             }
-            .buttonStyle(PlainButtonStyle())
-
-            if selectedImage != nil {
-                Button(action: {
-                    if let image = selectedImage {
-                        onSave(image)
-                    }
-                }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "checkmark.circle.fill")
-                        Text("保存する")
-                    }
-                    .font(.headline.weight(.bold))
-                    .foregroundColor(.white)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(themeManager.currentTheme.info)
-                            .shadow(color: themeManager.currentTheme.info.opacity(0.4), radius: 8, x: 0, y: 4)
-                    )
-                }
-                .buttonStyle(PlainButtonStyle())
-                .transition(.opacity.combined(with: .move(edge: .bottom)))
+            .task {
+                image = JapanPhotoManager.shared.loadImage(fileName)
             }
-
-            // 登録済みの写真を消す手段が無かったため追加
-            if existingImage != nil {
-                Button(action: { showDeleteConfirm = true }) {
-                    HStack(spacing: 6) {
-                        Image(systemName: "trash")
-                        Text("写真を削除")
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(themeManager.currentTheme.error)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 14)
-                    .background(
-                        RoundedRectangle(cornerRadius: 14)
-                            .fill(themeManager.currentTheme.error.opacity(0.1))
-                    )
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 14)
-                            .stroke(themeManager.currentTheme.error.opacity(0.3), lineWidth: 1)
-                    )
-                }
-                .buttonStyle(PlainButtonStyle())
-            }
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: selectedImage != nil)
-        .confirmationDialog(
-            "\(prefecture.name)の写真を削除しますか？",
-            isPresented: $showDeleteConfirm,
-            titleVisibility: .visible
-        ) {
-            Button("削除", role: .destructive) { onDelete() }
-            Button("キャンセル", role: .cancel) {}
-        } message: {
-            Text("削除した写真は元に戻せません")
         }
     }
 }
@@ -969,45 +964,46 @@ struct MaskedPrefectureImage: View {
 }
 
 // MARK: - ViewModel
-class JapanPhotoViewModel: ObservableObject {
-    @Published var photos: [Prefecture: UIImage] = [:]
-    private let photoManager = JapanPhotoManager.shared
+/// 開いているフォトマップの、県ごとの代表写真を持つ。
+/// アルバムの並びが変わったら（写真を足した・代表を変えた・別の端末から同期された）読み直す
+final class JapanPhotoViewModel: ObservableObject {
+    @Published private(set) var covers: [Prefecture: UIImage] = [:]
+    @Published private(set) var title: String = AlbumType.japan.title
+    private(set) var fileNames: [String] = []
 
-    init() {
-        loadAllPhotos()
+    private let albumId: String
+    private var cancellable: AnyCancellable?
+
+    init(albumId: String) {
+        self.albumId = albumId
+        cancellable = AlbumManager.shared.$albums
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] albums in
+                guard let self else { return }
+                self.apply(albums.first { $0.id == self.albumId })
+            }
     }
 
-    func savePhoto(for prefecture: Prefecture, image: UIImage) {
-        // Save to local storage
-        if photoManager.savePhoto(image, for: prefecture.rawValue) {
-            // Update in-memory photos
-            photos[prefecture] = image
-        } else {
-        }
+    func photoCount(of prefecture: Prefecture) -> Int {
+        PhotoMapFiles.photos(of: prefecture, in: fileNames).count
     }
 
-    func deletePhoto(for prefecture: Prefecture) {
-        // Delete from local storage
-        if photoManager.deletePhoto(for: prefecture.rawValue) {
-            // Update in-memory photos
-            photos.removeValue(forKey: prefecture)
-        } else {
-        }
-    }
+    private func apply(_ album: Album?) {
+        guard let album else { return }
+        title = album.title
+        guard album.photoFileNames != fileNames || covers.isEmpty else { return }
+        fileNames = album.photoFileNames
 
-    private func loadAllPhotos() {
-        // Load all photos from local storage
-        let savedPhotos = photoManager.loadAllPhotos()
-
-        for (prefectureRawValue, image) in savedPhotos {
-            if let prefecture = Prefecture.allCases.first(where: { $0.rawValue == prefectureRawValue }) {
-                photos[prefecture] = image
+        var result: [Prefecture: UIImage] = [:]
+        for (prefecture, files) in PhotoMapFiles.grouped(fileNames) {
+            if let cover = files.first, let image = JapanPhotoManager.shared.thumbnail(cover) {
+                result[prefecture] = image
             }
         }
-
+        covers = result
     }
 }
 
 #Preview {
-    JapanPhotoView()
+    JapanPhotoView(albumId: "preview")
 }

@@ -56,6 +56,7 @@ final class AlbumManager: NSObject, ObservableObject {
         migrateLegacyAlbumsIfNeeded(userId: userId)
         setupFetchedResultsController(userId: userId)
         initializeDefaultAlbums(userId: userId)
+        migrateJapanPhotosIfNeeded(userId: userId)
     }
 
     private func setupFetchedResultsController(userId: String) {
@@ -191,9 +192,7 @@ final class AlbumManager: NSObject, ObservableObject {
         // 既定アルバムは削除させない
         guard !album.isDefaultAlbum else { return }
 
-        for fileName in album.photoFileNames {
-            deletePhotoFile(fileName: fileName)
-        }
+        deleteFiles(of: album)
 
         if let entity = try? AlbumEntity.fetchById(id: album.id, context: context) {
             context.delete(entity)
@@ -209,9 +208,7 @@ final class AlbumManager: NSObject, ObservableObject {
         guard let entities = try? context.fetch(request) else { return }
 
         for entity in entities {
-            for fileName in entity.toAlbum().photoFileNames {
-                deletePhotoFile(fileName: fileName)
-            }
+            deleteFiles(of: entity.toAlbum())
             context.delete(entity)
         }
         CoreDataManager.shared.saveContext()
@@ -225,9 +222,7 @@ final class AlbumManager: NSObject, ObservableObject {
         guard let entities = try? context.fetch(request) else { return }
 
         for entity in entities {
-            for fileName in entity.toAlbum().photoFileNames {
-                deletePhotoFile(fileName: fileName)
-            }
+            deleteFiles(of: entity.toAlbum())
             context.delete(entity)
         }
         CoreDataManager.shared.saveContext()
@@ -371,6 +366,109 @@ final class AlbumManager: NSObject, ObservableObject {
 
     // 縮小は `UIImage.storedPhotoData()` に移した。
     // アルバム以外の写真（旅行のカバー・場所の写真）も同じ大きさで揃える
+
+    // MARK: - 日本全国フォトマップ
+    //
+    // フォトマップは種類 `.japan` のアルバム。写真の並びは `photoFileNames` にあり、
+    // ファイル名に県を含める（`PhotoMapFiles`）。ファイルは `JapanPhotoManager` が扱う。
+    // 詳しくは `docs/設計_フォトマップ.md`
+
+    /// フォトマップの写真を消すときは、`JapanPhotos` のほうのファイルを消す。
+    /// 普通のアルバムと同じ消し方をすると、別の場所を探して何も消えない
+    private func deleteFiles(of album: Album) {
+        for fileName in album.photoFileNames {
+            if album.isJapanPhotoMap {
+                JapanPhotoManager.shared.removeFile(fileName)
+            } else {
+                deletePhotoFile(fileName: fileName)
+            }
+        }
+    }
+
+    /// その県に写真を足す。県ごとの上限を超える分は足さない。
+    /// 戻り値は足せた枚数
+    @discardableResult
+    func addJapanPhotos(_ images: [UIImage], prefecture: Prefecture, to albumId: String) -> Int {
+        guard let album = albums.first(where: { $0.id == albumId }) ?? fetchAlbum(id: albumId) else { return 0 }
+
+        let room = PhotoMapFiles.remainingSlots(for: prefecture, in: album.photoFileNames)
+        let fileNames = images.prefix(room).compactMap {
+            JapanPhotoManager.shared.store($0, for: prefecture)
+        }
+        guard !fileNames.isEmpty else { return 0 }
+
+        mutateAlbum(id: albumId) { album in
+            album.photoFileNames.append(contentsOf: fileNames)
+        }
+        return fileNames.count
+    }
+
+    func removeJapanPhoto(_ fileName: String, from albumId: String) {
+        JapanPhotoManager.shared.removeFile(fileName)
+        mutateAlbum(id: albumId) { album in
+            album.photoFileNames.removeAll { $0 == fileName }
+        }
+    }
+
+    /// 地図に出す代表写真にする
+    func makeJapanCover(_ fileName: String, in albumId: String) {
+        mutateAlbum(id: albumId) { album in
+            album.photoFileNames = PhotoMapFiles.makingCover(fileName, in: album.photoFileNames)
+        }
+    }
+
+    /// 既定のフォトマップの、写真のある県の数（ウィジェット用）。
+    /// アルバムの画面を開いていなくても数えられるよう、Core Data から直接読む
+    func defaultPhotoMapPrefectureCount() -> Int {
+        var fileNames = fetchDefaultPhotoMap(userId: currentUserId)?.toAlbum().photoFileNames ?? []
+        // まだ移し替えていない（アルバムの画面を開いていない）あいだは、2.7 までの一覧も足して数える
+        if !UserDefaults.standard.bool(forKey: Self.japanPhotoMigrationKey) {
+            fileNames = PhotoMapFiles.mergingLegacy(prefectures: JapanPhotoManager.shared.legacyPrefectures,
+                                                    into: fileNames)
+        }
+        return PhotoMapFiles.prefectureCount(in: fileNames)
+    }
+
+    /// 移し替え済みの印。2.7 までの一覧は端末ごとの `UserDefaults` なので、印も端末に1つ
+    private static let japanPhotoMigrationKey = "JapanPhotoMapMigrated_v1"
+
+    private func fetchAlbum(id: String) -> Album? {
+        (try? AlbumEntity.fetchById(id: id, context: context))?.toAlbum()
+    }
+
+    private func fetchDefaultPhotoMap(userId: String?) -> AlbumEntity? {
+        let request: NSFetchRequest<AlbumEntity> = AlbumEntity.fetchRequest()
+        var format = "albumType == %@ AND isDefaultAlbum == YES"
+        var arguments: [Any] = [AlbumType.japan.rawValue]
+        if let userId {
+            format += " AND userId == %@"
+            arguments.append(userId)
+        }
+        request.predicate = NSPredicate(format: format, argumentArray: arguments)
+        request.fetchLimit = 1
+        return try? context.fetch(request).first
+    }
+
+    /// 2.7 までの県の一覧（`UserDefaults`）を、既定のフォトマップの並びに移す。1回だけ。
+    ///
+    /// ファイルは動かさない（`tokyo.jpg` のまま並びに入れる）。
+    /// 既定のフォトマップに写真が既にあれば足し合わせる（`PhotoMapFiles.mergingLegacy`）
+    private func migrateJapanPhotosIfNeeded(userId: String) {
+        let doneKey = Self.japanPhotoMigrationKey
+        guard !UserDefaults.standard.bool(forKey: doneKey) else { return }
+
+        let legacy = JapanPhotoManager.shared.legacyPrefectures
+        guard !legacy.isEmpty else {
+            UserDefaults.standard.set(true, forKey: doneKey)
+            return
+        }
+        guard let entity = fetchDefaultPhotoMap(userId: userId), let albumId = entity.id else { return }
+
+        mutateAlbum(id: albumId) { album in
+            album.photoFileNames = PhotoMapFiles.mergingLegacy(prefectures: legacy, into: album.photoFileNames)
+        }
+        UserDefaults.standard.set(true, forKey: doneKey)
+    }
 
     // MARK: - Default Albums
 
