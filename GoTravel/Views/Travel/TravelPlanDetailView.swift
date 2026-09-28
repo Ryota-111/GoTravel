@@ -122,6 +122,8 @@ struct TravelPlanDetailView: View {
     @State private var isSelectingItems = false
     @State private var selectedItemIDs: Set<String> = []
     @State private var showBulkItemDeleteConfirmation = false
+    /// 共有した旅行で、誰の時間軸を見ているか。nil なら全員
+    @State private var memberFilter: String?
     /// 出せなかった理由。文言とアイコンは種類ごとに変える
     @State private var planWeatherNote: WeatherNote?
     @State private var weatherAttribution: WeatherService.WeatherAttribution?
@@ -545,6 +547,14 @@ struct TravelPlanDetailView: View {
                     .font(.system(size: 16, weight: state == .now ? .bold : .semibold))
                     .foregroundColor(state == .past ? themeManager.currentTheme.secondaryText : accentColor)
 
+                // 全員の時間軸を見ているときだけ、全員のものでない予定に参加する人を添える
+                if memberFilter == nil, let label = participantLabel(item, plan: plan) {
+                    Label(label, systemImage: "person.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(scheduleAccentColor)
+                        .lineLimit(1)
+                }
+
                 if let location = item.location, !location.isEmpty {
                     HStack(spacing: 4) {
                         Image(systemName: "mappin.circle.fill")
@@ -673,6 +683,61 @@ struct TravelPlanDetailView: View {
         .padding(.horizontal, 4)
     }
 
+    // MARK: - メンバーごとの時間軸
+
+    private func participantLabel(_ item: ScheduleItem, plan: TravelPlan) -> String? {
+        SharedMembers.participantLabel(
+            of: item,
+            names: viewModel.memberNames(for: plan.id),
+            members: plan.sharedWith,
+            myUserId: authVM.userId
+        )
+    }
+
+    /// 「全員 / 自分 / 〇〇」。共有していて2人以上のときだけ出す
+    @ViewBuilder
+    private func memberFilterBar(plan: TravelPlan) -> some View {
+        if plan.isShared && plan.sharedWith.count >= 2 {
+            let names = viewModel.memberNames(for: plan.id)
+            let me = authVM.userId
+            // 自分を「全員」の次に置く。見る場面がいちばん多いため
+            let others = plan.sharedWith.filter { $0 != me }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    memberChip("全員", isSelected: memberFilter == nil) { memberFilter = nil }
+                    if let me, plan.sharedWith.contains(me) {
+                        memberChip("自分", isSelected: memberFilter == me) { memberFilter = me }
+                    }
+                    ForEach(others, id: \.self) { member in
+                        let name = SharedMembers.displayName(of: member, names: names,
+                                                             members: plan.sharedWith, myUserId: me)
+                        memberChip(name, isSelected: memberFilter == member) { memberFilter = member }
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+        }
+    }
+
+    private func memberChip(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                action()
+                selectedItemIDs = []
+            }
+        } label: {
+            Text(title)
+                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                .foregroundColor(isSelected ? .white : scheduleAccentColor)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(isSelected ? scheduleAccentColor : scheduleAccentColor.opacity(0.1)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
     // MARK: - まとめて削除
 
     private func toggleItemSelection(_ item: ScheduleItem) {
@@ -685,11 +750,11 @@ struct TravelPlanDetailView: View {
 
     /// 選んでいて、いま表示している日の予定
     private func selectedVisibleItems(plan: TravelPlan) -> [ScheduleItem] {
-        plan.timelineScheduleItems(onDay: selectedDay).filter { selectedItemIDs.contains($0.id) }
+        plan.timelineScheduleItems(onDay: selectedDay, for: memberFilter).filter { selectedItemIDs.contains($0.id) }
     }
 
     private func bulkItemActionBar(plan: TravelPlan) -> some View {
-        let items = plan.timelineScheduleItems(onDay: selectedDay)
+        let items = plan.timelineScheduleItems(onDay: selectedDay, for: memberFilter)
         let selectedCount = selectedVisibleItems(plan: plan).count
         let allSelected = !items.isEmpty && selectedCount == items.count
 
@@ -757,7 +822,7 @@ struct TravelPlanDetailView: View {
     /// 期間のある予約（宿・レンタカーなど）→ 固定した予定 の順
     private func dayPins(plan: TravelPlan) -> [DayPin] {
         plan.pinnedReservations(onDay: selectedDay).map(DayPin.reservation)
-            + plan.pinnedScheduleItems(onDay: selectedDay).map(DayPin.item)
+            + plan.pinnedScheduleItems(onDay: selectedDay, for: memberFilter).map(DayPin.item)
     }
 
     @ViewBuilder
@@ -1120,7 +1185,7 @@ struct TravelPlanDetailView: View {
                 Spacer()
 
                 // その日の予定があるときだけ出す
-                if !plan.timelineScheduleItems(onDay: selectedDay).isEmpty || isSelectingItems {
+                if !plan.timelineScheduleItems(onDay: selectedDay, for: memberFilter).isEmpty || isSelectingItems {
                     Button(isSelectingItems ? "完了" : "選択") {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             isSelectingItems.toggle()
@@ -1160,11 +1225,14 @@ struct TravelPlanDetailView: View {
 
             dayTabs(plan: plan)
 
+            // 共有中は、誰の時間軸を見るか選べる（出発地の違うメンバーが現地で集まる旅行のため）
+            memberFilterBar(plan: plan)
+
             // その日に泊まっている宿や、固定した予定。予定より先に目に入るよう一番上に出す
             dayPinsSection(plan: plan)
 
             // スケジュールアイテムリスト（固定した予定は上に出しているので除く）
-            let sortedItems = plan.timelineScheduleItems(onDay: selectedDay)
+            let sortedItems = plan.timelineScheduleItems(onDay: selectedDay, for: memberFilter)
             if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }),
                !sortedItems.isEmpty {
                 let nowIndex = nextItemIndex(in: sortedItems, dayDate: daySchedule.date)

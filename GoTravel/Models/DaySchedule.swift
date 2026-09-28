@@ -57,8 +57,14 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
     /// 固定したものは時刻の並びから外して上に出す。無い予定は固定していない扱い
     var isPinned: Bool?
 
+    /// 共有した旅行で、この予定に参加する人（ユーザーID）。**空（nil）なら全員。**
+    ///
+    /// 出発地の違うメンバーが現地で集まる旅行で、それぞれの移動を分けて見たいという要望から
+    /// （`docs/設計_メンバーごとの時間軸.md`）。旧バージョンが編集すると消えて全員の予定に戻る
+    var participantIds: [String]?
+
     enum CodingKeys: String, CodingKey {
-        case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId, timeZoneIdentifier, isPinned
+        case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId, timeZoneIdentifier, isPinned, participantIds
     }
 
     /// 書き出しや共有カードに出す金額。
@@ -89,7 +95,8 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
          linkURL: String? = nil,
          reservationId: String? = nil,
          timeZoneIdentifier: String? = nil,
-         isPinned: Bool? = nil) {
+         isPinned: Bool? = nil,
+         participantIds: [String]? = nil) {
         self.id = id
         self.time = time
         self.title = title
@@ -104,5 +111,6 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
         self.reservationId = reservationId
         self.timeZoneIdentifier = timeZoneIdentifier
         self.isPinned = isPinned
+        self.participantIds = participantIds
     }
 }

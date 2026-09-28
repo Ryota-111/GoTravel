@@ -162,6 +162,12 @@ struct TravelPlan: Identifiable, Codable {
     /// 費用を何人で割るか。nil なら人数から自動で決める（`splitCount(defaultingTo:)`）
     var customSplitCount: Int?
 
+    /// 共有メンバーの表示名（ユーザーID → 名前）。**パブリックDBから読んだときだけ入る。**
+    ///
+    /// 保存（Core Data・JSON）には載せない。名前は共有レコードが正で、端末には
+    /// `SharedMemberNameStore` が控えを持つ。各自が自分の分だけを書く
+    var memberNames: [String: String] = [:]
+
     enum CodingKeys: String, CodingKey {
         case id, title, startDate, endDate, destination, latitude, longitude, localImageFileName, cardColorHex, createdAt, userId, daySchedules, packingItems
         case reservations

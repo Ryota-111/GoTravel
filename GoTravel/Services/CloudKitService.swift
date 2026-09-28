@@ -913,7 +913,50 @@ final class CloudKitService {
         if recordName.hasPrefix("shared_") {
             plan.id = String(recordName.dropFirst("shared_".count))
         }
+        plan.memberNames = Self.memberNames(in: record)
         return plan
+    }
+
+    // MARK: - 共有メンバーの表示名
+    //
+    // 共有レコードの `memberNamesJSON`（ユーザーID → 名前）に置く。
+    // 各自が自分の分だけを書く。書くときは最新のレコードを取り直して足すので、
+    // 他の人の名前を上書きしない（`docs/設計_メンバーごとの時間軸.md`）
+
+    private static func memberNames(in record: CKRecord) -> [String: String] {
+        guard let json = record["memberNamesJSON"] as? String,
+              let data = json.data(using: .utf8),
+              let names = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
+        return names
+    }
+
+    /// 自分の表示名を書く。戻り値は書いたあとの名前の一覧。
+    /// 同時に他の人が書いて競合したら、取り直して書き直す
+    @discardableResult
+    func updateMemberName(planId: String, userId: String, name: String) async throws -> [String: String] {
+        let recordID = CKRecord.ID(recordName: "shared_\(planId)")
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        var attempt = 0
+        while true {
+            let record = try await publicDatabase.record(for: recordID)
+            var names = Self.memberNames(in: record)
+            if trimmed.isEmpty {
+                names.removeValue(forKey: userId)
+            } else {
+                names[userId] = trimmed
+            }
+            if let data = try? JSONEncoder().encode(names) {
+                record["memberNamesJSON"] = String(data: data, encoding: .utf8)
+            }
+
+            do {
+                _ = try await publicDatabase.save(record)
+                return names
+            } catch let ckError as CKError where ckError.code == .serverRecordChanged && attempt < 2 {
+                attempt += 1
+            }
+        }
     }
 
     /// TravelPlanの画像のみを取得
