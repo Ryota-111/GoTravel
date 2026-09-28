@@ -17,8 +17,11 @@ struct TravelPlanMapView: View {
         let id: String
         let item: ScheduleItem
         let dayNumber: Int
+        /// 経路の上の順番。**0 は経路に乗らない予定**（全員の見方での、特定の人の予定）
         let order: Int
         let coordinate: CLLocationCoordinate2D
+
+        var isOnRoute: Bool { order > 0 }
 
         static func == (lhs: MappedScheduleItem, rhs: MappedScheduleItem) -> Bool {
             lhs.id == rhs.id
@@ -93,17 +96,26 @@ struct TravelPlanMapView: View {
     /// 下の行程表と共有する選択中の項目。ScheduleItem の id を入れる
     var linkedItemID: Binding<String?>?
 
+    /// 共有した旅行で、誰の時間軸を見ているか。nil なら全員
+    var memberFilter: String?
+    /// 全員のものでない予定に添える名前（予定ID → 「さくら・父」）
+    var participantLabels: [String: String]
+
     init(plan: TravelPlan,
          initialDay: Int,
          isEmbedded: Bool = false,
          isSplitMode: Bool = false,
          linkedDay: Binding<Int>? = nil,
-         linkedItemID: Binding<String?>? = nil) {
+         linkedItemID: Binding<String?>? = nil,
+         memberFilter: String? = nil,
+         participantLabels: [String: String] = [:]) {
         self.plan = plan
         self.isEmbedded = isEmbedded
         self.isSplitMode = isSplitMode
         self.linkedDay = linkedDay
         self.linkedItemID = linkedItemID
+        self.memberFilter = memberFilter
+        self.participantLabels = participantLabels
         _scope = State(initialValue: .day(initialDay))
 
         // 実際の範囲は onAppear でピンに合わせ直す
@@ -129,14 +141,37 @@ struct TravelPlanMapView: View {
             .sorted { $0.dayNumber < $1.dayNumber }
     }
 
-    /// 表示対象のうち座標を持つ項目。連番は日ごとに1から振り直す
+    /// 全員の見方で、メンバーごとの予定を経路から外すか。
+    ///
+    /// 出発地の違うメンバーの移動を時刻順に1本でつなぐと、羽田 → 伊丹 → 那覇 のように
+    /// 誰も通らない線になる。全員の見方では全員の予定だけをつなぎ、
+    /// 特定の人の予定はピンだけにして名前を添える
+    private var separatesMembers: Bool {
+        memberFilter == nil && plan.isShared && plan.sharedWith.count >= 2
+    }
+
+    /// 表示対象のうち座標を持つ項目。連番は日ごとに1から振り直す。
+    /// 共有した旅行では、見ている人の時間軸に入る予定だけを出す
     private var mappedItems: [MappedScheduleItem] {
         var result: [MappedScheduleItem] = []
 
         for day in scopedDaySchedules {
             var order = 0
-            for item in sortedByTime(day.scheduleItems) {
+            for item in sortedByTime(day.scheduleItems) where SharedMembers.includes(item, member: memberFilter) {
                 guard let latitude = item.latitude, let longitude = item.longitude else { continue }
+                let isMemberOnly = !(item.participantIds ?? []).isEmpty
+                if separatesMembers && isMemberOnly {
+                    result.append(
+                        MappedScheduleItem(
+                            id: item.id,
+                            item: item,
+                            dayNumber: day.dayNumber,
+                            order: 0,
+                            coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+                        )
+                    )
+                    continue
+                }
                 order += 1
                 result.append(
                     MappedScheduleItem(
@@ -179,7 +214,7 @@ struct TravelPlanMapView: View {
 
     /// 日をまたいで線がつながらないよう、日ごとに独立した経路として描く
     private var routeSegments: [RouteSegment] {
-        Dictionary(grouping: mappedItems, by: \.dayNumber)
+        Dictionary(grouping: mappedItems.filter(\.isOnRoute), by: \.dayNumber)
             .compactMap { dayNumber, items -> RouteSegment? in
                 let sorted = items.sorted { $0.order < $1.order }
                 guard sorted.count >= 2 else { return nil }
@@ -258,6 +293,11 @@ struct TravelPlanMapView: View {
             selectedGroupID = nil
             fitCameraToPins(animated: true)
         }
+        // 見る人を切り替えるとピンが変わるので、範囲も合わせ直す
+        .onChange(of: memberFilter) { _, _ in
+            selectedGroupID = nil
+            fitCameraToPins(animated: true)
+        }
         .mapNavigation($navigationTarget)
     }
 
@@ -321,19 +361,59 @@ struct TravelPlanMapView: View {
         .accessibilityLabel(pinAccessibilityLabel(group))
     }
 
+    @ViewBuilder
     private func singlePinLabel(_ mapped: MappedScheduleItem) -> some View {
         let color = Self.dayColor(for: mapped.dayNumber)
 
-        return ZStack {
-            Circle()
-                .fill(color)
-                .frame(width: 34, height: 34)
-                .overlay(Circle().stroke(.white, lineWidth: 2.5))
-                .shadow(color: color.opacity(0.45), radius: 4, x: 0, y: 2)
+        if mapped.isOnRoute {
+            ZStack {
+                Circle()
+                    .fill(color)
+                    .frame(width: 34, height: 34)
+                    .overlay(Circle().stroke(.white, lineWidth: 2.5))
+                    .shadow(color: color.opacity(0.45), radius: 4, x: 0, y: 2)
 
+                Text("\(mapped.order)")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundStyle(.white)
+            }
+        } else {
+            // 経路に乗らない、特定の人の予定。番号の代わりに人と名前を出す
+            VStack(spacing: 3) {
+                ZStack {
+                    Circle()
+                        .fill(Color(.systemBackground))
+                        .frame(width: 30, height: 30)
+                        .overlay(Circle().stroke(color, lineWidth: 2.5))
+                        .shadow(color: Color.black.opacity(0.2), radius: 3, x: 0, y: 2)
+                    Image(systemName: "person.fill")
+                        .font(.system(size: 13, weight: .bold))
+                        .foregroundStyle(color)
+                }
+                if let label = participantLabels[mapped.item.id] {
+                    Text(label)
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundStyle(.white)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(color))
+                        .lineLimit(1)
+                }
+            }
+        }
+    }
+
+    /// 番号。経路に乗らない予定は人のアイコンにする
+    @ViewBuilder
+    private func orderMark(_ mapped: MappedScheduleItem, size: CGFloat, color: Color) -> some View {
+        if mapped.isOnRoute {
             Text("\(mapped.order)")
-                .font(.system(size: 15, weight: .bold))
-                .foregroundStyle(.white)
+                .font(.system(size: size, weight: .bold))
+                .foregroundStyle(color)
+        } else {
+            Image(systemName: "person.fill")
+                .font(.system(size: size - 2, weight: .bold))
+                .foregroundStyle(color)
         }
     }
 
@@ -356,10 +436,9 @@ struct TravelPlanMapView: View {
                         .font(.system(size: 11, weight: .bold))
                         .foregroundStyle(separatorColor)
                 }
-                Text("\(mapped.order)")
-                    .font(.system(size: 15, weight: .bold))
-                    // 日をまたぐ場合は番号だけでは区別できないため日の色で塗り分ける
-                    .foregroundStyle(isSameDay ? Color.white : Self.dayColor(for: mapped.dayNumber))
+                // 日をまたぐ場合は番号だけでは区別できないため日の色で塗り分ける
+                orderMark(mapped, size: 15,
+                          color: isSameDay ? Color.white : Self.dayColor(for: mapped.dayNumber))
             }
 
             if overflow > 0 {
@@ -377,6 +456,9 @@ struct TravelPlanMapView: View {
 
     private func pinAccessibilityLabel(_ group: PinGroup) -> String {
         if let only = group.items.first, group.isSingle {
+            guard only.isOnRoute else {
+                return "\(participantLabels[only.item.id] ?? "")の予定 \(only.item.title)"
+            }
             return "\(only.order)番目 \(only.item.title)"
         }
         return "\(group.displayTitle) \(group.items.count)件の予定"
@@ -615,9 +697,7 @@ struct TravelPlanMapView: View {
                 Circle()
                     .fill(color)
                     .frame(width: 28, height: 28)
-                Text("\(mapped.order)")
-                    .font(.system(size: 13, weight: .bold))
-                    .foregroundStyle(.white)
+                orderMark(mapped, size: 13, color: .white)
             }
 
             VStack(alignment: .leading, spacing: 3) {
@@ -625,6 +705,14 @@ struct TravelPlanMapView: View {
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(accentColor)
                     .lineLimit(1)
+
+                // 全員の見方では、特定の人の予定に名前を添える
+                if memberFilter == nil, let label = participantLabels[item.id] {
+                    Label(label, systemImage: "person.fill")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(Self.dayColor(for: mapped.dayNumber))
+                        .lineLimit(1)
+                }
 
                 HStack(spacing: 8) {
                     if showDayBadge {

@@ -313,7 +313,12 @@ struct TravelPlanDetailView: View {
                 .environmentObject(authVM)
         }
         .fullScreenCover(isPresented: $showScheduleMap) {
-            TravelPlanMapView(plan: plan, initialDay: selectedDay)
+            TravelPlanMapView(
+                plan: plan,
+                initialDay: selectedDay,
+                memberFilter: memberFilter,
+                participantLabels: mapParticipantLabels(plan: plan)
+            )
         }
         .sheet(isPresented: Binding(
             get: { exportItems != nil },
@@ -1449,7 +1454,9 @@ struct TravelPlanDetailView: View {
                 isEmbedded: true,
                 isSplitMode: true,
                 linkedDay: $selectedDay,
-                linkedItemID: $focusedItemID
+                linkedItemID: $focusedItemID,
+                memberFilter: memberFilter,
+                participantLabels: mapParticipantLabels(plan: plan)
             )
             .frame(height: 274)
             // 貼り付けている地図は狭いので、じっくり見たいときは全画面へ。
@@ -1483,10 +1490,34 @@ struct TravelPlanDetailView: View {
 
     /// 地図タブの中身。地図と Day タブは貼り付く側にあるので、ここは予定だけ
     private func mapTab(plan: TravelPlan) -> some View {
+        VStack(spacing: 0) {
+            // 日程タブと同じ切り替え。上の地図と下の行程表の両方がこれに従う
+            memberFilterBar(plan: plan)
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+
+            mapTabItinerary(plan: plan)
+        }
+    }
+
+    /// 予定ID → 参加する人の名前（全員のものでない予定だけ）。地図のピンに添える
+    private func mapParticipantLabels(plan: TravelPlan) -> [String: String] {
+        var labels: [String: String] = [:]
+        for item in plan.daySchedules.flatMap(\.scheduleItems) {
+            if let label = participantLabel(item, plan: plan) {
+                labels[item.id] = label
+            }
+        }
+        return labels
+    }
+
+    private func mapTabItinerary(plan: TravelPlan) -> some View {
         Group {
+            let dayItems = plan.daySchedules.first(where: { $0.dayNumber == selectedDay })?.scheduleItems ?? []
+            let visibleItems = dayItems.filter { SharedMembers.includes($0, member: memberFilter) }
             if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }),
-               !daySchedule.scheduleItems.isEmpty {
-                let sortedItems = sortedScheduleItems(daySchedule.scheduleItems)
+               !visibleItems.isEmpty {
+                let sortedItems = sortedScheduleItems(visibleItems)
                 let nowIndex = nextItemIndex(in: sortedItems, dayDate: daySchedule.date)
                 VStack(spacing: 0) {
                     ForEach(Array(sortedItems.enumerated()), id: \.element.id) { index, item in
