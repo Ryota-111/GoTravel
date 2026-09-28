@@ -381,10 +381,16 @@ struct PrefectureGridCard: View {
         VStack(spacing: 6) {
             ZStack {
                 if let image = photo {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
+                    // 枠の大きさを先に決めて、その中で切り抜く。
+                    // 写真に高さだけ与えると、横長の写真は写真の幅のまま隣のカードへはみ出す
+                    Color.clear
+                        .frame(maxWidth: .infinity)
                         .frame(height: 80)
+                        .overlay(
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        )
                         .clipShape(RoundedRectangle(cornerRadius: 10))
                 } else {
                     RoundedRectangle(cornerRadius: 10)
