@@ -404,9 +404,16 @@ final class AlbumManager: NSObject, ObservableObject {
     }
 
     func removeJapanPhoto(_ fileName: String, from albumId: String) {
-        JapanPhotoManager.shared.removeFile(fileName)
+        removeJapanPhotos([fileName], from: albumId)
+    }
+
+    /// まとめて消す。アルバムの保存は1回にする（1枚ずつ保存すると同期が枚数ぶん走る）
+    func removeJapanPhotos(_ fileNames: [String], from albumId: String) {
+        guard !fileNames.isEmpty else { return }
+        fileNames.forEach(JapanPhotoManager.shared.removeFile)
+        let targets = Set(fileNames)
         mutateAlbum(id: albumId) { album in
-            album.photoFileNames.removeAll { $0 == fileName }
+            album.photoFileNames.removeAll { targets.contains($0) }
         }
     }
 

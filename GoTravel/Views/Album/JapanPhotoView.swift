@@ -458,6 +458,10 @@ struct PrefectureGalleryView: View {
 
     @State private var showPicker = false
     @State private var previewing: PreviewTarget?
+    // 選択モード（アルバムの写真と同じ操作感で、まとめて削除できるようにする）
+    @State private var isSelecting = false
+    @State private var selected: Set<String> = []
+    @State private var showDeleteConfirm = false
 
     private struct PreviewTarget: Identifiable {
         let fileName: String
@@ -495,18 +499,53 @@ struct PrefectureGalleryView: View {
                         ForEach(Array(fileNames.enumerated()), id: \.element) { index, fileName in
                             photoCell(fileName, isCover: index == 0)
                         }
-                        addCell
+                        if !isSelecting {
+                            addCell
+                        }
                     }
                 }
                 .padding(16)
             }
-            .navigationTitle(prefecture.name)
+            .navigationTitle(navigationTitleText)
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("閉じる") { dismiss() }
-                        .foregroundColor(accentColor)
+                ToolbarItem(placement: .navigationBarLeading) {
+                    if isSelecting {
+                        Button("キャンセル") { exitSelection() }
+                            .foregroundColor(accentColor)
+                    } else {
+                        Button("閉じる") { dismiss() }
+                            .foregroundColor(accentColor)
+                    }
                 }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    if isSelecting {
+                        Button(selected.count == fileNames.count ? "すべて解除" : "すべて選択") {
+                            selected = selected.count == fileNames.count ? [] : Set(fileNames)
+                        }
+                        .foregroundColor(accentColor)
+                    } else if !fileNames.isEmpty {
+                        Button("選択") {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { isSelecting = true }
+                        }
+                        .foregroundColor(accentColor)
+                    }
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                if isSelecting {
+                    deleteBar
+                }
+            }
+            .confirmationDialog(
+                selected.count == 1 ? "この写真を削除しますか？" : "\(selected.count)枚の写真を削除しますか？",
+                isPresented: $showDeleteConfirm,
+                titleVisibility: .visible
+            ) {
+                Button("削除", role: .destructive) { deleteSelected() }
+                Button("キャンセル", role: .cancel) {}
+            } message: {
+                Text(deleteMessage)
             }
         }
         .sheet(isPresented: $showPicker) {
@@ -530,9 +569,75 @@ struct PrefectureGalleryView: View {
         }
     }
 
-    private func photoCell(_ fileName: String, isCover: Bool) -> some View {
+    // MARK: - 選択
+
+    private var navigationTitleText: String {
+        guard isSelecting else { return prefecture.name }
+        return selected.isEmpty ? "写真を選択" : "\(selected.count)枚を選択中"
+    }
+
+    /// 代表の写真を消すと、残った写真の先頭が地図に出る。何が起きるかを先に伝える
+    private var deleteMessage: String {
+        let removesCover = fileNames.first.map(selected.contains) ?? false
+        let removesAll = selected.count == fileNames.count
+        if removesAll { return "\(prefecture.name)の写真がなくなり、地図から消えます。元に戻せません。" }
+        if removesCover { return "代表の写真も含まれます。残った写真の先頭が地図に出ます。元に戻せません。" }
+        return "削除した写真は元に戻せません"
+    }
+
+    private var deleteBar: some View {
         Button {
-            previewing = PreviewTarget(fileName: fileName)
+            showDeleteConfirm = true
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "trash.fill")
+                Text("削除")
+            }
+            .font(.headline)
+            .foregroundColor(selected.isEmpty ? themeManager.currentTheme.secondaryText : .white)
+            .padding(.horizontal, 24)
+            .padding(.vertical, 12)
+            .background(
+                Capsule().fill(selected.isEmpty
+                               ? themeManager.currentTheme.secondaryText.opacity(0.15)
+                               : themeManager.currentTheme.error)
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .disabled(selected.isEmpty)
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 12)
+        .background(.ultraThinMaterial)
+    }
+
+    private func toggle(_ fileName: String) {
+        if selected.contains(fileName) {
+            selected.remove(fileName)
+        } else {
+            selected.insert(fileName)
+        }
+    }
+
+    private func exitSelection() {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            isSelecting = false
+            selected = []
+        }
+    }
+
+    private func deleteSelected() {
+        albumManager.removeJapanPhotos(Array(selected), from: albumId)
+        exitSelection()
+    }
+
+    private func photoCell(_ fileName: String, isCover: Bool) -> some View {
+        let isSelected = selected.contains(fileName)
+        return Button {
+            if isSelecting {
+                toggle(fileName)
+            } else {
+                previewing = PreviewTarget(fileName: fileName)
+            }
         } label: {
             Color.clear
                 .aspectRatio(1, contentMode: .fit)
@@ -546,6 +651,15 @@ struct PrefectureGalleryView: View {
                     }
                 }
                 .clipShape(RoundedRectangle(cornerRadius: 10))
+                .opacity(isSelecting && !isSelected ? 0.75 : 1)
+                .overlay(alignment: .bottomTrailing) {
+                    if isSelecting {
+                        Image(systemName: isSelected ? "checkmark.circle.fill" : "circle")
+                            .font(.system(size: 20))
+                            .foregroundStyle(.white, isSelected ? themeManager.currentTheme.error : Color.black.opacity(0.3))
+                            .padding(5)
+                    }
+                }
                 .overlay(alignment: .topLeading) {
                     if isCover {
                         Text("代表")
@@ -560,6 +674,7 @@ struct PrefectureGalleryView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel(isCover ? "代表の写真" : "写真")
+        .accessibilityAddTraits(isSelecting && isSelected ? .isSelected : [])
     }
 
     private var addCell: some View {
