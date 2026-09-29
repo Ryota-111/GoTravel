@@ -77,6 +77,8 @@ struct TravelPlanDetailView: View {
     /// **地図だけでなく Day タブまで含めること。**
     /// 地図だけにすると、Day を横スクロールするたびにタブが変わってしまう
     @State private var pinnedHeaderFrame: CGRect = .zero
+    /// 横にスクロールする部品の位置。ここで始めた横のドラッグではタブを変えない
+    @State private var swipeExclusionZones = SwipeExclusionZones()
 
     /// ScrollView の見えている高さ。scrollTo の anchor は割合指定なので必要
     @State private var scrollViewportHeight: CGFloat = 0
@@ -1228,10 +1230,14 @@ struct TravelPlanDetailView: View {
                 localTimeBanner(plan: plan, zone: zone)
             }
 
-            dayTabs(plan: plan)
+            excludedFromTabSwipe("dayTabs") {
+                dayTabs(plan: plan)
+            }
 
             // 共有中は、誰の時間軸を見るか選べる（出発地の違うメンバーが現地で集まる旅行のため）
-            memberFilterBar(plan: plan)
+            excludedFromTabSwipe("memberFilter-\(selectedTab.rawValue)") {
+                memberFilterBar(plan: plan)
+            }
 
             // その日に泊まっている宿や、固定した予定。予定より先に目に入るよう一番上に出す
             dayPinsSection(plan: plan)
@@ -1293,6 +1299,9 @@ struct TravelPlanDetailView: View {
                 // 貼り付いた帯の中で始めたドラッグは、地図の操作か
                 // Day タブの横スクロール。タブは動かさない
                 guard !pinnedHeaderFrame.contains(value.startLocation) else { return }
+                // 天気や Day タブ、メンバーの切り替えなど、横にスクロールする部品の上でも動かさない。
+                // 以前は日数の多い旅行で天気を横に送ると、地図タブへ移ってしまっていた
+                guard !swipeExclusionZones.contains(value.startLocation) else { return }
 
                 let dx = value.translation.width
                 let dy = value.translation.height
@@ -1311,6 +1320,21 @@ struct TravelPlanDetailView: View {
                 moveTab(forward: dx < 0)
             }
             .onEnded { _ in hasSwitchedTabInDrag = false }
+    }
+
+    /// 横にスクロールする部品を、タブ切り替えのスワイプの対象から外す。
+    /// 位置は縦のスクロールでも変わるので、見えている間は追いかけて覚えておく
+    private func excludedFromTabSwipe<Content: View>(_ id: String,
+                                                     @ViewBuilder _ content: () -> Content) -> some View {
+        content()
+            .onGeometryChange(for: CGRect.self) { proxy in
+                proxy.frame(in: .global)
+            } action: { frame in
+                swipeExclusionZones.frames[id] = frame
+            }
+            .onDisappear {
+                swipeExclusionZones.frames[id] = nil
+            }
     }
 
     /// 隣のタブへ移る。端では止まる（一周させると今どこにいるか分からなくなる）
@@ -1339,7 +1363,9 @@ struct TravelPlanDetailView: View {
                 .accessibilityLabel(Text("戻る"))
             }
 
-            tabButtons
+            excludedFromTabSwipe("tabButtons") {
+                tabButtons
+            }
         }
         .frame(height: Self.tabBarHeight)
         .background(tabBarBackground)
@@ -1492,7 +1518,9 @@ struct TravelPlanDetailView: View {
     private func mapTab(plan: TravelPlan) -> some View {
         VStack(spacing: 0) {
             // 日程タブと同じ切り替え。上の地図と下の行程表の両方がこれに従う
-            memberFilterBar(plan: plan)
+            excludedFromTabSwipe("memberFilter-\(selectedTab.rawValue)") {
+                memberFilterBar(plan: plan)
+            }
                 .padding(.horizontal, 16)
                 .padding(.top, 12)
 
@@ -1743,6 +1771,7 @@ struct TravelPlanDetailView: View {
     /// 開始日1日ぶんしか出していなかったため、旅行中は何日目にいても
     /// 初日の予報を見せられていた（しかも過去日なので取得に失敗していた）
     private func tripWeatherRow(plan: TravelPlan) -> some View {
+        excludedFromTabSwipe("weather") {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(1...plan.dayCount, id: \.self) { dayNumber in
@@ -1752,6 +1781,7 @@ struct TravelPlanDetailView: View {
                     }
                 }
             }
+        }
         }
     }
 
@@ -2428,5 +2458,17 @@ private struct SwipeBackEnabler: UIViewControllerRepresentable {
             vc.navigationController?.interactivePopGestureRecognizer?.isEnabled = true
             vc.navigationController?.interactivePopGestureRecognizer?.delegate = nil
         }
+    }
+}
+
+/// タブ切り替えのスワイプから外す範囲。
+///
+/// 縦のスクロールのたびに位置が変わるので、`@State` の値で持つと画面全体を
+/// そのたびに描き直してしまう。参照型に入れて、書き換えても描き直さないようにする
+private final class SwipeExclusionZones {
+    var frames: [String: CGRect] = [:]
+
+    func contains(_ point: CGPoint) -> Bool {
+        frames.values.contains { $0.contains(point) }
     }
 }
