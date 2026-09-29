@@ -305,7 +305,9 @@ struct TravelPlanMapView: View {
     private var mapLayer: some View {
         Map(position: $cameraPosition) {
             ForEach(routeSegments) { segment in
-                MapPolyline(coordinates: segment.coordinates)
+                // 測地線で引く。まっすぐ結ぶと、羽田 → ハワイが太平洋を渡らず
+                // アジアとヨーロッパの側を回る線になる
+                MapPolyline(coordinates: segment.coordinates, contourStyle: .geodesic)
                     .stroke(
                         segment.color.opacity(0.85),
                         style: StrokeStyle(lineWidth: 3, lineCap: .round, dash: [7, 7])
@@ -783,24 +785,13 @@ struct TravelPlanMapView: View {
                 ? MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
                 : MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
             region = MKCoordinateRegion(center: center, span: span)
+        } else if let fitted = MapRegionFitting.region(fitting: items.map(\.coordinate),
+                                                           minimumSpan: Self.minimumSpan) {
+            // 日付変更線をまたぐ旅行（羽田 → ハワイ）でも、ピンの入る側で囲む。
+            // 経度の最小と最大の真ん中を取っていた頃は、大西洋が映っていた
+            region = fitted
         } else {
-            let latitudes = items.map(\.coordinate.latitude)
-            let longitudes = items.map(\.coordinate.longitude)
-            let minLat = latitudes.min() ?? 0
-            let maxLat = latitudes.max() ?? 0
-            let minLon = longitudes.min() ?? 0
-            let maxLon = longitudes.max() ?? 0
-
-            let center = CLLocationCoordinate2D(
-                latitude: (minLat + maxLat) / 2,
-                longitude: (minLon + maxLon) / 2
-            )
-            // ピンが画面端に張り付かないよう余白を持たせる
-            let span = MKCoordinateSpan(
-                latitudeDelta: max((maxLat - minLat) * 1.5, Self.minimumSpan),
-                longitudeDelta: max((maxLon - minLon) * 1.5, Self.minimumSpan)
-            )
-            region = MKCoordinateRegion(center: center, span: span)
+            return
         }
 
         if animated {
