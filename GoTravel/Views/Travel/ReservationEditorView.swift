@@ -264,22 +264,58 @@ struct ReservationEditorView: View {
         .buttonStyle(.plain)
     }
 
-    /// 買っていない人向けの、控えめな案内。
+    /// 買っていない人向けの案内。
     ///
-    /// 予約を追加は無料で毎回使う画面なので、使えない機能を目立たせると広告のように感じる。
-    /// 使える見た目にもしない（押すと売り場が開くのに、使えそうに見えるとだまされた感じが出る）。
-    /// 気になった人だけが押せるよう、灰色の1行で「Pro」と先に書いておく
+    /// 予約を追加は無料で毎回使う画面なので、入力の途中（種類の下など）には出さない。
+    /// 入力を終えた人の目に入る一番下に置き、そのぶん何ができるのかは伝える。
+    /// **使える機能と同じ見た目にはしない。** 押すと売り場が開くのに使えそうに見えると、
+    /// だまされた感じが出る。「Pro」と先に書き、塗りではなく縁だけのカードにする
     private var proEmailHint: some View {
         Button {
             showsProSheet = true
         } label: {
-            Label("確認メールから自動で入れる（Pro）", systemImage: "envelope")
-                .font(.caption)
-                .foregroundColor(themeManager.currentTheme.secondaryText)
-                .frame(maxWidth: .infinity)
+            HStack(spacing: 12) {
+                Image(systemName: "envelope.open.fill")
+                    .font(.system(size: 18))
+                    .foregroundColor(accent)
+                    .frame(width: 36, height: 36)
+                    .background(Circle().fill(accent.opacity(0.12)))
+
+                VStack(alignment: .leading, spacing: 3) {
+                    HStack(spacing: 6) {
+                        Text("確認メールを貼るだけで、予約が入ります")
+                            .font(.system(size: 14, weight: .semibold))
+                            .foregroundColor(textColor)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Text("予約番号・日時・便名・金額を自動で入力")
+                        .font(.caption2)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                    Text("Travory Pro")
+                        .font(.system(size: 10, weight: .bold))
+                        .foregroundColor(accent)
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .overlay(Capsule().stroke(accent, lineWidth: 1))
+                        .padding(.top, 2)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+            .padding(14)
+            .background(
+                RoundedRectangle(cornerRadius: 14)
+                    .stroke(accent.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
+            )
+            .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
-        .padding(.top, 4)
+        .padding(.top, 8)
+        .accessibilityLabel("確認メールを貼るだけで予約が入ります。Travory Pro の説明を開く")
     }
 
     /// 読み取った1件目を入力欄に入れ、残りは保存したあとに順に開く。
