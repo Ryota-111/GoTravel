@@ -32,14 +32,14 @@ enum WidgetSnapshotBuilder {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: now)
 
-        // 進行中を優先し、無ければ今後の旅行のうち最も近いもの
+        // 進行中を優先し、無ければ今後の旅行のうち最も近いもの。
+        // 旅行の日付は日付として比べる（海外で最終日が前の日に終わらないように）
+        let todayKey = DayKey.string(for: now)
         let ongoing = travelPlans.first { plan in
-            let start = calendar.startOfDay(for: plan.startDate)
-            let end = calendar.startOfDay(for: plan.endDate)
-            return start <= today && end >= today
+            startDayKey(of: plan) <= todayKey && todayKey <= endDayKey(of: plan)
         }
         let upcomingTravel = travelPlans
-            .filter { calendar.startOfDay(for: $0.startDate) > today }
+            .filter { startDayKey(of: $0) > todayKey }
             .min { $0.startDate < $1.startDate }
 
         if let travel = ongoing ?? upcomingTravel {
@@ -47,6 +47,8 @@ enum WidgetSnapshotBuilder {
             snapshot.travelDestination = travel.destination
             snapshot.travelStartDate = travel.startDate
             snapshot.travelEndDate = travel.endDate
+            snapshot.travelStartDayKey = startDayKey(of: travel)
+            snapshot.travelEndDayKey = endDayKey(of: travel)
 
             // 旅行中かどうかはウィジェット側で日付から判定するため保存しない。
             // スケジュールは期間全体を持たせ、アプリ未起動でも翌日以降に追従させる
@@ -63,27 +65,31 @@ enum WidgetSnapshotBuilder {
     /// 各項目に実際の日付を持たせることで、ウィジェット側が
     /// アプリを起動しなくても当日分を選び出せる
     private static func travelSchedule(of travel: TravelPlan) -> [WidgetSnapshot.Item] {
-        let calendar = Calendar.current
+        let tripCalendar = ScheduleClock.calendar(in: ScheduleClock.legacyTimeZone)
         var result: [WidgetSnapshot.Item] = []
 
-        for daySchedule in travel.daySchedules.sorted(by: { $0.dayNumber < $1.dayNumber }) {
+        for daySchedule in travel.daySchedulesInRange {
             // daySchedule.date が未設定の場合に備えて開始日から算出する
-            let dayDate = calendar.date(
+            let dayDate = tripCalendar.date(
                 byAdding: .day,
                 value: daySchedule.dayNumber - 1,
                 to: travel.startDate
             ) ?? daySchedule.date
+            let day = tripCalendar.dateComponents([.year, .month, .day], from: dayDate)
+            let dayKey = DayKey.string(for: dayDate, in: ScheduleClock.legacyTimeZone)
 
             let items = daySchedule.scheduleItems
-                .sorted { minutes(of: $0.time) < minutes(of: $1.time) }
+                .sorted(by: ScheduleItem.chronologically)
                 .prefix(maxItemsPerDay)
                 .map { item in
                     WidgetSnapshot.Item(
                         id: item.id,
                         date: dayDate,
-                        time: item.time,
+                        time: occursAt(item, on: day),
                         title: item.title,
-                        subtitle: item.location
+                        subtitle: item.location,
+                        timeZoneIdentifier: item.timeZone.identifier,
+                        dayKey: dayKey
                     )
                 }
 
@@ -92,6 +98,28 @@ enum WidgetSnapshotBuilder {
         }
 
         return Array(result.prefix(maxTravelScheduleItems))
+    }
+
+    /// 旅行の日付は、日本で入れたものとして読む（予定の時刻と同じ考え方）
+    private static func startDayKey(of plan: TravelPlan) -> String {
+        DayKey.string(for: plan.startDate, in: ScheduleClock.legacyTimeZone)
+    }
+
+    private static func endDayKey(of plan: TravelPlan) -> String {
+        DayKey.string(for: plan.endDate, in: ScheduleClock.legacyTimeZone)
+    }
+
+    /// その日の、予定の時計での時:分を、実際に起きる瞬間にする。
+    ///
+    /// ウィジェットは端末の時計しか知らないので、ここで組み立てて渡す。
+    /// パリの 19:00 の予定は、日本にいてもパリにいても同じ瞬間になる
+    private static func occursAt(_ item: ScheduleItem, on day: DateComponents) -> Date {
+        let clock = ScheduleClock.calendar(in: item.timeZone)
+        let time = clock.dateComponents([.hour, .minute], from: item.time)
+        var parts = day
+        parts.hour = time.hour
+        parts.minute = time.minute
+        return clock.date(from: parts) ?? item.time
     }
 
     /// 今日以降の予定を日付順に返す

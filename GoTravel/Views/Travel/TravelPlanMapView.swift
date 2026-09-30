@@ -57,6 +57,13 @@ struct TravelPlanMapView: View {
     @State private var scope: Scope
     @State private var selectedGroupID: String?
     @State private var cameraPosition: MapCameraPosition
+    @State private var navigationTarget: MapDestination?
+
+    /// 実際に使う絞り込み。行程表と並べているときは向こうの日に従う
+    private var effectiveScope: Scope {
+        if let linkedDay { return .day(linkedDay.wrappedValue) }
+        return scope
+    }
 
     /// 1点に集中した時でも地図が寄りすぎないようにする最小の表示範囲
     private static let minimumSpan: CLLocationDegrees = 0.01
@@ -72,8 +79,31 @@ struct TravelPlanMapView: View {
     ]
 
     // MARK: - Initialization
-    init(plan: TravelPlan, initialDay: Int) {
+    /// タブに埋め込むときは true。閉じるボタンを出さない
+    var isEmbedded: Bool = false
+
+    /// 行程表と上下に並べるモード。
+    /// 日の選択と項目の選択は下の行程表に任せるので、
+    /// 地図側の上部バー・日の切り替え・詳細パネルは出さない
+    var isSplitMode: Bool = false
+
+    /// 下の行程表と共有する日番号
+    var linkedDay: Binding<Int>?
+
+    /// 下の行程表と共有する選択中の項目。ScheduleItem の id を入れる
+    var linkedItemID: Binding<String?>?
+
+    init(plan: TravelPlan,
+         initialDay: Int,
+         isEmbedded: Bool = false,
+         isSplitMode: Bool = false,
+         linkedDay: Binding<Int>? = nil,
+         linkedItemID: Binding<String?>? = nil) {
         self.plan = plan
+        self.isEmbedded = isEmbedded
+        self.isSplitMode = isSplitMode
+        self.linkedDay = linkedDay
+        self.linkedItemID = linkedItemID
         _scope = State(initialValue: .day(initialDay))
 
         // 実際の範囲は onAppear でピンに合わせ直す
@@ -89,13 +119,13 @@ struct TravelPlanMapView: View {
 
     // MARK: - Computed Properties
     private var tripDuration: Int {
-        let days = Calendar.current.dateComponents([.day], from: plan.startDate, to: plan.endDate).day ?? 0
+        let days = Calendar.current.dayDifference(from: plan.startDate, to: plan.endDate)
         return max(days + 1, 1)
     }
 
     private var scopedDaySchedules: [DaySchedule] {
         plan.daySchedules
-            .filter { scope == .all || scope == .day($0.dayNumber) }
+            .filter { effectiveScope == .all || effectiveScope == .day($0.dayNumber) }
             .sorted { $0.dayNumber < $1.dayNumber }
     }
 
@@ -188,31 +218,47 @@ struct TravelPlanMapView: View {
         ZStack(alignment: .top) {
             mapLayer
 
-            VStack(spacing: 10) {
-                topBar
-                scopeSelector
-                if unmappableCount > 0 {
-                    unmappableNotice
+            if !isSplitMode {
+                VStack(spacing: 10) {
+                    topBar
+                    scopeSelector
+                    if unmappableCount > 0 {
+                        unmappableNotice
+                    }
                 }
+                .padding(.horizontal, 12)
+                .padding(.top, 8)
             }
-            .padding(.horizontal, 12)
-            .padding(.top, 8)
 
             if mappedItems.isEmpty {
                 emptyOverlay
             }
         }
         .overlay(alignment: .bottom) {
-            if let selected = selectedGroup {
+            // 分割モードでは下の行程表が詳細の役目を持つので出さない
+            if !isSplitMode, let selected = selectedGroup {
                 detailPanel(selected)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
+        .overlay(alignment: .topTrailing) {
+            // 分割モードは上のバーを出さないので、ここだけ単独で置く
+            if isSplitMode {
+                fitAllButton
+                    .padding(12)
+            }
+        }
+        // 行程表で選ばれた項目にピンを合わせる
+        .onChange(of: linkedItemID?.wrappedValue) { _, itemID in
+            guard isSplitMode, let itemID else { return }
+            focusPin(forItemID: itemID)
+        }
         .onAppear { fitCameraToPins(animated: false) }
-        .onChange(of: scope) { _, _ in
+        .onChange(of: effectiveScope) { _, _ in
             selectedGroupID = nil
             fitCameraToPins(animated: true)
         }
+        .mapNavigation($navigationTarget)
     }
 
     // MARK: - Map Layer
@@ -244,11 +290,21 @@ struct TravelPlanMapView: View {
     /// 単独なら丸ピン、同一地点に複数あるならカプセル型に番号を並べる
     @ViewBuilder
     private func pinView(_ group: PinGroup) -> some View {
-        let isSelected = selectedGroupID == group.id
+        // 分割モードでは行程表側の選択に合わせて光らせる
+        let isSelected: Bool = {
+            if isSplitMode, let itemID = linkedItemID?.wrappedValue {
+                return group.items.contains { $0.item.id == itemID }
+            }
+            return selectedGroupID == group.id
+        }()
 
         Button {
             withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
                 selectedGroupID = group.id
+                // 下の行程表の該当行へ知らせる
+                if isSplitMode {
+                    linkedItemID?.wrappedValue = group.items.first?.item.id
+                }
             }
         } label: {
             Group {
@@ -327,16 +383,35 @@ struct TravelPlanMapView: View {
     }
 
     // MARK: - Top Bar
+    /// 全体が入るところまで戻す。ピンを追ってずれた後に元の見え方へ戻せる
+    private var fitAllButton: some View {
+        Button(action: {
+            selectedGroupID = nil
+            if isSplitMode { linkedItemID?.wrappedValue = nil }
+            fitCameraToPins(animated: true)
+        }) {
+            Image(systemName: "scope")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(accentColor)
+                .frame(width: 36, height: 36)
+                .background(.ultraThinMaterial, in: Circle())
+        }
+        .accessibilityLabel("全体を表示")
+        .disabled(mappedItems.isEmpty)
+    }
+
     private var topBar: some View {
         HStack(spacing: 10) {
-            Button(action: { dismiss() }) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 15, weight: .bold))
-                    .foregroundColor(accentColor)
-                    .frame(width: 36, height: 36)
-                    .background(.ultraThinMaterial, in: Circle())
+            if !isEmbedded {
+                Button(action: { dismiss() }) {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(accentColor)
+                        .frame(width: 36, height: 36)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .accessibilityLabel("閉じる")
             }
-            .accessibilityLabel("閉じる")
 
             VStack(alignment: .leading, spacing: 1) {
                 Text(plan.title)
@@ -350,15 +425,7 @@ struct TravelPlanMapView: View {
 
             Spacer(minLength: 0)
 
-            Button(action: { fitCameraToPins(animated: true) }) {
-                Image(systemName: "scope")
-                    .font(.system(size: 15, weight: .semibold))
-                    .foregroundColor(accentColor)
-                    .frame(width: 36, height: 36)
-                    .background(.ultraThinMaterial, in: Circle())
-            }
-            .accessibilityLabel("全体を表示")
-            .disabled(mappedItems.isEmpty)
+            fitAllButton
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
@@ -369,7 +436,8 @@ struct TravelPlanMapView: View {
     private var scopeSelector: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
-                scopeChip(title: "全日程", scopeValue: .all, color: themeManager.currentTheme.primary)
+                // primary は白黒テーマだと白。選択すると白い丸に白い文字になって消える
+                scopeChip(title: "全日程", scopeValue: .all, color: themeManager.currentTheme.actionFill)
 
                 ForEach(1...tripDuration, id: \.self) { day in
                     scopeChip(title: "Day \(day)", scopeValue: .day(day), color: Self.dayColor(for: day))
@@ -389,8 +457,9 @@ struct TravelPlanMapView: View {
             }
         } label: {
             HStack(spacing: 5) {
+                // 選択中は同じ色で塗った丸の上に乗るため、色分けの丸が消える
                 Circle()
-                    .fill(color)
+                    .fill(isSelected ? Color.white : color)
                     .frame(width: 7, height: 7)
                 Text(title)
                     .font(.caption.weight(.semibold))
@@ -472,40 +541,21 @@ struct TravelPlanMapView: View {
                     .padding(.top, 12)
             }
 
-            HStack(spacing: 10) {
-                Button(action: {
-                    openInAppleMaps(
-                        name: group.displayTitle,
-                        latitude: group.coordinate.latitude,
-                        longitude: group.coordinate.longitude
-                    )
-                }) {
-                    Label("経路案内", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(primaryColor)
-                        .foregroundStyle(.white)
-                        .cornerRadius(12)
-                }
-                .buttonStyle(PlainButtonStyle())
-
-                Button(action: {
-                    openInGoogleMaps(
-                        latitude: group.coordinate.latitude,
-                        longitude: group.coordinate.longitude
-                    )
-                }) {
-                    Label("Google", systemImage: "globe")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(primaryColor.opacity(0.12))
-                        .foregroundStyle(primaryColor)
-                        .cornerRadius(12)
-                }
-                .buttonStyle(PlainButtonStyle())
+            // 開くアプリはプロフィールの「経路案内のアプリ」に従う。
+            // 以前は Apple マップと Google の2つを並べていたが、Google は
+            // アプリが入っていないと押しても何も起きなかった
+            Button(action: {
+                navigationTarget = MapDestination(name: group.displayTitle, coordinate: group.coordinate)
+            }) {
+                Label("経路案内", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
+                    .font(.subheadline.weight(.semibold))
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(primaryColor)
+                    .foregroundStyle(.white)
+                    .cornerRadius(12)
             }
+            .buttonStyle(PlainButtonStyle())
             .padding(.horizontal, 20)
             .padding(.top, 14)
             .padding(.bottom, 20)
@@ -550,7 +600,7 @@ struct TravelPlanMapView: View {
     private func panelItemList(_ group: PinGroup) -> some View {
         VStack(spacing: 8) {
             ForEach(group.items) { mapped in
-                panelItemRow(mapped, showDayBadge: scope == .all || !group.isSameDay)
+                panelItemRow(mapped, showDayBadge: effectiveScope == .all || !group.isSameDay)
             }
         }
         .padding(.horizontal, 20)
@@ -586,7 +636,7 @@ struct TravelPlanMapView: View {
                             .background(color.opacity(0.14), in: Capsule())
                     }
 
-                    Text(DateFormatter.japaneseTime.string(from: item.time))
+                    Text(item.timeText)
                         .font(.caption.weight(.semibold))
                         .foregroundColor(themeManager.currentTheme.secondaryText)
 
@@ -614,6 +664,24 @@ struct TravelPlanMapView: View {
 
     // MARK: - Camera
     /// 表示中のピンがすべて収まる範囲にカメラを合わせる
+    /// 行程表で選ばれた項目のピンへ寄る
+    private func focusPin(forItemID itemID: String) {
+        guard let target = mappedItems.first(where: { $0.item.id == itemID }) else { return }
+
+        selectedGroupID = pinGroups.first { group in
+            group.items.contains { $0.item.id == itemID }
+        }?.id
+
+        withAnimation(.easeInOut(duration: 0.35)) {
+            cameraPosition = .region(
+                MKCoordinateRegion(
+                    center: target.coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: Self.minimumSpan, longitudeDelta: Self.minimumSpan)
+                )
+            )
+        }
+    }
+
     private func fitCameraToPins(animated: Bool) {
         let items = mappedItems
 
@@ -669,18 +737,9 @@ struct TravelPlanMapView: View {
         return "\(latitude),\(longitude)"
     }
 
-    /// 日付部分を無視して時刻だけで並べる（詳細画面のタイムラインと同じ順序）
+    /// 起きる順に並べる（詳細画面のタイムラインと同じ順序）
     private func sortedByTime(_ items: [ScheduleItem]) -> [ScheduleItem] {
-        let calendar = Calendar.current
-
-        return items.sorted { item1, item2 in
-            let components1 = calendar.dateComponents([.hour, .minute], from: item1.time)
-            let components2 = calendar.dateComponents([.hour, .minute], from: item2.time)
-
-            let minutes1 = (components1.hour ?? 0) * 60 + (components1.minute ?? 0)
-            let minutes2 = (components2.hour ?? 0) * 60 + (components2.minute ?? 0)
-            return minutes1 < minutes2
-        }
+        items.sorted(by: ScheduleItem.chronologically)
     }
 
     private func formatCost(_ cost: Double) -> String {
@@ -688,21 +747,5 @@ struct TravelPlanMapView: View {
         formatter.numberStyle = .decimal
         formatter.maximumFractionDigits = 0
         return "¥\(formatter.string(from: NSNumber(value: cost)) ?? "0")"
-    }
-
-    private func openInAppleMaps(name: String, latitude: Double, longitude: Double) {
-        let coordinate = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
-        let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))
-        mapItem.name = name
-        mapItem.openInMaps(launchOptions: [
-            MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
-        ])
-    }
-
-    private func openInGoogleMaps(latitude: Double, longitude: Double) {
-        let urlString = "comgooglemaps://?daddr=\(latitude),\(longitude)&directionsmode=driving"
-        if let url = URL(string: urlString) {
-            UIApplication.shared.open(url)
-        }
     }
 }

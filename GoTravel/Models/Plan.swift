@@ -2,9 +2,84 @@ import Foundation
 import SwiftUI
 
 // MARK: - Plan Type
-enum PlanType: String, Codable {
+enum PlanType: String, Codable, CaseIterable {
     case outing
     case daily
+    /// 記念日。時刻も場所も持たず、毎年めぐってくる日付そのもの。
+    /// 「あと◯日」「何回目か」が主役で、何をするかは持たない
+    case anniversary
+
+    var displayName: String {
+        switch self {
+        case .outing:      return "おでかけ"
+        case .daily:       return "日常"
+        case .anniversary: return "記念日"
+        }
+    }
+
+    var icon: String {
+        switch self {
+        case .outing:      return "figure.walk"
+        case .daily:       return "house.fill"
+        case .anniversary: return "heart.fill"
+        }
+    }
+
+    /// 選ぶとこの先で何を聞かれるか。
+    ///
+    /// 3つの違いが分からないという声への答えがこれ。
+    /// **違いは名前ではなく入力項目そのもの**なので、選んだ結果を先に見せる。
+    /// 説明を別の場所に置くと読まれないため、選択の真下に出す
+    var inputSummary: String {
+        switch self {
+        case .outing:      return "日程と、行きたい場所を登録します"
+        case .daily:       return "日付・時刻と、繰り返しを登録します"
+        case .anniversary: return "日付だけ。毎年くり返して、あと何日かを数えます"
+        }
+    }
+
+    /// 名前欄に薄く出す例。何を入れる箱なのかは、説明文より例のほうが早い
+    var titlePlaceholder: String {
+        switch self {
+        case .outing:      return "大阪旅行"
+        case .daily:       return "ジム"
+        case .anniversary: return "結婚記念日"
+        }
+    }
+}
+
+// MARK: - Recurrence
+
+/// 繰り返し。旅行計画には絶対に無い概念で、日常の用事と記念日にだけある。
+///
+/// 「完了にすると次回分を作る」方式にしている。
+/// 未来の分をあらかじめ大量に作ると、1件直したいだけのときに
+/// どれを直せばいいのか分からなくなるため
+enum PlanRecurrence: String, Codable, CaseIterable {
+    case none
+    case weekly
+    case monthly
+    case yearly
+
+    var displayName: String {
+        switch self {
+        case .none:    return "なし"
+        case .weekly:  return "毎週"
+        case .monthly: return "毎月"
+        case .yearly:  return "毎年"
+        }
+    }
+
+    /// 次回の日付。同じ曜日・同じ日を保つよう、カレンダー計算に任せる
+    func nextDate(after date: Date) -> Date? {
+        let calendar = Calendar.current
+        switch self {
+        case .none:    return nil
+        case .weekly:  return calendar.date(byAdding: .weekOfYear, value: 1, to: date)
+        case .monthly: return calendar.date(byAdding: .month, value: 1, to: date)
+        case .yearly:  return calendar.date(byAdding: .year, value: 1, to: date)
+        }
+    }
 }
 
 struct Plan: Identifiable, Codable, Equatable {
@@ -19,13 +94,31 @@ struct Plan: Identifiable, Codable, Equatable {
     var createdAt: Date
     var planType: PlanType = .outing
     var time: Date?
+    /// 終わりの時刻。日常の用事だけが持つ任意の値。
+    /// 日付は `startDate` 側が持つので、ここで見るのは時分だけ
+    var endTime: Date?
     var description: String?
     var linkURL: String?
     var scheduleItems: [PlanScheduleItem] = [] // スケジュール項目（おでかけプラン用）
+    /// 済んだかどうか。用事は「終わったか」が意味を持つ
+    var isCompleted: Bool = false
+    /// 付いているタグ（`PlanTag.id`）。予定の分類はこれが本命で、
+    /// 一覧の絞り込みも、色による見分けもタグが受け持つ。
+    ///
+    /// 名前ではなくIDを持つのは、後からタグの名前や色を変えても
+    /// 付けた予定を全部書き換えずに済むようにするため。
+    /// **先頭が代表タグ**で、一覧のカードにはこれが出る
+    var tagIDs: [String] = []
+    var recurrence: PlanRecurrence = .none
+    /// 鳴らす通知。**nil は「まだ設定していない」**で、種別ごとの既定が使われる。
+    /// 空配列は「通知しない」。この2つを分けないと、
+    /// 設定を足す前からある予定の通知を勝手に止めてしまう
+    var reminders: [PlanReminder]?
 
     enum CodingKeys: String, CodingKey {
         case id, title, startDate, endDate, places, cardColorHex, localImageFileName, userId, createdAt
-        case planType, time, description, linkURL, scheduleItems
+        case planType, time, endTime, description, linkURL, scheduleItems, isCompleted, tagIDs, recurrence
+        case reminders
     }
 
     var cardColorHex: String? {
@@ -47,9 +140,14 @@ struct Plan: Identifiable, Codable, Equatable {
          createdAt: Date = Date(),
          planType: PlanType = .outing,
          time: Date? = nil,
+         endTime: Date? = nil,
          description: String? = nil,
          linkURL: String? = nil,
-         scheduleItems: [PlanScheduleItem] = []) {
+         scheduleItems: [PlanScheduleItem] = [],
+         isCompleted: Bool = false,
+         tagIDs: [String] = [],
+         recurrence: PlanRecurrence = .none,
+         reminders: [PlanReminder]? = nil) {
         self.id = id
         self.title = title
         self.startDate = startDate
@@ -61,9 +159,14 @@ struct Plan: Identifiable, Codable, Equatable {
         self.createdAt = createdAt
         self.planType = planType
         self.time = time
+        self.endTime = endTime
         self.description = description
         self.linkURL = linkURL
         self.scheduleItems = scheduleItems
+        self.isCompleted = isCompleted
+        self.tagIDs = tagIDs
+        self.recurrence = recurrence
+        self.reminders = reminders
     }
 
     init(from decoder: Decoder) throws {
@@ -78,9 +181,14 @@ struct Plan: Identifiable, Codable, Equatable {
         createdAt = try container.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         planType = try container.decodeIfPresent(PlanType.self, forKey: .planType) ?? .outing
         time = try container.decodeIfPresent(Date.self, forKey: .time)
+        endTime = try container.decodeIfPresent(Date.self, forKey: .endTime)
         description = try container.decodeIfPresent(String.self, forKey: .description)
         linkURL = try container.decodeIfPresent(String.self, forKey: .linkURL)
         scheduleItems = try container.decodeIfPresent([PlanScheduleItem].self, forKey: .scheduleItems) ?? []
+        isCompleted = try container.decodeIfPresent(Bool.self, forKey: .isCompleted) ?? false
+        tagIDs = try container.decodeIfPresent([String].self, forKey: .tagIDs) ?? []
+        recurrence = try container.decodeIfPresent(PlanRecurrence.self, forKey: .recurrence) ?? .none
+        reminders = try container.decodeIfPresent([PlanReminder].self, forKey: .reminders)
         if let hex = try container.decodeIfPresent(String.self, forKey: .cardColorHex) {
             cardColor = Color(hex: hex)
         } else {
@@ -101,9 +209,14 @@ struct Plan: Identifiable, Codable, Equatable {
         try container.encode(createdAt, forKey: .createdAt)
         try container.encode(planType, forKey: .planType)
         try container.encodeIfPresent(time, forKey: .time)
+        try container.encodeIfPresent(endTime, forKey: .endTime)
         try container.encodeIfPresent(description, forKey: .description)
         try container.encodeIfPresent(linkURL, forKey: .linkURL)
         try container.encode(scheduleItems, forKey: .scheduleItems)
+        try container.encode(isCompleted, forKey: .isCompleted)
+        try container.encode(tagIDs, forKey: .tagIDs)
+        try container.encode(recurrence, forKey: .recurrence)
+        try container.encodeIfPresent(reminders, forKey: .reminders)
     }
 }
 
@@ -136,6 +249,21 @@ extension Color {
     }
 }
 
+// MARK: - 時刻の表示
+
+extension Plan {
+    /// 「14:00 〜 15:30」。終わりの時刻が無ければ開始だけを返す。
+    /// 時刻そのものが無ければ nil（＝終日）
+    var timeRangeText: String? {
+        guard let time else { return nil }
+
+        let start = DateFormatter.japaneseTime.string(from: time)
+        guard let endTime else { return start }
+
+        return start + " 〜 " + DateFormatter.japaneseTime.string(from: endTime)
+    }
+}
+
 // MARK: - 複数日のスケジュール
 
 extension Plan {
@@ -148,6 +276,61 @@ extension Plan {
             to: calendar.startOfDay(for: endDate)
         ).day ?? 0
         return max(days + 1, 1)
+    }
+
+    /// 前に作った予定を、別の日に作り直す。
+    ///
+    /// カレンダーの日付を長押しして履歴から選んだときに使う。
+    /// 「またジム」「また同じ店」のような繰り返しを、打ち直さずに置けるようにする。
+    ///
+    /// **日付だけを差し替えて、中身はそのまま持っていく。**
+    /// 期間の長さ（2泊3日など）も保つので、おでかけの予定でも形が崩れない。
+    ///
+    /// 引き継がないものが3つある。
+    /// - `id`：別の予定として扱う
+    /// - `isCompleted`：前回終えたことは、今回の予定には関係ない
+    /// - `localImageFileName`：写真のファイル名を共有すると、
+    ///   片方を消したときにもう片方の写真まで消える。**必要なら呼び出し側で複製する**
+    func recreated(on newStartDate: Date) -> Plan {
+        let calendar = Calendar.current
+        let newStart = calendar.startOfDay(for: newStartDate)
+        let oldStart = calendar.startOfDay(for: startDate)
+        let offsetDays = calendar.dateComponents([.day], from: oldStart, to: newStart).day ?? 0
+
+        /// 元の日付との差だけ、そのままずらす。時刻は元のまま残る
+        func shifted(_ date: Date?) -> Date? {
+            guard let date else { return nil }
+            return calendar.date(byAdding: .day, value: offsetDays, to: date)
+        }
+
+        var copy = self
+        copy.id = UUID().uuidString
+        copy.createdAt = Date()
+        copy.isCompleted = false
+        copy.localImageFileName = nil
+
+        copy.startDate = shifted(startDate) ?? newStartDate
+        copy.endDate = shifted(endDate) ?? newStartDate
+        copy.time = shifted(time)
+        copy.endTime = shifted(endTime)
+
+        // タイムスケジュールも同じ幅でずらす。
+        // 2日目に入れた予定は、新しい2日目に残る
+        copy.scheduleItems = scheduleItems.map { item in
+            var moved = item
+            moved.id = UUID().uuidString
+            moved.time = shifted(item.time) ?? item.time
+            return moved
+        }
+
+        // 場所は座標なので日付に関係なくそのまま使える
+        copy.places = places.map { place in
+            var moved = place
+            moved.id = UUID().uuidString
+            return moved
+        }
+
+        return copy
     }
 
     /// 2日以上にまたがるか。日付の選択欄や見出しを出すかの判定に使う
@@ -169,5 +352,19 @@ extension Plan {
     /// 指定の日番号に対応する日付
     func date(forDay dayNumber: Int) -> Date {
         Calendar.current.date(byAdding: .day, value: dayNumber - 1, to: startDate) ?? startDate
+    }
+}
+
+// MARK: - Plan Type Color
+
+extension PlanType {
+    /// 種別の色。3つとも全テーマで同じ色を使う。
+    /// 予定カードの小さなタグや点にだけ出るので、白黒テーマでも色が付いてよい
+    func color(_ theme: ThemePreset) -> Color {
+        switch self {
+        case .outing:      return theme.outingPlanColor
+        case .daily:       return theme.dailyPlanColor
+        case .anniversary: return theme.anniversaryPlanColor
+        }
     }
 }

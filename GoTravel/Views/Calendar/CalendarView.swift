@@ -9,11 +9,20 @@ struct CalendarTimelineItem: Identifiable {
     let type: CalendarItemType
     let relatedPlan: Plan?
     let relatedTravelPlan: TravelPlan?
+
+    /// 本当に時刻を持っているか。
+    ///
+    /// おでかけ・記念日・旅行は日付だけの予定で、`time` には並べ替えのために
+    /// その日の 0:00 を入れている。**これを時刻として扱ってはいけない。**
+    /// 「過ぎた予定」の判定に混ぜると、日付が変わった瞬間に
+    /// 0:00 の予定として過去扱いになり、当日なのに薄く表示されてしまう
+    var hasTime: Bool = false
 }
 
 enum CalendarItemType {
     case dailyPlan
     case outingPlan
+    case anniversary
     case travel
 }
 
@@ -22,7 +31,16 @@ struct CalendarView: View {
     @EnvironmentObject var travelViewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
+    @ObservedObject var tagManager = PlanTagManager.shared
     @State private var selectedDate = Date()
+    /// 長押しされた日。履歴から作る一覧を出すために持つ。
+    /// `Date` は Identifiable ではないので、シートに渡すために包む
+    @State private var historyTarget: HistoryTarget?
+
+    private struct HistoryTarget: Identifiable {
+        let id = UUID()
+        let date: Date
+    }
     @State private var currentMonth = Date()
     @State private var showAddSheet = false
     @State private var dragOffset: CGFloat = 0
@@ -43,7 +61,9 @@ struct CalendarView: View {
         NavigationView {
             ZStack(alignment: .bottom) {
                 LinearGradient(
-                    gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.gradientDark, themeManager.currentTheme.dark] : [themeManager.currentTheme.gradientLight, themeManager.currentTheme.light]),
+                    // 下端は純黒（dark）ではなくテーマの地の色に落とす。
+                    // 下部シートと同じ色だと境目が消えるので、シート側は一段上げた面を使う
+                    gradient: Gradient(colors: colorScheme == .dark ? [themeManager.currentTheme.gradientDark, themeManager.currentTheme.backgroundDark] : [themeManager.currentTheme.gradientLight, themeManager.currentTheme.light]),
                     startPoint: .top,
                     endPoint: .bottom
                 )
@@ -76,7 +96,8 @@ struct CalendarView: View {
                 BottomTimelineCard(
                     selectedDate: selectedDate,
                     timelineItems: dailyTimeline,
-                    isExpanded: $isTimelineExpanded
+                    isExpanded: $isTimelineExpanded,
+                    onAddPlan: { showAddSheet = true }
                 )
                 .environmentObject(viewModel)
                 .environmentObject(travelViewModel)
@@ -117,8 +138,16 @@ struct CalendarView: View {
                     .accessibilityLabel("予定を追加")
                 }
             }
+            .sheet(item: $historyTarget) { target in
+                PlanHistoryPickerView(date: target.date) { plan in
+                    createFromHistory(plan, on: target.date)
+                }
+                .environmentObject(viewModel)
+            }
             .sheet(isPresented: $showAddSheet) {
-                AddPlanView(historyPlans: viewModel.plans) { newPlan in
+                // 選んでいる日で始める。今日の日付で始まると、
+                // 8月30日を見ていても8月30日の予定は作れない
+                AddPlanView(historyPlans: viewModel.plans, initialDate: selectedDate) { newPlan in
                     if let userId = authVM.userId {
                         viewModel.add(newPlan, userId: userId)
                     } else {
@@ -177,7 +206,9 @@ struct CalendarView: View {
                     subtitle: plan.description,
                     type: .dailyPlan,
                     relatedPlan: plan,
-                    relatedTravelPlan: nil
+                    relatedTravelPlan: nil,
+                    // 日常の予定だけが時刻を持つ。それも入力は任意
+                    hasTime: plan.time != nil
                 )
             }
 
@@ -195,6 +226,24 @@ struct CalendarView: View {
                     title: plan.title,
                     subtitle: dateInfo,
                     type: .outingPlan,
+                    relatedPlan: plan,
+                    relatedTravelPlan: nil,
+                    hasTime: plan.time != nil
+                )
+            }
+
+        // 記念日。時刻を持たないので、その日の先頭に置く
+        let anniversaryItems = viewModel.plans
+            .filter { plan in
+                plan.planType == .anniversary &&
+                isDateInPlanRange(date: selectedDate, plan: plan)
+            }
+            .map { plan -> CalendarTimelineItem in
+                CalendarTimelineItem(
+                    time: calendar.startOfDay(for: selectedDate),
+                    title: plan.title,
+                    subtitle: anniversaryCountText(for: plan),
+                    type: .anniversary,
                     relatedPlan: plan,
                     relatedTravelPlan: nil
                 )
@@ -218,7 +267,7 @@ struct CalendarView: View {
             }
 
         // 時系列順にソート
-        return (dailyPlanItems + outingPlanItems + travelItems).sorted { item1, item2 in
+        return (anniversaryItems + dailyPlanItems + outingPlanItems + travelItems).sorted { item1, item2 in
             let components1 = calendar.dateComponents([.hour, .minute], from: item1.time)
             let components2 = calendar.dateComponents([.hour, .minute], from: item2.time)
 
@@ -256,7 +305,7 @@ struct CalendarView: View {
         } else if isEndDate {
             return "最終日 - \(dateRangeString(plan.startDate, plan.endDate))"
         } else {
-            let dayNumber = calendar.dateComponents([.day], from: plan.startDate, to: selectedDate).day ?? 0
+            let dayNumber = calendar.dayDifference(from: plan.startDate, to: selectedDate)
             return "\(dayNumber + 1)日目 - \(dateRangeString(plan.startDate, plan.endDate))"
         }
     }
@@ -273,7 +322,7 @@ struct CalendarView: View {
         } else if isEndDate {
             return "\(travelPlan.destination) - 最終日 (\(dateRangeString(travelPlan.startDate, travelPlan.endDate)))"
         } else {
-            let dayNumber = calendar.dateComponents([.day], from: travelPlan.startDate, to: selectedDate).day ?? 0
+            let dayNumber = calendar.dayDifference(from: travelPlan.startDate, to: selectedDate)
             return "\(travelPlan.destination) - \(dayNumber + 1)日目 (\(dateRangeString(travelPlan.startDate, travelPlan.endDate)))"
         }
     }
@@ -404,7 +453,7 @@ struct CalendarView: View {
     private func calendarDayCell(date: Date) -> some View {
         let isSelected = calendar.isDate(date, inSameDayAs: selectedDate)
         let isToday = calendar.isDateInToday(date)
-        let eventTypes = getEventTypesForDate(date: date)
+        let dotColors = dotColors(for: date)
         let dayNumber = calendar.component(.day, from: date)
 
         return VStack(spacing: 4) {
@@ -427,21 +476,43 @@ struct CalendarView: View {
                 )
 
             // イベントインジケーター（イベントタイプごとに色分け）
-            if !eventTypes.isEmpty {
-                HStack(spacing: 2) {
-                    ForEach(eventTypes.prefix(3).indices, id: \.self) { index in
-                        Circle()
-                            .fill(colorForEventType(eventTypes[index]))
-                            .frame(width: 4, height: 4)
-                    }
+            //
+            // 予定の無い日で行ごと消すと、その日のマスだけ背が低くなる。
+            // 週の高さは一番高いマスで決まるため、予定のある日の数字が
+            // 上へ、無い日の数字が下へずれて見えていた。高さは常に確保する
+            HStack(spacing: 2) {
+                ForEach(dotColors.prefix(3).indices, id: \.self) { index in
+                    Circle()
+                        .fill(dotColors[index])
+                        .frame(width: 4, height: 4)
                 }
             }
+            .frame(height: 4)
         }
         .contentShape(Rectangle())
         .onTapGesture {
             withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                 selectedDate = date
             }
+        }
+        // 長押しで、これまでの予定からその日に置ける。
+        // 「またジム」「また同じ店」を毎回打ち直さずに済ませるため。
+        // 月をめくる横スワイプとは競合しない（長押しは指が動くと成立しない）
+        .onLongPressGesture(minimumDuration: 0.45) {
+            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            historyTarget = HistoryTarget(date: date)
+        }
+    }
+
+    /// 履歴から作る。選ばれた予定を、長押しした日付で作り直す
+    private func createFromHistory(_ plan: Plan, on date: Date) {
+        guard let userId = authVM.userId else { return }
+
+        viewModel.add(plan.recreated(on: date), userId: userId)
+
+        // 作った日を開いて、増えたことがその場で見えるようにする
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            selectedDate = date
         }
     }
 
@@ -467,38 +538,44 @@ struct CalendarView: View {
     }
 
     // 指定日のイベントタイプのリストを取得（種別ごとに1つ、色分けが機能するよう重複排除）
-    private func getEventTypesForDate(date: Date) -> [CalendarItemType] {
-        var eventTypes: [CalendarItemType] = []
+    /// その日のマスに出す点の色。
+    ///
+    /// 予定の分類はタグが担うので、点もタグの色にする。
+    /// 種別（おでかけ／日常／記念日）で塗り分けていた頃は、月を見渡しても
+    /// 「日常が多い週」までしか分からなかった。
+    /// 同じ画面の下にある予定リストもタグの色なので、そちらとも揃う
+    private func dotColors(for date: Date) -> [Color] {
+        var colors: [Color] = []
 
-        // Travel plans (期間中のすべての日に表示)
+        // 旅行計画はタグを持たないので、専用の色を1つだけ
         if travelViewModel.travelPlans.contains(where: { isDateInTravelPlanRange(date: date, travelPlan: $0) }) {
-            eventTypes.append(.travel)
+            colors.append(themeManager.currentTheme.travelColor)
         }
 
-        // Outing plans
-        if viewModel.plans.contains(where: { $0.planType == .outing && isDateInPlanRange(date: date, plan: $0) }) {
-            eventTypes.append(.outingPlan)
+        let plansOfDay = viewModel.plans.filter { isDateInPlanRange(date: date, plan: $0) }
+        guard !plansOfDay.isEmpty else { return colors }
+
+        // 同じタグは1つにまとめる。並びは絞り込み行と同じ順にしたいので、
+        // その日のタグを拾うのではなくタグ側の並びを走る
+        let idsOfDay = Set(plansOfDay.flatMap(\.tagIDs))
+        for tag in tagManager.tags where idsOfDay.contains(tag.id) {
+            colors.append(tag.color)
         }
 
-        // Daily plans
-        if viewModel.plans.contains(where: { $0.planType == .daily && isDateInPlanRange(date: date, plan: $0) }) {
-            eventTypes.append(.dailyPlan)
+        // タグの付いていない予定は中立の灰色でまとめて1つ。
+        // 出さないと「予定があるのに点が無い日」ができる
+        if plansOfDay.contains(where: { tagManager.tags(for: $0.tagIDs).isEmpty }) {
+            colors.append(themeManager.currentTheme.secondaryText.opacity(0.55))
         }
 
-        return eventTypes
+        return colors
     }
 
-    private func colorForEventType(_ type: CalendarItemType) -> Color {
-        switch type {
-        case .dailyPlan:
-            return themeManager.currentTheme.dailyPlanColor
-        case .outingPlan:
-            return themeManager.currentTheme.outingPlanColor
-        case .travel:
-            return themeManager.currentTheme.travelColor
-        }
+    /// 「10回目の結婚記念日」。開始年からの経過で数える
+    private func anniversaryCountText(for plan: Plan) -> String {
+        let years = calendar.component(.year, from: selectedDate) - calendar.component(.year, from: plan.startDate)
+        return years > 0 ? "\(years + 1)回目" : "1回目"
     }
-
 
     // MARK: - Helper Methods
     private func changeMonth(by value: Int) {

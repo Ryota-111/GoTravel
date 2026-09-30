@@ -55,6 +55,7 @@ struct JoinTravelPlanView: View {
                 Text("「\(joinedPlanTitle)」に参加しました。旅行計画の一覧に表示されます。")
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     // MARK: - Header Section

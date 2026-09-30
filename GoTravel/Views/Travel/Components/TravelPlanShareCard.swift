@@ -7,7 +7,13 @@ import SwiftUI
 /// アプリを持っていない同行者に渡す手段としてこちらを用意した
 enum TravelPlanTextExporter {
 
-    static func fullItinerary(for plan: TravelPlan) -> String {
+    /// 何を書き出すかは呼び出し側が選ぶ。
+    /// 予約番号は渡す相手を選ぶ情報なので、既定では入れない
+    static func fullItinerary(for plan: TravelPlan,
+                              includesSchedule: Bool = true,
+                              includesReservations: Bool = true,
+                              includesPacking: Bool = true,
+                              includesConfirmationNumbers: Bool = false) -> String {
         var lines: [String] = []
 
         lines.append("【\(plan.title)】")
@@ -16,44 +22,54 @@ enum TravelPlanTextExporter {
             lines.append("目的地: \(plan.destination)")
         }
 
-        let days = plan.daySchedules.sorted { $0.dayNumber < $1.dayNumber }
-        for day in days where !day.scheduleItems.isEmpty {
-            lines.append("")
-            lines.append("◆ Day \(day.dayNumber)  \(dateString(day.date))")
+        if includesSchedule {
+            for day in plan.daySchedulesInRange where !day.scheduleItems.isEmpty {
+                lines.append("")
+                lines.append("◆ Day \(day.dayNumber)  \(dateString(plan.date(forDay: day.dayNumber)))")
 
-            for item in sortedByTime(day.scheduleItems) {
-                var row = "\(timeString(item.time))  \(item.title)"
-                if let location = item.location, !location.isEmpty {
-                    row += "  @\(location)"
-                }
-                if let cost = item.cost, cost > 0 {
-                    row += "  \(currency(cost))"
-                }
-                lines.append(row)
+                for item in sortedByTime(day.scheduleItems) {
+                    var row = "\(item.timeText)  \(item.title)"
+                    if let location = item.location, !location.isEmpty {
+                        row += "  @\(location)"
+                    }
+                    if let cost = item.displayCost, cost > 0 {
+                        row += "  \(currency(cost))"
+                    }
+                    lines.append(row)
 
-                if let notes = item.notes, !notes.isEmpty {
-                    lines.append("　　\(notes)")
+                    if let notes = item.notes, !notes.isEmpty {
+                        lines.append("　　\(notes)")
+                    }
+                    if let link = item.linkURL, !link.isEmpty {
+                        lines.append("　　\(link)")
+                    }
                 }
-                if let link = item.linkURL, !link.isEmpty {
-                    lines.append("　　\(link)")
-                }
+            }
+
+            let total = plan.daySchedulesInRange
+                .flatMap(\.scheduleItems)
+                .compactMap(\.displayCost)
+                .reduce(0, +)
+
+            if total > 0 {
+                lines.append("")
+                lines.append("\(costTotalLabel(for: plan)): \(currency(total))")
             }
         }
 
-        let total = plan.daySchedules
-            .flatMap(\.scheduleItems)
-            .compactMap(\.cost)
-            .reduce(0, +)
-
-        if total > 0 {
+        if includesReservations && !plan.reservations.isEmpty {
             lines.append("")
-            lines.append("合計: \(currency(total))")
+            lines.append("◆ 予約")
+            for reservation in plan.reservations {
+                lines.append(contentsOf: reservationLines(reservation,
+                                                          includesConfirmationNumber: includesConfirmationNumbers))
+            }
         }
 
-        if !plan.packingItems.isEmpty {
+        if includesPacking && !plan.items(of: .packing).isEmpty {
             lines.append("")
             lines.append("◆ 持ち物")
-            for packing in plan.packingItems {
+            for packing in plan.items(of: .packing) {
                 lines.append("\(packing.isChecked ? "☑" : "☐") \(packing.name)")
             }
         }
@@ -64,15 +80,50 @@ enum TravelPlanTextExporter {
         return lines.joined(separator: "\n")
     }
 
-    // MARK: Helpers
+    private static func reservationLines(_ reservation: Reservation,
+                                         includesConfirmationNumber: Bool) -> [String] {
+        var lines: [String] = []
+        let name = reservation.title.isEmpty ? reservation.kind.label : reservation.title
+        lines.append("[\(reservation.kind.label)] \(name)")
 
-    static func sortedByTime(_ items: [ScheduleItem]) -> [ScheduleItem] {
-        items.sorted { minutes(of: $0.time) < minutes(of: $1.time) }
+        if let line = reservation.dateLineText {
+            lines.append("　　\(line)")
+        }
+
+        if reservation.hasRoute {
+            var route = [reservation.departurePlace, reservation.arrivalPlace]
+                .compactMap { $0 }
+                .joined(separator: " → ")
+            if let arrival = reservation.arrivalDate {
+                route += "（到着 \(ScheduleClock.timeText(arrival, in: reservation.arrivalTimeZone))）"
+            }
+            lines.append("　　\(route)")
+        }
+
+        if let seat = reservation.seat, !seat.isEmpty {
+            lines.append("　　座席 \(seat)")
+        }
+        if let terminal = reservation.terminal, !terminal.isEmpty {
+            lines.append("　　ターミナル \(terminal)")
+        }
+
+        if includesConfirmationNumber,
+           let number = reservation.confirmationNumber, !number.isEmpty {
+            lines.append("　　予約番号 \(number)")
+        }
+
+        if let note = reservation.note, !note.isEmpty {
+            lines.append("　　\(note)")
+        }
+
+        return lines
     }
 
-    private static func minutes(of date: Date) -> Int {
-        let components = Calendar.current.dateComponents([.hour, .minute], from: date)
-        return (components.hour ?? 0) * 60 + (components.minute ?? 0)
+    // MARK: Helpers
+
+    /// 起きる順に並べる。時間帯が違う予定が混ざっていても、実際の順になる
+    static func sortedByTime(_ items: [ScheduleItem]) -> [ScheduleItem] {
+        items.sorted(by: ScheduleItem.chronologically)
     }
 
     static func dateString(_ date: Date) -> String {
@@ -82,11 +133,16 @@ enum TravelPlanTextExporter {
         return formatter.string(from: date)
     }
 
-    static func timeString(_ date: Date) -> String {
-        let formatter = DateFormatter()
-        formatter.locale = Locale(identifier: "ja_JP")
-        formatter.dateFormat = "HH:mm"
-        return formatter.string(from: date)
+    /// 合計の見出し。
+    ///
+    /// 旅行が終わったあとに残す画像では「予定していた額」と
+    /// 「実際に使った額」が混ざると読めなくなる。
+    /// 1件でも実績が入っていれば、実績として出していることを明示する
+    static func costTotalLabel(for plan: TravelPlan) -> String {
+        let hasActual = plan.daySchedulesInRange
+            .flatMap(\.scheduleItems)
+            .contains(where: \.isShowingActualCost)
+        return hasActual ? "実際に使った額" : "合計（予定）"
     }
 
     static func currency(_ amount: Double) -> String {
@@ -113,7 +169,7 @@ struct TravelPlanShareCard: View {
     }
 
     private var dayTotal: Double {
-        daySchedule.scheduleItems.compactMap(\.cost).reduce(0, +)
+        daySchedule.scheduleItems.compactMap(\.displayCost).reduce(0, +)
     }
 
     var body: some View {
@@ -125,6 +181,39 @@ struct TravelPlanShareCard: View {
         }
         .frame(width: Self.width, alignment: .leading)
         .background(Color(.systemBackground))
+    }
+
+    /// 全日程を1枚にまとめるカードから、この日の中身だけを借りる
+    var dayBody: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            dayHeading
+            timeline
+        }
+    }
+
+    private var dayHeading: some View {
+        HStack(spacing: 6) {
+            Text("Day \(daySchedule.dayNumber)")
+                .font(.caption.weight(.bold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 9)
+                .padding(.vertical, 4)
+                .background(accentColor, in: Capsule())
+
+            Text(TravelPlanTextExporter.dateString(plan.date(forDay: daySchedule.dayNumber)))
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.primary)
+
+            Spacer(minLength: 0)
+
+            if dayTotal > 0 {
+                Text(TravelPlanTextExporter.currency(dayTotal))
+                    .font(.caption.weight(.bold))
+                    .foregroundColor(.secondary)
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 16)
     }
 
     // MARK: Header
@@ -151,7 +240,7 @@ struct TravelPlanShareCard: View {
                     .padding(.vertical, 4)
                     .background(accentColor, in: Capsule())
 
-                Text(TravelPlanTextExporter.dateString(daySchedule.date))
+                Text(TravelPlanTextExporter.dateString(plan.date(forDay: daySchedule.dayNumber)))
                     .font(.subheadline.weight(.semibold))
                     .foregroundColor(.primary)
             }
@@ -180,7 +269,7 @@ struct TravelPlanShareCard: View {
 
     private func row(item: ScheduleItem, isLast: Bool) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Text(TravelPlanTextExporter.timeString(item.time))
+            Text(item.timeText)
                 .font(.system(size: 13, weight: .bold, design: .rounded).monospacedDigit())
                 .foregroundColor(accentColor)
                 .frame(width: 44, alignment: .leading)
@@ -217,7 +306,7 @@ struct TravelPlanShareCard: View {
                         .foregroundColor(.secondary)
                 }
 
-                if let cost = item.cost, cost > 0 {
+                if let cost = item.displayCost, cost > 0 {
                     Text(TravelPlanTextExporter.currency(cost))
                         .font(.caption.weight(.bold))
                         .foregroundColor(accentColor)
@@ -255,6 +344,227 @@ struct TravelPlanShareCard: View {
             }
             .foregroundColor(accentColor)
         }
+        .padding(.horizontal, 24)
+        .padding(.top, 12)
+        .padding(.bottom, 20)
+        .background(accentColor.opacity(0.07))
+    }
+}
+
+// MARK: - 全日程を1枚に
+
+/// 旅程まるごと1枚の画像。
+/// 日ごとに分けると枚数が増えてカメラロールが埋まるため、1枚にまとめる
+struct TravelPlanFullShareCard: View {
+    let plan: TravelPlan
+    let accentColor: Color
+
+    private var days: [DaySchedule] {
+        plan.daySchedulesInRange.filter { !$0.scheduleItems.isEmpty }
+    }
+
+    private var total: Double {
+        plan.daySchedulesInRange
+            .flatMap { $0.scheduleItems }
+            .compactMap(\.displayCost)
+            .reduce(0, +)
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ShareCardHeader(plan: plan, subtitle: nil, accentColor: accentColor)
+
+            Divider().padding(.horizontal, 24)
+
+            if days.isEmpty {
+                Text("予定がまだありません")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .padding(24)
+            } else {
+                ForEach(days) { day in
+                    TravelPlanShareCard(plan: plan, daySchedule: day, accentColor: accentColor)
+                        .dayBody
+                }
+            }
+
+            ShareCardFooter(accentColor: accentColor) {
+                if total > 0 {
+                    HStack {
+                        Text(TravelPlanTextExporter.costTotalLabel(for: plan))
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                        Spacer()
+                        Text(TravelPlanTextExporter.currency(total))
+                            .font(.system(size: 16, weight: .bold, design: .rounded))
+                            .foregroundColor(.primary)
+                    }
+                }
+            }
+        }
+        .frame(width: TravelPlanShareCard.width, alignment: .leading)
+        .background(Color(.systemBackground))
+    }
+}
+
+// MARK: - 予約と持ち物を1枚に
+
+/// 空港や宿で見たいものと、出発前に見たいものをまとめた1枚
+struct TravelPlanExtrasShareCard: View {
+    let plan: TravelPlan
+    let accentColor: Color
+    let includesReservations: Bool
+    let includesPacking: Bool
+    /// 予約番号は画像になるとSNSに出回りうるので、既定では入れない
+    let includesConfirmationNumbers: Bool
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            ShareCardHeader(plan: plan, subtitle: "予約・持ち物", accentColor: accentColor)
+
+            Divider().padding(.horizontal, 24)
+
+            if includesReservations && !plan.reservations.isEmpty {
+                section(title: "予約") {
+                    ForEach(plan.reservations) { reservation in
+                        reservationRow(reservation)
+                    }
+                }
+            }
+
+            if includesPacking && !plan.items(of: .packing).isEmpty {
+                section(title: "持ち物（\(plan.items(of: .packing).count)件）") {
+                    // 2列にして縦に伸びすぎないようにする
+                    LazyVGrid(columns: [GridItem(.flexible(), alignment: .leading),
+                                        GridItem(.flexible(), alignment: .leading)],
+                              spacing: 6) {
+                        ForEach(plan.items(of: .packing)) { item in
+                            HStack(spacing: 6) {
+                                Image(systemName: item.isChecked ? "checkmark.square.fill" : "square")
+                                    .font(.caption)
+                                    .foregroundColor(item.isChecked ? accentColor : .secondary)
+                                Text(item.name)
+                                    .font(.caption)
+                                    .foregroundColor(.primary)
+                                    .lineLimit(1)
+                            }
+                        }
+                    }
+                }
+            }
+
+            ShareCardFooter(accentColor: accentColor) { EmptyView() }
+        }
+        .frame(width: TravelPlanShareCard.width, alignment: .leading)
+        .background(Color(.systemBackground))
+    }
+
+    private func section<Content: View>(title: String, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(title)
+                .font(.subheadline.weight(.bold))
+                .foregroundColor(accentColor)
+            content()
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 24)
+        .padding(.vertical, 16)
+    }
+
+    private func reservationRow(_ reservation: Reservation) -> some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: reservation.kind.icon)
+                .font(.caption)
+                .foregroundColor(accentColor)
+                .frame(width: 18)
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(reservation.title.isEmpty ? reservation.kind.label : reservation.title)
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(.primary)
+
+                if let line = reservation.dateLineText {
+                    Text(line)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+
+                if reservation.hasRoute {
+                    Text([reservation.departurePlace, reservation.arrivalPlace]
+                        .compactMap { $0 }
+                        .joined(separator: " → "))
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+
+                if let seat = reservation.seat, !seat.isEmpty {
+                    Text("座席 \(seat)")
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                }
+
+                if includesConfirmationNumbers,
+                   let number = reservation.confirmationNumber, !number.isEmpty {
+                    Text("予約番号 \(number)")
+                        .font(.system(size: 12, weight: .bold, design: .monospaced))
+                        .foregroundColor(.primary)
+                }
+            }
+
+            Spacer(minLength: 0)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+}
+
+// MARK: - 共通の見出しと足元
+
+private struct ShareCardHeader: View {
+    let plan: TravelPlan
+    let subtitle: String?
+    let accentColor: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(plan.title)
+                .font(.system(size: 24, weight: .bold, design: .rounded))
+                .foregroundColor(.primary)
+                .lineLimit(2)
+
+            if !plan.destination.isEmpty {
+                Label(plan.destination, systemImage: "mappin.and.ellipse")
+                    .font(.subheadline)
+                    .foregroundColor(.secondary)
+                    .lineLimit(1)
+            }
+
+            Text(subtitle ?? "\(TravelPlanTextExporter.dateString(plan.startDate)) 〜 \(TravelPlanTextExporter.dateString(plan.endDate))")
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(.primary)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(24)
+    }
+}
+
+private struct ShareCardFooter<Content: View>: View {
+    let accentColor: Color
+    @ViewBuilder let content: () -> Content
+
+    var body: some View {
+        VStack(spacing: 10) {
+            content()
+
+            HStack(spacing: 5) {
+                Image(systemName: "airplane.departure")
+                    .font(.caption2)
+                Text("Travory")
+                    .font(.caption.weight(.bold))
+                Spacer()
+            }
+            .foregroundColor(accentColor)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 24)
         .padding(.top, 12)
         .padding(.bottom, 20)

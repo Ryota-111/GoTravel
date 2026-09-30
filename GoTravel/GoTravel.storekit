@@ -4,7 +4,7 @@
   "products" : [
     {
       "displayPrice" : "120",
-      "familySharable" : false,
+      "familyShareable" : false,
       "internalID" : "tip_small",
       "localizations" : [
         {
@@ -19,7 +19,7 @@
     },
     {
       "displayPrice" : "250",
-      "familySharable" : false,
+      "familyShareable" : false,
       "internalID" : "tip_medium",
       "localizations" : [
         {
@@ -34,7 +34,7 @@
     },
     {
       "displayPrice" : "610",
-      "familySharable" : false,
+      "familyShareable" : false,
       "internalID" : "tip_large",
       "localizations" : [
         {
@@ -49,7 +49,7 @@
     },
     {
       "displayPrice" : "1220",
-      "familySharable" : false,
+      "familyShareable" : false,
       "internalID" : "tip_xlarge",
       "localizations" : [
         {
@@ -61,6 +61,21 @@
       "productID" : "com.gmail.taismryotasis.Travory.tip.xlarge",
       "referenceName" : "Tip XLarge",
       "type" : "Consumable"
+    },
+    {
+      "displayPrice" : "490",
+      "familyShareable" : false,
+      "internalID" : "pro_themes",
+      "localizations" : [
+        {
+          "description" : "追加テーマがすべて使えるようになります。これから増えるぶんも含まれます。",
+          "displayName" : "追加テーマ",
+          "locale" : "ja_JP"
+        }
+      ],
+      "productID" : "com.gmail.taismryotasis.Travory.pro.themes",
+      "referenceName" : "Pro Themes",
+      "type" : "NonConsumable"
     }
   ],
   "settings" : {

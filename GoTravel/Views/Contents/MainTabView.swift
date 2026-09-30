@@ -52,9 +52,24 @@ struct MainTabView: View {
             }
         }
         .task {
-            // カテゴリーはどのタブからも参照されるためここで用意する
+            // カテゴリーとタグはどのタブからも参照されるためここで用意する。
+            // タグ側は初回に、文字列だった頃のタグを実体へ移す処理も走る
             if let userId = authVM.userId {
                 PlaceCategoryManager.shared.setup(userId: userId)
+                PlanTagManager.shared.setup(userId: userId)
+                // やることリストはホームのバッジからも数を出すので、ここで用意する。
+                // 初回は UserDefaults に残っているぶんを Core Data へ移す
+                TaskManager.shared.setup(userId: userId)
+                // 持ち物・お土産・やりたいことの「よく使う」候補。
+                // 旅行ごとではなくユーザーに紐づく
+                PackingPresetManager.shared.setup(userId: userId)
+
+                // 写真の預け直し。
+                // `ProStore` は起動直後に所有状態を確かめるが、そのときまだ
+                // サインインが復元されておらず userId が無いことがある。
+                // そこで一度取りこぼすと次の購入まで追いつく機会が来ないので、
+                // ユーザーが確定したここでもう一度声をかける（済んでいれば何もしない）
+                PhotoSyncService.shared.backfill()
             }
 
             if !hasCheckedICloud {
@@ -82,6 +97,13 @@ struct MainTabView: View {
         .onAppear { updateWidgetSnapshot() }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { updateWidgetSnapshot() }
+
+            // アプリに戻ってきたときに、同行者の編集を取り込む。
+            // ホームの onAppear はバックグラウンドから戻っても呼ばれないため、
+            // ここが無いと、引っぱって更新するまで最初の内容のまま見え続けていた
+            if phase == .active, let userId = authVM.userId {
+                Task { await travelPlanViewModel.refreshSharedPlans(userId: userId) }
+            }
         }
         .alert("iCloudが必要です", isPresented: $showICloudAlert) {
             Button("設定を開く", role: .none) {

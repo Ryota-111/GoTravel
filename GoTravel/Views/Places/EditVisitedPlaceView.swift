@@ -76,6 +76,7 @@ struct EditVisitedPlaceView: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     private func saveChanges() {

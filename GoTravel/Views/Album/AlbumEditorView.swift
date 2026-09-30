@@ -75,6 +75,7 @@ struct AlbumEditorView: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     private var backgroundGradient: some View {

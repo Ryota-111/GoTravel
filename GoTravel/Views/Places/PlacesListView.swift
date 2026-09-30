@@ -213,101 +213,108 @@ struct PlacesListView: View {
         }
     }
 
+    /// 予定カードと同じ言語で組む。面には色を敷かず、色はサムネイルとタグへ。
+    /// 全カードにテーマ色を敷いていたときは、並べると一覧が騒がしかった
     private func placeCardView(_ place: VisitedPlace) -> some View {
         let category = categoryManager.category(for: place.categoryId)
-        let baseColor: Color = colorScheme == .dark
+        let accent = category.color
+        let surface: Color = colorScheme == .dark
             ? themeManager.currentTheme.secondaryBackgroundDark
             : themeManager.currentTheme.backgroundLight
-        let tintOpacity: Double = colorScheme == .dark ? 0.16 : 0.10
 
         return NavigationLink(destination: PlaceDetailView(place: place)) {
-            HStack(alignment: .top, spacing: 14) {
-                // カテゴリーアイコンチップ（テーマ色主体）
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(
-                            LinearGradient(
-                                colors: [mainColor, mainColor.opacity(0.65)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 46, height: 46)
-                        .shadow(color: mainColor.opacity(0.35), radius: 5, x: 0, y: 3)
+            HStack(spacing: 12) {
+                placeThumbnail(place, category: category, accent: accent)
 
-                    Image(systemName: category.icon)
-                        .font(.system(size: 19, weight: .semibold))
-                        .foregroundColor(.white)
-                }
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(place.title)
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(textColor)
+                        .lineLimit(1)
 
-                VStack(alignment: .leading, spacing: 7) {
-                    HStack(spacing: 8) {
-                        Text(place.title)
-                            .font(.system(.headline, design: .rounded).weight(.bold))
-                            .foregroundColor(textColor)
+                    // 同じ名前の店が複数あっても見分けられるように住所を出す
+                    if let address = place.address, !address.isEmpty {
+                        Text(address)
+                            .font(.system(size: 12))
+                            .foregroundColor(secondaryTextColor)
                             .lineLimit(1)
+                    }
 
+                    HStack(spacing: 7) {
                         Text(category.name)
-                            .font(.caption2.weight(.bold))
-                            .foregroundColor(mainColor)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(accent)
                             .padding(.horizontal, 7)
-                            .padding(.vertical, 3)
-                            .background(mainColor.opacity(0.14), in: Capsule())
-                    }
+                            .padding(.vertical, 2)
+                            .background(accent.opacity(colorScheme == .dark ? 0.24 : 0.14), in: RoundedRectangle(cornerRadius: 6))
 
-                    VStack(alignment: .leading, spacing: 4) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "calendar")
-                                .font(.caption2)
-                            Text(formattedDate(place))
-                                .font(.caption.weight(.medium))
-                        }
-
-                        if let address = place.address, !address.isEmpty {
-                            HStack(spacing: 4) {
-                                Image(systemName: "mappin.and.ellipse")
-                                    .font(.caption2)
-                                Text(address)
-                                    .font(.caption.weight(.medium))
-                                    .lineLimit(1)
-                            }
-                        }
+                        Text(formattedDate(place))
+                            .font(.system(size: 12))
+                            .foregroundColor(secondaryTextColor)
+                            .lineLimit(1)
                     }
-                    .foregroundColor(secondaryTextColor)
                 }
 
                 Spacer(minLength: 0)
 
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(secondaryTextColor.opacity(0.6))
-                    .padding(.top, 4)
+                placeMenuButton(place: place)
             }
-            .padding(14)
+            .padding(.leading, 9)
+            .padding(.vertical, 9)
+            .padding(.trailing, 4)
             .background(
-                ZStack {
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(baseColor)
-                    RoundedRectangle(cornerRadius: 18)
-                        .fill(
-                            LinearGradient(
-                                colors: [mainColor.opacity(tintOpacity), mainColor.opacity(0.02)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                }
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .fill(surface)
             )
+            // ダークでは影が沈んで効かないので、細い輪郭に置き換える
             .overlay(
-                RoundedRectangle(cornerRadius: 18)
-                    .stroke(mainColor.opacity(0.28), lineWidth: 1)
+                RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    .strokeBorder(colorScheme == .dark ? mainColor.opacity(0.10) : .clear, lineWidth: 1)
             )
-            .shadow(color: Color.black.opacity(0.06), radius: 7, x: 0, y: 3)
+            .shadow(
+                color: colorScheme == .dark ? .clear : Color.black.opacity(0.07),
+                radius: 13,
+                x: 0,
+                y: 5
+            )
         }
         .buttonStyle(PlainButtonStyle())
-        .contextMenu {
+    }
+
+    /// 保存した写真は詳細でしか見えていなかった。一覧でも出すと、
+    /// 名前を読まなくてもどの場所か分かる
+    private func placeThumbnail(_ place: VisitedPlace, category: CustomPlaceCategory, accent: Color) -> some View {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+            .fill(accent.opacity(colorScheme == .dark ? 0.24 : 0.14))
+            .frame(width: 56, height: 56)
+            .overlay {
+                if let fileName = place.localPhotoFileName,
+                   let image = FileManager.documentsImage(named: fileName) {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFill()
+                } else {
+                    Image(systemName: category.icon)
+                        .font(.system(size: 20, weight: .semibold))
+                        .foregroundColor(accent)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+    }
+
+    /// 長押しの contextMenu だけでは削除できることに気づけない。
+    /// 予定カードと同じ44ptの「⋯」に揃える
+    private func placeMenuButton(place: VisitedPlace) -> some View {
+        Menu {
             deleteButton(place: place)
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.system(size: 15, weight: .bold))
+                .foregroundColor(secondaryTextColor)
+                .frame(width: 44, height: 40)
+                .contentShape(Rectangle())
         }
+        .accessibilityLabel("この場所の操作")
     }
 
     private func deleteButton(place: VisitedPlace) -> some View {
@@ -391,6 +398,10 @@ struct PlacesListView: View {
             droppedPinContent(at: placePicker.coordinate, color: themeManager.currentTheme.success)
 
             ForEach(vm.places) { place in
+                let category = categoryManager.category(for: place.categoryId)
+                let accent = category.color
+                let isSelected = selectedPlace?.id == place.id
+
                 Annotation(place.title, coordinate: place.coordinate) {
                         Button(action: {
                             withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
@@ -398,17 +409,23 @@ struct PlacesListView: View {
                             }
                         }) {
                             ZStack {
+                                // 色はカテゴリを表す。全部が同じ赤だと、
+                                // 地図の上でホテルと風景の区別がつかない
                                 Circle()
-                                    .fill(selectedPlace?.id == place.id
-                                          ? themeManager.currentTheme.xprimary
-                                          : themeManager.currentTheme.error.opacity(0.9))
+                                    .fill(accent)
                                     .frame(width: 38, height: 38)
-                                    .shadow(color: themeManager.currentTheme.error.opacity(0.4), radius: 4, x: 0, y: 2)
-                                    .scaleEffect(selectedPlace?.id == place.id ? 1.15 : 1.0)
-                                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: selectedPlace?.id == place.id)
-                                Image(systemName: categoryManager.category(for: place.categoryId).icon)
+                                    // 選んだピンは色ではなく白い縁と大きさで示す
+                                    .overlay(
+                                        Circle()
+                                            .strokeBorder(Color.white.opacity(isSelected ? 0.95 : 0), lineWidth: 2.5)
+                                    )
+                                    .shadow(color: accent.opacity(0.45), radius: isSelected ? 7 : 4, x: 0, y: 2)
+                                    .scaleEffect(isSelected ? 1.15 : 1.0)
+                                    .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+
+                                Image(systemName: category.icon)
                                     .font(.system(size: 16, weight: .semibold))
-                                    .foregroundStyle(.white)
+                                    .foregroundStyle(ThemePreset.readableText(on: accent))
                             }
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -429,14 +446,17 @@ struct PlacesListView: View {
                 .padding(.bottom, 14)
 
             HStack(alignment: .top, spacing: 12) {
-                // カテゴリーアイコン
+                // カテゴリーアイコン。ピンと同じ色にして、
+                // どのピンを開いているのか下のパネルでも分かるようにする
                 ZStack {
+                    let accent = categoryManager.category(for: place.categoryId).color
+
                     Circle()
-                        .fill(themeManager.currentTheme.error.opacity(0.12))
+                        .fill(accent.opacity(colorScheme == .dark ? 0.24 : 0.14))
                         .frame(width: 44, height: 44)
                     Image(systemName: categoryManager.category(for: place.categoryId).icon)
                         .font(.system(size: 18))
-                        .foregroundColor(themeManager.currentTheme.error)
+                        .foregroundColor(accent)
                 }
 
                 VStack(alignment: .leading, spacing: 4) {
@@ -489,39 +509,89 @@ struct PlacesListView: View {
         .padding(.bottom, 8)
     }
     
+    /// カテゴリーの絞り込み。
+    ///
+    /// 60×60のタイルを横に並べていたため、1画面に3つしか入らず、
+    /// 4つ目からは存在に気づけなかった。44ptのチップにして件数も出す
     private var eventTypeSelectionSection: some View {
         ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 20) {
-                horizontalEventsCard(
-                    menuName: "すべて",
-                    menuImage: "square.grid.2x2.fill",
-                    rectColor: selectedCategoryId == Self.allCategoryId ? themeManager.currentTheme.xsecondary : themeManager.currentTheme.light,
-                    imageColors: selectedCategoryId == Self.allCategoryId ? themeManager.currentTheme.light : themeManager.currentTheme.xsecondary,
-                    textColor: selectedCategoryId == Self.allCategoryId ? themeManager.currentTheme.xsecondary : themeManager.currentTheme.secondaryText
-                )
-                .onTapGesture {
-                    withAnimation(.spring()) {
-                        selectedCategoryId = Self.allCategoryId
-                    }
+            HStack(spacing: 8) {
+                categoryChip(
+                    title: "すべて",
+                    icon: "square.grid.2x2.fill",
+                    color: themeManager.currentTheme.actionFill,
+                    count: vm.places.count,
+                    isSelected: selectedCategoryId == Self.allCategoryId
+                ) {
+                    selectedCategoryId = Self.allCategoryId
                 }
 
                 ForEach(categoryManager.categories) { category in
-                    horizontalEventsCard(
-                        menuName: category.name,
-                        menuImage: category.icon,
-                        rectColor: selectedCategoryId == category.id ? themeManager.currentTheme.xsecondary : themeManager.currentTheme.light,
-                        imageColors: selectedCategoryId == category.id ? themeManager.currentTheme.light : themeManager.currentTheme.xsecondary,
-                        textColor: selectedCategoryId == category.id ? themeManager.currentTheme.xsecondary : themeManager.currentTheme.secondaryText
-                    )
-                    .onTapGesture {
-                        withAnimation(.spring()) {
-                            selectedCategoryId = category.id
-                        }
+                    categoryChip(
+                        title: category.name,
+                        icon: category.icon,
+                        color: category.color,
+                        count: vm.places.filter { $0.categoryId == category.id }.count,
+                        isSelected: selectedCategoryId == category.id
+                    ) {
+                        selectedCategoryId = category.id
                     }
                 }
             }
             .padding(.horizontal, 20)
         }
+    }
+
+    /// 選ぶと色で塗り、選んでいないときは色をアイコンだけに置く。
+    /// 全部を色で塗ると、カテゴリーが増えるほど帯が虹色になる
+    private func categoryChip(
+        title: String,
+        icon: String,
+        color: Color,
+        count: Int,
+        isSelected: Bool,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                action()
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(isSelected ? ThemePreset.readableText(on: color) : color)
+
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(isSelected ? ThemePreset.readableText(on: color) : textColor)
+                    .lineLimit(1)
+
+                Text("\(count)")
+                    .font(.system(size: 11, weight: .bold))
+                    .monospacedDigit()
+                    .foregroundColor(isSelected
+                                     ? ThemePreset.readableText(on: color).opacity(0.85)
+                                     : themeManager.currentTheme.secondaryText)
+            }
+            .padding(.horizontal, 13)
+            .frame(height: 44)
+            .background(
+                Capsule()
+                    .fill(isSelected
+                          ? AnyShapeStyle(color)
+                          : AnyShapeStyle(colorScheme == .dark
+                                          ? themeManager.currentTheme.secondaryBackgroundDark
+                                          : themeManager.currentTheme.backgroundLight))
+            )
+            .shadow(
+                color: colorScheme == .dark ? .clear : Color.black.opacity(isSelected ? 0.12 : 0.05),
+                radius: isSelected ? 8 : 4,
+                x: 0,
+                y: 2
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
     }
 
     // MARK: - Helper Methods

@@ -177,7 +177,8 @@ private struct SmallView: View {
 
             if let current = snapshot.travelScheduleItems.first {
                 // 旅行中は「今どこにいる予定か」を主役にする
-                Text(TravoryWidgetFormatter.time.string(from: current.time ?? referenceDate))
+                // 予定の時計で出す。端末の時計で読むと、海外で時刻がずれる
+                Text(current.timeText ?? TravoryWidgetFormatter.time.string(from: referenceDate))
                     .font(.system(size: 15, weight: .bold, design: .rounded).monospacedDigit())
                     .foregroundStyle(TravoryWidgetPalette.accent)
 
@@ -448,16 +449,16 @@ private struct LockScreenView: View {
         if let label = TravoryWidgetFormatter.dayLabel(for: item.date, asOf: referenceDate) {
             parts.append(label)
         }
-        if let time = item.time {
-            parts.append(TravoryWidgetFormatter.time.string(from: time))
+        if let time = item.timeText {
+            parts.append(time)
         }
         return parts.joined(separator: " · ")
     }
 
     /// 「沖縄旅行 · 14:00」のような見出し行
     private func headerLine(travelTitle: String, item: WidgetSnapshot.Item) -> String {
-        guard let time = item.time else { return travelTitle }
-        return "\(travelTitle) · \(TravoryWidgetFormatter.time.string(from: time))"
+        guard let time = item.timeText else { return travelTitle }
+        return "\(travelTitle) · \(time)"
     }
 
     /// 「今日 14:00 ジム」のように、日付と時刻を前に置く
@@ -466,8 +467,8 @@ private struct LockScreenView: View {
         if showsDate, let label = TravoryWidgetFormatter.dayLabel(for: item.date, asOf: referenceDate) {
             parts.append(label)
         }
-        if let time = item.time {
-            parts.append(TravoryWidgetFormatter.time.string(from: time))
+        if let time = item.timeText {
+            parts.append(time)
         }
         parts.append(item.title)
         return parts.joined(separator: " ")
@@ -523,8 +524,8 @@ private struct ItemRow: View {
 
     @ViewBuilder
     private var timeText: some View {
-        if let time = item.time {
-            Text(TravoryWidgetFormatter.time.string(from: time))
+        if let time = item.timeText {
+            Text(time)
                 .font(.caption2.weight(.bold).monospacedDigit())
                 .foregroundStyle(.secondary)
         }

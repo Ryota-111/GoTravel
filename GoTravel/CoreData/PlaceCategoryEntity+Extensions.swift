@@ -8,6 +8,7 @@ public class PlaceCategoryEntity: NSManagedObject {
     @NSManaged public var id: String?
     @NSManaged public var name: String?
     @NSManaged public var icon: String?
+    @NSManaged public var colorHex: String?
     @NSManaged public var createdAt: Date?
     @NSManaged public var userId: String?
 }
@@ -42,7 +43,8 @@ extension PlaceCategoryEntity {
             id: id ?? UUID().uuidString,
             name: name ?? "",
             icon: icon ?? "mappin.circle.fill",
-            isDefault: false
+            isDefault: false,
+            colorHex: colorHex
         )
     }
 
@@ -50,6 +52,7 @@ extension PlaceCategoryEntity {
         self.id = category.id
         self.name = category.name
         self.icon = category.icon
+        self.colorHex = category.colorHex
         self.userId = userId
         if self.createdAt == nil {
             self.createdAt = createdAt

@@ -88,7 +88,7 @@ final class PlacesViewModel: NSObject, ObservableObject {
         // 画像をローカルに保存
         if let image = image {
             let fileName = "visited_place_\(UUID().uuidString).jpg"
-            if let imageData = image.jpegData(compressionQuality: 0.7) {
+            if let imageData = image.storedPhotoData() {
                 do {
                     try FileManager.saveImageDataToDocuments(data: imageData, named: fileName)
                     placeToSave.localPhotoFileName = fileName
@@ -124,7 +124,7 @@ final class PlacesViewModel: NSObject, ObservableObject {
 
             // 新しい画像を保存
             let fileName = "visited_place_\(UUID().uuidString).jpg"
-            if let imageData = image.jpegData(compressionQuality: 0.7) {
+            if let imageData = image.storedPhotoData() {
                 do {
                     try FileManager.saveImageDataToDocuments(data: imageData, named: fileName)
                     placeToSave.localPhotoFileName = fileName

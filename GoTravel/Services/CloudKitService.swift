@@ -722,7 +722,17 @@ final class CloudKitService {
            let reservationsJSON = String(data: reservationsData, encoding: .utf8) {
             record["reservationsJSON"] = reservationsJSON
         }
-        if let packingItemsData = try? encoder.encode(plan.packingItems),
+        // **持ち主のいる項目はパブリックDBに載せない。**
+        //
+        // 持ち物とお土産は各自のもので、同行者に見せない約束になっている。
+        // 画面で隠すだけだと実体はレコードに残るため、書く手前で落とす。
+        // お土産の「誰に」は同行者へのサプライズを書く場所でもあり、
+        // ここが漏れると台無しになる。
+        //
+        // 残るのは持ち主のいない項目、つまり「やりたいこと」と、
+        // 持ち主を持たせる前からある古い項目だけ。
+        let shareableItems = plan.packingItems.filter { $0.ownerId == nil }
+        if let packingItemsData = try? encoder.encode(shareableItems),
            let packingItemsJSON = String(data: packingItemsData, encoding: .utf8) {
             record["packingItemsJSON"] = packingItemsJSON
         }
@@ -778,7 +788,7 @@ final class CloudKitService {
 
     /// 共有まわりのログ。Console.app で
     /// subsystem: com.gmail.taismryotasis.Travory / category: sharing を見る
-    private static let shareLogger = Logger(
+    static let shareLogger = Logger(
         subsystem: "com.gmail.taismryotasis.Travory",
         category: "sharing"
     )
@@ -826,6 +836,20 @@ final class CloudKitService {
     }
 
     /// 共有コードでパブリックDBから共有プランを検索
+    /// 1件だけ取りに行く。旅行計画の画面から更新を押したときに使う。
+    ///
+    /// 見つからなければ nil。共有が解除された場合と、相手が計画ごと
+    /// 消した場合のどちらでもこうなる
+    func fetchSharedTravelPlan(planId: String) async throws -> TravelPlan? {
+        let recordID = CKRecord.ID(recordName: "shared_\(planId)")
+        do {
+            let record = try await publicDatabase.record(for: recordID)
+            return parseSharedTravelPlan(from: record)
+        } catch let ckError as CKError where ckError.code == .unknownItem {
+            return nil
+        }
+    }
+
     func fetchSharedTravelPlan(byShareCode shareCode: String) async throws -> TravelPlan? {
         let predicate = NSPredicate(format: "shareCode == %@", shareCode)
         let records = try await queryPublic(recordType: Self.sharedPlanRecordType, predicate: predicate)
@@ -858,7 +882,17 @@ final class CloudKitService {
             recordsMap[record.recordID.recordName] = record
         }
 
-        return recordsMap.values.compactMap { parseSharedTravelPlan(from: $0) }
+        let plans = recordsMap.values.compactMap { parseSharedTravelPlan(from: $0) }
+
+        // 「引っぱっても更新されない」の切り分け用。
+        // 0件なのか、取れているのに解釈で落ちているのかで原因が全く違う
+        Self.shareLogger.notice("""
+            共有プランを取得 \(Self.environmentHint, privacy: .public) \
+            自分がオーナー=\(ownedRecords.count) 参加中=\(sharedRecords.count) \
+            解釈できた=\(plans.count)
+            """)
+
+        return plans
     }
 
     /// 共有プランをパブリックDBから削除（オーナーが共有解除・削除した時）

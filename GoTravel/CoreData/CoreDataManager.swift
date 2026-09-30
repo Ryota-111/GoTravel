@@ -13,8 +13,34 @@ class CoreDataManager {
     /// CloudKit Console の Development に CD_〜 が並んだら false に戻す。
     /// ダミーレコードの作成と削除を行うため起動に数十秒かかる。
     /// リリースビルドには含まれないので本番の動作には影響しない。
+    ///
+    /// deploy 済み: `TaskEntity` と `PhotoAssetEntity`（2026年8月31日）、
+    /// `PackingPresetEntity`（2026年9月5日）、`TravelPlanEntity.deletedAt`（2026年9月26日）。
+    ///
+    /// 既存のエンティティに項目を足したときも、同じ手順で Production に反映すること。
+    /// 反映しないままリリースすると、その書き出しが Production で失敗し、同期全体が止まる
     private static let initializesCloudKitSchemaOnLaunch = false
     #endif
+
+    /// スクリーンショット用の空っぽモード。
+    ///
+    /// App Store の画像を撮り直すときに、実データを消さずに「何も無い状態」を作るためのもの。
+    /// **有効なときは保存先をメモリ内にして、実データのファイルにも CloudKit にも一切触らない。**
+    /// アプリを終了すれば入力したデモデータは跡形もなく消える。
+    ///
+    /// 有効にする条件は次の2つを**両方**満たしたときだけ。
+    /// - DEBUG ビルドであること（App Store 用のビルドでは存在しない分岐）
+    /// - Xcode から起動引数 `-TravoryEmptyDataMode` を付けて実行すること
+    ///
+    /// 端末のホーム画面からアプリを叩いた場合は起動引数が付かないため、
+    /// 通常どおり実データで起動する
+    static var isEmptyDataMode: Bool {
+        #if DEBUG
+        return ProcessInfo.processInfo.arguments.contains("-TravoryEmptyDataMode")
+        #else
+        return false
+        #endif
+    }
 
     // MARK: - Properties
 
@@ -27,10 +53,19 @@ class CoreDataManager {
             fatalError("Failed to retrieve persistent store description")
         }
 
-        // CloudKitコンテナIDを設定
-        description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(
-            containerIdentifier: "iCloud.com.gmail.taismryotasis.Travory"
-        )
+        if Self.isEmptyDataMode {
+            // 保存先をメモリ内だけにする。実データの sqlite ファイルは開きもしない。
+            // CloudKit も切るので、ここで作ったデモデータが同期されることも、
+            // 逆に実データが降ってくることもない
+            description.url = URL(fileURLWithPath: "/dev/null")
+            description.cloudKitContainerOptions = nil
+            print("[CoreDataManager] 空データモードで起動しました。実データには触れません。")
+        } else {
+            // CloudKitコンテナIDを設定
+            description.cloudKitContainerOptions = NSPersistentCloudKitContainerOptions(
+                containerIdentifier: "iCloud.com.gmail.taismryotasis.Travory"
+            )
+        }
 
         // リモート変更通知を有効化
         description.setOption(true as NSNumber, forKey: NSPersistentStoreRemoteChangeNotificationPostOptionKey)
@@ -51,7 +86,7 @@ class CoreDataManager {
         #if DEBUG
         // 新しいエンティティは CloudKit にレコードタイプが無いと同期されないため、
         // 開発中に一度だけスキーマを作成する
-        if CoreDataManager.initializesCloudKitSchemaOnLaunch {
+        if CoreDataManager.initializesCloudKitSchemaOnLaunch && !Self.isEmptyDataMode {
             do {
                 try container.initializeCloudKitSchema(options: [])
                 print("[CoreDataManager] CloudKit schema initialized. スイッチを false に戻してください。")
@@ -98,17 +133,27 @@ class CoreDataManager {
 
     // MARK: - Save Context
 
-    /// メインコンテキストを保存
-    func saveContext() {
+    /// メインコンテキストを保存する。
+    ///
+    /// 戻り値は保存できたかどうか。
+    /// **消す処理の前には必ずこれを見ること。** Core Data の検索は未保存の
+    /// 変更も返すため、保存が失敗していても「在る」と判定されてしまう。
+    /// それを根拠に元データを消すと、本当に失われる
+    @discardableResult
+    func saveContext() -> Bool {
         let context = viewContext
 
-        if context.hasChanges {
-            do {
-                try context.save()
-                // CloudKitに自動的に同期される
-            } catch {
-                _ = error as NSError
-            }
+        guard context.hasChanges else { return true }
+
+        do {
+            try context.save()
+            // CloudKitに自動的に同期される
+            return true
+        } catch {
+            #if DEBUG
+            print("[CoreDataManager] 保存に失敗: \(error)")
+            #endif
+            return false
         }
     }
 

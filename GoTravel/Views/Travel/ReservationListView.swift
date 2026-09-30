@@ -6,6 +6,8 @@ import SwiftUI
 /// **予約番号をすぐ出せること**を中心に据えている。
 struct ReservationListView: View {
     let plan: TravelPlan
+    /// タブに埋め込むときは true。NavigationStack とツールバーを出さない
+    var isEmbedded: Bool = false
 
     @EnvironmentObject var viewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
@@ -15,6 +17,8 @@ struct ReservationListView: View {
 
     @State private var editing: Reservation?
     @State private var copiedId: String?
+    /// 目的地の時間帯。時刻に「現地」「日本」を添えるのに使う
+    @State private var destinationTimeZone: TimeZone?
 
     private var currentPlan: TravelPlan {
         viewModel.travelPlans.first(where: { $0.id == plan.id }) ?? plan
@@ -42,6 +46,48 @@ struct ReservationListView: View {
     private var accent: Color { themeManager.currentTheme.actionFill }
 
     var body: some View {
+        Group {
+            if isEmbedded {
+                embeddedContent
+            } else {
+                standaloneContent
+            }
+        }
+        .task(id: plan.id) {
+            destinationTimeZone = await DestinationTimeZoneService.shared.timeZone(for: plan)
+        }
+    }
+
+    /// タブの中身。背景と枠は親が持つ
+    private var embeddedContent: some View {
+        VStack(spacing: 12) {
+            HStack {
+                Spacer()
+                Button {
+                    editing = Reservation()
+                } label: {
+                    Label("予約を追加", systemImage: "plus")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(accent)
+                }
+            }
+
+            if reservations.isEmpty {
+                emptyState
+            } else {
+                ForEach(reservations) { reservation in
+                    reservationCard(reservation)
+                }
+            }
+        }
+        .sheet(item: $editing) { reservation in
+            ReservationEditorView(planId: plan.id ?? "", reservation: reservation)
+                .environmentObject(viewModel)
+                .environmentObject(authVM)
+        }
+    }
+
+    private var standaloneContent: some View {
         NavigationStack {
             ZStack {
                 (colorScheme == .dark
@@ -133,8 +179,8 @@ struct ReservationListView: View {
                         .foregroundColor(textColor)
                         .lineLimit(2)
 
-                    if let date = reservation.date {
-                        Text(Self.dateFormatter.string(from: date))
+                    if let date = reservation.date, let line = reservation.dateLineText {
+                        Text(withZoneLabel(line, date: date, zone: reservation.dateTimeZone))
                             .font(.caption)
                             .foregroundColor(themeManager.currentTheme.secondaryText)
                     }
@@ -142,14 +188,38 @@ struct ReservationListView: View {
 
                 Spacer(minLength: 0)
 
-                Button {
-                    editing = reservation
+                // 長押しの contextMenu だけだと削除に気づけない。
+                // 旅行計画のカードと同じ「…」に揃え、1度覚えれば他でも使えるようにする
+                Menu {
+                    Button {
+                        editing = reservation
+                    } label: {
+                        Label("編集", systemImage: "pencil")
+                    }
+
+                    Button("削除", systemImage: "trash", role: .destructive) {
+                        delete(reservation)
+                    }
                 } label: {
-                    Image(systemName: "pencil")
-                        .font(.caption)
+                    Image(systemName: "ellipsis")
+                        .font(.system(size: 14, weight: .bold))
                         .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .frame(width: 30, height: 30)
+                        .contentShape(Rectangle())
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel("予約のメニュー")
+            }
+
+            // 空港・駅で一番見るものなので、予約番号の前に出す
+            if reservation.hasRoute {
+                routeRow(reservation)
+            }
+
+            if !detailChips(reservation).isEmpty {
+                FlowDetailChips(chips: detailChips(reservation),
+                                textColor: textColor,
+                                secondary: themeManager.currentTheme.secondaryText)
             }
 
             if let number = reservation.confirmationNumber, !number.isEmpty {
@@ -173,11 +243,90 @@ struct ReservationListView: View {
         }
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 14).fill(cardFill))
-        .contextMenu {
-            Button("編集") { editing = reservation }
-            Button("削除", role: .destructive) { delete(reservation) }
+        .background(
+            RoundedRectangle(cornerRadius: 14)
+                .fill(cardFill)
+                // 白黒テーマは背景とカードの明るさがほぼ同じなので必ず枠を引く
+                .overlay(RoundedRectangle(cornerRadius: 14).stroke(textColor.opacity(0.12), lineWidth: 1))
+        )
+
+    }
+
+    /// 出発地 → 到着地。時刻が入っていればその下に添える
+    private func routeRow(_ reservation: Reservation) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            endpoint(place: reservation.departurePlace, time: reservation.date,
+                     zone: reservation.dateTimeZone, alignment: .leading)
+
+            VStack(spacing: 2) {
+                Image(systemName: reservation.kind == .flight ? "airplane" : "arrow.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(accent)
+                if let duration = durationText(reservation) {
+                    Text(duration)
+                        .font(.system(size: 10))
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                }
+            }
+            .padding(.top, 6)
+
+            endpoint(place: reservation.arrivalPlace, time: reservation.arrivalDate,
+                     zone: reservation.arrivalTimeZone, alignment: .trailing)
         }
+        .padding(.vertical, 10)
+        .padding(.horizontal, 12)
+        .frame(maxWidth: .infinity)
+        .background(RoundedRectangle(cornerRadius: 10).fill(accent.opacity(0.06)))
+    }
+
+    private func endpoint(place: String?, time: Date?, zone: TimeZone, alignment: HorizontalAlignment) -> some View {
+        VStack(alignment: alignment, spacing: 2) {
+            Text(place ?? "-")
+                .font(.system(size: 14, weight: .semibold))
+                .foregroundColor(textColor)
+                .lineLimit(1)
+                .minimumScaleFactor(0.7)
+
+            if let time {
+                Text(ScheduleClock.timeText(time, in: zone))
+                    .font(.system(size: 17, weight: .bold, design: .rounded))
+                    .foregroundColor(textColor)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+
+                if let label = ScheduleClock.zoneLabel(zone, at: time, destination: destinationTimeZone) {
+                    Text(label)
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                }
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: alignment == .leading ? .leading : .trailing)
+    }
+
+    /// 出発から到着までの所要時間。両方入っているときだけ
+    private func durationText(_ reservation: Reservation) -> String? {
+        guard let start = reservation.date, let end = reservation.arrivalDate, end > start else { return nil }
+        let minutes = Int(end.timeIntervalSince(start) / 60)
+        let hours = minutes / 60
+        let rest = minutes % 60
+        if hours == 0 { return "\(rest)分" }
+        return rest == 0 ? "\(hours)時間" : "\(hours)時間\(rest)分"
+    }
+
+    /// 便名・座席・ターミナルなど、短い情報をまとめて出す
+    private func detailChips(_ reservation: Reservation) -> [(String, String)] {
+        var chips: [(String, String)] = []
+        if let number = reservation.transportNumber, !number.isEmpty {
+            chips.append((reservation.kind == .flight ? "便名" : "列車", number))
+        }
+        if let seat = reservation.seat, !seat.isEmpty {
+            chips.append(("座席", seat))
+        }
+        if let terminal = reservation.terminal, !terminal.isEmpty {
+            chips.append(("ターミナル", terminal))
+        }
+        return chips
     }
 
     /// 予約番号はこの機能の主役なので、大きく出してタップでコピーできるようにする
@@ -218,12 +367,43 @@ struct ReservationListView: View {
         guard let userId = authVM.userId else { return }
         var updated = currentPlan
         updated.reservations.removeAll { $0.id == reservation.id }
+        // 行程にも出していた予約なら、そちらも一緒に片付ける。
+        // 消した予約の予定だけが行程に residual として残ると、
+        // どこから来たものか分からなくなる。
+        // 「行程にも追加する」を使っていない予約では、消すものが無いので何も起きない
+        updated.removeScheduleItems(forReservation: reservation.id)
         viewModel.update(updated, userId: userId)
     }
 
-    private static let dateFormatter: DateFormatter = {
-        let formatter = DateFormatter.japanese
-        formatter.dateFormat = "M月d日(E) HH:mm"
-        return formatter
-    }()
+    /// 見ている人の時計と違えば「（現地）」などを添える
+    private func withZoneLabel(_ text: String, date: Date, zone: TimeZone) -> String {
+        guard let label = ScheduleClock.zoneLabel(zone, at: date, destination: destinationTimeZone) else { return text }
+        return "\(text)（\(label)）"
+    }
+}
+
+/// 便名・座席などの短い情報を並べる。
+/// 文字数がまちまちなので、固定列にせず幅なりに折り返す
+private struct FlowDetailChips: View {
+    let chips: [(String, String)]
+    let textColor: Color
+    let secondary: Color
+
+    var body: some View {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 96), spacing: 8)], spacing: 8) {
+            ForEach(chips, id: \.0) { label, value in
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(label)
+                        .font(.system(size: 10))
+                        .foregroundColor(secondary)
+                    Text(value)
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(textColor)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+        }
+    }
 }

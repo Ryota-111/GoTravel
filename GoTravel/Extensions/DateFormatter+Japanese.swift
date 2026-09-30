@@ -29,6 +29,13 @@ extension DateFormatter {
         return formatter
     }
 
+    /// 「8/27」。狭い場所に日付を添えるとき用
+    static var japaneseMonthDayCompact: DateFormatter {
+        let formatter = DateFormatter.japanese
+        formatter.dateFormat = "M/d"
+        return formatter
+    }
+
     static var japaneseDateLong: DateFormatter {
         let formatter = DateFormatter.japanese
         formatter.dateStyle = .long

@@ -24,6 +24,9 @@ class NotificationService {
 
     // MARK: - Travel Plan Notifications
     func scheduleTravelPlanNotifications(for plan: TravelPlan) {
+        // 空データモードで作ったデモ予定の通知を実機に残さない。
+        // 撮影が終わってデータが消えたあとに鳴ってしまう
+        guard !CoreDataManager.isEmptyDataMode else { return }
         guard let planId = plan.id else { return }
 
         cancelTravelPlanNotifications(for: planId)
@@ -76,131 +79,53 @@ class NotificationService {
     }
 
     // MARK: - Plan Notifications
+    /// 予定に設定された通知を入れ直す。
+    ///
+    /// 何を鳴らすかは `Plan.reminders`（未設定なら種別ごとの既定）が決める。
+    /// 種別ごとの決め打ちをここに書いていた頃は、設定と実際の予約がずれる余地があった
     func schedulePlanNotifications(for plan: Plan) {
+        // 空データモードで作ったデモ予定の通知を実機に残さない。
+        // 撮影が終わってデータが消えたあとに鳴ってしまう
+        guard !CoreDataManager.isEmptyDataMode else { return }
         cancelPlanNotifications(for: plan.id)
 
         let now = Date()
 
-        switch plan.planType {
-        case .outing:
-            // おでかけプランの1日前通知
-            if let oneDayBefore = calendar.date(byAdding: .day, value: -1, to: plan.startDate) {
-                var components = calendar.dateComponents(in: TimeZone.current, from: oneDayBefore)
-                components.hour = 19
-                components.minute = 0
-                components.second = 0
+        for reminder in plan.effectiveReminders {
+            // 過ぎた時刻には予約できない。今日の予定を夜に作った場合など、
+            // 設定は入っていても1本も入らないことがある
+            guard let fireDate = reminder.fireDate(for: plan, calendar: calendar),
+                  fireDate > now else { continue }
 
-                if let scheduledDate = calendar.date(from: components), scheduledDate > now {
-                    scheduleNotification(
-                        id: "\(plan.id)_day",
-                        title: "おでかけが明日です",
-                        body: "\(plan.title)が明日です。楽しみですね！",
-                        dateComponents: components
-                    )
-                }
-            }
+            var components = calendar.dateComponents(in: TimeZone.current, from: fireDate)
+            components.second = 0
 
-        case .daily:
-            // 日常プランの1日前通知
-            if let oneDayBefore = calendar.date(byAdding: .day, value: -1, to: plan.startDate) {
-                var components = calendar.dateComponents(in: TimeZone.current, from: oneDayBefore)
-                components.hour = 19
-                components.minute = 0
-                components.second = 0
-
-                if let scheduledDate = calendar.date(from: components), scheduledDate > now {
-                    scheduleNotification(
-                        id: "\(plan.id)_day",
-                        title: "予定が明日です",
-                        body: "\(plan.title)が明日です。準備をお忘れなく！",
-                        dateComponents: components
-                    )
-                }
-            }
-
-            // 当日朝9時の通知
-            var morningComponents = calendar.dateComponents(in: TimeZone.current, from: plan.startDate)
-            morningComponents.hour = 9
-            morningComponents.minute = 0
-            morningComponents.second = 0
-
-            if let morningDate = calendar.date(from: morningComponents), morningDate > now {
-                let body: String
-                if let time = plan.time {
-                    let h = calendar.component(.hour, from: time)
-                    let m = calendar.component(.minute, from: time)
-                    body = String(format: "今日%d:%02dに「\(plan.title)」の予定があります。", h, m)
-                } else {
-                    body = "今日「\(plan.title)」の予定があります。"
-                }
-                scheduleNotification(
-                    id: "\(plan.id)_morning",
-                    title: "今日の予定",
-                    body: body,
-                    dateComponents: morningComponents
-                )
-            }
-
-            // 時刻指定がある場合の通知
-            if let time = plan.time {
-                // plan.timeから時刻情報を取得
-                let timeComponents = calendar.dateComponents([.hour, .minute], from: time)
-
-                // plan.startDateの日付部分と、plan.timeの時刻部分を組み合わせる
-                var eventDateComponents = calendar.dateComponents(in: TimeZone.current, from: plan.startDate)
-                eventDateComponents.hour = timeComponents.hour
-                eventDateComponents.minute = timeComponents.minute
-                eventDateComponents.second = 0
-
-                guard let eventDate = calendar.date(from: eventDateComponents) else {
-                    return
-                }
-
-                // 1時間前の通知
-                if let oneHourBefore = calendar.date(byAdding: .hour, value: -1, to: eventDate) {
-                    if oneHourBefore > now {
-                        var components = calendar.dateComponents(in: TimeZone.current, from: oneHourBefore)
-                        components.second = 0
-
-                        scheduleNotification(
-                            id: "\(plan.id)_hour",
-                            title: "予定が1時間後です",
-                            body: "\(plan.title)が1時間後に始まります。",
-                            dateComponents: components
-                        )
-                    }
-                }
-
-                // 10分前の通知
-                if let tenMinutesBefore = calendar.date(byAdding: .minute, value: -10, to: eventDate) {
-                    if tenMinutesBefore > now {
-                        var components = calendar.dateComponents(in: TimeZone.current, from: tenMinutesBefore)
-                        components.second = 0
-
-                        scheduleNotification(
-                            id: "\(plan.id)_10min",
-                            title: "予定が10分後です",
-                            body: "\(plan.title)が10分後に始まります。準備してください！",
-                            dateComponents: components
-                        )
-                    }
-                }
-            }
+            scheduleNotification(
+                id: "\(plan.id)_\(reminder.rawValue)",
+                title: reminder.notificationTitle(for: plan),
+                body: reminder.notificationBody(for: plan),
+                dateComponents: components
+            )
         }
     }
 
     func cancelPlanNotifications(for planId: String) {
-        let identifiers = [
+        // 旧IDぶんも消す。設定を持つ前のビルドで予約された通知が残っていることがある
+        let legacyIdentifiers = [
             "\(planId)_day",
             "\(planId)_morning",
             "\(planId)_hour",
             "\(planId)_10min"
         ]
+        let identifiers = PlanReminder.allCases.map { "\(planId)_\($0.rawValue)" } + legacyIdentifiers
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
     }
 
     // MARK: - Task Notifications
     func scheduleTaskNotifications(for task: TaskItem) {
+        // 空データモードで作ったデモ予定の通知を実機に残さない。
+        // 撮影が終わってデータが消えたあとに鳴ってしまう
+        guard !CoreDataManager.isEmptyDataMode else { return }
         guard let dueDate = task.dueDate else { return }
         cancelTaskNotifications(for: task.id)
 

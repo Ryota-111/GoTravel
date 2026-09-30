@@ -20,8 +20,10 @@ struct EnjoyWorldView: View {
     @EnvironmentObject var plansViewModel: PlansViewModel
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
+    @ObservedObject var tagManager = PlanTagManager.shared
     @State private var selectedTab: TabType = .all
-    @State private var selectedPlanTab: PlanTabType = .all
+    @State private var selectedPlanFilter: PlanFilter = .all
+    @State private var showManagePlanTags = false
     @StateObject private var taskManager = TaskManager.shared
     @State private var showAddTravelPlan = false
     @State private var showAddPlan = false
@@ -30,6 +32,10 @@ struct EnjoyWorldView: View {
     @State private var showDeleteConfirmation = false
     @State private var planEventToDelete: Plan?
     @State private var showPlanDeleteConfirmation = false
+    /// 予定をまとめて削除するための選択（「予定リストを一括選択で削除したい」という要望）
+    @State private var isSelectingPlans = false
+    @State private var selectedPlanIDs: Set<String> = []
+    @State private var showBulkPlanDeleteConfirmation = false
     @State private var showAuthError = false
     @State private var hasLoadedData = false
     @State private var navigateToTaskList = false
@@ -60,16 +66,20 @@ struct EnjoyWorldView: View {
     }
 
     private var filteredPlans: [Plan] {
-        let filtered: [Plan]
-        switch selectedPlanTab {
+        switch selectedPlanFilter {
         case .all:
-            filtered = plansViewModel.plans
-        case .goingout:
-            filtered = plansViewModel.plans.filter { $0.planType == .outing }
-        case .everyday:
-            filtered = plansViewModel.plans.filter { $0.planType == .daily }
+            return plansViewModel.plans
+        case .tag(let tagId):
+            return plansViewModel.plans.filter { $0.tagIDs.contains(tagId) }
+        case .untagged:
+            return plansViewModel.plans.filter { tagManager.tags(for: $0.tagIDs).isEmpty }
         }
-        return filtered
+    }
+
+    /// タグの付いていない予定があるときだけ「未分類」を出す。
+    /// 全部に付けている人の絞り込み行に、押しても何も出ない口を残さない
+    private var hasUntaggedPlans: Bool {
+        plansViewModel.plans.contains { tagManager.tags(for: $0.tagIDs).isEmpty }
     }
 
     private var currentFilteredPlans: [Plan] {
@@ -206,6 +216,7 @@ struct EnjoyWorldView: View {
                     travelEventsTitleSection
                     tabSelectionSection
                     travelPlansSection
+                    recentlyDeletedLink
                     planEventsTitleSection
                     planTabSelectionSection
                     planEventsListSection
@@ -217,6 +228,8 @@ struct EnjoyWorldView: View {
                 }
             }
             .background(backgroundGradient)
+            // 紙の粒子。濃さ 0 のテーマでは何も重ならない
+            .paperGrain(themeManager.currentTheme.style.paperGrain)
             .navigationBarHidden(true)
             .sheet(isPresented: $showAddTravelPlan) {
                 AddTravelPlanView { newPlan in
@@ -238,6 +251,16 @@ struct EnjoyWorldView: View {
                 JoinTravelPlanView()
                     .environmentObject(travelPlanViewModel)
             }
+            .sheet(isPresented: $showManagePlanTags) {
+                ManagePlanTagsView()
+            }
+            .onChange(of: tagManager.tags) { _, _ in
+                // 絞り込みに使っていたタグが消えたら、何も出ない一覧のまま取り残される
+                if case .tag(let id) = selectedPlanFilter,
+                   !tagManager.tags.contains(where: { $0.id == id }) {
+                    selectedPlanFilter = .all
+                }
+            }
             .alert("認証が必要です", isPresented: $showAuthError) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -254,7 +277,15 @@ struct EnjoyWorldView: View {
                     planToDelete = nil
                 }
             } message: { plan in
-                Text("「\(plan.title)」を本当に削除しますか？")
+                Text(plan.isShared
+                     ? "「\(plan.title)」を削除しますか？共有は終了します。\(TravelPlanViewModel.trashRetentionDays)日間は「最近削除した旅行計画」から戻せます。"
+                     : "「\(plan.title)」を削除しますか？\(TravelPlanViewModel.trashRetentionDays)日間は「最近削除した旅行計画」から戻せます。")
+            }
+            .alert("\(selectedVisiblePlans.count)件の予定を削除しますか？", isPresented: $showBulkPlanDeleteConfirmation) {
+                Button("削除", role: .destructive) { deleteSelectedPlans() }
+                Button("キャンセル", role: .cancel) {}
+            } message: {
+                Text("選んだ予定と、その通知を削除します。繰り返しの予定は、以降の回もまとめて削除されます。")
             }
             .alert("予定を削除", isPresented: $showPlanDeleteConfirmation, presenting: planEventToDelete) { plan in
                 Button("削除", role: .destructive) {
@@ -395,11 +426,35 @@ struct EnjoyWorldView: View {
         
     }
     
+    /// 見出しの右に伸ばす罫と、その先の英字ラベル。
+    /// 印刷物のテーマだけに出す。それ以外では何も描かない
+    @ViewBuilder
+    private func sectionRule(_ kicker: String) -> some View {
+        if chipStyle.decor == .ticket {
+            Rectangle()
+                .fill(themeManager.currentTheme.cardBorder)
+                .frame(height: 1)
+
+            Text(kicker)
+                .font(chipStyle.monoFont(size: 9))
+                .tracking(2.16)     // 0.24em
+                .foregroundColor(themeManager.currentTheme.tertiaryText)
+        }
+    }
+
     private var travelEventsTitleSection: some View {
         HStack {
             Text("旅行計画")
                 .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-                .font(.title.weight(.semibold))
+                .font(chipStyle.hasDisplayFont
+                      ? chipStyle.displayFont(size: 23)
+                      : .title.weight(.semibold))
+                // 罫が横幅を取りに行くので、見出しは縮ませない
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+
+            sectionRule("TRIPS")
+
             Spacer()
 
             Button(action: { showJoinPlan = true }) {
@@ -408,13 +463,28 @@ struct EnjoyWorldView: View {
                         .font(.caption)
                     Text("共有に参加")
                         .font(.subheadline.weight(.medium))
+                        .lineLimit(1)
                 }
-                .foregroundColor(themeManager.currentTheme.secondary)
+                // 見出しの罫が横幅を取りに行くので、ボタン側を縮ませない。
+                // 付けないと「共有 / に参加」と2行に折れる
+                .fixedSize(horizontal: true, vertical: false)
+                // テーマ色をそのまま載せると、明るい色（オレンジなど）で
+                // 読めなくなる。背景に対して差が出る濃さに調整して使う。
+                //
+                // 判定にグラデーションを渡してはいけない。`readableTint` は
+                // 不透明度を見ないため、青の60%を「暗い背景」と誤って読み、
+                // オレンジを明るくして薄い水色の上でさらに薄くしてしまう。
+                // ここは実際には白に近い場所なので、白を基準に濃くする
+                .foregroundColor(joinTintColor)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 7)
                 .background(
                     Capsule()
                         .fill(themeManager.currentTheme.secondary.opacity(0.15))
+                )
+                .overlay(
+                    Capsule()
+                        .strokeBorder(joinTintColor.opacity(0.5), lineWidth: 1)
                 )
             }
 
@@ -437,14 +507,18 @@ struct EnjoyWorldView: View {
         .accessibilityLabel(Text(label))
     }
 
+    /// 4つ並べると幅の狭い機種や文字サイズを上げた設定で入りきらず、
+    /// 「今後の旅行」が2行に折り返してタブの高さが揃わなくなる。
+    /// 折り返しを禁止して、入らない分は横スクロールで逃がす
     private var tabSelectionSection: some View {
-        HStack(spacing: 8) {
-            ForEach(TabType.allCases) { tab in
-                tabButton(for: tab)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                ForEach(TabType.allCases) { tab in
+                    tabButton(for: tab)
+                }
             }
-            Spacer()
+            .padding(.horizontal, 20)
         }
-        .padding(.horizontal, 20)
     }
 
     private var travelPlansSection: some View {
@@ -461,7 +535,7 @@ struct EnjoyWorldView: View {
                 .frame(width: 200, height: 200)
                 .background(themeManager.currentTheme.tertiary)
                 .cornerRadius(25)
-                .shadow(color: themeManager.currentTheme.accent1.opacity(0.1), radius: 10, x: 0, y: 5)
+                // 実際のカードと同じ理由で影は付けない（TravelPlanCard を参照）
                 .padding(.horizontal, 20)
                 // ScrollView直下は中央揃えになるため、実際のカードと同じ左端に寄せる
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -473,27 +547,119 @@ struct EnjoyWorldView: View {
         }
     }
 
+    /// ゴミ箱に何か入っているときだけ、旅行計画の下に入口を出す。
+    /// 消した直後に「戻したい」と思う場所はここなので、プロフィールの奥だけに置かない
+    @ViewBuilder
+    private var recentlyDeletedLink: some View {
+        let count = travelPlanViewModel.recentlyDeleted.count
+        if count > 0 {
+            NavigationLink(destination: RecentlyDeletedTravelPlansView().environmentObject(travelPlanViewModel)) {
+                HStack(spacing: 6) {
+                    Image(systemName: "trash")
+                        .font(.caption)
+                    Text("最近削除した旅行計画（\(count)）")
+                        .font(.caption.weight(.semibold))
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
+                }
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+                .padding(.horizontal, 20)
+                .padding(.top, 10)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+        }
+    }
+
     private var planEventsTitleSection: some View {
         HStack {
             Text("予定計画")
                 .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-                .font(.title.weight(.semibold))
+                .font(chipStyle.hasDisplayFont
+                      ? chipStyle.displayFont(size: 23)
+                      : .title.weight(.semibold))
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+
+            sectionRule("PLANS")
+
             Spacer()
 
-            sectionAddButton(label: "予定を追加") { showAddPlan = true }
+            // 予定があるときだけ出す。選択中は追加を隠して、やることを1つにする
+            if !selectablePlans.isEmpty || isSelectingPlans {
+                Button(isSelectingPlans ? "完了" : "選択") {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isSelectingPlans.toggle()
+                        selectedPlanIDs = []
+                    }
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(themeManager.currentTheme.secondary)
+            }
+
+            if !isSelectingPlans {
+                sectionAddButton(label: "予定を追加") { showAddPlan = true }
+            }
         }
         .padding(.horizontal, 20)
         .padding(.top, 10)
     }
 
+    /// 予定の絞り込みはタグで行う。
+    ///
+    /// 以前は種別（おでかけ／日常／記念日）のタブだったが、種別は作るときに
+    /// どの項目を聞くかの区別でしかない。仕事か遊びかで探したい人にとっては
+    /// 絞り込みの軸にならないので、タグに置き換えた。
+    /// 旅行計画のタブと同じ理由で横スクロールにする（`tabSelectionSection` を参照）
     private var planTabSelectionSection: some View {
-        HStack(spacing: 8) {
-            ForEach(PlanTabType.allCases) { tab in
-                planTabButton(for: tab)
+        ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 8) {
+                planFilterButton(
+                    for: .all,
+                    label: "すべて",
+                    fill: themeManager.currentTheme.secondary,
+                    onFill: themeManager.currentTheme.light
+                )
+
+                ForEach(tagManager.tags) { tag in
+                    planFilterButton(
+                        for: .tag(tag.id),
+                        label: tag.name,
+                        // 塗りは白文字が読める濃さまで落とす
+                        fill: ThemePreset.readableTint(tag.color, on: .white),
+                        onFill: .white
+                    )
+                }
+
+                if hasUntaggedPlans {
+                    planFilterButton(
+                        for: .untagged,
+                        label: "未分類",
+                        fill: themeManager.currentTheme.secondary,
+                        onFill: themeManager.currentTheme.light
+                    )
+                }
+
+                managePlanTagsButton
             }
-            Spacer()
+            .padding(.horizontal, 20)
         }
-        .padding(.horizontal, 20)
+    }
+
+    /// 絞り込み行の末尾に置くタグ管理の口。
+    /// 絞り込みたいと思った場所で、そのまま整理までできるようにする
+    private var managePlanTagsButton: some View {
+        Button(action: { showManagePlanTags = true }) {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 7)
+                .background(
+                    Capsule().strokeBorder(themeManager.currentTheme.secondaryText.opacity(0.25), lineWidth: 1)
+                )
+        }
+        .accessibilityLabel("タグを管理")
     }
 
     private var planEventsListSection: some View {
@@ -529,67 +695,145 @@ struct EnjoyWorldView: View {
             Text(tab.displayName)
                 .font(.callout)
                 .fontWeight(selectedTab == tab ? .semibold : .regular)
-                .foregroundColor(selectedTab == tab ? themeManager.currentTheme.light : themeManager.currentTheme.secondaryText)
-                .padding(.horizontal, 12)
+                .foregroundColor(
+                    chipTextColor(isSelected: selectedTab == tab,
+                                  onFill: themeManager.currentTheme.light)
+                )
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .padding(.horizontal, chipStyle.decor == .ticket ? 14 : 12)
                 .padding(.vertical, 7)
+                .frame(minHeight: chipStyle.decor == .ticket ? 44 : 0)
                 .background {
-                    if selectedTab == tab {
-                        Capsule()
-                            .fill(themeManager.currentTheme.secondary)
-                            .matchedGeometryEffect(id: "TAB", in: animation)
-                    }
+                    chipChrome(isSelected: selectedTab == tab,
+                               fill: themeManager.currentTheme.secondary,
+                               geometryID: "TAB")
                 }
         }
     }
 
-    private func planTabButton(for tab: PlanTabType) -> some View {
-        Button(action: {
+    private func planFilterButton(for filter: PlanFilter, label: String, fill: Color, onFill: Color) -> some View {
+        let isSelected = selectedPlanFilter == filter
+
+        return Button(action: {
             withAnimation(.spring(response: 0.7, dampingFraction: 0.7)) {
-                selectedPlanTab = tab
+                selectedPlanFilter = filter
             }
         }) {
-            Text(tab.displayName)
+            Text(label)
                 .font(.callout)
-                .fontWeight(selectedPlanTab == tab ? .semibold : .regular)
-                .foregroundColor(selectedPlanTab == tab ? themeManager.currentTheme.light : themeManager.currentTheme.secondaryText)
-                .padding(.horizontal, 12)
+                .fontWeight(isSelected ? .semibold : .regular)
+                .foregroundColor(chipTextColor(isSelected: isSelected, onFill: onFill))
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+                .padding(.horizontal, chipStyle.decor == .ticket ? 14 : 12)
                 .padding(.vertical, 7)
-                .background {
-                    if selectedPlanTab == tab {
-                        Capsule()
-                            .fill(themeManager.currentTheme.secondary)
-                            .matchedGeometryEffect(id: "PLAN_TAB", in: animation)
-                    }
-                }
+                .frame(minHeight: chipStyle.decor == .ticket ? 44 : 0)
+                .background { chipChrome(isSelected: isSelected, fill: fill) }
+        }
+    }
+
+    private var chipStyle: ThemeStyle { themeManager.currentTheme.style }
+
+    private func chipTextColor(isSelected: Bool, onFill: Color) -> Color {
+        guard chipStyle.decor == .ticket else {
+            return isSelected ? onFill : themeManager.currentTheme.secondaryText
+        }
+        // 切符仕立てでは、選択中は紙を反転させて刷り込んだように見せる
+        return isSelected
+            ? themeManager.currentTheme.cardBackground2
+            : themeManager.currentTheme.secondaryText
+    }
+
+    /// チップの外枠。丸のままか、角を落として版ズレの影を敷くか
+    @ViewBuilder
+    private func chipChrome(isSelected: Bool, fill: Color, geometryID: String = "PLAN_TAB") -> some View {
+        let theme = themeManager.currentTheme
+
+        switch chipStyle.decor {
+        case .ticket:
+            let radius = chipStyle.radiusSmall
+            RoundedRectangle(cornerRadius: radius)
+                .fill(isSelected ? theme.text : Color.clear)
+                .overlay(
+                    RoundedRectangle(cornerRadius: radius)
+                        .strokeBorder(isSelected ? theme.text : theme.cardBorder, lineWidth: 1)
+                )
+                .offsetShadow(isSelected ? chipStyle.offsetShadow : 0,
+                              color: theme.primary,
+                              cornerRadius: radius)
+
+        case .plain:
+            if isSelected {
+                Capsule()
+                    .fill(fill)
+                    .matchedGeometryEffect(id: geometryID, in: animation)
+            }
         }
     }
 
     private var emptyTravelPlansView: some View {
-        Button(action: {
+        emptyAddCard(
+            title: "旅行計画を作成",
+            subtitle: "日程・費用・持ち物をまとめて残せます"
+        ) {
             showAddTravelPlan = true
-        }) {
-            VStack(spacing: 15) {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 60))
-                    .foregroundColor(themeManager.currentTheme.secondary)
-
-                Text("旅行計画を作成")
-                    .font(.headline)
-                    .foregroundColor(themeManager.currentTheme.text)
-
-                Text("新しい旅行計画を追加してください")
-                    .font(.subheadline)
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-                    .multilineTextAlignment(.center)
-            }
-            .frame(width: 200, height: 200)
-            .background(themeManager.currentTheme.tertiary)
-            .cornerRadius(25)
-            .shadow(color: themeManager.currentTheme.accent1.opacity(0.1), radius: 10, x: 0, y: 5)
         }
         .padding(.horizontal, 20)
-        // ScrollView直下は中央揃えになるため、実際のカードと同じ左端に寄せる
-        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    /// 1件も無いときの追加口。
+    ///
+    /// アプリを入れて最初に見る画面がこれなので、旅行計画・予定計画で
+    /// 形が違うと別の機能に見える。両方ともこのカードに統一する。
+    /// 点線なのは、1件作った後に出る追加口（`addTravelPlanButton` /
+    /// `addPlanButton`）と同じ「これから増える場所」の見た目に揃えるため。
+    /// 中身が透けると＋の抜きが背景を拾って濁るので、チップは丸と記号で組む
+    private func emptyAddCard(title: String, subtitle: String? = nil, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 14) {
+                ZStack {
+                    Circle()
+                        .fill(themeManager.currentTheme.secondary)
+                        .frame(width: 56, height: 56)
+                        .shadow(color: themeManager.currentTheme.secondary.opacity(0.35), radius: 6, x: 0, y: 3)
+
+                    Image(systemName: "plus")
+                        .font(.system(size: 24, weight: .bold))
+                        .foregroundColor(themeManager.currentTheme.light)
+                }
+
+                VStack(spacing: 6) {
+                    Text(title)
+                        .font(.system(.headline, design: .rounded).weight(.bold))
+                        .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
+
+                    if let subtitle {
+                        Text(subtitle)
+                            .font(.subheadline)
+                            .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme).opacity(0.6))
+                            .multilineTextAlignment(.center)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 30)
+            .padding(.horizontal, 20)
+            .background(
+                // 背景のグラデーションは上が濃く下は白に近い。
+                // 単色を敷くとどちらかで沈むため、下地の明るさに追従する材質にする
+                RoundedRectangle(cornerRadius: 25)
+                    .fill(.ultraThinMaterial)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 25)
+                    .strokeBorder(
+                        addTravelTintColor.opacity(0.45),
+                        style: StrokeStyle(lineWidth: 1.5, dash: [8, 6])
+                    )
+            )
+        }
+        .buttonStyle(ScaleButtonStyle())
     }
 
     private func travelPlansListView(plans: [TravelPlan]) -> some View {
@@ -617,56 +861,139 @@ struct EnjoyWorldView: View {
         .animation(.spring(response: 0.7, dampingFraction: 0.6), value: plans.count)
     }
 
+    /// 横並びの末尾に置く追加口。写真の入ったカードと張り合わないよう、
+    /// 同じ角丸のまま点線の枠だけにして「これから埋める1枚」に見せる。
+    /// 影は付けない（`TravelPlanCard` と同じ理由で、帯からはみ出した分が切り取られる）
     private var addTravelPlanButton: some View {
         Button(action: {
             showAddTravelPlan = true
         }) {
-            VStack {
-                Image(systemName: "plus.circle.fill")
-                    .font(.system(size: 50))
-                    .foregroundColor(themeManager.currentTheme.secondary)
+            VStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(addTravelTintColor.opacity(0.16))
+                        .frame(width: 52, height: 52)
+                    Circle()
+                        .strokeBorder(addTravelTintColor.opacity(0.5), lineWidth: 1.5)
+                        .frame(width: 52, height: 52)
 
-                Text("予定を追加")
-                    .font(.headline)
-                    .foregroundColor(themeManager.currentTheme.secondary)
+                    Image(systemName: "plus")
+                        .font(.system(size: 22, weight: .bold))
+                        .foregroundColor(addTravelTintColor)
+                }
+
+                Text("旅行計画を追加")
+                    .font(.system(.subheadline, design: .rounded).weight(.bold))
+                    .foregroundColor(addTravelTintColor)
             }
             .frame(width: 150, height: 200)
-            .background(themeManager.currentTheme.accent2.opacity(0.2))
-            .cornerRadius(25)
-            .shadow(color: themeManager.currentTheme.accent1.opacity(0.1), radius: 10, x: 0, y: 5)
+            .background(
+                RoundedRectangle(cornerRadius: 25)
+                    .fill(addTravelTintColor.opacity(0.10))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 25)
+                    .strokeBorder(
+                        addTravelTintColor.opacity(0.45),
+                        style: StrokeStyle(lineWidth: 1.5, dash: [8, 6])
+                    )
+            )
         }
+        .buttonStyle(ScaleButtonStyle())
+    }
+
+    private var addTravelTintColor: Color {
+        tintOnBackground(themeManager.currentTheme.xprimary)
+    }
+
+    private var joinTintColor: Color {
+        ThemePreset.readableTint(
+            themeManager.currentTheme.secondary,
+            on: colorScheme == .dark
+                ? themeManager.currentTheme.backgroundDark
+                : themeManager.currentTheme.backgroundLight
+        )
+    }
+
+    /// 背景のグラデーションの上に直接置く色。
+    /// テーマ色をそのまま使うと、デフォルトカラーでは青い背景に青が沈み、
+    /// オレンジは明るすぎて読めない。カードの上に載る前提の
+    /// `backgroundLight` ではなく、実際に敷かれているグラデーションで判定する
+    private func tintOnBackground(_ color: Color) -> Color {
+        ThemePreset.readableTint(
+            color,
+            on: colorScheme == .dark
+                ? themeManager.currentTheme.gradientDark
+                : themeManager.currentTheme.gradientLight
+        )
     }
 
     private var emptyPlanEventsView: some View {
-        VStack(spacing: 15) {
-            Image(systemName: "calendar.badge.plus")
-                .font(.system(size: 50))
-                .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
+        emptyAddCard(title: "まだ予定がありません") {
+            showAddPlan = true
+        }
+    }
 
-            Text("まだ予定がありません")
-                .font(.body)
-                .foregroundColor(themeManager.currentTheme.secondaryText)
+    /// いま一覧に出ている予定（選択の対象）
+    private var selectablePlans: [Plan] {
+        currentFilteredPlans + futureFilteredPlans
+    }
 
-            Button(action: {
-                showAddPlan = true
-            }) {
-                Text("予定を追加")
-                    .font(.headline)
-                    .foregroundColor(.white)
-                    .padding(.horizontal, 30)
-                    .padding(.vertical, 12)
-                    .background(themeManager.currentTheme.secondary)
-                    .cornerRadius(25)
+    /// 選んでいて、いま一覧に出ている予定。
+    /// 選択中にタグで絞り込みを変えると、見えなくなった予定の選択が残るため、見えているものだけ数える
+    private var selectedVisiblePlans: [Plan] {
+        selectablePlans.filter { selectedPlanIDs.contains($0.id) }
+    }
+
+    /// 選択中だけ一覧の上に出す。全部選ぶ・まとめて消す
+    private var bulkPlanActionBar: some View {
+        let selectedCount = selectedVisiblePlans.count
+        let allSelected = !selectablePlans.isEmpty && selectedCount == selectablePlans.count
+
+        return HStack {
+            Button(allSelected ? "選択を解除" : "すべて選択") {
+                selectedPlanIDs = allSelected ? [] : Set(selectablePlans.map(\.id))
+            }
+            .font(.subheadline)
+            .foregroundColor(themeManager.currentTheme.secondary)
+
+            Spacer()
+
+            Button {
+                showBulkPlanDeleteConfirmation = true
+            } label: {
+                Label(selectedCount == 0 ? "削除" : "\(selectedCount)件を削除", systemImage: "trash")
+                    .font(.subheadline.weight(.semibold))
+            }
+            .foregroundColor(selectedCount == 0
+                             ? themeManager.currentTheme.secondaryText.opacity(0.5)
+                             : themeManager.currentTheme.error)
+            .disabled(selectedCount == 0)
+        }
+        .padding(.vertical, 4)
+    }
+
+    private func deleteSelectedPlans() {
+        let targets = selectedVisiblePlans
+        Task {
+            await plansViewModel.deletePlans(targets)
+            await MainActor.run {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    selectedPlanIDs = []
+                    isSelectingPlans = false
+                }
             }
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 40)
     }
 
     private func planEventsListView(plans: [Plan]) -> some View {
         // 外側のScrollViewでスクロールするため、ここではVStackのみ
         // （縦ScrollViewのネストはスクロールが取り合いになり操作が不安定になる）
         VStack(spacing: 10) {
+            if isSelectingPlans {
+                bulkPlanActionBar
+            }
+
             PlanEventSectionView(
                 title: "今日の予定",
                 plans: currentFilteredPlans,
@@ -674,7 +1001,8 @@ struct EnjoyWorldView: View {
                 onDelete: { plan in
                     planEventToDelete = plan
                     showPlanDeleteConfirmation = true
-                }
+                },
+                selection: isSelectingPlans ? $selectedPlanIDs : nil
             )
             .animation(.spring(response: 0.7, dampingFraction: 0.6), value: currentFilteredPlans.count)
 
@@ -685,33 +1013,76 @@ struct EnjoyWorldView: View {
                 onDelete: { plan in
                     planEventToDelete = plan
                     showPlanDeleteConfirmation = true
-                }
+                },
+                selection: isSelectingPlans ? $selectedPlanIDs : nil
             )
             .animation(.spring(response: 0.7, dampingFraction: 0.6), value: futureFilteredPlans.count)
 
-            addPlanButton
+            if !isSelectingPlans {
+                addPlanButton
+            }
         }
         .padding(.horizontal, 1)
         .animation(.spring(response: 0.7, dampingFraction: 0.6), value: plans.count)
     }
 
+    /// 一覧の末尾に置く追加口。予定カードと同じ形・同じ左端のまま、
+    /// 点線と薄い塗りで「まだ中身が無い次の1枚」に見せる。
+    /// 面で塗りつぶすと iOS では無効状態の色に見えてしまうため
     private var addPlanButton: some View {
         Button(action: {
             showAddPlan = true
         }) {
-            HStack {
-                Image(systemName: "plus.circle.fill")
-                    .foregroundColor(themeManager.currentTheme.secondary)
+            HStack(spacing: 12) {
+                ZStack {
+                    RoundedRectangle(cornerRadius: 11)
+                        .fill(
+                            LinearGradient(
+                                colors: [addAccentColor, addAccentColor.opacity(0.65)],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
+                        .frame(width: 34, height: 34)
+                        .shadow(color: addAccentColor.opacity(0.3), radius: 4, x: 0, y: 2)
+
+                    Image(systemName: "plus")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(themeManager.currentTheme.light)
+                }
+
                 Text("予定を追加")
-                    .font(.headline)
-                    .foregroundColor(themeManager.currentTheme.secondary)
+                    .font(.system(.subheadline, design: .rounded).weight(.bold))
+                    .foregroundColor(addLabelColor)
+
+                Spacer(minLength: 0)
             }
-            .padding(.vertical, 15)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 12)
             .frame(maxWidth: .infinity)
-            .background(themeManager.currentTheme.accent2.opacity(0.2))
-            .cornerRadius(15)
-            .shadow(color: themeManager.currentTheme.accent1.opacity(0.05), radius: 5, x: 0, y: 2)
+            .background(
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(addAccentColor.opacity(colorScheme == .dark ? 0.12 : 0.06))
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 18)
+                    .strokeBorder(
+                        addAccentColor.opacity(0.35),
+                        style: StrokeStyle(lineWidth: 1.5, dash: [7, 5])
+                    )
+            )
         }
+        .buttonStyle(ScaleButtonStyle())
+    }
+
+    /// 予定カード（`PlanEventCardView`）の主役色と揃える。
+    /// accent2 はテーマごとに白にも黒にもなり、薄く敷くと消えるテーマがある
+    private var addAccentColor: Color {
+        themeManager.currentTheme.xprimary
+    }
+
+    private var addLabelColor: Color {
+        colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
     }
 
 
@@ -782,14 +1153,12 @@ extension EnjoyWorldView {
         var displayName: String { rawValue }
     }
 
-    enum PlanTabType: String, CaseIterable, Identifiable {
-        case all = "すべて"
-        case goingout = "おでかけ"
-        case everyday = "日常"
-
-        var id: String { rawValue }
-
-        var displayName: String { rawValue }
+    /// 予定一覧の絞り込み。タグ1つか、全部か、タグの付いていないものか。
+    /// 複数のタグを同時に選べるようにすると AND か OR かの説明が要るので、単一選択にしている
+    enum PlanFilter: Hashable {
+        case all
+        case tag(String)
+        case untagged
     }
 }
 

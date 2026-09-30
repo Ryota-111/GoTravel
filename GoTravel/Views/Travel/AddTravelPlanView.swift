@@ -21,6 +21,7 @@ struct AddTravelPlanView: View {
     @State private var showImagePicker = false
     @State private var isUploading = false
     @State private var destinationCoordinate: (latitude: Double, longitude: Double)?
+    @State private var destinationSearchTask: Task<Void, Never>?
 
     private let totalSteps = 4
     private var isLastStep: Bool { currentStep == totalSteps - 1 }
@@ -330,7 +331,7 @@ struct AddTravelPlanView: View {
                 }
 
                 if startDate <= endDate {
-                    let nights = Calendar.current.dateComponents([.day], from: startDate, to: endDate).day ?? 0
+                    let nights = Calendar.current.dayDifference(from: startDate, to: endDate)
                     if nights > 0 {
                         HStack(spacing: 6) {
                             Image(systemName: "moon.stars.fill")
@@ -414,6 +415,15 @@ struct AddTravelPlanView: View {
     }
 
     private var imagePickerButton: some View {
+        VStack(spacing: 10) {
+            // 未購入のときだけ出る
+            DeviceOnlyPhotoNote()
+
+            imagePickerTapArea
+        }
+    }
+
+    private var imagePickerTapArea: some View {
         Button(action: { showImagePicker = true }) {
             VStack(spacing: 14) {
                 ZStack {
@@ -446,15 +456,18 @@ struct AddTravelPlanView: View {
     // MARK: - Actions
     private func saveTravelPlan() {
         isUploading = true
-        if let image = selectedImage {
-            saveWithImage(image)
-        } else {
-            saveWithoutImage()
+        Task { @MainActor in
+            await settleDestinationCoordinate()
+            if let image = selectedImage {
+                saveWithImage(image)
+            } else {
+                saveWithoutImage()
+            }
         }
     }
 
     private func saveWithImage(_ image: UIImage) {
-        guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+        guard let imageData = image.storedPhotoData() else {
             createAndSavePlan(withImageFileName: nil)
             return
         }
@@ -489,21 +502,39 @@ struct AddTravelPlanView: View {
 
     // MARK: - Location Search
     private func searchLocationCoordinate(for query: String) {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
+        // 打っている途中の検索は捨てる。残すと古い結果が後から上書きする
+        destinationSearchTask?.cancel()
+
+        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             destinationCoordinate = nil
             return
         }
-        let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = trimmed
-        MKLocalSearch(request: request).start { response, _ in
-            guard let item = response?.mapItems.first else { return }
-            let coord = item.placemark.coordinate
-            DispatchQueue.main.async {
-                destinationCoordinate = (coord.latitude, coord.longitude)
-            }
+
+        destinationSearchTask = Task { @MainActor in
+            let coordinate = await DestinationGeocoder.coordinate(for: query)
+            guard !Task.isCancelled else { return }
+            destinationCoordinate = coordinate.map { ($0.latitude, $0.longitude) }
+            // 終わったことを保存側に伝える（検索中なら保存が待つ）
+            destinationSearchTask = nil
         }
     }
+
+    /// 保存の前に、目的地の座標がそろうのを待つ。
+    ///
+    /// 検索は入力が止まって0.5秒後に始まり、通信を経て座標が入る。
+    /// 以前は保存がこれを待たず、「沖縄」と打ってすぐ保存すると座標が空のまま残り、
+    /// 天気が「設定された場所には天気の情報がありませんでした」になっていた。
+    /// 検索中か、座標がまだ無いときは、ここで引き直してから保存する
+    private func settleDestinationCoordinate() async {
+        let query = destination.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty, destinationCoordinate == nil || destinationSearchTask != nil else { return }
+
+        destinationSearchTask?.cancel()
+        destinationSearchTask = nil
+        let coordinate = await DestinationGeocoder.coordinate(for: query, debounce: 0)
+        destinationCoordinate = coordinate.map { ($0.latitude, $0.longitude) }
+    }
+
 }
 
 // MARK: - Preview

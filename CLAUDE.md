@@ -127,7 +127,7 @@ MVVM アーキテクチャ（SwiftUI + Core Data）:
 - **Views/Authentication/**: Apple Sign In（`AppleAuthView`）
 - **Views/Calendar/**: カレンダー表示（`CalendarView`）
 - **Views/Contents/**: 共通UI（`MainTabView`, `ContentView`, `SplashScreenView`, `OnboardingView` など）
-- **Views/Map/**: マップ（`MapHomeView`, `MapViewRepresentable`, `SearchableMapView`）
+- **Views/Map/**: マップ（`MapHomeView`, `MapPlacePicker`）。地図は SwiftUI の `Map` で描く
 - **Views/Places/**: 訪問済み場所（`PlacesListView`, `PlaceDetailView`, `SaveAsVisitedView` など）
 - **Views/Plans/**: おでかけ・日常予定（`EnjoyWorldView`, `AddPlanView`, `PlanDetailView` など）
 - **Views/Travel/**: 旅行計画（`TravelPlanDetailView`, `AddTravelPlanView`, `ScheduleEditorView` など）

@@ -119,10 +119,13 @@ extension VisitedPlaceEntity {
         self.travelPlanId = place.travelPlanId
         self.userId = place.userId ?? ""
 
-        // tagsをエンコード
+        // tagsをエンコード。
+        // 空になったときも必ず書く（書かないと、全部外しても前のタグが残る）
         if let tags = place.tags, !tags.isEmpty {
             let encoder = JSONEncoder()
             self.tagsData = try? encoder.encode(tags)
+        } else {
+            self.tagsData = nil
         }
     }
 

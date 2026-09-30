@@ -40,10 +40,17 @@ struct AlbumDetailView: View {
             ZStack {
                 backgroundGradient
 
-                if photos.isEmpty {
-                    emptyStateView
-                } else {
-                    photoGridView
+                VStack(spacing: 0) {
+                    // 未購入のときだけ出る。写真を入れる場所に置いておく
+                    DeviceOnlyPhotoNote()
+                        .padding(.horizontal, 16)
+                        .padding(.top, 8)
+
+                    if photos.isEmpty {
+                        emptyStateView
+                    } else {
+                        photoGridView
+                    }
                 }
             }
             .navigationTitle(navigationTitleText)
@@ -106,6 +113,7 @@ struct AlbumDetailView: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
         .sheet(isPresented: $showImagePicker) {
             MultiPhotoPicker { images in
                 guard !images.isEmpty else { return }
@@ -694,9 +702,17 @@ struct ShareImageItem: Identifiable {
 
 struct ShareSheet: UIViewControllerRepresentable {
     let items: [Any]
+    /// 何をして終わったかを呼び出し側に伝える。
+    /// 写真に保存したときは共有シートが黙って閉じるだけで、
+    /// 保存できたのか分からないため
+    var onComplete: ((UIActivity.ActivityType?, Bool) -> Void)? = nil
 
     func makeUIViewController(context: Context) -> UIActivityViewController {
-        UIActivityViewController(activityItems: items, applicationActivities: nil)
+        let controller = UIActivityViewController(activityItems: items, applicationActivities: nil)
+        controller.completionWithItemsHandler = { activityType, completed, _, _ in
+            onComplete?(activityType, completed)
+        }
+        return controller
     }
 
     func updateUIViewController(_ uiViewController: UIActivityViewController, context: Context) {}

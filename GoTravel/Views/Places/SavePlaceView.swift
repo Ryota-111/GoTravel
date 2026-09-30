@@ -157,17 +157,19 @@ struct SavePlaceView: View {
                         let isSelected = vm.categoryId == cat.id
                         Button(action: { vm.categoryId = cat.id }) {
                             VStack(spacing: 6) {
+                                // 選ぶ前からそのカテゴリーの色で出す。
+                                // 一覧や地図のピンと同じ色なので、選んだ結果が予想できる
                                 ZStack {
                                     Circle()
-                                        .fill(isSelected ? themeManager.currentTheme.xprimary : themeManager.currentTheme.xprimary.opacity(0.08))
+                                        .fill(isSelected ? cat.color : cat.color.opacity(0.14))
                                         .frame(width: 44, height: 44)
                                     Image(systemName: cat.icon)
                                         .font(.system(size: 18))
-                                        .foregroundColor(isSelected ? .white : accentColor.opacity(0.6))
+                                        .foregroundColor(isSelected ? ThemePreset.readableText(on: cat.color) : cat.color)
                                 }
                                 Text(cat.name)
                                     .font(.system(size: 10, weight: .medium))
-                                    .foregroundColor(isSelected ? themeManager.currentTheme.xprimary : themeManager.currentTheme.secondaryText)
+                                    .foregroundColor(isSelected ? cat.color : themeManager.currentTheme.secondaryText)
                                     .lineLimit(1)
                             }
                         }

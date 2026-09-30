@@ -17,7 +17,12 @@ struct EditTravelPlanBasicInfoView: View {
     @State private var selectedImage: UIImage?
     @State private var showImagePicker = false
     @State private var isUploading = false
+    @State private var showShortenWarning = false
+    /// 出発日を動かしたとき、予定をどう扱うかの確認
+    @State private var showShiftChoice = false
+    @State private var pendingShift: TravelPlan.ScheduleShift?
     @State private var destinationCoordinate: (latitude: Double, longitude: Double)?
+    @State private var destinationSearchTask: Task<Void, Never>?
 
     // MARK: - Initialization
     init(plan: TravelPlan) {
@@ -63,10 +68,6 @@ struct EditTravelPlanBasicInfoView: View {
         colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight
     }
 
-    private var cardBg: Color {
-        colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight
-    }
-
     private var bgGradient: some View {
         LinearGradient(
             gradient: Gradient(colors: colorScheme == .dark
@@ -87,8 +88,12 @@ struct EditTravelPlanBasicInfoView: View {
                 headerView
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 14) {
+                    VStack(spacing: 0) {
                         coverImageSection
+                            .padding(.bottom, 6)
+                        // 未購入のときだけ出る
+                        DeviceOnlyPhotoNote()
+                            .padding(.bottom, 6)
                         titleSection
                         destinationSection
                         dateSection
@@ -104,6 +109,25 @@ struct EditTravelPlanBasicInfoView: View {
         .navigationBarHidden(true)
         .sheet(isPresented: $showImagePicker) {
             ImageCropPickerView(image: $selectedImage, aspectRatio: 1.0)
+        }
+        .confirmationDialog("出発日が変わります", isPresented: $showShiftChoice, titleVisibility: .visible) {
+            Button("予定の日付はそのまま") {
+                pendingShift = .keepDates
+                continueSaveAfterShiftChoice()
+            }
+            Button("予定も日程に合わせてずらす") {
+                pendingShift = .keepDayNumbers
+                continueSaveAfterShiftChoice()
+            }
+            Button("キャンセル", role: .cancel) { }
+        } message: {
+            Text("入れてある予定をどう扱いますか。\n\n「日付はそのまま」だと、12/25 に入れた予定は 12/25 に残ります。\n「日程に合わせてずらす」だと、2日目の予定は新しい2日目に移ります。")
+        }
+        .alert("旅行の日数が減ります", isPresented: $showShortenWarning) {
+            Button("キャンセル", role: .cancel) { }
+            Button("このまま保存") { performSave() }
+        } message: {
+            Text(leavingRangeMessage)
         }
     }
 
@@ -230,6 +254,14 @@ struct EditTravelPlanBasicInfoView: View {
                             .onChange(of: destination) { _, newValue in
                                 searchLocationCoordinate(for: newValue)
                             }
+                            // 座標が空のまま保存されている計画は、開いた時点で引き直す。
+                            // 目的地の文字を変えないと検索しないので、同じ「沖縄」のまま
+                            // 保存しても直らなかった
+                            .task {
+                                if destinationCoordinate == nil {
+                                    searchLocationCoordinate(for: destination)
+                                }
+                            }
                     }
                     .padding(14)
                     .background(fieldBg)
@@ -269,7 +301,7 @@ struct EditTravelPlanBasicInfoView: View {
                             .foregroundColor(themeManager.currentTheme.error)
                             .padding(.top, 2)
                     } else {
-                        let nights = Calendar.current.dateComponents([.day], from: startDate, to: endDate).day ?? 0
+                        let nights = Calendar.current.dayDifference(from: startDate, to: endDate)
                         if nights > 0 {
                             HStack(spacing: 6) {
                                 Image(systemName: "moon.stars.fill")
@@ -337,15 +369,21 @@ struct EditTravelPlanBasicInfoView: View {
     }
 
     // MARK: - Helper Views
-    @ViewBuilder
+    /// 1区切り。
+    ///
+    /// 以前はセクションごとに影付きのカードを敷いていたが、中の入力欄も箱を持つため
+    /// 箱が二重になっていた。面を塗るのはやめて薄い区切り線だけにする。
+    /// スケジュールの追加・編集画面と同じ組み
     private func sectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        content()
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(cardBg)
-                    .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
-            )
+        VStack(alignment: .leading, spacing: 0) {
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 16)
+
+            Rectangle()
+                .fill(themeManager.currentTheme.secondaryText.opacity(0.15))
+                .frame(height: 1)
+        }
     }
 
     private func sectionLabel(_ text: String, icon: String) -> some View {
@@ -360,13 +398,62 @@ struct EditTravelPlanBasicInfoView: View {
     }
 
     // MARK: - Actions
+
+    /// 縮めたことで旅行期間から外れる日程（予定が入っているものだけ）
+    private var daysLeavingRange: [DaySchedule] {
+        let days = Calendar.current.dayDifference(from: startDate, to: normalizedEndDate)
+        return plan.daySchedulesOutOfRange(forDayCount: max(days + 1, 1))
+    }
+
+    private var leavingRangeMessage: String {
+        let dayList = daysLeavingRange.map { "Day \($0.dayNumber)" }.joined(separator: "・")
+        let count = daySLeavingItemCount
+        return "\(dayList) に入れた予定\(count)件が旅行期間の外になるため、表示されなくなります。\n\n予定は消えません。日数を元に戻せばまた表示されます。"
+    }
+
+    private var daySLeavingItemCount: Int {
+        daysLeavingRange.reduce(0) { $0 + $1.scheduleItems.count }
+    }
+
+    /// 出発日を動かすと、予定を「日付のまま」にするか「◯日目のまま」に
+    /// するかで結果が変わる。**どちらが正しいかはアプリには決められない。**
+    /// 予定が入っているときだけ聞く
+    private var needsShiftChoice: Bool {
+        guard !Calendar.current.isDate(startDate, inSameDayAs: plan.startDate) else { return false }
+        return plan.daySchedules.contains { !$0.scheduleItems.isEmpty }
+    }
+
+    /// 日数を縮めると、範囲外の日の予定が画面から消える。
+    /// 黙って消えると気付けないので、保存前に知らせる
     private func saveTravelPlan() {
+        if needsShiftChoice {
+            showShiftChoice = true
+        } else if daysLeavingRange.isEmpty {
+            performSave()
+        } else {
+            showShortenWarning = true
+        }
+    }
+
+    /// 予定の扱いを選んでもらったあと、日数が減る確認へ進む
+    private func continueSaveAfterShiftChoice() {
+        if daysLeavingRange.isEmpty {
+            performSave()
+        } else {
+            showShortenWarning = true
+        }
+    }
+
+    private func performSave() {
         isUploading = true
 
-        if let image = selectedImage {
-            handleImageSave(image)
-        } else {
-            handleNoImageSave()
+        Task { @MainActor in
+            await settleDestinationCoordinate()
+            if let image = selectedImage {
+                handleImageSave(image)
+            } else {
+                handleNoImageSave()
+            }
         }
     }
 
@@ -380,7 +467,7 @@ struct EditTravelPlanBasicInfoView: View {
     }
 
     private func saveNewImage(_ image: UIImage) {
-        guard let imageData = image.jpegData(compressionQuality: 0.7) else {
+        guard let imageData = image.storedPhotoData() else {
             saveUpdatedPlan(with: plan.localImageFileName)
             return
         }
@@ -408,14 +495,22 @@ struct EditTravelPlanBasicInfoView: View {
     }
 
     private func saveUpdatedPlan(with fileName: String?) {
+        let shift = pendingShift ?? .keepDayNumbers
         var updatedPlan = plan
         updatedPlan.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
         updatedPlan.destination = destination.trimmingCharacters(in: .whitespacesAndNewlines)
         updatedPlan.latitude = destinationCoordinate?.latitude
         updatedPlan.longitude = destinationCoordinate?.longitude
+        // 置き直しの判断に、変更前の出発日が要る
+        let previousStartDate = plan.startDate
+
         updatedPlan.startDate = startDate
         updatedPlan.endDate = normalizedEndDate
         updatedPlan.localImageFileName = fileName
+        // 予定をどの日に置くか決め直す。
+        // 旅行ごとずらしたなら日番号のまま、期間の長さが変わったなら
+        // 予定の日付のほうを守る（出発日を1日早めただけでホテルが動かないように）
+        updatedPlan.realignDaySchedules(previousStartDate: previousStartDate, shift: shift)
 
         if let userId = authVM.userId {
             viewModel.update(updatedPlan, userId: userId, image: selectedImage)
@@ -429,19 +524,37 @@ struct EditTravelPlanBasicInfoView: View {
 
     // MARK: - Location Search
     private func searchLocationCoordinate(for query: String) {
-        let trimmed = query.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !trimmed.isEmpty else {
+        // 打っている途中の検索は捨てる。残すと古い結果が後から上書きする
+        destinationSearchTask?.cancel()
+
+        guard !query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
             destinationCoordinate = nil
             return
         }
-        let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = trimmed
-        MKLocalSearch(request: request).start { response, _ in
-            guard let item = response?.mapItems.first else { return }
-            let coord = item.placemark.coordinate
-            DispatchQueue.main.async {
-                destinationCoordinate = (coord.latitude, coord.longitude)
-            }
+
+        destinationSearchTask = Task { @MainActor in
+            let coordinate = await DestinationGeocoder.coordinate(for: query)
+            guard !Task.isCancelled else { return }
+            destinationCoordinate = coordinate.map { ($0.latitude, $0.longitude) }
+            // 終わったことを保存側に伝える（検索中なら保存が待つ）
+            destinationSearchTask = nil
         }
     }
+
+    /// 保存の前に、目的地の座標がそろうのを待つ。
+    ///
+    /// 検索は入力が止まって0.5秒後に始まり、通信を経て座標が入る。
+    /// 以前は保存がこれを待たず、「沖縄」と打ってすぐ保存すると座標が空のまま残り、
+    /// 天気が「設定された場所には天気の情報がありませんでした」になっていた。
+    /// 検索中か、座標がまだ無いときは、ここで引き直してから保存する
+    private func settleDestinationCoordinate() async {
+        let query = destination.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !query.isEmpty, destinationCoordinate == nil || destinationSearchTask != nil else { return }
+
+        destinationSearchTask?.cancel()
+        destinationSearchTask = nil
+        let coordinate = await DestinationGeocoder.coordinate(for: query, debounce: 0)
+        destinationCoordinate = coordinate.map { ($0.latitude, $0.longitude) }
+    }
+
 }

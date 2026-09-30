@@ -91,6 +91,7 @@ struct PlaceSearchView: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     private func searchPlaces() {

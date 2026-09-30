@@ -26,6 +26,13 @@ public class TravelPlanEntity: NSManagedObject {
     @NSManaged public var packingItemsData: Data?
     @NSManaged public var reservationsData: Data?
     @NSManaged public var customSplitCount: NSNumber?
+    /// ゴミ箱に入れた日時。入っていなければ nil。
+    ///
+    /// 削除してもすぐには消さず、30日間は「最近削除した旅行計画」から戻せるようにする。
+    /// 「過去の旅行計画が一切表示されなくなった」と報告があり、消したものを
+    /// 取り戻す手段がまったく無かったため。
+    /// `TravelPlan` には持たせない（共有やパブリックDBに載せる話ではないため）
+    @NSManaged public var deletedAt: Date?
 }
 
 // MARK: - Fetch Request

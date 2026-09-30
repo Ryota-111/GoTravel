@@ -1,11 +1,24 @@
 import SwiftUI
 
 // MARK: - Plan Event Card View
+//
+// 骨格はどのカードも同じにして、今日の1枚だけを前に出す。
+// 以前は全カードが同じ強さで色を敷いていたため、一覧が平坦で主役がいなかった。
+//
+// 色の受け持ちを2つに分けている。
+// - カードの主役色（日付タイル・面の色味・影）は **テーマ色**。
+//   白黒テーマを選んだ人の一覧が青やオレンジで埋まらないようにする
+// - 分類の色は **タグの小さなチップ**。
+//   一覧を見分ける手がかりとしては、この大きさで足りる。
+//   以前はここに種別（おでかけ／日常）の名前を色つきで出していたが、
+//   種別は作るときにどの項目を聞くかの区別でしかないので、
+//   名前を外してアイコンだけにした。色は3種類の区別のために残してある
 struct PlanEventCardView: View {
     let plan: Plan
     var onDelete: (() -> Void)? = nil
     @Environment(\.colorScheme) var colorScheme
     @ObservedObject var themeManager = ThemeManager.shared
+    @ObservedObject var tagManager = PlanTagManager.shared
 
     // メインテーマ色（カード全体の主役。種別カラーはアクセントに限定）
     private var mainColor: Color {
@@ -20,154 +33,390 @@ struct PlanEventCardView: View {
         titleColor.opacity(0.65)
     }
 
-    private var typeIcon: String {
-        plan.planType == .daily ? "house.fill" : "figure.walk"
+    private var surfaceColor: Color {
+        colorScheme == .dark
+            ? themeManager.currentTheme.secondaryBackgroundDark
+            : themeManager.currentTheme.backgroundLight
     }
 
-    private var typeName: String {
-        plan.planType == .daily ? "日常" : "おでかけ"
+    /// 今日にかかっている予定。この1枚だけ日付タイルを塗る
+    private var isToday: Bool {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        return calendar.startOfDay(for: plan.startDate) <= today
+            && calendar.startOfDay(for: plan.endDate) >= today
     }
 
     private var isSingleDay: Bool {
         Calendar.current.isDate(plan.startDate, inSameDayAs: plan.endDate)
     }
 
-    var body: some View {
-        HStack(alignment: .top, spacing: 14) {
-            // アイコンチップ（テーマ色主体、アイコン形状で種別を表現）
-            ZStack(alignment: .bottomTrailing) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(
-                            LinearGradient(
-                                colors: [mainColor, mainColor.opacity(0.65)],
-                                startPoint: .topLeading,
-                                endPoint: .bottomTrailing
-                            )
-                        )
-                        .frame(width: 46, height: 46)
-                        .shadow(color: mainColor.opacity(0.35), radius: 5, x: 0, y: 3)
-                    Image(systemName: typeIcon)
-                        .font(.system(size: 19, weight: .semibold))
-                        .foregroundColor(.white)
-                }
+    private var typeName: String { plan.planType.displayName }
 
-                // 種別カラーのドット（色分けのアクセント）
-                Circle()
-                    .fill(typeColor)
-                    .frame(width: 12, height: 12)
-                    .overlay(
-                        Circle()
-                            .stroke(colorScheme == .dark
-                                    ? themeManager.currentTheme.secondaryBackgroundDark
-                                    : themeManager.currentTheme.backgroundLight,
-                                    lineWidth: 2)
-                    )
-                    .offset(x: 3, y: 3)
-            }
+    /// 記念日は「あと◯日」が主役。日付タイルも当日ではなく記念日そのものを指す
+    private var isAnniversary: Bool { plan.planType == .anniversary }
 
-            VStack(alignment: .leading, spacing: 7) {
-                HStack(spacing: 8) {
-                    Text(plan.title)
-                        .font(.system(.headline, design: .rounded).weight(.bold))
-                        .foregroundColor(titleColor)
-                        .lineLimit(1)
+    private var theme: ThemePreset { themeManager.currentTheme }
 
-                    // 種別バッジ
-                    Text(typeName)
-                        .font(.caption2.weight(.bold))
-                        .foregroundColor(typeColor)
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 3)
-                        .background(typeColor.opacity(0.14), in: Capsule())
-                }
+    /// 行の中身。外枠がどちらでも同じものを出す
+    private var rowText: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(plan.title)
+                .font(.system(size: isToday ? 17 : 16, weight: isToday ? .bold : .semibold))
+                .foregroundColor(titleColor)
+                .lineLimit(1)
 
-                HStack(spacing: 10) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "calendar")
-                            .font(.caption2)
-                        Text(isSingleDay
-                             ? dateString(plan.startDate)
-                             : "\(dateString(plan.startDate)) 〜 \(dateString(plan.endDate))")
-                            .font(.caption.weight(.medium))
-                    }
+            HStack(spacing: 7) {
+                // 種別はアイコンだけに落としたが、無色だと3種類の区別がつかない。
+                // 名前を出さないぶん、色で見分けられるようにしておく
+                Image(systemName: plan.planType.icon)
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(typeColor)
+                    .accessibilityLabel(typeName)
+
+                tagChip
+
+                Text(subtitle)
+                    .font(.system(size: 12))
                     .foregroundColor(subTextColor)
-
-                    if plan.planType == .daily, let time = plan.time {
-                        HStack(spacing: 4) {
-                            Image(systemName: "clock")
-                                .font(.caption2)
-                            Text(formatTime(time))
-                                .font(.caption.weight(.semibold))
-                        }
-                        .foregroundColor(mainColor)
-                    }
-
-                    if !plan.places.isEmpty {
-                        HStack(spacing: 3) {
-                            Image(systemName: "mappin.and.ellipse")
-                                .font(.caption2)
-                            Text("\(plan.places.count)件")
-                                .font(.caption.weight(.medium))
-                        }
-                        .foregroundColor(subTextColor)
-                    }
-                }
+                    .lineLimit(1)
             }
+
+            todayScheduleLines
+        }
+    }
+
+    var body: some View {
+        // 外枠の作りはテーマ名ではなく decor トークンで決める
+        switch theme.style.decor {
+        case .ticket: ticketRow
+        case .plain:  plainRow
+        }
+    }
+
+    // MARK: - 半券つきの行
+    //
+    // 左に種別の帯、右に日付の半券。あいだは切り取り線で分ける。
+    // 幅が 0 のテーマではそもそもこちらに来ない
+
+    private var ticketRow: some View {
+        HStack(spacing: 0) {
+            Rectangle()
+                .fill(typeColor)
+                .frame(width: theme.style.typeSpineWidth)
+
+            rowText
+                .padding(.leading, 14)
+                .padding(.trailing, 12)
+                .padding(.vertical, 12)
 
             Spacer(minLength: 0)
 
-            if let onDelete = onDelete {
-                Button(action: onDelete) {
-                    Image(systemName: "trash")
-                        .font(.subheadline)
-                        .foregroundColor(subTextColor)
-                        .padding(8)
-                        .background(titleColor.opacity(0.06), in: Circle())
-                }
-                .buttonStyle(PlainButtonStyle())
-                .accessibilityLabel("予定を削除")
-            }
+            menuButton
+
+            dateStub
         }
-        .padding(14)
+        .frame(minHeight: 76)
+        .background(theme.cardBackground2)
+        .clipShape(RoundedRectangle(cornerRadius: theme.radius(.medium)))
+        .overlay(
+            RoundedRectangle(cornerRadius: theme.radius(.medium))
+                .strokeBorder(theme.cardBorder, lineWidth: 1)
+        )
+    }
+
+    /// 右端の日付。切り取り線で本体と分かれている
+    private var dateStub: some View {
+        VStack(spacing: 1) {
+            Text(stubDay)
+                .font(theme.style.monoFont(size: 15))
+                .foregroundColor(titleColor)
+            Text(stubWeekday)
+                .font(.system(size: 10))
+                .foregroundColor(subTextColor)
+        }
+        .frame(width: theme.style.dateStubWidth)
+        .frame(maxHeight: .infinity)
+        .background(theme.cardBorder.opacity(0.13))
+        .overlay(alignment: .leading) {
+            DashedRule(vertical: true)
+                .stroke(theme.cardBorder,
+                        style: StrokeStyle(lineWidth: 1.5, dash: [4, 3]))
+                .frame(width: 1.5)
+        }
+    }
+
+    private var stubDate: Date {
+        isAnniversary ? plan.startDate : (isToday ? Date() : plan.startDate)
+    }
+
+    private var stubDay: String {
+        let f = DateFormatter.japanese
+        f.dateFormat = "M/d"
+        return f.string(from: stubDate)
+    }
+
+    private var stubWeekday: String {
+        let f = DateFormatter.japanese
+        f.dateFormat = "E"
+        return f.string(from: stubDate)
+    }
+
+    // MARK: - これまでの行
+
+    private var plainRow: some View {
+        // 角丸と影はテーマのトークンから引く。
+        // 既定値は今までの値そのものなので、値を書いていないテーマは何も変わらない
+        let radius = theme.style.rowRadius
+        let shape = RoundedRectangle(cornerRadius: radius, style: .continuous)
+
+        return HStack(spacing: 0) {
+            // 種別を示す左の帯。
+            // 幅 0 のテーマでは見えないだけで、常に置いたままにしておく。
+            // if で付け外しするとビューの同一性が変わり、テーマを変えた瞬間に
+            // 部分木が作り直されてしまう
+            Rectangle()
+                .fill(typeColor)
+                .frame(width: theme.style.typeSpineWidth)
+
+            // 中身をたたむ今日のカードだけ、タイルと「⋯」を上に寄せる
+            HStack(alignment: isToday && !todayItems.isEmpty ? .top : .center, spacing: 12) {
+                dateTile
+
+                rowText
+
+                Spacer(minLength: 0)
+
+                menuButton
+            }
+            .padding(.leading, 12)
+            .padding(.vertical, 9)
+            .padding(.trailing, 4)
+        }
         .background(
-            // ベース背景 + テーマ色のごく淡い色被せ
             ZStack {
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(colorScheme == .dark
-                          ? themeManager.currentTheme.secondaryBackgroundDark
-                          : themeManager.currentTheme.backgroundLight)
-                RoundedRectangle(cornerRadius: 18)
-                    .fill(
+                shape.fill(surfaceColor)
+
+                // 今日の1枚だけ、面にも薄く色を流す
+                if isToday {
+                    shape.fill(
                         LinearGradient(
-                            gradient: Gradient(colors: [
-                                mainColor.opacity(colorScheme == .dark ? 0.16 : 0.10),
-                                mainColor.opacity(0.02)
-                            ]),
+                            colors: [mainColor.opacity(colorScheme == .dark ? 0.18 : 0.10), .clear],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         )
                     )
+                }
             }
         )
+        .clipShape(shape)
+        // ダークでは影が沈んで効かないので、細い輪郭に置き換える
         .overlay(
-            RoundedRectangle(cornerRadius: 18)
-                .stroke(mainColor.opacity(0.28), lineWidth: 1)
+            shape.strokeBorder(
+                colorScheme == .dark
+                    ? mainColor.opacity(isToday ? 0.48 : 0.10)
+                    : .clear,
+                lineWidth: 1
+            )
         )
-        .shadow(color: Color.black.opacity(0.06), radius: 7, x: 0, y: 3)
+        .shadow(
+            color: colorScheme == .dark
+                ? .clear
+                : (isToday ? mainColor.opacity(0.16) : Color.black.opacity(0.07))
+                    .opacity(theme.style.shadowStrength),
+            radius: theme.style.rowShadowRadius,
+            x: 0,
+            y: theme.style.shadowY
+        )
+    }
+
+    // MARK: - 今日の中身
+    //
+    // スケジュールは詳細を開かないと見えなかった。
+    // 毎日開くのは今日の予定なので、その1枚だけ中身をたたんで出す
+    @ViewBuilder
+    private var todayScheduleLines: some View {
+        if isToday, !todayItems.isEmpty {
+            VStack(alignment: .leading, spacing: 4) {
+                Rectangle()
+                    .fill(titleColor.opacity(0.08))
+                    .frame(height: 1)
+                    .padding(.vertical, 2)
+
+                ForEach(todayItems.prefix(Self.foldedLineLimit)) { item in
+                    HStack(spacing: 8) {
+                        Text(DateFormatter.japaneseTime.string(from: item.time))
+                            .font(.system(size: 11, weight: .semibold))
+                            .monospacedDigit()
+                            .foregroundColor(mainColor)
+
+                        Text(item.title)
+                            .font(.system(size: 12))
+                            .foregroundColor(titleColor.opacity(0.85))
+                            .lineLimit(1)
+                    }
+                }
+
+                if todayItems.count > Self.foldedLineLimit {
+                    Text("＋\(todayItems.count - Self.foldedLineLimit)件")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(subTextColor)
+                }
+            }
+            .padding(.top, 2)
+        }
+    }
+
+    private static let foldedLineLimit = 2
+
+    /// 今日にあたる日のスケジュール。
+    /// 何日目かの判定は `Plan.dayNumber(for:)` に任せる。
+    /// 日付を指定できなかった頃のデータを1日目として扱う規則も、そこに入っている
+    private var todayItems: [PlanScheduleItem] {
+        guard isToday else { return [] }
+
+        let elapsed = Calendar.current.dayDifference(from: plan.startDate, to: Date())
+        let todayNumber = min(max(elapsed + 1, 1), plan.dayCount)
+
+        return plan.scheduleItems
+            .filter { plan.dayNumber(for: $0) == todayNumber }
+            .sorted { $0.time < $1.time }
+    }
+
+    // MARK: - 日付タイル
+    //
+    // アイコンだけの目印では日付が本文に埋もれ、一覧を流し読みできなかった。
+    // 数字を大きく置いて、日付でたどれるようにする
+    private var dateTile: some View {
+        // 曜日は本文の頭へ回した。3行にすると、この列がカードの高さを決めてしまう
+        VStack(spacing: 1) {
+            Text(isToday ? "今日" : monthText)
+                .font(.system(size: 10, weight: .bold))
+                .opacity(isToday ? 0.86 : 0.78)
+
+            Text(dayText)
+                // 日付は等幅を持つテーマならその書体で。
+                // 持たないテーマは今までどおり、数字だけ桁を揃える
+                .font(theme.style.tabularFont(size: 21, weight: .heavy))
+        }
+        .foregroundColor(isToday ? ThemePreset.readableText(on: mainColor) : mainColor)
+        .padding(.vertical, 6)
+        .frame(width: 46)
+        .background(
+            RoundedRectangle(cornerRadius: 13, style: .continuous)
+                .fill(isToday ? AnyShapeStyle(mainColor) : AnyShapeStyle(mainColor.opacity(colorScheme == .dark ? 0.22 : 0.12)))
+        )
+    }
+
+    /// むき出しの削除ボタンは、一覧をなぞるだけで押してしまう。
+    /// 44pt の「⋯」にまとめて、押す気がないと届かないようにする
+    @ViewBuilder
+    private var menuButton: some View {
+        if let onDelete = onDelete {
+            Menu {
+                Button("削除", systemImage: "trash", role: .destructive, action: onDelete)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(subTextColor)
+                    // 幅は44のまま。高さで詰めると、この列がカードを押し広げる
+                    .frame(width: 44, height: 40)
+                    .contentShape(Rectangle())
+            }
+            .accessibilityLabel("この予定の操作")
+        }
+    }
+
+    // MARK: - 文言
+    //
+    // 単日でも「8月23日 〜 8月23日」と出していたのをやめる。
+    // 日付はタイルが持つので、本文には期間と中身だけを残す
+    private var subtitle: String {
+        var parts: [String] = [weekdayText]
+
+        if !isSingleDay {
+            parts.append("\(DateFormatter.japaneseDate.string(from: plan.endDate))まで")
+            let days = Calendar.current.dayDifference(from: plan.startDate, to: plan.endDate) + 1
+            parts.append("\(days)日間")
+        }
+
+        if let timeText = plan.timeRangeText {
+            parts.append(timeText)
+        }
+
+        if !plan.places.isEmpty {
+            parts.append("\(plan.places.count)件の場所")
+        }
+
+        if plan.recurrence != .none {
+            parts.append(plan.recurrence.displayName)
+        }
+
+        return parts.joined(separator: " · ")
     }
 
     private var typeColor: Color {
-        plan.planType == .daily
-            ? themeManager.currentTheme.dailyPlanColor
-            : themeManager.currentTheme.outingPlanColor
+        plan.planType.color(themeManager.currentTheme)
     }
 
-    private func dateString(_ d: Date) -> String {
-        DateFormatter.japaneseDate.string(from: d)
+    /// 分類の色。一覧で「どの仕分けの予定か」を見分ける手がかりはタグが受け持つ
+    @ViewBuilder
+    private var tagChip: some View {
+        if let tag = primaryTag {
+            Text(tag.name)
+                .font(.system(size: 10, weight: .bold))
+                .lineLimit(1)
+                .foregroundColor(tag.color)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 2)
+                .background(
+                    tag.color.opacity(colorScheme == .dark ? 0.24 : 0.14),
+                    in: RoundedRectangle(cornerRadius: 6)
+                )
+
+            // 2つ目以降は数だけ。名前を全部出すと日付や時刻が押し出される
+            if extraTagCount > 0 {
+                Text("+\(extraTagCount)")
+                    .font(.system(size: 10, weight: .bold))
+                    .foregroundColor(subTextColor)
+            }
+        }
     }
 
-    private func formatTime(_ time: Date) -> String {
-        DateFormatter.japaneseTime.string(from: time)
+    /// 一覧に出す代表タグ。予定が持つ並びの先頭を使う
+    private var primaryTag: PlanTag? {
+        tagManager.tags(for: plan.tagIDs).first
+    }
+
+    private var extraTagCount: Int {
+        max(tagManager.tags(for: plan.tagIDs).count - 1, 0)
+    }
+
+    /// タイルに出す日。今日にかかっている予定は今日を指す
+    private var tileDate: Date {
+        isToday ? Date() : plan.startDate
+    }
+
+    private var monthText: String {
+        Self.monthFormatter.string(from: tileDate)
+    }
+
+    private var dayText: String {
+        Self.dayFormatter.string(from: tileDate)
+    }
+
+    private var weekdayText: String {
+        Self.weekdayFormatter.string(from: tileDate)
+    }
+
+    private static let monthFormatter = japaneseFormatter("M月")
+    private static let dayFormatter = japaneseFormatter("d")
+    private static let weekdayFormatter = japaneseFormatter("E")
+
+    private static func japaneseFormatter(_ format: String) -> DateFormatter {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateFormat = format
+        return formatter
     }
 }

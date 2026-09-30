@@ -2,6 +2,8 @@ import SwiftUI
 import MapKit
 
 struct AddScheduleItemView: View {
+    /// 経路案内の行き先。開くアプリはプロフィールの設定に従う（`mapNavigation`）
+    @State private var navigationTarget: MapDestination?
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject var viewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
@@ -13,6 +15,10 @@ struct AddScheduleItemView: View {
 
     @State private var title = ""
     @State private var time = Date()
+    /// 時刻をどこの時計で入れるか。海外の旅行では現地の時計から始める
+    @State private var timeZone: TimeZone = .current
+    /// 目的地の時間帯。日本と時差があるときだけ入る
+    @State private var destinationTimeZone: TimeZone?
     @State private var cost = ""
     @State private var notes = ""
     @State private var linkURL = ""
@@ -35,10 +41,30 @@ struct AddScheduleItemView: View {
     ))
     @State private var selectedMapResult: MKMapItem?
     @State private var mapVisibleRegion: MKCoordinateRegion?
+    @State private var hasCenteredOnDestination = false
 
     // MARK: - Computed
     var dayDate: Date {
         Calendar.current.date(byAdding: .day, value: dayNumber - 1, to: plan.startDate) ?? plan.startDate
+    }
+
+    /// 地図と検索の起点。
+    /// 日本の中心から始めると、沖縄でもハワイでも長野周辺の候補が上位に来て、
+    /// 毎回地図を現地まで動かす手間がかかる。この旅行の目的地から始める。
+    /// 目的地の座標が無い計画（取得に失敗した・古いデータ）だけ日本全体にする
+    private var searchStartRegion: MKCoordinateRegion {
+        guard let latitude = plan.latitude, let longitude = plan.longitude else {
+            return MKCoordinateRegion(
+                center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
+                span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
+            )
+        }
+        // 0.3度＝約33km。目的地の座標は「沖縄」「東京」のような広い言葉から
+        // 引いた1点なので、寄りすぎると隣町が画面の外に出てしまう
+        return MKCoordinateRegion(
+            center: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
+            span: MKCoordinateSpan(latitudeDelta: 0.3, longitudeDelta: 0.3)
+        )
     }
 
     private var canAdd: Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty }
@@ -56,10 +82,6 @@ struct AddScheduleItemView: View {
 
     private var fieldBg: Color {
         colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight
-    }
-
-    private var cardBg: Color {
-        colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight
     }
 
     private var bgGradient: some View {
@@ -82,8 +104,7 @@ struct AddScheduleItemView: View {
                 headerView
 
                 ScrollView(showsIndicators: false) {
-                    VStack(spacing: 14) {
-                        dayInfoCard
+                    VStack(spacing: 0) {
                         titleSection
                         timeSection
                         locationSection
@@ -148,37 +169,6 @@ struct AddScheduleItemView: View {
         .background(travelColor.opacity(0.15))
     }
 
-    // MARK: - Day Info Card
-    private var dayInfoCard: some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(travelColor.opacity(0.15))
-                    .frame(width: 50, height: 50)
-                Text("\(dayNumber)")
-                    .font(.title2.weight(.bold))
-                    .foregroundColor(travelColor)
-            }
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text("Day \(dayNumber)")
-                    .font(.headline.weight(.bold))
-                    .foregroundColor(textColor)
-                Text(formattedDayDate)
-                    .font(.subheadline)
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-            }
-
-            Spacer()
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(cardBg)
-                .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
-        )
-    }
-
     // MARK: - Title Section
     private var titleSection: some View {
         sectionCard {
@@ -208,22 +198,16 @@ struct AddScheduleItemView: View {
         sectionCard {
             VStack(alignment: .leading, spacing: 10) {
                 sectionLabel("時間", icon: "clock.fill")
-                HStack {
-                    Image(systemName: "clock")
-                        .foregroundColor(travelColor.opacity(0.8))
-                        .frame(width: 24)
-                    Text("時刻")
-                        .font(.subheadline)
-                        .foregroundColor(textColor)
-                    Spacer()
-                    DatePicker("", selection: $time, displayedComponents: .hourAndMinute)
-                        .colorMultiply(travelColor)
-                        .datePickerStyle(.compact)
-                        .labelsHidden()
-                }
-                .padding(14)
-                .background(fieldBg)
-                .cornerRadius(12)
+                ScheduleTimeField(
+                    time: $time,
+                    timeZone: $timeZone,
+                    destination: destinationTimeZone,
+                    tint: travelColor,
+                    textColor: textColor,
+                    secondaryText: themeManager.currentTheme.secondaryText,
+                    fieldBackground: fieldBg
+                )
+                .task { await resolveDestinationTimeZone() }
             }
         }
     }
@@ -391,14 +375,21 @@ struct AddScheduleItemView: View {
 
     // MARK: - Helper Views
     @ViewBuilder
+    /// 1区切り。
+    ///
+    /// 以前はセクションごとに影付きのカードを敷いていたが、中の入力欄も箱を持つため
+    /// 箱が二重になっていた。面を塗るのはやめて薄い区切り線だけにする。
+    /// 予定計画の編集画面（`PlanDetailView.editSection`）と同じ組み
     private func sectionCard<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        content()
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(cardBg)
-                    .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
-            )
+        VStack(alignment: .leading, spacing: 0) {
+            content()
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 16)
+
+            Rectangle()
+                .fill(themeManager.currentTheme.secondaryText.opacity(0.15))
+                .frame(height: 1)
+        }
     }
 
     private func sectionLabel(_ text: String, icon: String) -> some View {
@@ -419,6 +410,17 @@ struct AddScheduleItemView: View {
         return formatter.string(from: dayDate)
     }
 
+    /// 目的地が海外なら、現地の時計で入れ始める。
+    /// 時:分は変えないので、開いた直後に入力欄の時刻が動いて見えることはない
+    private func resolveDestinationTimeZone() async {
+        guard destinationTimeZone == nil,
+              let zone = await DestinationTimeZoneService.shared.timeZone(for: plan),
+              ScheduleClock.isForeign(zone, at: dayDate) else { return }
+        destinationTimeZone = zone
+        time = ScheduleClock.keepingWallClock(time, from: timeZone, to: zone)
+        timeZone = zone
+    }
+
     // MARK: - Add Action（即時保存）
     private func addScheduleItem() {
         guard let userId = authVM.userId else { return }
@@ -434,7 +436,8 @@ struct AddScheduleItemView: View {
             latitude: selectedCoordinate?.latitude,
             longitude: selectedCoordinate?.longitude,
             cost: cost.isEmpty ? nil : Double(cost),
-            linkURL: linkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : linkURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            linkURL: linkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : linkURL.trimmingCharacters(in: .whitespacesAndNewlines),
+            timeZoneIdentifier: timeZone.identifier
         )
 
         var updatedPlan = basePlan
@@ -623,6 +626,7 @@ struct AddScheduleItemView: View {
                 }
             }
         }
+        .navigationViewStyle(.stack)
     }
 
     /// 保存済みの場所を行き先として設定する。
@@ -670,6 +674,13 @@ struct AddScheduleItemView: View {
                 }
             }
             .onMapCameraChange { context in mapVisibleRegion = context.region }
+            // 初回だけ目的地へ寄せる。2回目以降は前に見ていた場所のままにする
+            .onAppear {
+                guard !hasCenteredOnDestination else { return }
+                hasCenteredOnDestination = true
+                mapPosition = .region(searchStartRegion)
+                mapVisibleRegion = searchStartRegion
+            }
 
             VStack(spacing: 0) {
                 // ヘッダー
@@ -784,10 +795,7 @@ struct AddScheduleItemView: View {
         let request = MKLocalSearch.Request()
         request.naturalLanguageQuery = searchText
         request.resultTypes = [.pointOfInterest, .address]
-        request.region = mapVisibleRegion ?? MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
-            span: MKCoordinateSpan(latitudeDelta: 5, longitudeDelta: 5)
-        )
+        request.region = mapVisibleRegion ?? searchStartRegion
         do {
             let response = try await MKLocalSearch(request: request).start()
             searchResults = response.mapItems
@@ -835,7 +843,7 @@ struct AddScheduleItemView: View {
             }
 
             HStack(spacing: 10) {
-                Button { result.openInMaps() } label: {
+                Button { navigationTarget = MapDestination(result) } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "arrow.triangle.turn.up.right.diamond")
                         Text("経路")
@@ -847,6 +855,7 @@ struct AddScheduleItemView: View {
                     .foregroundColor(travelColor)
                     .cornerRadius(12)
                 }
+                .mapNavigation($navigationTarget)
                 Button {
                     selectedLocation = result
                     selectedCoordinate = result.placemark.coordinate

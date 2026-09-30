@@ -5,9 +5,13 @@ struct ProfileView: View {
     @StateObject private var vm = ProfileViewModel()
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
+    /// Pro のカードの文言が購入の直後に切り替わるように見張る
+    @ObservedObject private var proStore = ProStore.shared
     @Environment(\.colorScheme) var colorScheme
     @State private var animateCards = false
     @State private var showJoinPlan = false
+    /// カードの副題を、設定画面から戻ったときに書き換えるため
+    @AppStorage(MapNavigator.preferenceKey) private var mapAppPreference: String = MapApp.ask.rawValue
     @EnvironmentObject var travelPlanViewModel: TravelPlanViewModel
 
     var body: some View {
@@ -19,18 +23,30 @@ struct ProfileView: View {
                 VStack(spacing: 0) {
                     profileHeaderSection
 
+                    // 上から「本人のこと」「できること」「設定」「困ったとき」「その他」。
+                    //
+                    // 設定がヘルプやチップより下にあると、いちばん開く用事のものが
+                    // 一番下になる。アカウント（削除を含む）は最後に置く
                     VStack(spacing: 16) {
                         profileEditCard
 
-                        accountCard
+                        proCard
 
                         joinTravelPlanCard
+
+                        appsettingCard
+
+                        reminderDefaultsCard
+
+                        mapAppCard
+
+                        recentlyDeletedCard
 
                         helpSupportCard
 
                         tipJarCard
 
-                        appsettingCard
+                        accountCard
 
                         // cloudKitTestCard // 開発用：必要時にコメント解除
                     }
@@ -191,7 +207,8 @@ struct ProfileView: View {
                     VStack(spacing: 12) {
                         Text(authVM.userFullName ?? "ユーザー")
                             .font(.system(size: 28, weight: .bold, design: .rounded))
-                            .foregroundColor(themeManager.currentTheme.text)
+                            // text は白0.1の固定色で、暗い背景では黒いまま消える
+                            .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
 
                         Text(authVM.userEmail ?? "")
                             .font(.system(size: 15, weight: .medium))
@@ -248,7 +265,7 @@ struct ProfileView: View {
         .opacity(animateCards ? 1 : 0)
         .scaleEffect(animateCards ? 1 : 0.8)
         .offset(y: animateCards ? 0 : 30)
-        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.25), value: animateCards)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.45), value: animateCards)
     }
 
     // MARK: - Help & Support Card
@@ -281,7 +298,80 @@ struct ProfileView: View {
         .opacity(animateCards ? 1 : 0)
         .scaleEffect(animateCards ? 1 : 0.8)
         .offset(y: animateCards ? 0 : 30)
-        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.45), value: animateCards)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.25), value: animateCards)
+    }
+
+    private var reminderDefaultsCard: some View {
+        NavigationLink(destination: PlanReminderDefaultsView()) {
+            GlassMenuCard(
+                icon: "bell.badge.fill",
+                title: "通知の初期設定",
+                subtitle: "新しい予定に入れる通知",
+                gradientColors: [Color.orange, Color.pink.opacity(0.8)]
+            )
+        }
+        .buttonStyle(CardButtonStyle())
+        .opacity(animateCards ? 1 : 0)
+        .scaleEffect(animateCards ? 1 : 0.8)
+        .offset(y: animateCards ? 0 : 30)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.30), value: animateCards)
+    }
+
+    private var recentlyDeletedCard: some View {
+        NavigationLink(destination: RecentlyDeletedTravelPlansView().environmentObject(travelPlanViewModel)) {
+            GlassMenuCard(
+                icon: "trash.fill",
+                title: "最近削除した旅行計画",
+                subtitle: travelPlanViewModel.recentlyDeleted.isEmpty
+                    ? "\(TravelPlanViewModel.trashRetentionDays)日間は戻せます"
+                    : "\(travelPlanViewModel.recentlyDeleted.count)件・\(TravelPlanViewModel.trashRetentionDays)日間は戻せます",
+                gradientColors: [Color.gray, Color.gray.opacity(0.7)]
+            )
+        }
+        .buttonStyle(CardButtonStyle())
+        .opacity(animateCards ? 1 : 0)
+        .scaleEffect(animateCards ? 1 : 0.8)
+        .offset(y: animateCards ? 0 : 30)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.35), value: animateCards)
+    }
+
+    private var mapAppCard: some View {
+        NavigationLink(destination: MapAppSettingView()) {
+            GlassMenuCard(
+                icon: "arrow.triangle.turn.up.right.diamond.fill",
+                title: "経路案内のアプリ",
+                subtitle: (MapApp(rawValue: mapAppPreference) ?? .ask).displayName,
+                gradientColors: [Color.teal, Color.blue.opacity(0.8)]
+            )
+        }
+        .buttonStyle(CardButtonStyle())
+        .opacity(animateCards ? 1 : 0)
+        .scaleEffect(animateCards ? 1 : 0.8)
+        .offset(y: animateCards ? 0 : 30)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.35), value: animateCards)
+    }
+
+    // MARK: - Pro Card
+    //
+    // これまで買い切りの入口は「アプリ設定 → テーマ」の中だけで、
+    // テーマを見に行った人しか存在に気づけなかった。
+    // 購入済みかどうかで文言だけ変え、カード自体は常に置いておく
+    private var proCard: some View {
+        NavigationLink(destination: ProView()) {
+            GlassMenuCard(
+                icon: proStore.isPurchased ? "checkmark.seal.fill" : "sparkles",
+                title: "Travory Pro",
+                subtitle: proStore.isPurchased
+                    ? "ご利用中です"
+                    : "テーマ14種と写真のiCloud保管",
+                gradientColors: [Color.yellow, Color.orange.opacity(0.8)]
+            )
+        }
+        .buttonStyle(CardButtonStyle())
+        .opacity(animateCards ? 1 : 0)
+        .scaleEffect(animateCards ? 1 : 0.8)
+        .offset(y: animateCards ? 0 : 30)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.15), value: animateCards)
     }
 
     // MARK: - Join Travel Plan Card
@@ -298,7 +388,7 @@ struct ProfileView: View {
         .opacity(animateCards ? 1 : 0)
         .scaleEffect(animateCards ? 1 : 0.8)
         .offset(y: animateCards ? 0 : 30)
-        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.30), value: animateCards)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.20), value: animateCards)
     }
 
     // MARK: - Tip Jar Card
@@ -344,6 +434,7 @@ struct GlassMenuCard: View {
     let subtitle: String
     let gradientColors: [Color]
     @ObservedObject var themeManager = ThemeManager.shared
+    @Environment(\.colorScheme) var colorScheme
 
     var body: some View {
         ZStack {
@@ -379,7 +470,7 @@ struct GlassMenuCard: View {
                 VStack(alignment: .leading, spacing: 6) {
                     Text(title)
                         .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundColor(themeManager.currentTheme.text)
+                        .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
 
                     Text(subtitle)
                         .font(.system(size: 14, weight: .medium))
@@ -419,13 +510,21 @@ struct ProfileEditView: View {
     @State private var showRemoveAvatarConfirm = false
     @State private var animateContent = false
 
+    // 名前とメールは Apple から初回しか貰えないので、自分で直せるようにしてある
+    @State private var editedName = ""
+    @State private var editedEmail = ""
+
+    private var hasProfileChanges: Bool {
+        editedName.trimmingCharacters(in: .whitespacesAndNewlines) != (authVM.userFullName ?? "")
+            || editedEmail.trimmingCharacters(in: .whitespacesAndNewlines) != (authVM.userEmail ?? "")
+    }
+
     var body: some View {
         ZStack {
             backgroundGradient
 
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 25) {
-                    // User Info (read-only)
                     userInfoSection
 
                     avatarSection
@@ -440,8 +539,24 @@ struct ProfileEditView: View {
             .navigationBarTitleDisplayMode(.inline)
         }
         .onAppear {
+            editedName = authVM.userFullName ?? ""
+            editedEmail = authVM.userEmail ?? ""
+
             withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
                 animateContent = true
+            }
+        }
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                Button("保存") {
+                    authVM.updateProfile(fullName: editedName, email: editedEmail)
+                    presentationMode.wrappedValue.dismiss()
+                }
+                .fontWeight(.semibold)
+                .foregroundColor(hasProfileChanges
+                                 ? themeManager.currentTheme.xprimary
+                                 : themeManager.currentTheme.secondaryText)
+                .disabled(!hasProfileChanges)
             }
         }
         .sheet(isPresented: $showImagePicker) {
@@ -479,9 +594,10 @@ struct ProfileEditView: View {
                         .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
 
-                Text(authVM.userFullName ?? "ユーザー")
+                TextField("ユーザー", text: $editedName)
                     .font(.body)
                     .foregroundColor(themeManager.currentTheme.text)
+                    .textInputAutocapitalization(.never)
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
@@ -504,9 +620,12 @@ struct ProfileEditView: View {
                         .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
 
-                Text(authVM.userEmail ?? "")
+                TextField("未設定", text: $editedEmail)
                     .font(.body)
                     .foregroundColor(themeManager.currentTheme.text)
+                    .keyboardType(.emailAddress)
+                    .textInputAutocapitalization(.never)
+                    .autocorrectionDisabled()
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
@@ -551,10 +670,12 @@ struct ProfileEditView: View {
                     .foregroundColor(themeManager.currentTheme.xprimary)
                 Text("お知らせ")
                     .font(.caption.bold())
-                    .foregroundColor(themeManager.currentTheme.text)
+                    .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
             }
 
-            Text("名前とメールアドレスはApple IDから取得されます。変更する場合は、Apple IDの設定から変更してください。")
+            // Apple から名前とメールを貰えるのは初回の1回きりで、取り直す手段がない。
+            // 「Apple IDの設定から変更してください」は実際には効かない案内だった
+            Text("名前とメールアドレスは、初回のサインイン時にApple IDから取得したものです。この端末での表示にだけ使うので、ここで自由に変更できます。")
                 .font(.caption)
                 .foregroundColor(themeManager.currentTheme.secondaryText)
         }
@@ -993,6 +1114,8 @@ struct AppSettingView: View {
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
     @State private var animateCards = false
+    /// 未購入のテーマが選ばれたとき、どれから開かれたかを覚えて購入画面を出す
+    @State private var storeTargetTheme: ThemePreset.ThemeType?
 
     var body: some View {
         ZStack {
@@ -1063,21 +1186,29 @@ struct AppSettingView: View {
                             .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
                             .padding(.horizontal)
 
-                        ForEach(Array(ThemePreset.ThemeType.allCases.enumerated()), id: \.offset) { index, themeType in
-                            ThemeCard(
-                                themeType: themeType,
-                                isSelected: themeManager.currentTheme.type == themeType,
-                                onSelect: {
-                                    withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
-                                        themeManager.setTheme(themeType)
-                                    }
-                                }
-                            )
-                            .padding(.horizontal)
-                            .opacity(animateCards ? 1 : 0)
-                            .offset(y: animateCards ? 0 : 20)
-                            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.15 + Double(index) * 0.05), value: animateCards)
+                        themeList(ThemePreset.ThemeType.freeCases, startIndex: 0)
+
+                        HStack(spacing: 8) {
+                            Text("追加のテーマ")
+                                .font(.headline)
+                                .foregroundColor(themeManager.currentTheme.text)
+
+                            if themeManager.isPremiumUnlocked {
+                                Text("購入済み")
+                                    .font(.caption2.bold())
+                                    .foregroundColor(themeManager.currentTheme.success)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 3)
+                                    .background(
+                                        Capsule().fill(themeManager.currentTheme.success.opacity(0.14))
+                                    )
+                            }
                         }
+                        .padding(.horizontal)
+                        .padding(.top, 8)
+
+                        themeList(ThemePreset.ThemeType.premiumCases,
+                                  startIndex: ThemePreset.ThemeType.freeCases.count)
                     }
                 }
                 .padding(.bottom, 30)
@@ -1089,6 +1220,39 @@ struct AppSettingView: View {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
                 animateCards = true
             }
+        }
+        .sheet(item: $storeTargetTheme) { target in
+            ProSheet(highlighted: target)
+        }
+    }
+
+    /// テーマの一覧。startIndex は登場アニメーションの順番をずらすためだけに使う
+    @ViewBuilder
+    private func themeList(_ types: [ThemePreset.ThemeType], startIndex: Int) -> some View {
+        ForEach(Array(types.enumerated()), id: \.element) { index, themeType in
+            ThemeCard(
+                themeType: themeType,
+                isSelected: themeManager.currentTheme.type == themeType,
+                isLocked: !themeManager.canUse(themeType),
+                isSeasonallyOpen: themeManager.isSeasonallyOpen(themeType),
+                onSelect: {
+                    if themeManager.canUse(themeType) {
+                        withAnimation(.spring(response: 0.5, dampingFraction: 0.7)) {
+                            themeManager.setTheme(themeType)
+                        }
+                    } else {
+                        storeTargetTheme = themeType
+                    }
+                }
+            )
+            .padding(.horizontal)
+            .opacity(animateCards ? 1 : 0)
+            .offset(y: animateCards ? 0 : 20)
+            .animation(
+                .spring(response: 0.6, dampingFraction: 0.8)
+                    .delay(0.15 + Double(startIndex + index) * 0.05),
+                value: animateCards
+            )
         }
     }
 
@@ -1125,6 +1289,8 @@ struct ThemeColorDot: View {
 struct ThemeCard: View {
     let themeType: ThemePreset.ThemeType
     let isSelected: Bool
+    var isLocked: Bool = false
+    var isSeasonallyOpen: Bool = false
     let onSelect: () -> Void
 
     @ObservedObject var themeManager = ThemeManager.shared
@@ -1134,44 +1300,106 @@ struct ThemeCard: View {
         Button(action: onSelect) {
             let previewTheme = ThemePreset(type: themeType)
 
-            VStack(alignment: .leading, spacing: 12) {
-                HStack {
-                    Text(themeType.displayName)
-                        .font(.headline)
-                        .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
+            HStack(alignment: .top, spacing: 12) {
+                VStack(alignment: .leading, spacing: 12) {
+                    HStack(spacing: 8) {
+                        // そのテーマ自身の書体で名前を出す。明朝か丸ゴシックかがここで分かる
+                        Text(themeType.displayName)
+                            .font(previewTheme.displayFont(.headline))
+                            .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
 
-                    Spacer()
+                        if isSeasonallyOpen, let season = themeType.season {
+                            Text("\(season.displayName)のあいだ使えます")
+                                .font(.caption2.bold())
+                                .foregroundColor(themeManager.currentTheme.success)
+                                .padding(.horizontal, 7)
+                                .padding(.vertical, 3)
+                                .background(
+                                    Capsule().fill(themeManager.currentTheme.success.opacity(0.14))
+                                )
+                        }
 
-                    if isSelected {
-                        Image(systemName: "checkmark.circle.fill")
-                            .font(.title2)
-                            .foregroundColor(themeManager.currentTheme.success)
+                        Spacer(minLength: 0)
+
+                        if isSelected {
+                            Image(systemName: "checkmark.circle.fill")
+                                .font(.title2)
+                                .foregroundColor(themeManager.currentTheme.success)
+                        } else if isLocked {
+                            Image(systemName: "lock.fill")
+                                .font(.subheadline)
+                                .foregroundColor(themeManager.currentTheme.tertiaryText)
+                        }
                     }
-                }
 
-                // Color Preview
-                HStack(spacing: 8) {
-                    ThemeColorDot(color: previewTheme.primary)
-                    ThemeColorDot(color: previewTheme.secondary)
-                    ThemeColorDot(color: previewTheme.tertiary)
-                    ThemeColorDot(color: previewTheme.accent1)
-                    ThemeColorDot(color: previewTheme.accent2)
+                    Text(themeType.subtitle)
+                        .font(.caption)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+
+                    // テーマの主色3つと、背景・文字。
+                    //
+                    // 予定の3色（おでかけ・日常・旅行）はここでは使えない。
+                    // 既定の3テーマがどれも青・橙・緑をベタ書きで持っているため、
+                    // 並べると3つとも同じ見本になってしまう
+                    HStack(spacing: 6) {
+                        swatch(previewTheme.primary, in: previewTheme)
+                        swatch(previewTheme.secondary, in: previewTheme)
+                        swatch(previewTheme.tertiary, in: previewTheme)
+                        swatch(previewTheme.backgroundLight, in: previewTheme)
+                        swatch(previewTheme.text, in: previewTheme)
+                    }
+
+                    Spacer(minLength: 0)
                 }
+                .opacity(isLocked ? 0.55 : 1)
+
+                // 見え方の見本。写真ではなく、そのテーマのトークンで描いている。
+                //
+                // 未購入でも薄くしない。どんな見た目になるか分からないものは
+                // 買われないので、ここは鍵付きのときこそ見せる必要がある
+                ThemePreviewCard(preset: previewTheme, width: 88)
             }
             .padding()
+            // 枠は今のテーマの形に揃える。
+            //
+            // 以前はプレビュー側のテーマの角丸と縁幅で描いていた。形の違いが
+            // 一覧で分かるという意図だったが、角丸が 6〜22、縁が 0〜1.5 と
+            // 幅があるため、行ごとに輪郭が変わって一覧が落ち着かなかった。
+            // 形の違いは下の色見本で見せる
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: themeManager.currentTheme.radius(.large))
                     // 選択中の枠が白黒テーマで白くなり、どれを選んでいるか分からなくなるため actionFill を使う
                     .fill(isSelected ? themeManager.currentTheme.actionFill.opacity(0.1) : themeManager.currentTheme.cardBackground2)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
-                    .stroke(isSelected ? themeManager.currentTheme.actionFill : themeManager.currentTheme.cardBorder, lineWidth: isSelected ? 2 : 1)
+                RoundedRectangle(cornerRadius: themeManager.currentTheme.radius(.large))
+                    .stroke(
+                        isSelected ? themeManager.currentTheme.actionFill : themeManager.currentTheme.cardBorder,
+                        lineWidth: isSelected ? 2 : 1
+                    )
             )
             .shadow(color: isSelected ? themeManager.currentTheme.shadow : Color.clear, radius: isSelected ? 15 : 5, x: 0, y: 5)
             .scaleEffect(isSelected ? 1.02 : 1.0)
         }
         .buttonStyle(PlainButtonStyle())
+    }
+
+    /// 白や淡い色でも見えるよう、縁を必ず付ける
+    /// 色見本。角丸と縁の太さは、そのテーマ自身の値で描く。
+    /// 枠を揃えたぶん、形の個性はここで見せる。
+    /// 大きさと位置は全テーマで同じなので、並べても一覧は乱れない
+    private func swatch(_ color: Color, in preset: ThemePreset) -> some View {
+        let shape = RoundedRectangle(cornerRadius: preset.radius(.small))
+
+        return shape
+            .fill(color)
+            .frame(width: 26, height: 26)
+            .overlay(
+                shape.stroke(preset.text.opacity(0.18),
+                             lineWidth: max(preset.style.borderWidth, 1))
+            )
     }
 }
 
@@ -1353,6 +1581,7 @@ struct UserGuideView: View {
             }
             .navigationBarItems(trailing: closeButton)
         }
+        .navigationViewStyle(.stack)
     }
 
     private var closeButton: some View {
