@@ -14,6 +14,9 @@ struct ProView: View {
     /// テーマ一覧から「このテーマを使いたい」で開かれたときに、そのテーマ名を見出しに出す。
     /// プロフィールから開いたときは nil
     var highlighted: ThemePreset.ThemeType? = nil
+    /// 買えたらすぐ閉じるか。使いたい機能から開かれたとき（予約メールの取り込みなど）は、
+    /// 買ったその場で元の画面に戻して使ってもらう
+    var dismissesOnPurchase = false
 
     @ObservedObject private var store = ProStore.shared
     @ObservedObject private var themeManager = ThemeManager.shared
@@ -41,6 +44,8 @@ struct ProView: View {
                     purchasedNotice
                 }
 
+                // 予約メールの取り込みを先頭に置く（Pro の目玉）
+                featureReservationEmail
                 featureThemes
                 featurePhotoSync
                 onceOnlyCard
@@ -57,9 +62,12 @@ struct ProView: View {
         .navigationTitle("Travory Pro")
         .navigationBarTitleDisplayMode(.inline)
         .onChange(of: store.isPurchased) { _, purchased in
+            guard purchased else { return }
             // テーマから開かれていたら、買えたその場で当てる
-            if purchased, let highlighted {
+            if let highlighted {
                 themeManager.setTheme(highlighted)
+                dismiss()
+            } else if dismissesOnPurchase {
                 dismiss()
             }
         }
@@ -80,7 +88,9 @@ struct ProView: View {
                 .foregroundColor(theme.text)
                 .multilineTextAlignment(.center)
 
-            Text("一度のお支払いで、追加テーマ14種と写真のiCloud保管が使えるようになります。月額や年額はありません。")
+            Text(highlighted == nil
+                 ? "予約確認メールを貼り付けるだけで、予約が入ります。追加テーマ14種と写真のiCloud保管も、一度のお支払いで使えるようになります。月額や年額はありません。"
+                 : "一度のお支払いで、予約確認メールの取り込み・追加テーマ14種・写真のiCloud保管が使えるようになります。月額や年額はありません。")
                 .font(.subheadline)
                 .foregroundColor(theme.secondaryText)
                 .multilineTextAlignment(.center)
@@ -103,7 +113,7 @@ struct ProView: View {
         .themedCard()
     }
 
-    // MARK: - 入っているもの①：テーマ
+    // MARK: - 入っているもの②：テーマ
 
     private var featureThemes: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -163,7 +173,7 @@ struct ProView: View {
         .themedCard()
     }
 
-    // MARK: - 入っているもの②：写真の保管
+    // MARK: - 入っているもの③：写真の保管
 
     private var featurePhotoSync: some View {
         VStack(alignment: .leading, spacing: 12) {
@@ -181,6 +191,106 @@ struct ProView: View {
         }
         .padding(16)
         .themedCard()
+    }
+
+    // MARK: - 入っているもの①：予約メールの取り込み（目玉）
+
+    private var featureReservationEmail: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("おすすめ")
+                .font(.caption2.bold())
+                .foregroundColor(onAccent)
+                .padding(.horizontal, 8)
+                .padding(.vertical, 3)
+                .background(Capsule().fill(accent))
+
+            featureHeading(
+                icon: "envelope.open.fill",
+                title: "予約確認メールを貼るだけで、予約が入ります",
+                detail: "飛行機・新幹線・宿・レストラン・チケットの予約確認メールから、"
+                      + "予約番号・日時・便名・金額を読み取って入力欄に入れます。打ち直す手間がなくなります。"
+            )
+
+            // 何が起きるのかは、文章より見本のほうが早く伝わる
+            reservationEmailDemo
+
+            bullet("往復の航空券のように、1通に複数の予約があっても順に登録できます。")
+            bullet("海外の空港や宿は、現地の時間で入ります。")
+            bullet("保存する前に内容を確かめられます。メールはこの端末の中だけで読み取り、どこにも送りません。")
+            bullet("予約を手で入力する機能は、これまでどおり無料です。")
+        }
+        .padding(16)
+        .themedCard()
+    }
+
+    /// 確認メール → 予約 の見本。実際の予約カードに近い見た目にする
+    private var reservationEmailDemo: some View {
+        VStack(spacing: 8) {
+            VStack(alignment: .leading, spacing: 3) {
+                Label("確認メール", systemImage: "envelope")
+                    .font(.caption2.bold())
+                    .foregroundColor(theme.secondaryText)
+                Text("2026年10月6日　SKY 111便\n神戸 07:30 → 那覇 09:35\n予約番号：K7Q2PX\nお支払金額：12,800円")
+                    .font(.system(size: 11, design: .monospaced))
+                    .foregroundColor(theme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(12)
+            .background(RoundedRectangle(cornerRadius: 10).fill(theme.secondaryText.opacity(0.08)))
+
+            Image(systemName: "arrow.down")
+                .font(.caption.bold())
+                .foregroundColor(accent)
+
+            VStack(alignment: .leading, spacing: 8) {
+                HStack(spacing: 8) {
+                    Image(systemName: "airplane")
+                        .font(.system(size: 13))
+                        .foregroundColor(accent)
+                        .frame(width: 26, height: 26)
+                        .background(Circle().fill(accent.opacity(0.14)))
+                    Text("SKY111")
+                        .font(.subheadline.bold())
+                        .foregroundColor(theme.text)
+                    Spacer()
+                    Text("¥12,800")
+                        .font(.caption.bold())
+                        .foregroundColor(theme.secondaryText)
+                }
+                HStack {
+                    demoEndpoint("神戸空港", "07:30")
+                    Spacer()
+                    Image(systemName: "airplane")
+                        .font(.caption)
+                        .foregroundColor(accent)
+                    Spacer()
+                    demoEndpoint("那覇空港", "09:35")
+                }
+                Text("予約番号  K7Q2PX")
+                    .font(.system(size: 13, weight: .semibold, design: .monospaced))
+                    .foregroundColor(theme.text)
+            }
+            .padding(12)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(accent.opacity(0.06))
+                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(accent.opacity(0.35), lineWidth: 1))
+            )
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("見本：確認メールの便名・時刻・予約番号・金額が、そのまま予約に入ります")
+    }
+
+    private func demoEndpoint(_ place: String, _ time: String) -> some View {
+        VStack(spacing: 1) {
+            Text(place)
+                .font(.caption.bold())
+                .foregroundColor(theme.text)
+            Text(time)
+                .font(.system(size: 16, weight: .bold, design: .rounded))
+                .foregroundColor(theme.text)
+        }
     }
 
     // MARK: - 買い方の説明
@@ -346,13 +456,14 @@ struct ProView: View {
 /// 中身は `ProView` そのままで、閉じるボタンだけ足す
 struct ProSheet: View {
     let highlighted: ThemePreset.ThemeType?
+    var dismissesOnPurchase = false
 
     @ObservedObject private var themeManager = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
         NavigationStack {
-            ProView(highlighted: highlighted)
+            ProView(highlighted: highlighted, dismissesOnPurchase: dismissesOnPurchase)
                 .toolbar {
                     ToolbarItem(placement: .cancellationAction) {
                         Button("閉じる") { dismiss() }

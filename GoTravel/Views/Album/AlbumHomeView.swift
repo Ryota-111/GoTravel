@@ -3,7 +3,6 @@ import SwiftUI
 // MARK: - Album Home View
 struct AlbumHomeView: View {
     @ObservedObject private var albumManager = AlbumManager.shared
-    @ObservedObject private var japanPhotoManager = JapanPhotoManager.shared
     // MainTabView から注入済みのインスタンスを使う（自前生成すると二重管理になる）
     @EnvironmentObject var travelPlanViewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
@@ -23,11 +22,9 @@ struct AlbumHomeView: View {
         albumManager.albums.filter { !$0.isDefaultAlbum }
     }
 
-    /// 日本全国フォトマップの写真は別管理なので、合計にはそちらの枚数を足す
+    /// フォトマップも写真の並びをアルバムに持つようになったので、どのアルバムも同じ数え方
     private var totalPhotoCount: Int {
-        albumManager.albums.reduce(0) { total, album in
-            total + (album.isJapanPhotoMap ? japanPhotoManager.photoCount : album.photoFileNames.count)
-        }
+        albumManager.albums.reduce(0) { $0 + $1.photoFileNames.count }
     }
 
     var body: some View {
@@ -79,7 +76,7 @@ struct AlbumHomeView: View {
         .fullScreenCover(item: $selectedAlbum) { album in
             // タイトル文字列ではなく種別で判定する
             if album.isJapanPhotoMap {
-                JapanPhotoView()
+                JapanPhotoView(albumId: album.id)
             } else {
                 AlbumDetailView(album: album)
             }
@@ -361,21 +358,20 @@ struct AlbumCard: View {
     let onStartSelection: () -> Void
 
     @ObservedObject private var albumManager = AlbumManager.shared
-    @ObservedObject private var japanPhotoManager = JapanPhotoManager.shared
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
 
     /// 計算プロパティのままだと参照のたびにディスクから読み直すため、一度だけ読んで保持する
     @State private var recentPhotos: [UIImage] = []
 
-    /// 日本全国フォトマップの写真は JapanPhotoManager が別に持っているため、枚数もそちらを見る
     private var photoCount: Int {
-        album.isJapanPhotoMap ? japanPhotoManager.photoCount : album.photoFileNames.count
+        album.photoFileNames.count
     }
 
+    /// フォトマップの写真は `JapanPhotos` にあるので、読み出し先だけ分ける
     private func loadRecentPhotos() {
         recentPhotos = album.isJapanPhotoMap
-            ? japanPhotoManager.recentThumbnails(limit: 4)
+            ? JapanPhotoManager.shared.recentThumbnails(in: album, limit: 4)
             : albumManager.recentThumbnails(from: album, limit: 4)
     }
 
@@ -452,12 +448,6 @@ struct AlbumCard: View {
         }
         .task(id: album.photoFileNames) {
             loadRecentPhotos()
-        }
-        // 日本全国フォトマップは別管理なので、そちらの更新にも追従させる
-        .task(id: japanPhotoManager.savedPrefectures) {
-            if album.isJapanPhotoMap {
-                loadRecentPhotos()
-            }
         }
     }
 

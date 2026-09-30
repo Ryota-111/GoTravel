@@ -27,7 +27,8 @@ enum WidgetSnapshotBuilder {
     static func build(travelPlans: [TravelPlan], plans: [Plan], now: Date = Date()) -> WidgetSnapshot {
         var snapshot = WidgetSnapshot()
         snapshot.updatedAt = now
-        snapshot.prefectureCount = JapanPhotoManager.shared.photoCount
+        // 既定のフォトマップの、写真のある県の数（フォトマップは複数作れるようになった）
+        snapshot.prefectureCount = AlbumManager.shared.defaultPhotoMapPrefectureCount()
 
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: now)

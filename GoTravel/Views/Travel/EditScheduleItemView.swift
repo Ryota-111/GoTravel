@@ -26,6 +26,8 @@ struct EditScheduleItemView: View {
     @State private var destinationTimeZone: TimeZone?
     /// その日の一番上に固定するか
     @State private var isPinned: Bool
+    /// 共有した旅行で、この予定に参加する人。空なら全員
+    @State private var participants: Set<String>
     @State private var cost: String
     @State private var actualCost: String
     @State private var linkURL: String
@@ -63,6 +65,7 @@ struct EditScheduleItemView: View {
         _time = State(initialValue: item.time)
         _timeZone = State(initialValue: item.timeZone)
         _isPinned = State(initialValue: item.isPinned == true)
+        _participants = State(initialValue: Set(item.participantIds ?? []))
         _cost = State(initialValue: item.cost != nil ? String(Int(item.cost!)) : "")
         _actualCost = State(initialValue: item.actualCost != nil ? String(Int(item.actualCost!)) : "")
         _linkURL = State(initialValue: item.linkURL ?? "")
@@ -243,6 +246,16 @@ struct EditScheduleItemView: View {
                     fieldBackground: fieldBg
                 )
                 .task { await resolveDestinationTimeZone() }
+
+                // 共有していて2人以上のときだけ出る
+                ParticipantPicker(
+                    plan: plan,
+                    selected: $participants,
+                    tint: travelColor,
+                    textColor: textColor,
+                    secondaryText: themeManager.currentTheme.secondaryText,
+                    fieldBackground: fieldBg
+                )
 
                 // 固定した予定は時刻の並びから外れて、その日の一番上に出る
                 Toggle(isOn: $isPinned) {
@@ -509,7 +522,11 @@ struct EditScheduleItemView: View {
         guard let userId = authVM.userId else { return }
 
         let updatedItem = createUpdatedItem()
-        let updatedPlan = updatePlanWithItem(updatedItem)
+        var updatedPlan = updatePlanWithItem(updatedItem)
+        // 予約から作った予定なら、金額を予約の費用にも反映する（予約の画面で同じ金額が見える）
+        if let reservationId = updatedItem.reservationId {
+            updatedPlan.syncReservationCost(fromScheduleItemsOf: reservationId)
+        }
 
         viewModel.update(updatedPlan, userId: userId)
         presentationMode.wrappedValue.dismiss()
@@ -544,7 +561,8 @@ struct EditScheduleItemView: View {
             reservationId: item.reservationId,
             timeZoneIdentifier: timeZone.identifier,
             // 外したときは nil に戻す（固定したことの無い予定と同じ形にする）
-            isPinned: isPinned ? true : nil
+            isPinned: isPinned ? true : nil,
+            participantIds: SharedMembers.normalizedParticipants(participants, members: plan.sharedWith)
         )
     }
 

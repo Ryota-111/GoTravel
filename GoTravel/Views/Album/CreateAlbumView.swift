@@ -4,6 +4,9 @@ struct CreateAlbumView: View {
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.dismiss) var dismiss
     @ObservedObject private var albumManager = AlbumManager.shared
+    @ObservedObject private var proStore = ProStore.shared
+    /// 2つ目以降のフォトマップを作ろうとしたとき（Pro でない場合）に出す
+    @State private var showProSheet = false
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
 
@@ -13,7 +16,12 @@ struct CreateAlbumView: View {
     @State private var selectedTravelPlan: TravelPlan?
 
     let travelPlans: [TravelPlan]
-    let albumTypes: [AlbumType] = [.travel, .family, .landscape, .food, .custom]
+    let albumTypes: [AlbumType] = [.travel, .family, .landscape, .food, .custom, .japan]
+
+    /// 2つ目以降のフォトマップは Travory Pro。1つ目（既定）は誰でも持っている
+    private var isPhotoMapLocked: Bool {
+        !proStore.isPurchased && albumManager.albums.contains { $0.isJapanPhotoMap }
+    }
 
     enum CreationMode {
         case manual
@@ -90,6 +98,9 @@ struct CreateAlbumView: View {
             }
         }
         .navigationBarBackButtonHidden(true)
+        .sheet(isPresented: $showProSheet) {
+            ProSheet(highlighted: nil)
+        }
     }
 
     // MARK: - Header
@@ -229,7 +240,12 @@ struct CreateAlbumView: View {
 
     private func typeCard(_ type: AlbumType) -> some View {
         let isSelected = selectedType == type
+        let isLocked = type == .japan && isPhotoMapLocked
         return Button(action: {
+            if isLocked {
+                showProSheet = true
+                return
+            }
             withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
                 selectedType = type
             }
@@ -248,10 +264,21 @@ struct CreateAlbumView: View {
                 .scaleEffect(isSelected ? 1.08 : 1.0)
                 .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
 
-                Text(type.title)
+                Text(type == .japan ? "フォトマップ" : type.title)
                     .font(.caption.weight(.medium))
                     .foregroundColor(isSelected ? type.defaultCoverColor : accentColor.opacity(0.6))
                     .lineLimit(1)
+                    .overlay(alignment: .topTrailing) {
+                        if isLocked {
+                            Text("Pro")
+                                .font(.system(size: 8, weight: .heavy))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 4)
+                                .padding(.vertical, 1)
+                                .background(Capsule().fill(Color.orange))
+                                .offset(x: 14, y: -26)
+                        }
+                    }
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
@@ -408,6 +435,11 @@ struct CreateAlbumView: View {
     // MARK: - Action
     private func createAlbum() {
         if creationMode == .manual {
+            // 念のため、作る直前にも確かめる（選んだあとに別の端末で作られた場合など）
+            if selectedType == .japan && isPhotoMapLocked {
+                showProSheet = true
+                return
+            }
             albumManager.createAlbum(title: albumTitle, type: selectedType)
         } else if let travelPlan = selectedTravelPlan {
             albumManager.createTravelPlanAlbum(from: travelPlan)

@@ -77,6 +77,8 @@ struct TravelPlanDetailView: View {
     /// **地図だけでなく Day タブまで含めること。**
     /// 地図だけにすると、Day を横スクロールするたびにタブが変わってしまう
     @State private var pinnedHeaderFrame: CGRect = .zero
+    /// 横にスクロールする部品の位置。ここで始めた横のドラッグではタブを変えない
+    @State private var swipeExclusionZones = SwipeExclusionZones()
 
     /// ScrollView の見えている高さ。scrollTo の anchor は割合指定なので必要
     @State private var scrollViewportHeight: CGFloat = 0
@@ -122,6 +124,8 @@ struct TravelPlanDetailView: View {
     @State private var isSelectingItems = false
     @State private var selectedItemIDs: Set<String> = []
     @State private var showBulkItemDeleteConfirmation = false
+    /// 共有した旅行で、誰の時間軸を見ているか。nil なら全員
+    @State private var memberFilter: String?
     /// 出せなかった理由。文言とアイコンは種類ごとに変える
     @State private var planWeatherNote: WeatherNote?
     @State private var weatherAttribution: WeatherService.WeatherAttribution?
@@ -311,7 +315,12 @@ struct TravelPlanDetailView: View {
                 .environmentObject(authVM)
         }
         .fullScreenCover(isPresented: $showScheduleMap) {
-            TravelPlanMapView(plan: plan, initialDay: selectedDay)
+            TravelPlanMapView(
+                plan: plan,
+                initialDay: selectedDay,
+                memberFilter: memberFilter,
+                participantLabels: mapParticipantLabels(plan: plan)
+            )
         }
         .sheet(isPresented: Binding(
             get: { exportItems != nil },
@@ -545,6 +554,14 @@ struct TravelPlanDetailView: View {
                     .font(.system(size: 16, weight: state == .now ? .bold : .semibold))
                     .foregroundColor(state == .past ? themeManager.currentTheme.secondaryText : accentColor)
 
+                // 全員の時間軸を見ているときだけ、全員のものでない予定に参加する人を添える
+                if memberFilter == nil, let label = participantLabel(item, plan: plan) {
+                    Label(label, systemImage: "person.fill")
+                        .font(.system(size: 11, weight: .semibold))
+                        .foregroundColor(scheduleAccentColor)
+                        .lineLimit(1)
+                }
+
                 if let location = item.location, !location.isEmpty {
                     HStack(spacing: 4) {
                         Image(systemName: "mappin.circle.fill")
@@ -673,6 +690,61 @@ struct TravelPlanDetailView: View {
         .padding(.horizontal, 4)
     }
 
+    // MARK: - メンバーごとの時間軸
+
+    private func participantLabel(_ item: ScheduleItem, plan: TravelPlan) -> String? {
+        SharedMembers.participantLabel(
+            of: item,
+            names: viewModel.memberNames(for: plan.id),
+            members: plan.sharedWith,
+            myUserId: authVM.userId
+        )
+    }
+
+    /// 「全員 / 自分 / 〇〇」。共有していて2人以上のときだけ出す
+    @ViewBuilder
+    private func memberFilterBar(plan: TravelPlan) -> some View {
+        if plan.isShared && plan.sharedWith.count >= 2 {
+            let names = viewModel.memberNames(for: plan.id)
+            let me = authVM.userId
+            // 自分を「全員」の次に置く。見る場面がいちばん多いため
+            let others = plan.sharedWith.filter { $0 != me }
+
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    memberChip("全員", isSelected: memberFilter == nil) { memberFilter = nil }
+                    if let me, plan.sharedWith.contains(me) {
+                        memberChip("自分", isSelected: memberFilter == me) { memberFilter = me }
+                    }
+                    ForEach(others, id: \.self) { member in
+                        let name = SharedMembers.displayName(of: member, names: names,
+                                                             members: plan.sharedWith, myUserId: me)
+                        memberChip(name, isSelected: memberFilter == member) { memberFilter = member }
+                    }
+                }
+                .padding(.horizontal, 2)
+            }
+        }
+    }
+
+    private func memberChip(_ title: String, isSelected: Bool, action: @escaping () -> Void) -> some View {
+        Button {
+            withAnimation(.easeInOut(duration: 0.2)) {
+                action()
+                selectedItemIDs = []
+            }
+        } label: {
+            Text(title)
+                .font(.system(size: 13, weight: isSelected ? .semibold : .regular))
+                .foregroundColor(isSelected ? .white : scheduleAccentColor)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(Capsule().fill(isSelected ? scheduleAccentColor : scheduleAccentColor.opacity(0.1)))
+        }
+        .buttonStyle(.plain)
+        .accessibilityAddTraits(isSelected ? .isSelected : [])
+    }
+
     // MARK: - まとめて削除
 
     private func toggleItemSelection(_ item: ScheduleItem) {
@@ -685,11 +757,11 @@ struct TravelPlanDetailView: View {
 
     /// 選んでいて、いま表示している日の予定
     private func selectedVisibleItems(plan: TravelPlan) -> [ScheduleItem] {
-        plan.timelineScheduleItems(onDay: selectedDay).filter { selectedItemIDs.contains($0.id) }
+        plan.timelineScheduleItems(onDay: selectedDay, for: memberFilter).filter { selectedItemIDs.contains($0.id) }
     }
 
     private func bulkItemActionBar(plan: TravelPlan) -> some View {
-        let items = plan.timelineScheduleItems(onDay: selectedDay)
+        let items = plan.timelineScheduleItems(onDay: selectedDay, for: memberFilter)
         let selectedCount = selectedVisibleItems(plan: plan).count
         let allSelected = !items.isEmpty && selectedCount == items.count
 
@@ -757,7 +829,7 @@ struct TravelPlanDetailView: View {
     /// 期間のある予約（宿・レンタカーなど）→ 固定した予定 の順
     private func dayPins(plan: TravelPlan) -> [DayPin] {
         plan.pinnedReservations(onDay: selectedDay).map(DayPin.reservation)
-            + plan.pinnedScheduleItems(onDay: selectedDay).map(DayPin.item)
+            + plan.pinnedScheduleItems(onDay: selectedDay, for: memberFilter).map(DayPin.item)
     }
 
     @ViewBuilder
@@ -1120,7 +1192,7 @@ struct TravelPlanDetailView: View {
                 Spacer()
 
                 // その日の予定があるときだけ出す
-                if !plan.timelineScheduleItems(onDay: selectedDay).isEmpty || isSelectingItems {
+                if !plan.timelineScheduleItems(onDay: selectedDay, for: memberFilter).isEmpty || isSelectingItems {
                     Button(isSelectingItems ? "完了" : "選択") {
                         withAnimation(.easeInOut(duration: 0.2)) {
                             isSelectingItems.toggle()
@@ -1158,13 +1230,20 @@ struct TravelPlanDetailView: View {
                 localTimeBanner(plan: plan, zone: zone)
             }
 
-            dayTabs(plan: plan)
+            excludedFromTabSwipe("dayTabs") {
+                dayTabs(plan: plan)
+            }
+
+            // 共有中は、誰の時間軸を見るか選べる（出発地の違うメンバーが現地で集まる旅行のため）
+            excludedFromTabSwipe("memberFilter-\(selectedTab.rawValue)") {
+                memberFilterBar(plan: plan)
+            }
 
             // その日に泊まっている宿や、固定した予定。予定より先に目に入るよう一番上に出す
             dayPinsSection(plan: plan)
 
             // スケジュールアイテムリスト（固定した予定は上に出しているので除く）
-            let sortedItems = plan.timelineScheduleItems(onDay: selectedDay)
+            let sortedItems = plan.timelineScheduleItems(onDay: selectedDay, for: memberFilter)
             if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }),
                !sortedItems.isEmpty {
                 let nowIndex = nextItemIndex(in: sortedItems, dayDate: daySchedule.date)
@@ -1220,6 +1299,9 @@ struct TravelPlanDetailView: View {
                 // 貼り付いた帯の中で始めたドラッグは、地図の操作か
                 // Day タブの横スクロール。タブは動かさない
                 guard !pinnedHeaderFrame.contains(value.startLocation) else { return }
+                // 天気や Day タブ、メンバーの切り替えなど、横にスクロールする部品の上でも動かさない。
+                // 以前は日数の多い旅行で天気を横に送ると、地図タブへ移ってしまっていた
+                guard !swipeExclusionZones.contains(value.startLocation) else { return }
 
                 let dx = value.translation.width
                 let dy = value.translation.height
@@ -1238,6 +1320,21 @@ struct TravelPlanDetailView: View {
                 moveTab(forward: dx < 0)
             }
             .onEnded { _ in hasSwitchedTabInDrag = false }
+    }
+
+    /// 横にスクロールする部品を、タブ切り替えのスワイプの対象から外す。
+    /// 位置は縦のスクロールでも変わるので、見えている間は追いかけて覚えておく
+    private func excludedFromTabSwipe<Content: View>(_ id: String,
+                                                     @ViewBuilder _ content: () -> Content) -> some View {
+        content()
+            .onGeometryChange(for: CGRect.self) { proxy in
+                proxy.frame(in: .global)
+            } action: { frame in
+                swipeExclusionZones.frames[id] = frame
+            }
+            .onDisappear {
+                swipeExclusionZones.frames[id] = nil
+            }
     }
 
     /// 隣のタブへ移る。端では止まる（一周させると今どこにいるか分からなくなる）
@@ -1266,7 +1363,9 @@ struct TravelPlanDetailView: View {
                 .accessibilityLabel(Text("戻る"))
             }
 
-            tabButtons
+            excludedFromTabSwipe("tabButtons") {
+                tabButtons
+            }
         }
         .frame(height: Self.tabBarHeight)
         .background(tabBarBackground)
@@ -1381,7 +1480,9 @@ struct TravelPlanDetailView: View {
                 isEmbedded: true,
                 isSplitMode: true,
                 linkedDay: $selectedDay,
-                linkedItemID: $focusedItemID
+                linkedItemID: $focusedItemID,
+                memberFilter: memberFilter,
+                participantLabels: mapParticipantLabels(plan: plan)
             )
             .frame(height: 274)
             // 貼り付けている地図は狭いので、じっくり見たいときは全画面へ。
@@ -1415,10 +1516,36 @@ struct TravelPlanDetailView: View {
 
     /// 地図タブの中身。地図と Day タブは貼り付く側にあるので、ここは予定だけ
     private func mapTab(plan: TravelPlan) -> some View {
+        VStack(spacing: 0) {
+            // 日程タブと同じ切り替え。上の地図と下の行程表の両方がこれに従う
+            excludedFromTabSwipe("memberFilter-\(selectedTab.rawValue)") {
+                memberFilterBar(plan: plan)
+            }
+                .padding(.horizontal, 16)
+                .padding(.top, 12)
+
+            mapTabItinerary(plan: plan)
+        }
+    }
+
+    /// 予定ID → 参加する人の名前（全員のものでない予定だけ）。地図のピンに添える
+    private func mapParticipantLabels(plan: TravelPlan) -> [String: String] {
+        var labels: [String: String] = [:]
+        for item in plan.daySchedules.flatMap(\.scheduleItems) {
+            if let label = participantLabel(item, plan: plan) {
+                labels[item.id] = label
+            }
+        }
+        return labels
+    }
+
+    private func mapTabItinerary(plan: TravelPlan) -> some View {
         Group {
+            let dayItems = plan.daySchedules.first(where: { $0.dayNumber == selectedDay })?.scheduleItems ?? []
+            let visibleItems = dayItems.filter { SharedMembers.includes($0, member: memberFilter) }
             if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }),
-               !daySchedule.scheduleItems.isEmpty {
-                let sortedItems = sortedScheduleItems(daySchedule.scheduleItems)
+               !visibleItems.isEmpty {
+                let sortedItems = sortedScheduleItems(visibleItems)
                 let nowIndex = nextItemIndex(in: sortedItems, dayDate: daySchedule.date)
                 VStack(spacing: 0) {
                     ForEach(Array(sortedItems.enumerated()), id: \.element.id) { index, item in
@@ -1644,6 +1771,7 @@ struct TravelPlanDetailView: View {
     /// 開始日1日ぶんしか出していなかったため、旅行中は何日目にいても
     /// 初日の予報を見せられていた（しかも過去日なので取得に失敗していた）
     private func tripWeatherRow(plan: TravelPlan) -> some View {
+        excludedFromTabSwipe("weather") {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
                 ForEach(1...plan.dayCount, id: \.self) { dayNumber in
@@ -1653,6 +1781,7 @@ struct TravelPlanDetailView: View {
                     }
                 }
             }
+        }
         }
     }
 
@@ -1906,10 +2035,7 @@ struct TravelPlanDetailView: View {
     }
 
     private func formatBudgetAmount(plan: TravelPlan) -> String {
-        let total = plan.daySchedulesInRange
-            .flatMap { $0.scheduleItems }
-            .compactMap { $0.cost }
-            .reduce(0, +)
+        let total = plan.totalPlannedCost
 
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
@@ -1919,10 +2045,7 @@ struct TravelPlanDetailView: View {
     }
 
     private func formatTotalCost(plan: TravelPlan) -> String {
-        let total = plan.daySchedulesInRange
-            .flatMap { $0.scheduleItems }
-            .compactMap { $0.cost }
-            .reduce(0, +)
+        let total = plan.totalPlannedCost
 
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
@@ -2329,5 +2452,17 @@ private struct SwipeBackEnabler: UIViewControllerRepresentable {
             vc.navigationController?.interactivePopGestureRecognizer?.isEnabled = true
             vc.navigationController?.interactivePopGestureRecognizer?.delegate = nil
         }
+    }
+}
+
+/// タブ切り替えのスワイプから外す範囲。
+///
+/// 縦のスクロールのたびに位置が変わるので、`@State` の値で持つと画面全体を
+/// そのたびに描き直してしまう。参照型に入れて、書き換えても描き直さないようにする
+private final class SwipeExclusionZones {
+    var frames: [String: CGRect] = [:]
+
+    func contains(_ point: CGPoint) -> Bool {
+        frames.values.contains { $0.contains(point) }
     }
 }

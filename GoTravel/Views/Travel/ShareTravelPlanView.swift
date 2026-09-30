@@ -18,6 +18,10 @@ struct ShareTravelPlanView: View {
     @State private var isPublishing = false
     @State private var showPublishError = false
     @State private var publishErrorMessage = ""
+    /// この旅行での自分の呼び方を変えるとき
+    @State private var showRename = false
+    @State private var renameText = ""
+    @State private var renameFailed = false
 
     /// ViewModelから常に最新のプランを参照する
     /// （`plan`はシート表示時点のコピーなので、コード生成やメンバー参加が反映されない）
@@ -83,6 +87,18 @@ struct ShareTravelPlanView: View {
                 Button("キャンセル", role: .cancel) {}
             } message: {
                 Text("共有コードが無効になり、参加中のメンバーは全員この計画から外れます。再度共有する場合は、新しいコードを作成して全員に参加し直してもらう必要があります。")
+            }
+            .alert("この旅行での呼び方", isPresented: $showRename) {
+                TextField("例：父、さくら", text: $renameText)
+                Button("保存") { saveMyName() }
+                Button("キャンセル", role: .cancel) {}
+            } message: {
+                Text("共有メンバーに見える名前です。空にすると、プロフィールの名前に戻ります。")
+            }
+            .alert("呼び方を変更できませんでした", isPresented: $renameFailed) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("通信環境をご確認のうえ、もう一度お試しください。")
             }
             .alert("共有コードを発行できませんでした", isPresented: $showPublishError) {
                 Button("OK", role: .cancel) {}
@@ -297,7 +313,7 @@ struct ShareTravelPlanView: View {
             // User info
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 6) {
-                    Text(formatUserId(userId))
+                    Text(displayName(of: userId))
                         .font(.subheadline)
                         .foregroundColor(themeManager.currentTheme.dark)
 
@@ -312,9 +328,15 @@ struct ShareTravelPlanView: View {
                     }
                 }
 
-                Text("UID: \(userId.prefix(8))...")
-                    .font(.caption2)
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                // 自分の行でだけ、この旅行での呼び方を変えられる
+                if userId == authVM.userId {
+                    Button("呼び方を変更") {
+                        renameText = viewModel.memberNames(for: currentPlan.id)[userId] ?? ""
+                        showRename = true
+                    }
+                    .font(.caption)
+                    .foregroundColor(themeManager.currentTheme.info)
+                }
             }
 
             Spacer()
@@ -325,10 +347,26 @@ struct ShareTravelPlanView: View {
         .cornerRadius(8)
     }
 
-    private func formatUserId(_ userId: String) -> String {
-        // For now, just show first 8 characters
-        // In future, could fetch user display names from Firestore
-        return "ユーザー \(userId.prefix(8))"
+    /// 共有メンバーの名前。付いていなければ「自分」「メンバー2」のように出す。
+    /// 以前は ID の先頭8文字を出すだけで、誰が誰か分からなかった
+    private func displayName(of userId: String) -> String {
+        SharedMembers.displayName(
+            of: userId,
+            names: viewModel.memberNames(for: currentPlan.id),
+            members: currentPlan.sharedWith,
+            myUserId: authVM.userId
+        )
+    }
+
+    private func saveMyName() {
+        guard let planId = currentPlan.id, let userId = authVM.userId else { return }
+        Task {
+            do {
+                try await viewModel.setMyMemberName(renameText, planId: planId, userId: userId)
+            } catch {
+                renameFailed = true
+            }
+        }
     }
 
     // MARK: - Info Section

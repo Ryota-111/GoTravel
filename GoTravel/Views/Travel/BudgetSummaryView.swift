@@ -27,6 +27,19 @@ struct BudgetSummaryView: View {
     // MARK: - Computed Properties
     private var totalCost: Double {
         allItems.compactMap { $0.cost }.reduce(0, +)
+            + reservationCosts.compactMap(\.budget).reduce(0, +)
+    }
+
+    /// 行程に出ていない予約の費用。
+    /// 宿の予約番号と金額だけ控えた人の分も、予算に入れる。
+    /// 行程に出ている予約は予定の金額として日ごとに数えるので、ここには入れない
+    private var reservationCosts: [ItemCost] {
+        currentPlan.reservationsWithCostOutsideItinerary.map {
+            ItemCost(id: $0.id,
+                     title: $0.title.isEmpty ? $0.kind.label : $0.title,
+                     budget: $0.cost,
+                     actual: nil)
+        }
     }
 
     /// 実際に使った金額の合計。未入力の項目は集計しない
@@ -176,7 +189,7 @@ struct BudgetSummaryView: View {
                 costSplitCard
             }
 
-            if !costByDay.isEmpty {
+            if !costByDay.isEmpty || !reservationCosts.isEmpty {
                 dailyCard
             }
 
@@ -444,6 +457,11 @@ struct BudgetSummaryView: View {
                         Divider()
                     }
                 }
+
+                if !reservationCosts.isEmpty {
+                    if !costByDay.isEmpty { Divider() }
+                    reservationCostSection
+                }
             }
         }
         .padding(16)
@@ -455,6 +473,33 @@ struct BudgetSummaryView: View {
                 .overlay(RoundedRectangle(cornerRadius: 16).stroke(cardStroke, lineWidth: 1))
                 .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
         )
+    }
+
+    /// 行程に出ていない予約の費用。日が決まらないので、日ごとの後ろにまとめる
+    private var reservationCostSection: some View {
+        VStack(spacing: 0) {
+            HStack(spacing: 8) {
+                Text("予約")
+                    .font(.caption.weight(.bold))
+                    .foregroundColor(accentColor)
+                Text("行程に無いもの")
+                    .font(.caption)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                Spacer(minLength: 4)
+                Text(formatCurrency(reservationCosts.compactMap(\.budget).reduce(0, +)))
+                    .font(.caption)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+            .padding(.vertical, 10)
+
+            VStack(spacing: 0) {
+                ForEach(reservationCosts) { item in
+                    itemRow(item)
+                }
+            }
+            .padding(.leading, 8)
+            .padding(.bottom, 6)
+        }
     }
 
     private func dayRow(_ day: DayCost) -> some View {
@@ -542,7 +587,7 @@ struct BudgetSummaryView: View {
             Text("まだ金額が登録されていません")
                 .font(.subheadline.weight(.medium))
                 .foregroundColor(accentColor)
-            Text("スケジュールに金額を追加すると\nここに表示されます")
+            Text("スケジュールや予約に金額を追加すると\nここに表示されます")
                 .font(.caption)
                 .foregroundColor(themeManager.currentTheme.secondaryText)
                 .multilineTextAlignment(.center)

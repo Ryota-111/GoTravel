@@ -19,6 +19,8 @@ struct AddScheduleItemView: View {
     @State private var timeZone: TimeZone = .current
     /// 目的地の時間帯。日本と時差があるときだけ入る
     @State private var destinationTimeZone: TimeZone?
+    /// 共有した旅行で、この予定に参加する人。空なら全員
+    @State private var participants: Set<String> = []
     @State private var cost = ""
     @State private var notes = ""
     @State private var linkURL = ""
@@ -208,6 +210,16 @@ struct AddScheduleItemView: View {
                     fieldBackground: fieldBg
                 )
                 .task { await resolveDestinationTimeZone() }
+
+                // 共有していて2人以上のときだけ出る
+                ParticipantPicker(
+                    plan: plan,
+                    selected: $participants,
+                    tint: travelColor,
+                    textColor: textColor,
+                    secondaryText: themeManager.currentTheme.secondaryText,
+                    fieldBackground: fieldBg
+                )
             }
         }
     }
@@ -437,7 +449,8 @@ struct AddScheduleItemView: View {
             longitude: selectedCoordinate?.longitude,
             cost: cost.isEmpty ? nil : Double(cost),
             linkURL: linkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : linkURL.trimmingCharacters(in: .whitespacesAndNewlines),
-            timeZoneIdentifier: timeZone.identifier
+            timeZoneIdentifier: timeZone.identifier,
+            participantIds: SharedMembers.normalizedParticipants(participants, members: basePlan.sharedWith)
         )
 
         var updatedPlan = basePlan

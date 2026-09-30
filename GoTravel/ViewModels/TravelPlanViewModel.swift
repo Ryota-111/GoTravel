@@ -478,6 +478,7 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
 
         // 先にパブリックDBへ公開する。失敗したらローカルは共有状態にしない
         try await CloudKitService.shared.publishSharedTravelPlan(plan)
+        writeDefaultMemberName(planId: planId, userId: userId)
 
         // update() 内の再公開は保存済みレコードへの上書きになるだけなので無害
         update(plan, userId: userId)
@@ -558,6 +559,12 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
                     .takenPlan ?? plan
                 try await self.saveSharedPlanLocally(adopted)
                 SharedPlanBaseStore.save(plan)
+                if let planId = plan.id {
+                    await MainActor.run {
+                        self.storeMemberNames(plan.memberNames, planId: planId)
+                        self.writeDefaultMemberName(planId: planId, userId: userId)
+                    }
+                }
 
                 await MainActor.run {
                     completion(.success(plan))
@@ -608,6 +615,41 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
         }
     }
 
+    // MARK: - 共有メンバーの表示名
+
+    /// 計画ごとの、メンバーの表示名（ユーザーID → 名前）
+    @MainActor @Published private(set) var memberNamesByPlan: [String: [String: String]] = [:]
+
+    @MainActor
+    func memberNames(for planId: String?) -> [String: String] {
+        guard let planId else { return [:] }
+        return memberNamesByPlan[planId] ?? SharedMemberNameStore.names(planId: planId)
+    }
+
+    @MainActor
+    private func storeMemberNames(_ names: [String: String], planId: String) {
+        guard !names.isEmpty else { return }
+        SharedMemberNameStore.save(names, planId: planId)
+        memberNamesByPlan[planId] = names
+    }
+
+    /// まだ名前を付けていなければ、プロフィールの名前を書く。
+    /// プロフィールに名前が無ければ何もしない（画面では「メンバー2」のように出る）
+    @MainActor
+    private func writeDefaultMemberName(planId: String, userId: String) {
+        guard let name = SharedMemberNameStore.profileName(userId: userId) else { return }
+        Task { try? await self.setMyMemberName(name, planId: planId, userId: userId) }
+    }
+
+    /// この旅行での自分の呼び方を変える（「父」「さくら」など）。空にするとプロフィールの名前に戻す
+    @MainActor
+    func setMyMemberName(_ name: String, planId: String, userId: String) async throws {
+        let trimmed = name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let value = trimmed.isEmpty ? (SharedMemberNameStore.profileName(userId: userId) ?? "") : trimmed
+        let names = try await CloudKitService.shared.updateMemberName(planId: planId, userId: userId, name: value)
+        storeMemberNames(names, planId: planId)
+    }
+
     // MARK: - 共有の同期を1件ずつ順に流す
 
     /// 計画ごとに、いま走っている（または最後に積んだ）同期
@@ -650,6 +692,12 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
     @discardableResult
     private func reconcile(remote: TravelPlan, userId: String) async throws -> Bool {
         guard let planId = remote.id else { return false }
+
+        // 名前は共有レコードが正。取り込むたびに控えへ写し、自分の名前が無ければ書く
+        storeMemberNames(remote.memberNames, planId: planId)
+        if remote.memberNames[userId] == nil {
+            writeDefaultMemberName(planId: planId, userId: userId)
+        }
 
         let local = travelPlans.first(where: { $0.id == planId })
 

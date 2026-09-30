@@ -106,17 +106,19 @@ extension TravelPlan {
             .sorted { $0.order < $1.order }
     }
 
-    /// その日の一番上に固定した予定
-    func pinnedScheduleItems(onDay dayNumber: Int) -> [ScheduleItem] {
+    /// その日の一番上に固定した予定。
+    /// - Parameter member: 共有した旅行で、この人の時間軸だけを見るとき。nil なら全員
+    func pinnedScheduleItems(onDay dayNumber: Int, for member: String? = nil) -> [ScheduleItem] {
         scheduleItems(onDay: dayNumber)
-            .filter { $0.isPinned == true }
+            .filter { $0.isPinned == true && SharedMembers.includes($0, member: member) }
             .sorted(by: ScheduleItem.chronologically)
     }
 
-    /// その日の、時刻の並びに出す予定（固定したものを除く）
-    func timelineScheduleItems(onDay dayNumber: Int) -> [ScheduleItem] {
+    /// その日の、時刻の並びに出す予定（固定したものを除く）。
+    /// - Parameter member: 共有した旅行で、この人の時間軸だけを見るとき。nil なら全員
+    func timelineScheduleItems(onDay dayNumber: Int, for member: String? = nil) -> [ScheduleItem] {
         scheduleItems(onDay: dayNumber)
-            .filter { $0.isPinned != true }
+            .filter { $0.isPinned != true && SharedMembers.includes($0, member: member) }
             .sorted(by: ScheduleItem.chronologically)
     }
 
