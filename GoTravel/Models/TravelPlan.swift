@@ -447,14 +447,49 @@ struct TravelPlan: Identifiable, Codable {
     /// 古い予定が残ったまま新しいものが増えるのを防ぐ。
     /// `isOn` が false なら消すだけ
     mutating func syncScheduleItems(for reservation: Reservation, isOn: Bool) {
+        // 行程の側で入れた実績の金額は、予約には無いので作り直すと消えてしまう。
+        // 費用を持つ1件目に引き継ぐ
+        let actualCost = scheduleItems(forReservation: reservation.id).lazy.compactMap(\.actualCost).first
+
         removeScheduleItems(forReservation: reservation.id)
         guard isOn else { return }
 
-        for item in reservation.itineraryItems() {
+        for (index, var item) in reservation.itineraryItems().enumerated() {
+            if index == 0 { item.actualCost = actualCost }
             if let dayNumber = dayNumber(forDate: item.time, in: item.timeZone) {
                 addScheduleItem(item, onDay: dayNumber)
             }
         }
+    }
+
+    /// その予約から作られた予定（時刻順）
+    func scheduleItems(forReservation reservationId: String) -> [ScheduleItem] {
+        daySchedules
+            .flatMap(\.scheduleItems)
+            .filter { $0.reservationId == reservationId }
+            .sorted { $0.time < $1.time }
+    }
+
+    /// 行程の予定で金額を直したとき、元の予約の費用も揃える。
+    ///
+    /// 予約の費用は「その予約から作った予定の金額の合計」とする。
+    /// 飛行機の到着の予定に金額を入れた場合も、2重に数えずに済む
+    mutating func syncReservationCost(fromScheduleItemsOf reservationId: String) {
+        guard let index = reservations.firstIndex(where: { $0.id == reservationId }) else { return }
+        let costs = scheduleItems(forReservation: reservationId).compactMap(\.cost)
+        reservations[index].cost = costs.isEmpty ? nil : costs.reduce(0, +)
+    }
+
+    /// 費用が入っていて、行程には出ていない予約。
+    /// 行程に出ている予約の費用は予定の金額として数えるので、ここには入れない（2重に数えない）
+    var reservationsWithCostOutsideItinerary: [Reservation] {
+        reservations.filter { ($0.cost ?? 0) > 0 && !hasScheduleItems(forReservation: $0.id) }
+    }
+
+    /// 予算（予定の金額）の合計。行程の予定と、行程に出ていない予約の費用を足す
+    var totalPlannedCost: Double {
+        daySchedulesInRange.flatMap(\.scheduleItems).compactMap(\.cost).reduce(0, +)
+            + reservationsWithCostOutsideItinerary.compactMap(\.cost).reduce(0, +)
     }
 
     /// 種類ごとのリスト。

@@ -43,6 +43,7 @@ struct ProView: View {
 
                 featureThemes
                 featurePhotoSync
+                featureReservationEmail
                 onceOnlyCard
 
                 if !store.isPurchased {
@@ -80,7 +81,7 @@ struct ProView: View {
                 .foregroundColor(theme.text)
                 .multilineTextAlignment(.center)
 
-            Text("一度のお支払いで、追加テーマ14種と写真のiCloud保管が使えるようになります。月額や年額はありません。")
+            Text("一度のお支払いで、追加テーマ14種・写真のiCloud保管・予約確認メールの取り込みが使えるようになります。月額や年額はありません。")
                 .font(.subheadline)
                 .foregroundColor(theme.secondaryText)
                 .multilineTextAlignment(.center)
@@ -178,6 +179,26 @@ struct ProView: View {
             bullet("同じApple Accountの端末どうしで、同じ写真が見られます。")
             bullet("預け先はお客様のiCloudです。開発者が見ることはできません。")
             bullet("ご購入いただいた時点で、それまでに保存した写真もまとめてお預かりします。")
+        }
+        .padding(16)
+        .themedCard()
+    }
+
+    // MARK: - 入っているもの③：予約メールの取り込み
+
+    private var featureReservationEmail: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            featureHeading(
+                icon: "envelope.open.fill",
+                title: "予約確認メールから予約を取り込めます",
+                detail: "予約を追加するときに、飛行機・新幹線・宿・レストランなどの予約確認メールを貼り付けるだけで、"
+                      + "予約番号・日時・便名・金額を読み取って入力欄に入れます。"
+            )
+
+            bullet("往復の航空券のように、1通に複数の予約があってもまとめて読み取ります。")
+            bullet("海外の空港や宿は、現地の時間で入ります。")
+            bullet("読み取った内容は保存する前に確かめられます。メールはこの端末の中だけで読み取り、どこにも送りません。")
+            bullet("予約を手で入力する機能は、これまでどおり無料です。")
         }
         .padding(16)
         .themedCard()

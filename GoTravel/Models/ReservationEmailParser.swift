@@ -24,6 +24,8 @@ struct ReservationDraft: Equatable {
     var end: DateComponents?
     /// 年が書いていなかったので補った。画面で確かめてもらう
     var guessedYear = false
+    /// 支払った金額（円）。1通に複数の予約があるときは、1件目にだけ入れる（合計なので）
+    var cost: Double?
 }
 
 // MARK: - 読み取り
@@ -38,10 +40,13 @@ struct ReservationDraft: Equatable {
 /// （`ReservationEmailSampleTests`）
 enum ReservationEmailParser {
 
-    /// - Parameter referenceDate: 年が書いていない日付を補う基準（ふつうは今日）
-    static func parse(_ rawText: String, referenceDate: Date = Date()) -> [ReservationDraft] {
+    /// - Parameters:
+    ///   - kind: 利用者が選んだ種類。選んでいれば、文面から当てずにこれで読む
+    ///   - referenceDate: 年が書いていない日付を補う基準（ふつうは今日）
+    static func parse(_ rawText: String, kind chosenKind: Reservation.Kind? = nil,
+                      referenceDate: Date = Date()) -> [ReservationDraft] {
         let text = tableToLabelValues(normalized(rawText))
-        let kind = detectKind(text)
+        let kind = chosenKind ?? detectKind(text)
         // 受付・支払いの日時や、キャンセル・有効の期限は、予約の日時として使わない
         let allEvents = dateTimeEvents(in: text, referenceDate: referenceDate)
         let reservationEvents = allEvents.filter { !$0.isAdministrative }
@@ -72,7 +77,52 @@ enum ReservationEmailParser {
         for index in drafts.indices where drafts[index].confirmationNumber == nil {
             drafts[index].confirmationNumber = confirmation
         }
+        drafts[0].cost = paidAmount(in: text)
         return drafts
+    }
+
+    // MARK: - 金額
+
+    /// 支払いの合計を探すラベル。前にあるものほど確か
+    /// （「お支払い金額」「割引後」はクーポンやポイントを引いた後、「合計」は引く前のことがある）。
+    /// 合計が書いていない航空券のために、運賃や領収額も最後に探す
+    private static let amountLabels = ["割引後料金合計", "割引後合計", "割引後の合計", "お支払い金額", "お支払金額", "お支払額",
+                                       "支払い金額", "支払金額", "ご請求額", "お支払い総額", "支払総額", "合計金額", "料金合計",
+                                       "総額", "合計", "total", "領収額", "発売額", "運賃額", "航空券代金", "運賃"]
+
+    /// 支払った金額（円）。ラベルの後ろ（改行1つまで）にある最初の円の金額を使う。
+    /// 小計や1枚あたりの値段を拾わないよう、ラベルの無い金額は使わない。
+    /// 円以外（ドル・ユーロ）は、予算が円なので読まない
+    static func paidAmount(in text: String) -> Double? {
+        let ns = text as NSString
+        let amount = #"^[^\n]{0,30}?(?:\n[^\n]{0,30}?)?(?:[¥￥]\s?([\d,]+)|([\d,]+)\s?円|JPY\s?([\d,]+))"#
+        guard let amountRegex = try? NSRegularExpression(pattern: amount, options: [.caseInsensitive]) else { return nil }
+
+        for label in amountLabels {
+            var searchStart = 0
+            while searchStart < ns.length {
+                let found = ns.range(of: label, options: [.caseInsensitive],
+                                     range: NSRange(location: searchStart, length: ns.length - searchStart))
+                guard found.location != NSNotFound else { break }
+                searchStart = found.location + found.length
+
+                // 「小計」「subtotal」のような別の言葉の一部は飛ばす
+                if found.location > 0,
+                   let before = ns.substring(with: NSRange(location: found.location - 1, length: 1)).first,
+                   before == "小" || before.isLetter && before.isASCII { continue }
+
+                let rest = ns.substring(from: searchStart)
+                let restNS = rest as NSString
+                guard let match = amountRegex.firstMatch(in: rest, range: NSRange(location: 0, length: restNS.length)) else { continue }
+                for group in 1...3 {
+                    let range = match.range(at: group)
+                    guard range.location != NSNotFound else { continue }
+                    let digits = restNS.substring(with: range).replacingOccurrences(of: ",", with: "")
+                    if let value = Double(digits), value > 0 { return value }
+                }
+            }
+        }
+        return nil
     }
 
     // MARK: - 下ごしらえ

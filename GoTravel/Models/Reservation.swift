@@ -127,6 +127,14 @@ struct Reservation: Identifiable, Codable, Equatable {
     /// 終わりがあれば期間中の毎日、無ければ始まりの日だけに出る
     var pinsDuringPeriod: Bool?
 
+    /// 費用（円）。
+    ///
+    /// 行程にも追加した予約では、**行程の予定の金額と同じもの**として扱う
+    /// （作った予定の1件目に入れ、予定の側で直したらこちらも直す）。
+    /// 予算の画面には、行程に出ていない予約の分もまとめて出す。
+    /// JSON の中の項目なので、CloudKit のスキーマ変更は要らない
+    var cost: Double?
+
     /// 経路を表示するかどうか。
     /// 片方しか入っていなくても出す。入れた情報が画面に出ないほうが困る
     var hasRoute: Bool {
@@ -149,7 +157,8 @@ struct Reservation: Identifiable, Codable, Equatable {
          timeZoneIdentifier: String? = nil,
          arrivalTimeZoneIdentifier: String? = nil,
          endDate: Date? = nil,
-         pinsDuringPeriod: Bool? = nil) {
+         pinsDuringPeriod: Bool? = nil,
+         cost: Double? = nil) {
         self.id = id
         self.kind = kind
         self.title = title
@@ -167,6 +176,7 @@ struct Reservation: Identifiable, Codable, Equatable {
         self.arrivalTimeZoneIdentifier = arrivalTimeZoneIdentifier
         self.endDate = endDate
         self.pinsDuringPeriod = pinsDuringPeriod
+        self.cost = cost
     }
 }
 
@@ -226,6 +236,7 @@ extension Reservation {
                                  title: title,
                                  location: nil,
                                  notes: note,
+                                 cost: cost,
                                  reservationId: id,
                                  timeZoneIdentifier: timeZoneIdentifier)]
         }
@@ -236,10 +247,12 @@ extension Reservation {
         let name = (label?.isEmpty == false ? label! : title)
 
         var items = [
+            // 費用は1件目（出発）にだけ入れる。到着にも入れると予算で2重に数える
             ScheduleItem(time: date,
                          title: "\(name) 出発",
                          location: departurePlace,
                          notes: note,
+                         cost: cost,
                          reservationId: id,
                          timeZoneIdentifier: timeZoneIdentifier)
         ]

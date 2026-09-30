@@ -34,6 +34,21 @@ struct ReservationEditorView: View {
     /// 行程に出したいかどうかは予約ごとに違うので、その都度選んでもらう
     @State private var addsToItinerary = false
 
+    // MARK: メールからの取り込み（Travory Pro）
+
+    @ObservedObject private var proStore = ProStore.shared
+    @State private var showsEmailImport = false
+    @State private var showsProSheet = false
+    /// メールから取り込んだときだけ入る。確かめてほしいこと（年を補った・時刻が無かった など）
+    @State private var importNotes: [String]?
+    /// 1通に複数の予約があったときの、まだ開いていない分。保存すると次を開く
+    @State private var pendingImports: [ImportedReservation] = []
+    /// 種類を自分で選んだか。選んでいれば、メールもその種類として読む。
+    /// 開いた直後の「宿泊」は既定なだけなので、選んだことにしない
+    @State private var hasChosenKind = false
+    /// 費用の入力欄。数字以外を打たれても消さずに持っておく
+    @State private var costText = ""
+
     private var plan: TravelPlan? {
         viewModel.travelPlans.first(where: { $0.id == planId })
     }
@@ -95,10 +110,15 @@ struct ReservationEditorView: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 16) {
-                        if isNewReservation && hasScheduleItems {
+                        if let importNotes {
+                            importNotesBanner(importNotes)
+                        } else if isNewReservation && hasScheduleItems {
                             importFromScheduleButton
                         }
                         kindPicker
+                        if isNewReservation && importNotes == nil {
+                            importFromEmailButton
+                        }
                         // 経路のある予約は便名と区間が名前の代わりになる。
                         // 「ANA123」と「ANA123便 羽田→那覇」を二重に書かせない
                         if reservation.kind.usesRoute {
@@ -129,25 +149,20 @@ struct ReservationEditorView: View {
                 }
             }
             .onAppear {
-                if let existing = reservation.date {
-                    hasDate = true
-                    date = existing
-                }
-                if let existing = reservation.arrivalDate {
-                    hasArrivalDate = true
-                    arrivalDate = existing
-                }
-                dateZone = reservation.dateTimeZone
-                arrivalZone = reservation.arrivalTimeZone
-                if let existing = reservation.endDate {
-                    hasEndDate = true
-                    endDate = existing
-                }
-                // いま行程に出ているかどうかを、そのままトグルの状態にする。
-                // これをしないと、一度オンにしたものをオフに戻せない
-                addsToItinerary = plan?.hasScheduleItems(forReservation: reservation.id) ?? false
+                load(reservation)
+                hasChosenKind = !isNewReservation
             }
             .task { await resolveDestinationTimeZone() }
+            .sheet(isPresented: $showsEmailImport) {
+                if let plan {
+                    ReservationEmailImportView(plan: plan, kind: hasChosenKind ? reservation.kind : nil) { results in
+                        applyImport(results)
+                    }
+                }
+            }
+            .sheet(isPresented: $showsProSheet) {
+                ProSheet(highlighted: nil)
+            }
             .sheet(isPresented: $showSchedulePicker) {
                 if let plan {
                     ScheduleItemPickerView(plan: plan) { item, dayDate in
@@ -156,6 +171,121 @@ struct ReservationEditorView: View {
                 }
             }
         }
+    }
+
+    /// メールの読み取りは外れることがあるので、補ったところを先に伝える
+    private func importNotesBanner(_ notes: [String]) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Label("メールから読み取りました。内容を確かめてから保存してください", systemImage: "envelope.open")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(textColor)
+            if !pendingImports.isEmpty {
+                Text("このメールには、あと\(pendingImports.count)件の予約があります。保存すると次の予約を開きます。")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(textColor)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            ForEach(notes, id: \.self) { note in
+                HStack(alignment: .top, spacing: 6) {
+                    Text("・")
+                    Text(note)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                .font(.system(size: 12))
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 12).fill(accent.opacity(0.12)))
+    }
+
+    /// 入力欄を予約の内容で埋める。開いたときと、メールから取り込んだときに使う
+    private func load(_ reservation: Reservation) {
+        self.reservation = reservation
+        hasDate = false
+        hasArrivalDate = false
+        hasEndDate = false
+        if let existing = reservation.date {
+            hasDate = true
+            date = existing
+        }
+        if let existing = reservation.arrivalDate {
+            hasArrivalDate = true
+            arrivalDate = existing
+        }
+        dateZone = reservation.dateTimeZone
+        arrivalZone = reservation.arrivalTimeZone
+        if let existing = reservation.endDate {
+            hasEndDate = true
+            endDate = existing
+        }
+        // いま行程に出ているかどうかを、そのままトグルの状態にする。
+        // これをしないと、一度オンにしたものをオフに戻せない
+        addsToItinerary = plan?.hasScheduleItems(forReservation: reservation.id) ?? false
+        costText = reservation.cost.map { String(Int($0)) } ?? ""
+    }
+
+    /// 予約確認メールから入れる。種類を選んでから押すと、その種類として読む
+    private var importFromEmailButton: some View {
+        Button {
+            if proStore.isPurchased {
+                showsEmailImport = true
+            } else {
+                showsProSheet = true
+            }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "envelope.open")
+                    .font(.system(size: 16))
+
+                VStack(alignment: .leading, spacing: 2) {
+                    HStack(spacing: 6) {
+                        Text(hasChosenKind ? "\(reservation.kind.label)の予約メールから取り込む" : "予約メールから取り込む")
+                            .font(.system(size: 15, weight: .semibold))
+                        if !proStore.isPurchased {
+                            Text("Pro")
+                                .font(.system(size: 10, weight: .bold))
+                                .foregroundColor(ThemePreset.readableText(on: accent))
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 1)
+                                .background(Capsule().fill(accent))
+                        }
+                    }
+                    Text("確認メールを貼り付けると、予約番号・日時・金額を読み取ります")
+                        .font(.caption2)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                }
+
+                Spacer(minLength: 0)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+            .foregroundColor(accent)
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 12).fill(accent.opacity(0.12)))
+        }
+        .buttonStyle(.plain)
+    }
+
+    /// 読み取った1件目を入力欄に入れ、残りは保存したあとに順に開く。
+    /// メールに無かった項目は、先に書いてあった内容を残す
+    private func applyImport(_ results: [ImportedReservation]) {
+        guard var first = results.first else { return }
+        let typed = reservation
+        first.reservation.id = typed.id
+        if first.reservation.title.isEmpty { first.reservation.title = typed.title }
+        if first.reservation.confirmationNumber == nil { first.reservation.confirmationNumber = typed.confirmationNumber }
+        first.reservation.note = typed.note
+        first.reservation.linkURL = typed.linkURL
+        if first.reservation.cost == nil { first.reservation.cost = typed.cost ?? Double(costText) }
+
+        load(first.reservation)
+        importNotes = first.notes
+        pendingImports = Array(results.dropFirst())
+        hasChosenKind = true
     }
 
     /// 行程に書いた飛行機や宿を、予約としても登録したい場面が多い。
@@ -329,6 +459,7 @@ struct ReservationEditorView: View {
                         textColor: textColor
                     ) {
                         reservation.kind = kind
+                        hasChosenKind = true
                     }
                 }
             }
@@ -620,8 +751,45 @@ struct ReservationEditorView: View {
         }
     }
 
+    /// 費用。行程にも追加すると、行程の予定の金額にも入る（同じ金額を2か所に打たずに済む）
+    private var costField: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("費用")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+
+            HStack(spacing: 6) {
+                Text("¥")
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                TextField("例：12000", text: $costText)
+                    .keyboardType(.numberPad)
+                    .foregroundColor(textColor)
+            }
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+
+            Text("予算の画面の合計に入ります。行程にも追加すると、行程の予定の金額として並びます。")
+                .font(.caption2)
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// "12,000" や全角で打たれても読めるようにする。読めなければ nil（空欄と同じ）
+    private var parsedCost: Double? {
+        let digits = ReservationEmailParser.normalized(costText)
+            .replacingOccurrences(of: ",", with: "")
+            .replacingOccurrences(of: "¥", with: "")
+            .replacingOccurrences(of: "円", with: "")
+            .trimmingCharacters(in: .whitespaces)
+        guard let value = Double(digits), value > 0 else { return nil }
+        return value
+    }
+
     private var optionalFields: some View {
         VStack(spacing: 16) {
+            costField
+
             field(label: "メモ", text: Binding(
                 get: { reservation.note ?? "" },
                 set: { reservation.note = $0 }
@@ -683,6 +851,7 @@ struct ReservationEditorView: View {
         edited.confirmationNumber = edited.confirmationNumber?.trimmingCharacters(in: .whitespacesAndNewlines)
         edited.note = edited.note?.trimmingCharacters(in: .whitespacesAndNewlines)
         edited.linkURL = edited.linkURL?.trimmingCharacters(in: .whitespacesAndNewlines)
+        edited.cost = parsedCost
 
         if let index = plan.reservations.firstIndex(where: { $0.id == edited.id }) {
             plan.reservations[index] = edited
@@ -696,6 +865,14 @@ struct ReservationEditorView: View {
         plan.syncScheduleItems(for: edited, isOn: addsToItinerary)
 
         viewModel.update(plan, userId: userId)
+
+        // 1通のメールに残りの予約があれば、閉じずに次を開く
+        if !pendingImports.isEmpty {
+            let next = pendingImports.removeFirst()
+            load(next.reservation)
+            importNotes = next.notes
+            return
+        }
         dismiss()
     }
 }

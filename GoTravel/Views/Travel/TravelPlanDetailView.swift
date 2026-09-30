@@ -2035,10 +2035,7 @@ struct TravelPlanDetailView: View {
     }
 
     private func formatBudgetAmount(plan: TravelPlan) -> String {
-        let total = plan.daySchedulesInRange
-            .flatMap { $0.scheduleItems }
-            .compactMap { $0.cost }
-            .reduce(0, +)
+        let total = plan.totalPlannedCost
 
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
@@ -2048,10 +2045,7 @@ struct TravelPlanDetailView: View {
     }
 
     private func formatTotalCost(plan: TravelPlan) -> String {
-        let total = plan.daySchedulesInRange
-            .flatMap { $0.scheduleItems }
-            .compactMap { $0.cost }
-            .reduce(0, +)
+        let total = plan.totalPlannedCost
 
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal

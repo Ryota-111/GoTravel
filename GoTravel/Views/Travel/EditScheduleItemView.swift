@@ -522,7 +522,11 @@ struct EditScheduleItemView: View {
         guard let userId = authVM.userId else { return }
 
         let updatedItem = createUpdatedItem()
-        let updatedPlan = updatePlanWithItem(updatedItem)
+        var updatedPlan = updatePlanWithItem(updatedItem)
+        // 予約から作った予定なら、金額を予約の費用にも反映する（予約の画面で同じ金額が見える）
+        if let reservationId = updatedItem.reservationId {
+            updatedPlan.syncReservationCost(fromScheduleItemsOf: reservationId)
+        }
 
         viewModel.update(updatedPlan, userId: userId)
         presentationMode.wrappedValue.dismiss()

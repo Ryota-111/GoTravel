@@ -30,7 +30,7 @@ struct ReservationEmailSampleTests {
 
     /// 比べる項目。正解の JSON に書いた項目だけ比べる（null と書けば「読み取らないこと」が正解）
     private static let fields = ["kind", "title", "confirmationNumber", "transportNumber",
-                                 "departurePlace", "arrivalPlace", "start", "arrival", "end"]
+                                 "departurePlace", "arrivalPlace", "start", "arrival", "end", "cost"]
 
     @Test("実際のメールで精度を測る", .enabled(if: !sampleFiles.isEmpty))
     func measureAccuracy() throws {
@@ -113,6 +113,8 @@ struct ReservationEmailSampleTests {
         case "start": return text(of: draft.start)
         case "arrival": return text(of: draft.arrival)
         case "end": return text(of: draft.end)
+        // "6000"（円）
+        case "cost": return draft.cost.map { String(Int($0)) }
         default: return nil
         }
     }
