@@ -363,7 +363,7 @@ struct ProfileView: View {
                 title: "Travory Pro",
                 subtitle: proStore.isPurchased
                     ? "ご利用中です"
-                    : "テーマ14種と写真のiCloud保管",
+                    : "予約メールの取り込み・テーマ・写真の保管",
                 gradientColors: [Color.yellow, Color.orange.opacity(0.8)]
             )
         }

@@ -116,7 +116,9 @@ struct ReservationEditorView: View {
                             importFromScheduleButton
                         }
                         kindPicker
-                        if isNewReservation && importNotes == nil {
+                        // 使える人には目立つ場所に出す。買っていない人は、入力のじゃまに
+                        // ならないよう画面の下に1行だけ出す（下の proEmailHint）
+                        if isNewReservation && importNotes == nil && proStore.isPurchased {
                             importFromEmailButton
                         }
                         // 経路のある予約は便名と区間が名前の代わりになる。
@@ -130,6 +132,9 @@ struct ReservationEditorView: View {
                         numberField
                         optionalFields
                         addToItinerarySection
+                        if isNewReservation && importNotes == nil && !proStore.isPurchased {
+                            proEmailHint
+                        }
                     }
                     .padding(20)
                 }
@@ -160,8 +165,11 @@ struct ReservationEditorView: View {
                     }
                 }
             }
-            .sheet(isPresented: $showsProSheet) {
-                ProSheet(highlighted: nil)
+            // 買えたら、そのまま取り込みを開く（使いたくて買ったので、探し直させない）
+            .sheet(isPresented: $showsProSheet, onDismiss: {
+                if proStore.isPurchased { showsEmailImport = true }
+            }) {
+                ProSheet(highlighted: nil, dismissesOnPurchase: true)
             }
             .sheet(isPresented: $showSchedulePicker) {
                 if let plan {
@@ -229,29 +237,15 @@ struct ReservationEditorView: View {
     /// 予約確認メールから入れる。種類を選んでから押すと、その種類として読む
     private var importFromEmailButton: some View {
         Button {
-            if proStore.isPurchased {
-                showsEmailImport = true
-            } else {
-                showsProSheet = true
-            }
+            showsEmailImport = true
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: "envelope.open")
                     .font(.system(size: 16))
 
                 VStack(alignment: .leading, spacing: 2) {
-                    HStack(spacing: 6) {
-                        Text(hasChosenKind ? "\(reservation.kind.label)の予約メールから取り込む" : "予約メールから取り込む")
-                            .font(.system(size: 15, weight: .semibold))
-                        if !proStore.isPurchased {
-                            Text("Pro")
-                                .font(.system(size: 10, weight: .bold))
-                                .foregroundColor(ThemePreset.readableText(on: accent))
-                                .padding(.horizontal, 5)
-                                .padding(.vertical, 1)
-                                .background(Capsule().fill(accent))
-                        }
-                    }
+                    Text(hasChosenKind ? "\(reservation.kind.label)の予約メールから取り込む" : "予約メールから取り込む")
+                        .font(.system(size: 15, weight: .semibold))
                     Text("確認メールを貼り付けると、予約番号・日時・金額を読み取ります")
                         .font(.caption2)
                         .foregroundColor(themeManager.currentTheme.secondaryText)
@@ -268,6 +262,24 @@ struct ReservationEditorView: View {
             .background(RoundedRectangle(cornerRadius: 12).fill(accent.opacity(0.12)))
         }
         .buttonStyle(.plain)
+    }
+
+    /// 買っていない人向けの、控えめな案内。
+    ///
+    /// 予約を追加は無料で毎回使う画面なので、使えない機能を目立たせると広告のように感じる。
+    /// 使える見た目にもしない（押すと売り場が開くのに、使えそうに見えるとだまされた感じが出る）。
+    /// 気になった人だけが押せるよう、灰色の1行で「Pro」と先に書いておく
+    private var proEmailHint: some View {
+        Button {
+            showsProSheet = true
+        } label: {
+            Label("確認メールから自動で入れる（Pro）", systemImage: "envelope")
+                .font(.caption)
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 4)
     }
 
     /// 読み取った1件目を入力欄に入れ、残りは保存したあとに順に開く。
