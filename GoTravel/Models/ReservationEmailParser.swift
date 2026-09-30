@@ -376,28 +376,37 @@ enum ReservationEmailParser {
                                        "CX", "HX", "UO", "SQ", "TR", "TG", "VN", "PR", "5J", "QF", "AF", "LH",
                                        "BA", "AY", "KL", "EK", "QR", "AC", "ZG", "MU", "CA", "CZ"]
 
-    /// 「ANA123」「JAL915」のように社名で書かれることもある
-    private static let airlineNames = ["ANA": "NH", "JAL": "JL", "Peach": "MM", "ジェットスター": "GK",
-                                       "スカイマーク": "BC", "SKY": "BC", "エアドゥ": "HD", "AIRDO": "HD",
-                                       "ソラシドエア": "6J", "スターフライヤー": "7G"]
+    /// 「ANA123」「SKY111」のように、各社の呼び名で書かれることもある。
+    /// 値は、カタカナで書かれたときに便名として使う書き方
+    private static let airlineNames = ["ANA": "ANA", "JAL": "JAL", "SKY": "SKY", "ADO": "ADO", "SNJ": "SNJ", "SFJ": "SFJ",
+                                       "Peach": "MM", "AIRDO": "ADO", "ジェットスター": "GK", "スカイマーク": "SKY",
+                                       "エアドゥ": "ADO", "ソラシドエア": "SNJ", "スターフライヤー": "SFJ"]
 
+    /// 便名。**メールに書かれたとおりの書き方で返す**（空白だけ詰める）。
+    ///
+    /// 公式の2文字コードに直すと、スカイマークの「SKY111」が「BC111」になり、
+    /// 空港の案内表示や搭乗券の書き方と食い違って探せなくなる
     static func flightNumbers(in text: String) -> [(position: Int, number: String)] {
         let ns = text as NSString
-        let codes = (airlineCodes + airlineNames.keys).map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|")
+        let codes = (airlineCodes + airlineNames.keys)
+            .sorted { $0.count > $1.count }   // 「AIRDO」を「ADO」より先に
+            .map(NSRegularExpression.escapedPattern(for:)).joined(separator: "|")
         // 数字の直後に英数字が続くものは便名ではない（予約番号「JL7X9K2P」の頭を JL7 と読まないように）
         let pattern = #"(?<![A-Za-z0-9])("# + codes + #")\s?(\d{1,4})(?![A-Za-z0-9])(?:\s?便)?"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
 
         var result: [(Int, String)] = []
+        var seen: Set<String> = []
         for match in regex.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
             let prefix = ns.substring(with: match.range(at: 1))
-            let code = airlineNames[prefix] ?? prefix
-            // 「ANA 027」は NH27。頭の 0 は便名に含めない
-            let digits = String(Int(ns.substring(with: match.range(at: 2))) ?? 0)
-            let number = "\(code)\(digits)"
+            let digits = ns.substring(with: match.range(at: 2))
+            // 英字はそのまま、カタカナの社名だけ便名の書き方にする
+            let code = prefix.allSatisfy(\.isASCII) ? prefix : (airlineNames[prefix] ?? prefix)
             // 同じ便が何度も書かれているメールは多い。最初の1回だけ使う
-            guard !result.contains(where: { $0.1 == number }) else { continue }
-            result.append((match.range.location, number))
+            // （「ANA 027」と「ANA27」は同じ便）
+            let key = "\(code)\(Int(digits) ?? 0)"
+            guard seen.insert(key).inserted else { continue }
+            result.append((match.range.location, "\(code)\(digits)"))
         }
         return result
     }

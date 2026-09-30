@@ -41,7 +41,7 @@ struct ReservationEmailParserTests {
         let draft = try #require(ReservationEmailParser.parse(text, referenceDate: today).first)
 
         #expect(draft.kind == .flight)
-        #expect(draft.transportNumber == "NH993")
+        #expect(draft.transportNumber == "ANA993")
         #expect(ymdhm(draft.start) == "2026-10-06 07:00")
         #expect(ymdhm(draft.arrival) == "2026-10-06 09:40")
         #expect(draft.departurePlace == "羽田空港")
@@ -135,5 +135,16 @@ struct ReservationEmailParserTests {
         #expect(ymdhm(draft.start) == "2026-10-06 10:00")
         #expect(ymdhm(draft.end) == "2026-10-09 17:00")
         #expect(draft.confirmationNumber == "R-778899")
+    }
+}
+
+extension ReservationEmailParserTests {
+    @Test("便名はメールに書かれたとおりにする（スカイマークを BC に直さない）")
+    func flightNumberKeepsWrittenForm() {
+        #expect(ReservationEmailParser.flightNumbers(in: "2026年10月06日　SKY 111便").map(\.number) == ["SKY111"])
+        #expect(ReservationEmailParser.flightNumbers(in: "スカイマーク 111便").map(\.number) == ["SKY111"])
+        #expect(ReservationEmailParser.flightNumbers(in: "AIRDO 15便").map(\.number) == ["AIRDO15"])
+        // 同じ便の書き方の揺れは1便として数える
+        #expect(ReservationEmailParser.flightNumbers(in: "ANA 027便\nANA27便").count == 1)
     }
 }
