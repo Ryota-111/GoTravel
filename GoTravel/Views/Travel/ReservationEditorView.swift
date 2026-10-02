@@ -244,9 +244,9 @@ struct ReservationEditorView: View {
                     .font(.system(size: 16))
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(hasChosenKind ? "\(reservation.kind.label)の予約メールから取り込む" : "予約メールから取り込む")
+                    Text(hasChosenKind ? "\(reservation.kind.label)の予約メール・画像から取り込む" : "予約メール・画像から取り込む")
                         .font(.system(size: 15, weight: .semibold))
-                    Text("確認メールを貼り付けると、予約番号・日時・金額を読み取ります")
+                    Text("確認メールやスクリーンショットから、予約番号・日時・金額を読み取ります")
                         .font(.caption2)
                         .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
@@ -283,7 +283,7 @@ struct ReservationEditorView: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
-                        Text("確認メールを貼るだけで、予約が入ります")
+                        Text("確認メールやスクショから、予約が入ります")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(textColor)
                             .fixedSize(horizontal: false, vertical: true)
@@ -315,7 +315,7 @@ struct ReservationEditorView: View {
         }
         .buttonStyle(.plain)
         .padding(.top, 8)
-        .accessibilityLabel("確認メールを貼るだけで予約が入ります。Travory Pro の説明を開く")
+        .accessibilityLabel("確認メールやスクリーンショットから予約が入ります。Travory Pro の説明を開く")
     }
 
     /// 読み取った1件目を入力欄に入れ、残りは保存したあとに順に開く。

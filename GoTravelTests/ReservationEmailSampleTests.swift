@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import UIKit
 @testable import GoTravel
 
 /// 実際の予約確認メールで、読み取りの精度を測る。
@@ -7,6 +8,7 @@ import Foundation
 /// メールは個人情報を含むので、リポジトリには入れない。
 /// `~/Developer/travory-reservation-emails/` に置いた `.txt` と、同じ名前の
 /// `.expected.json`（正解）を比べ、結果を同じフォルダの `report.md` に書き出す。
+/// 確認画面のスクリーンショット（`.png` `.jpg`）も同じように置ける（文字認識してから読む）。
 ///
 /// **精度を測るためのもの。外れてもテストは失敗にしない**（読み取りの改善で数字を上げていく）。
 /// フォルダやメールが無ければ飛ばす
@@ -20,12 +22,23 @@ struct ReservationEmailSampleTests {
         return URL(fileURLWithPath: home).appendingPathComponent("Developer/travory-reservation-emails")
     }
 
+    static let imageExtensions: Set<String> = ["png", "jpg", "jpeg", "heic"]
+
     /// サブフォルダ（「予約メールサンプル」など）の中も読む
     static var sampleFiles: [URL] {
         guard let enumerator = FileManager.default.enumerator(at: samplesFolder, includingPropertiesForKeys: nil) else { return [] }
         return enumerator.compactMap { $0 as? URL }
-            .filter { $0.pathExtension == "txt" }
+            .filter { $0.pathExtension == "txt" || imageExtensions.contains($0.pathExtension.lowercased()) }
             .sorted { $0.path < $1.path }
+    }
+
+    /// メールはそのまま、画像は文字認識して、読み取りに渡す文字にする
+    private static func sourceText(of file: URL) async throws -> String {
+        guard imageExtensions.contains(file.pathExtension.lowercased()) else {
+            return try String(contentsOf: file, encoding: .utf8)
+        }
+        guard let image = UIImage(contentsOfFile: file.path)?.cgImage else { return "" }
+        return (try? await ReservationImageTextReader.text(from: image)) ?? ""
     }
 
     /// 比べる項目。正解の JSON に書いた項目だけ比べる（null と書けば「読み取らないこと」が正解）
@@ -33,7 +46,7 @@ struct ReservationEmailSampleTests {
                                  "departurePlace", "arrivalPlace", "start", "arrival", "end", "cost"]
 
     @Test("実際のメールで精度を測る", .enabled(if: !sampleFiles.isEmpty))
-    func measureAccuracy() throws {
+    func measureAccuracy() async throws {
         var fieldHits: [String: Int] = [:]
         var fieldTotals: [String: Int] = [:]
         var perfect = 0
@@ -45,7 +58,7 @@ struct ReservationEmailSampleTests {
             let relative = file.path.replacingOccurrences(of: Self.samplesFolder.path + "/", with: "")
             let name = (relative as NSString).deletingPathExtension
             let expectedURL = file.deletingPathExtension().appendingPathExtension("expected.json")
-            let text = try String(contentsOf: file, encoding: .utf8)
+            let text = try await Self.sourceText(of: file)
 
             guard let data = try? Data(contentsOf: expectedURL),
                   let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
