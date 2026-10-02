@@ -6,6 +6,11 @@ struct MainTabView: View {
     @State private var showICloudAlert = false
     @State private var hasCheckedICloud = false
     @State private var whatsNew: WhatsNew?
+    /// 共有メニューから送られた予約確認メールや画像（`SharedImportInbox`）
+    @State private var sharedImports: SharedImportsPresentation?
+    /// 一度見せたもの。「あとで」で閉じたあと、アプリに戻るたびに出し直さない
+    /// （新しく送られたものがあるときだけ出す。次に起動したときは、残っていればまた出す）
+    @State private var shownSharedImports: Set<URL> = []
     @StateObject private var plansViewModel = PlansViewModel()
     @StateObject private var travelPlanViewModel = TravelPlanViewModel()
     @EnvironmentObject var authVM: AuthViewModel
@@ -89,6 +94,8 @@ struct MainTabView: View {
             if canShowWhatsNew, WhatsNewManager.shouldShow {
                 whatsNew = WhatsNew.current
                 WhatsNewManager.markAsShown()
+            } else {
+                checkSharedImports()
             }
         }
         // ウィジェット用のデータを書き出す。
@@ -104,6 +111,8 @@ struct MainTabView: View {
             if phase == .active, let userId = authVM.userId {
                 Task { await travelPlanViewModel.refreshSharedPlans(userId: userId) }
             }
+            // 共有メニューから予約を送ったあと、アプリに戻ってきたとき
+            if phase == .active { checkSharedImports() }
         }
         .alert("iCloudが必要です", isPresented: $showICloudAlert) {
             Button("設定を開く", role: .none) {
@@ -115,9 +124,24 @@ struct MainTabView: View {
         } message: {
             Text("このアプリはデータを保存するためにiCloudを使用します。iCloudにサインインしてください。\n\n設定 > [あなたの名前] > iCloud")
         }
-        .sheet(item: $whatsNew) { content in
+        // 新機能のお知らせと重ならないよう、閉じてから受け取り箱を見る
+        .sheet(item: $whatsNew, onDismiss: checkSharedImports) { content in
             WhatsNewView(content: content)
         }
+        .sheet(item: $sharedImports) { presentation in
+            SharedImportInboxView(items: presentation.items)
+                .environmentObject(travelPlanViewModel)
+                .environmentObject(authVM)
+        }
+    }
+
+    /// 共有メニューから送られたものがあれば、どの旅行に入れるか聞く
+    private func checkSharedImports() {
+        guard whatsNew == nil, sharedImports == nil, authVM.userId != nil else { return }
+        let items = SharedImportInbox.pendingItems()
+        guard items.contains(where: { !shownSharedImports.contains($0.url) }) else { return }
+        shownSharedImports.formUnion(items.map(\.url))
+        sharedImports = SharedImportsPresentation(items: items)
     }
 
     private func updateWidgetSnapshot() {
@@ -133,4 +157,10 @@ struct MainTabView: View {
             showICloudAlert = true
         }
     }
+}
+
+/// 受け取り箱の画面を出すときの中身。sheet(item:) で出すために包む
+private struct SharedImportsPresentation: Identifiable {
+    let id = UUID()
+    let items: [SharedImportInbox.Item]
 }

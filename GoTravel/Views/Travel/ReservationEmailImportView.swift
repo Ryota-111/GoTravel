@@ -10,6 +10,8 @@ struct ReservationEmailImportView: View {
     let plan: TravelPlan
     /// 利用者が選んだ種類。選んでいなければ nil（文面から当てる）
     let kind: Reservation.Kind?
+    /// 共有メニューから送られてきた本文や画像。あれば開いてすぐ読み取る
+    var initial: SharedImportInbox.Item.Content? = nil
     let onImport: ([ImportedReservation]) -> Void
 
     @ObservedObject var themeManager = ThemeManager.shared
@@ -50,6 +52,21 @@ struct ReservationEmailImportView: View {
             }
             .navigationTitle("予約を取り込む")
             .navigationBarTitleDisplayMode(.inline)
+            .task {
+                switch initial {
+                case .text(let shared):
+                    text = shared
+                    await read()
+                case .image(let url):
+                    if let image = UIImage(contentsOfFile: url.path) {
+                        await readImage(image)
+                    } else {
+                        imageReadFailed = true
+                    }
+                case nil:
+                    break
+                }
+            }
             .onChange(of: pickedPhoto) { _, item in
                 guard let item else { return }
                 pickedPhoto = nil
@@ -164,14 +181,21 @@ struct ReservationEmailImportView: View {
     /// 画像の文字を読んで入力欄に入れ、そのまま予約として読み取る。
     /// 読んだ文字を入力欄に見せておくのは、読み違えたときに直せるようにするため
     private func readImage(_ item: PhotosPickerItem) async {
+        guard let data = try? await item.loadTransferable(type: Data.self),
+              let image = UIImage(data: data) else {
+            imageReadFailed = true
+            return
+        }
+        await readImage(image)
+    }
+
+    private func readImage(_ image: UIImage) async {
         isReadingImage = true
         imageReadFailed = false
         foundNothing = false
         defer { isReadingImage = false }
 
-        guard let data = try? await item.loadTransferable(type: Data.self),
-              let image = UIImage(data: data),
-              let cgImage = image.cgImage,
+        guard let cgImage = image.cgImage,
               let recognized = try? await ReservationImageTextReader.text(
                   from: cgImage, orientation: CGImagePropertyOrientation(image.imageOrientation)) else {
             imageReadFailed = true

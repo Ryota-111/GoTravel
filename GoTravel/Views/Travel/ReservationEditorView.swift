@@ -4,6 +4,8 @@ import SwiftUI
 struct ReservationEditorView: View {
     let planId: String
     @State var reservation: Reservation
+    /// 共有メニューから取り込んだ予約。あれば開いたときに入力欄へ入れる（複数なら保存ごとに次を開く）
+    var initialImports: [ImportedReservation] = []
 
     @EnvironmentObject var viewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
@@ -46,6 +48,7 @@ struct ReservationEditorView: View {
     /// 種類を自分で選んだか。選んでいれば、メールもその種類として読む。
     /// 開いた直後の「宿泊」は既定なだけなので、選んだことにしない
     @State private var hasChosenKind = false
+    @State private var didApplyInitialImports = false
     /// 費用の入力欄。数字以外を打たれても消さずに持っておく
     @State private var costText = ""
 
@@ -156,6 +159,11 @@ struct ReservationEditorView: View {
             .onAppear {
                 load(reservation)
                 hasChosenKind = !isNewReservation
+                // 一度だけ入れる。画面がもう一度現れたときに、直した内容を上書きしないように
+                if !initialImports.isEmpty && !didApplyInitialImports {
+                    didApplyInitialImports = true
+                    applyImport(initialImports)
+                }
             }
             .task { await resolveDestinationTimeZone() }
             .sheet(isPresented: $showsEmailImport) {
