@@ -74,6 +74,26 @@ struct WhatsNew: Identifiable {
 
     private static let all: [WhatsNew] = [
         WhatsNew(
+            version: "2.9",
+            items: [
+                Item(
+                    icon: "photo.on.rectangle.angled",
+                    title: "スクリーンショットからも予約を入れられます",
+                    detail: "予約サイトのアプリの確認画面や e チケットのスクリーンショットから、予約番号・日時・便名・金額を読み取れるようになりました。予約を追加 →「予約メール・画像から取り込む」→「写真から読み取る」で選んでください。メールが届かない予約も取り込めます。画像はこの端末の中だけで読み取ります。Travory Pro に含まれます。"
+                ),
+                Item(
+                    icon: "square.and.arrow.up.fill",
+                    title: "共有メニューから Travory に送れます",
+                    detail: "メールの本文を選んだり、写真アプリで確認画面のスクリーンショットを開いたりして、共有メニューの「Travory」を選ぶと送れます。Travory を開くと、どの旅行の予約か選んで取り込めます。コピーして貼り付ける手間がなくなります。Travory Pro に含まれます。"
+                ),
+                Item(
+                    icon: "dollarsign.arrow.circlepath",
+                    title: "費用を外貨でも入れられます",
+                    detail: "予定や予約の費用の「円」を押すと、ドル・ユーロ・ウォンなどの通貨を選べます。両替したレートを入れると円に直して予算に入ります。レートは旅行ごとに1つで、予算の画面の「為替レート」からまとめて直せます。無料でお使いいただけます。"
+                )
+            ]
+        ),
+        WhatsNew(
             version: "2.8",
             items: [
                 Item(
