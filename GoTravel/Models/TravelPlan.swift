@@ -191,6 +191,11 @@ struct TravelPlan: Identifiable, Codable {
     /// `SharedMemberNameStore` が控えを持つ。各自が自分の分だけを書く
     var memberNames: [String: String] = [:]
 
+    /// 共有レコードに載っているヘッダー写真の版と、取ってきた写真のファイル。
+    /// **パブリックDBから読んだときだけ入る**（保存には載せない。`SharedCoverPhoto`）
+    var sharedCoverVersion: String? = nil
+    var sharedCoverFileURL: URL? = nil
+
     enum CodingKeys: String, CodingKey {
         case id, title, startDate, endDate, destination, latitude, longitude, localImageFileName, cardColorHex, createdAt, userId, daySchedules, packingItems
         case reservations

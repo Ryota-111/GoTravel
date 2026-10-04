@@ -768,6 +768,11 @@ final class CloudKitService {
         }
 
         applySharedPlanFields(to: record, from: plan)
+        var cover = applySharedCover(to: record, from: plan, planId: planId)
+        defer {
+            // 載せるために縮めた写真の一時ファイルは、送り終えたら消す
+            if let file = cover?.file { try? FileManager.default.removeItem(at: file) }
+        }
 
         do {
             _ = try await publicDatabase.save(record)
@@ -775,6 +780,8 @@ final class CloudKitService {
             // 他メンバーと同時保存が競合した場合はサーバー側レコードに再適用して保存
             guard let serverRecord = ckError.serverRecord else { throw ckError }
             applySharedPlanFields(to: serverRecord, from: plan)
+            if let file = cover?.file { try? FileManager.default.removeItem(at: file) }
+            cover = applySharedCover(to: serverRecord, from: plan, planId: planId)
             do {
                 _ = try await publicDatabase.save(serverRecord)
             } catch {
@@ -789,7 +796,33 @@ final class CloudKitService {
             throw error
         }
 
+        // 載せた写真の版は、この端末が使っている版になる（取り込みで同じ写真を取り直さない）
+        if let cover {
+            SharedCoverPhoto.setAdopted(cover.version, planId: planId)
+            SharedCoverPhoto.clearChanged(planId: planId)
+        }
+
         Self.shareLogger.notice("公開成功 env=\(Self.environmentHint, privacy: .public) planId=\(planId, privacy: .public)")
+    }
+
+    /// ヘッダー写真を載せるなら、縮めた写真と新しい版を記録に入れる（`SharedCoverPhoto` のルール）。
+    /// 載せたら版と一時ファイルを返す
+    private func applySharedCover(to record: CKRecord, from plan: TravelPlan,
+                                  planId: String) -> (version: String, file: URL)? {
+        let hasLocalPhoto = SharedCoverPhoto.hasLocalPhoto(plan)
+        let changed = SharedCoverPhoto.isChanged(planId: planId)
+        // 写真を消した場合は、ほかの人の写真まで消さない（載せ直さないだけ）
+        if changed && !hasLocalPhoto { SharedCoverPhoto.clearChanged(planId: planId) }
+
+        guard let version = SharedCoverPhoto.uploadVersion(
+                changedLocally: changed,
+                remoteVersion: record[SharedCoverPhoto.versionKey] as? String,
+                hasLocalPhoto: hasLocalPhoto),
+              let file = SharedCoverPhoto.uploadFile(for: plan) else { return nil }
+
+        record[SharedCoverPhoto.imageKey] = CKAsset(fileURL: file)
+        record[SharedCoverPhoto.versionKey] = version
+        return (version, file)
     }
 
     /// 共有まわりのログ。Console.app で
@@ -920,6 +953,8 @@ final class CloudKitService {
             plan.id = String(recordName.dropFirst("shared_".count))
         }
         plan.memberNames = Self.memberNames(in: record)
+        plan.sharedCoverVersion = record[SharedCoverPhoto.versionKey] as? String
+        plan.sharedCoverFileURL = (record[SharedCoverPhoto.imageKey] as? CKAsset)?.fileURL
         return plan
     }
 
