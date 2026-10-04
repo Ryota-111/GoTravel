@@ -79,6 +79,11 @@ struct TravelPlanDetailView: View {
     @State private var pinnedHeaderFrame: CGRect = .zero
     /// 横にスクロールする部品の位置。ここで始めた横のドラッグではタブを変えない
     @State private var swipeExclusionZones = SwipeExclusionZones()
+    /// 横にスライドして隣のタブへ移るか（アプリ設定で切り替える）。
+    /// 便利だと使っている人がいる一方、日程を横になぞって地図へ移ってしまうのが
+    /// ストレスだという声も続いたので、選べるようにした。最初はオン（今までどおり）
+    @AppStorage(TravelPlanDetailView.tabSwipeKey) private var switchesTabBySwipe = true
+    static let tabSwipeKey = "TravelPlanTabSwipeEnabled"
 
     /// ScrollView の見えている高さ。scrollTo の anchor は割合指定なので必要
     @State private var scrollViewportHeight: CGFloat = 0
@@ -253,7 +258,8 @@ struct TravelPlanDetailView: View {
                 }
                 // スワイプは ScrollView に付ける。内側の要素に付けると
                 // ScrollView に取り込まれて、ほとんど反応しなくなる
-                .simultaneousGesture(tabSwipeGesture)
+                // オフのときは、このジェスチャだけ止める（中のスクロールや地図の操作はそのまま）
+                .simultaneousGesture(tabSwipeGesture, including: switchesTabBySwipe ? .all : .subviews)
                 // 引っぱって更新。共有中なら相手の変更を取り込み、天気も取り直す
                 .refreshable { await pullToRefresh() }
                 // anchor は割合で指定するので、枠の高さが要る
