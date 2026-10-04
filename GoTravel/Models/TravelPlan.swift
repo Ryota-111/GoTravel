@@ -441,34 +441,6 @@ struct TravelPlan: Identifiable, Codable {
         }
     }
 
-    /// 予約の内容を行程に反映する。
-    ///
-    /// **いったん消してから入れ直す。** 予約の時刻や便名を書き換えたときに、
-    /// 古い予定が残ったまま新しいものが増えるのを防ぐ。
-    /// `isOn` が false なら消すだけ
-    mutating func syncScheduleItems(for reservation: Reservation, isOn: Bool) {
-        // 行程の側で入れた実績の金額は、予約には無いので作り直すと消えてしまう。
-        // 費用を持つ1件目に引き継ぐ
-        let actualCost = scheduleItems(forReservation: reservation.id).lazy.compactMap(\.actualCost).first
-        let actualForeign = scheduleItems(forReservation: reservation.id).lazy.compactMap(\.foreignCost?.actualAmount).first
-
-        removeScheduleItems(forReservation: reservation.id)
-        guard isOn else { return }
-
-        for (index, var item) in reservation.itineraryItems().enumerated() {
-            if index == 0 {
-                item.actualCost = actualCost
-                if item.foreignCost != nil {
-                    item.foreignCost?.actualAmount = actualForeign
-                    item.actualCost = item.foreignCost?.yenActualAmount ?? actualCost
-                }
-            }
-            if let dayNumber = dayNumber(forDate: item.time, in: item.timeZone) {
-                addScheduleItem(item, onDay: dayNumber)
-            }
-        }
-    }
-
     /// その予約から作られた予定（時刻順）
     func scheduleItems(forReservation reservationId: String) -> [ScheduleItem] {
         daySchedules

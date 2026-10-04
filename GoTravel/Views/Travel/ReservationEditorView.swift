@@ -28,6 +28,13 @@ struct ReservationEditorView: View {
     @State private var destinationTimeZone: TimeZone?
 
     @State private var showSchedulePicker = false
+    /// 地図で場所を選んでいるところ（宿などの場所・出発地・到着地）
+    @State private var placeTarget: PlaceTarget?
+
+    private enum PlaceTarget: String, Identifiable {
+        case main, departure, arrival
+        var id: String { rawValue }
+    }
     /// 保存と同時に行程へも入れるか。
     ///
     /// **既定はオフ。** 予約を控えただけのつもりの人の行程が、保存のたびに
@@ -130,6 +137,7 @@ struct ReservationEditorView: View {
                             routeSection
                         } else {
                             field(label: "予約の名前", text: $reservation.title, placeholder: reservation.kind.placeholder)
+                            locationRow
                             dateSection
                         }
                         numberField
@@ -178,6 +186,13 @@ struct ReservationEditorView: View {
                 if proStore.isPurchased { showsEmailImport = true }
             }) {
                 ProSheet(highlighted: nil, dismissesOnPurchase: true)
+            }
+            .fullScreenCover(item: $placeTarget) { target in
+                MapPlaceSearchView(title: placeSearchTitle(target),
+                                   startRegion: plan?.placeSearchRegion ?? TravelPlan.japanRegion,
+                                   accent: accent) { picked in
+                    apply(picked, to: target)
+                }
             }
             .sheet(isPresented: $showSchedulePicker) {
                 if let plan {
@@ -394,8 +409,18 @@ struct ReservationEditorView: View {
         draft.arrivalDate = hasArrivalDate ? arrivalDate : nil
         draft.timeZoneIdentifier = dateZone.identifier
         draft.arrivalTimeZoneIdentifier = arrivalZone.identifier
+        draft.endDate = (draft.kind.usesPeriod && hasDate && hasEndDate) ? endDate : nil
         if draft.kind.usesRoute { draft.title = composedRouteTitle }
         return draft.itineraryItems()
+    }
+
+    /// 「「ホテル海風」（1日目）と「ホテル海風 チェックアウト」（3日目）」。
+    /// 旅行の期間から外れて置けないものは書かない
+    private var itineraryPreviewText: String {
+        guard let plan else { return "" }
+        return itineraryPreview.compactMap { item in
+            plan.dayNumber(forDate: item.time, in: item.timeZone).map { "「\(item.title)」（\($0)日目）" }
+        }.joined(separator: "と")
     }
 
     /// 行程に置ける日か。旅行の期間から外れた日時だと置き場所が無い
@@ -418,9 +443,8 @@ struct ReservationEditorView: View {
                 .tint(accent)
 
                 Text(addsToItinerary
-                     ? "\(dayNumber)日目のタイムスケジュールに、"
-                       + itineraryPreview.map { "「\($0.title)」" }.joined(separator: "と")
-                       + "が並びます。予約を消すと、この予定も一緒に消えます。"
+                     ? "タイムスケジュールに、\(itineraryPreviewText)が並びます。"
+                       + "行程の名前や場所・メモは日程タブで書き換えられ、予約を直しても残ります。予約を消すと、この予定も一緒に消えます。"
                      : "オンにすると、\(dayNumber)日目のタイムスケジュールにも並びます。")
                     .font(.system(size: 12))
                     .foregroundColor(themeManager.currentTheme.secondaryText)
@@ -477,13 +501,16 @@ struct ReservationEditorView: View {
         dateZone = item.timeZone
         hasDate = true
 
-        // 飛行機・新幹線は場所を出発地として扱う。
-        // 「神戸空港」をメモに入れても、空港の欄が空のままで意味がない
+        // 予定の場所は、地図の位置ごと予約の場所にする（メモには入れない）。
+        // 飛行機・新幹線では出発地として扱う
         var locationForNote = item.location
-        if reservation.kind.usesRoute,
-           let location = item.location?.trimmingCharacters(in: .whitespacesAndNewlines),
-           !location.isEmpty {
-            reservation.departurePlace = location
+        if let place = TravelPlan.location(of: item, keepingAddressOf: nil) {
+            if reservation.kind.usesRoute {
+                reservation.departurePlace = place.name
+                reservation.departureLocation = place
+            } else {
+                reservation.location = place
+            }
             locationForNote = nil
         }
 
@@ -501,6 +528,127 @@ struct ReservationEditorView: View {
         if let link = item.linkURL, !link.isEmpty,
            (reservation.linkURL ?? "").isEmpty {
             reservation.linkURL = link
+        }
+    }
+
+    // MARK: - 場所（地図）
+
+    /// 宿・レストランなどの場所。地図で選んでおくと、行程の予定にもそのまま入る
+    @ViewBuilder
+    private var locationRow: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("場所")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+
+            if let location = reservation.location {
+                HStack(spacing: 10) {
+                    Image(systemName: location.latitude == nil ? "mappin" : "mappin.circle.fill")
+                        .foregroundColor(accent)
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(location.name)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(textColor)
+                        if let address = location.address {
+                            Text(address)
+                                .font(.caption2)
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
+                                .lineLimit(1)
+                        }
+                    }
+                    Spacer(minLength: 0)
+                    Button("変更") { placeTarget = .main }
+                        .font(.subheadline)
+                        .foregroundColor(accent)
+                    Button {
+                        reservation.location = nil
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
+                    }
+                    .accessibilityLabel(Text("場所を消す"))
+                }
+                .padding(14)
+                .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+            } else {
+                Button {
+                    placeTarget = .main
+                } label: {
+                    Label("地図で場所を選ぶ", systemImage: "map")
+                        .font(.subheadline)
+                        .foregroundColor(accent)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .padding(14)
+                        .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    /// 出発地・到着地。文字で入れても、右の地図のボタンで選んでもよい。
+    /// 地図で選んだあとに文字を書き換えたら、位置は別の場所なので外す
+    private func routePlaceField(label: String,
+                                 text: WritableKeyPath<Reservation, String?>,
+                                 location: WritableKeyPath<Reservation, ReservationLocation?>,
+                                 target: PlaceTarget,
+                                 placeholder: String) -> some View {
+        let hasPoint = reservation[keyPath: location]?.latitude != nil
+        return VStack(alignment: .leading, spacing: 8) {
+            Text(label)
+                .font(.caption.weight(.semibold))
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+
+            HStack(spacing: 6) {
+                TextField(placeholder, text: Binding(
+                    get: { reservation[keyPath: text] ?? "" },
+                    set: { newValue in
+                        reservation[keyPath: text] = newValue
+                        if reservation[keyPath: location]?.name != newValue {
+                            reservation[keyPath: location] = nil
+                        }
+                    }
+                ))
+                .foregroundColor(textColor)
+                .autocorrectionDisabled()
+
+                Button {
+                    placeTarget = target
+                } label: {
+                    Image(systemName: hasPoint ? "mappin.circle.fill" : "map")
+                        .foregroundColor(accent)
+                }
+                .accessibilityLabel(Text("\(label)を地図で選ぶ"))
+            }
+            .padding(14)
+            .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+        }
+    }
+
+    private func placeSearchTitle(_ target: PlaceTarget) -> String {
+        switch target {
+        case .main: return "場所を選ぶ"
+        case .departure: return "出発地を選ぶ"
+        case .arrival: return "到着地を選ぶ"
+        }
+    }
+
+    private func apply(_ picked: PickedPlace, to target: PlaceTarget) {
+        let location = ReservationLocation(name: picked.name, address: picked.address,
+                                           latitude: picked.latitude, longitude: picked.longitude)
+        switch target {
+        case .main:
+            reservation.location = location
+            // 名前がまだ無ければ、選んだ場所の名前を予約の名前にする（ホテルを選んだら、それが宿の名前）
+            if reservation.title.trimmingCharacters(in: .whitespaces).isEmpty {
+                reservation.title = picked.name
+            }
+        case .departure:
+            reservation.departurePlace = picked.name
+            reservation.departureLocation = location
+        case .arrival:
+            reservation.arrivalPlace = picked.name
+            reservation.arrivalLocation = location
         }
     }
 
@@ -535,10 +683,10 @@ struct ReservationEditorView: View {
                   placeholder: isFlight ? "例：ANA123" : "例：のぞみ21号")
 
             HStack(spacing: 12) {
-                field(label: "出発", text: binding(\.departurePlace),
-                      placeholder: isFlight ? "例：羽田空港" : "例：東京駅")
-                field(label: "到着", text: binding(\.arrivalPlace),
-                      placeholder: isFlight ? "例：那覇空港" : "例：新大阪駅")
+                routePlaceField(label: "出発", text: \.departurePlace, location: \.departureLocation,
+                                target: .departure, placeholder: isFlight ? "例：羽田空港" : "例：東京駅")
+                routePlaceField(label: "到着", text: \.arrivalPlace, location: \.arrivalLocation,
+                                target: .arrival, placeholder: isFlight ? "例：那覇空港" : "例：新大阪駅")
             }
 
             timeCard
@@ -840,10 +988,20 @@ struct ReservationEditorView: View {
         VStack(spacing: 16) {
             costField
 
-            field(label: "メモ", text: Binding(
-                get: { reservation.note ?? "" },
-                set: { reservation.note = $0 }
-            ), placeholder: "例：朝食付き / 禁煙ルーム")
+            // 何行でも書ける。行程にも追加すると、予定のメモにもそのまま入る
+            VStack(alignment: .leading, spacing: 8) {
+                Text("メモ")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                TextField("例：朝食付き / 駐車場は裏手（1泊1,000円）", text: Binding(
+                    get: { reservation.note ?? "" },
+                    set: { reservation.note = $0 }
+                ), axis: .vertical)
+                .lineLimit(2...8)
+                .foregroundColor(textColor)
+                .padding(14)
+                .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+            }
 
             field(label: "リンク", text: Binding(
                 get: { reservation.linkURL ?? "" },
@@ -892,6 +1050,13 @@ struct ReservationEditorView: View {
             edited.seat = nil
         }
         if edited.kind != .flight { edited.terminal = nil }
+        // 場所は、宿などなら1つ、飛行機・新幹線なら出発と到着。使わないほうは消す
+        if edited.kind.usesRoute {
+            edited.location = nil
+        } else {
+            edited.departureLocation = nil
+            edited.arrivalLocation = nil
+        }
 
         // 空欄は nil に寄せる。空文字が残ると「入力あり」と判定してしまう
         for keyPath in [\Reservation.transportNumber, \.departurePlace, \.arrivalPlace, \.seat, \.terminal] {
@@ -905,20 +1070,21 @@ struct ReservationEditorView: View {
         edited.cost = costs.cost
         edited.foreignCost = costs.foreign
 
+        // 直す前の予約。行程の側で名前やメモを書き換えたかどうかを見分けるのに使う
+        let previous = plan.reservations.first { $0.id == edited.id }
         if let index = plan.reservations.firstIndex(where: { $0.id == edited.id }) {
             plan.reservations[index] = edited
         } else {
             plan.reservations.append(edited)
         }
 
-        // 行程との連動。オンなら入れ直し、オフなら消す。
-        // 予約の時刻や便名を書き換えたときに古い予定が残らないよう、
-        // どちらの場合もいったん消してから作り直す
         // 外貨のレートは旅行ごとに1つ。この予約で入れたレートに、同じ通貨の費用をすべて揃える
         if let foreign = edited.foreignCost, let rate = foreign.rate {
             plan.setExchangeRate(rate, for: foreign.currencyCode)
         }
-        plan.syncScheduleItems(for: edited, isOn: addsToItinerary)
+        // 行程との連動。オンなら行程の予定を予約に合わせる（日程タブで入れた場所やメモは残す）、
+        // オフなら消す
+        plan.syncScheduleItems(for: edited, previous: previous, isOn: addsToItinerary)
 
         viewModel.update(plan, userId: userId)
 

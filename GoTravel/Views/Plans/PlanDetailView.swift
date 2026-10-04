@@ -5,7 +5,6 @@ struct PlanDetailView: View {
     /// 経路案内の行き先。開くアプリはプロフィールの設定に従う（`mapNavigation`）
     @State private var navigationTarget: MapDestination?
     /// 地図から場所を選ぶ画面（全画面）の中の経路案内。上の画面の選択肢は全画面の上に出せないため分ける
-    @State private var searchResultNavigationTarget: MapDestination?
     @State var plan: Plan
     @State private var showMap = false
     @State private var showStreetView = false
@@ -38,14 +37,6 @@ struct PlanDetailView: View {
     @State private var editedRecurrence: PlanRecurrence = .none
     @State private var editedPlaces: [PlannedPlace] = []
     @State private var showAddPlaceInEdit = false
-    @State private var mapPosition: MapCameraPosition = .region(MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
-        span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
-    ))
-    @State private var selectedMapResult: MKMapItem?
-    @State private var mapVisibleRegion: MKCoordinateRegion?
-    @State private var searchText: String = ""
-    @State private var searchResults: [MKMapItem] = []
 
     @ObservedObject var themeManager = ThemeManager.shared
     @ObservedObject var tagManager = PlanTagManager.shared
@@ -169,8 +160,13 @@ struct PlanDetailView: View {
                 saveReminders(reminders)
             }
         }
+        // 地図で探す。地図に出ている施設を押しても、長押しでピンを立てても選べる（`MapPlaceSearchView`）
         .fullScreenCover(isPresented: $showAddPlaceInEdit) {
-            mapPickerView
+            MapPlaceSearchView(title: "地図から検索", startRegion: TravelPlan.japanRegion, accent: planColor) { picked in
+                let item = MKMapItem(placemark: MKPlacemark(coordinate: picked.coordinate))
+                item.name = picked.name
+                addPlaceFromMapResult(item, address: picked.address)
+            }
         }
         .alert("エラー", isPresented: $showAlert) {
             Button("OK", role: .cancel) {}
@@ -2258,207 +2254,12 @@ struct PlanDetailView: View {
         }
     }
 
-    // MARK: - Map Picker View
-    private var mapPickerView: some View {
-        NavigationView {
-            ZStack {
-                Map(position: $mapPosition, selection: $selectedMapResult) {
-                    ForEach(searchResults, id: \.self) { result in
-                        Marker(item: result)
-                            .tint(themeManager.currentTheme.error)
-                    }
-                }
-                .safeAreaInset(edge: .top) {
-                    mapSearchBarView
-                }
-                .safeAreaInset(edge: .bottom) {
-                    if let selectedResult = selectedMapResult {
-                        mapSelectedResultDetailView(selectedResult)
-                    }
-                }
-                .onMapCameraChange { context in
-                    mapVisibleRegion = context.region
-                }
-            }
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("閉じる") {
-                        showAddPlaceInEdit = false
-                    }
-                }
-            }
-        }
-        .navigationViewStyle(.stack)
-    }
-
-    // MARK: - Map Search Bar
-    private var mapSearchBarView: some View {
-        TextField("場所を検索", text: $searchText)
-            .textFieldStyle(.plain)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
-            .background(Color(.systemBackground))
-            .cornerRadius(10)
-            .padding(.horizontal)
-            .padding(.vertical, 8)
-            .background(.ultraThinMaterial)
-            .onSubmit {
-                Task {
-                    await performMapSearch()
-                }
-            }
-    }
-
-    private func performMapSearch() async {
-        let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = searchText
-        // 施設だけに絞ると住所で検索できないため住所も対象にする
-        request.resultTypes = [.pointOfInterest, .address]
-
-        // 表示中の狭い範囲に限定すると遠方の場所が一切ヒットしない。
-        // 近くを優先しつつ遠方も拾えるよう、中心だけ引き継いで範囲は広く取る
-        request.region = MKCoordinateRegion(
-            center: mapVisibleRegion?.center
-                ?? CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
-            span: MKCoordinateSpan(latitudeDelta: 60, longitudeDelta: 60)
-        )
-
-        let search = MKLocalSearch(request: request)
-        do {
-            let response = try await search.start()
-            searchResults = response.mapItems
-            if let firstResult = searchResults.first {
-                withAnimation {
-                    mapPosition = .region(MKCoordinateRegion(
-                        center: firstResult.placemark.coordinate,
-                        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-                    ))
-                }
-            }
-            searchText = ""
-        } catch {
-        }
-    }
-
-    // MARK: - Map Selected Result Detail View
-    private func mapSelectedResultDetailView(_ result: MKMapItem) -> some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack(alignment: .top) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(result.name ?? "名称なし")
-                        .font(.title2)
-                        .fontWeight(.bold)
-
-                    if let category = result.pointOfInterestCategory?.rawValue {
-                        Text(category)
-                            .font(.subheadline)
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                Spacer()
-            }
-
-            if let address = result.placemark.title {
-                HStack(alignment: .top, spacing: 8) {
-                    Image(systemName: "mappin.circle.fill")
-                        .foregroundStyle(themeManager.currentTheme.error)
-                        .font(.title3)
-                    Text(address)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                }
-            }
-
-            if let phoneNumber = result.phoneNumber {
-                HStack(spacing: 8) {
-                    Image(systemName: "phone.circle.fill")
-                        .foregroundStyle(themeManager.currentTheme.success)
-                        .font(.title3)
-                    Text(phoneNumber)
-                        .font(.subheadline)
-                    Spacer()
-                    Button {
-                        if let url = URL(string: "tel:\(phoneNumber.replacingOccurrences(of: " ", with: ""))") {
-                            UIApplication.shared.open(url)
-                        }
-                    } label: {
-                        Text("電話")
-                            .font(.caption)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(themeManager.currentTheme.success)
-                            .foregroundStyle(.white)
-                            .cornerRadius(8)
-                    }
-                }
-            }
-
-            if let url = result.url {
-                HStack(spacing: 8) {
-                    Image(systemName: "safari.fill")
-                        .foregroundStyle(themeManager.currentTheme.actionFill)
-                        .font(.title3)
-                    Text(url.host ?? "Website")
-                        .font(.subheadline)
-                        .lineLimit(1)
-                    Spacer()
-                    Button {
-                        UIApplication.shared.open(url)
-                    } label: {
-                        Text("開く")
-                            .font(.caption)
-                            .padding(.horizontal, 12)
-                            .padding(.vertical, 6)
-                            .background(themeManager.currentTheme.actionFill)
-                            .foregroundStyle(.white)
-                            .cornerRadius(8)
-                    }
-                }
-            }
-
-            Divider()
-
-            HStack(spacing: 12) {
-                Button {
-                    searchResultNavigationTarget = MapDestination(result)
-                } label: {
-                    Label("経路", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(themeManager.currentTheme.actionFill.opacity(0.12))
-                        .foregroundStyle(themeManager.currentTheme.actionFill)
-                        .cornerRadius(10)
-                }
-                .mapNavigation($searchResultNavigationTarget)
-
-                Button {
-                    addPlaceFromMapResult(result)
-                } label: {
-                    Label("追加", systemImage: "plus.circle.fill")
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 12)
-                        .background(themeManager.currentTheme.adaptiveText(for: colorScheme).opacity(0.12))
-                        .foregroundStyle(themeManager.currentTheme.adaptiveText(for: colorScheme))
-                        .cornerRadius(10)
-                }
-            }
-        }
-        .padding(20)
-        .background(.ultraThinMaterial)
-        .cornerRadius(20)
-        .shadow(color: .black.opacity(0.15), radius: 12, x: 0, y: -4)
-        .padding(.horizontal)
-        .padding(.bottom, 12)
-    }
-
-    private func addPlaceFromMapResult(_ result: MKMapItem) {
+    private func addPlaceFromMapResult(_ result: MKMapItem, address: String? = nil) {
         let place = PlannedPlace(
             name: result.name ?? "名称不明",
             latitude: result.placemark.coordinate.latitude,
             longitude: result.placemark.coordinate.longitude,
-            address: result.placemark.title
+            address: address ?? result.placemark.title
         )
 
         if isEditMode {
@@ -2475,7 +2276,6 @@ struct PlanDetailView: View {
             }
         }
 
-        selectedMapResult = nil
         showAddPlaceInEdit = false
     }
 }

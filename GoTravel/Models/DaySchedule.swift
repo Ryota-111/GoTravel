@@ -67,8 +67,13 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
     /// 円で入れた予定は nil（`ForeignCost.swift`）
     var foreignCost: ForeignCost?
 
+    /// 予約から作った予定のうち、どの部分か（"main" / "departure" / "arrival"）。
+    /// 飛行機は出発と到着の2件になるので、予約を直したときにどちらへ反映するかを決めるのに使う。
+    /// 2.9 より前に作った予定には無い（時刻の順で当てる。`ReservationItinerarySync.swift`）
+    var reservationPart: String?
+
     enum CodingKeys: String, CodingKey {
-        case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId, timeZoneIdentifier, isPinned, participantIds, foreignCost
+        case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId, timeZoneIdentifier, isPinned, participantIds, foreignCost, reservationPart
     }
 
     /// 書き出しや共有カードに出す金額。
@@ -101,7 +106,8 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
          timeZoneIdentifier: String? = nil,
          isPinned: Bool? = nil,
          participantIds: [String]? = nil,
-         foreignCost: ForeignCost? = nil) {
+         foreignCost: ForeignCost? = nil,
+         reservationPart: String? = nil) {
         self.id = id
         self.time = time
         self.title = title
@@ -118,5 +124,6 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
         self.isPinned = isPinned
         self.participantIds = participantIds
         self.foreignCost = foreignCost
+        self.reservationPart = reservationPart
     }
 }

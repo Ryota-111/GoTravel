@@ -630,11 +630,13 @@ struct TravelPlanDetailView: View {
                     }
                 }
 
+                // メモは全部の行を出す。駐車場や集合場所のように、何行かに分けて
+                // 書いた情報を現地で見るため（2行で切っていたら続きが見えなかった）
                 if let notes = item.notes, !notes.isEmpty {
                     Text(notes)
                         .font(.system(size: 12))
                         .foregroundColor(themeManager.currentTheme.secondaryText)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 // 入力できるのに表示先が無く、開く手段がなかったため追加

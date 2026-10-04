@@ -3,8 +3,6 @@ import MapKit
 
 // タイムスケジュールの予定編集画面（AddScheduleItemViewと同じデザイン言語）
 struct EditScheduleItemView: View {
-    /// 経路案内の行き先。開くアプリはプロフィールの設定に従う（`mapNavigation`）
-    @State private var navigationTarget: MapDestination?
     // MARK: - Properties
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject var viewModel: TravelPlanViewModel
@@ -42,16 +40,6 @@ struct EditScheduleItemView: View {
     @State private var selectedLocation: MKMapItem?
     @State private var selectedCoordinate: CLLocationCoordinate2D?
     @State private var selectedAddress: String?
-    @State private var searchText = ""
-    @State private var searchResults: [MKMapItem] = []
-    @State private var isSearching = false
-    @State private var mapPosition: MapCameraPosition = .region(MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
-        span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
-    ))
-    @State private var selectedMapResult: MKMapItem?
-    @State private var mapVisibleRegion: MKCoordinateRegion?
-    @State private var hasCenteredOnDestination = false
 
     // MARK: - Initialization
     init(plan: TravelPlan, daySchedule: DaySchedule, item: ScheduleItem) {
@@ -83,19 +71,6 @@ struct EditScheduleItemView: View {
     // MARK: - Computed
     private var canSave: Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty }
 
-    /// 地図と検索の起点（`AddScheduleItemView` と同じ理由・同じ内容）
-    private var searchStartRegion: MKCoordinateRegion {
-        guard let latitude = plan.latitude, let longitude = plan.longitude else {
-            return MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
-                span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
-            )
-        }
-        return MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
-            span: MKCoordinateSpan(latitudeDelta: 0.3, longitudeDelta: 0.3)
-        )
-    }
 
     private var travelColor: Color {
         switch themeManager.currentTheme.type {
@@ -174,8 +149,11 @@ struct EditScheduleItemView: View {
             }
             .environmentObject(authVM)
         }
+        // 地図で探す。地図に出ている施設を押しても、長押しでピンを立てても選べる（`MapPlaceSearchView`）
         .fullScreenCover(isPresented: $showLocationPicker) {
-            locationPickerView
+            MapPlaceSearchView(title: "地図から検索", startRegion: plan.placeSearchRegion, accent: travelColor) { picked in
+                applyPickedPlace(picked)
+            }
         }
     }
 
@@ -514,9 +492,10 @@ struct EditScheduleItemView: View {
         if let foreign = updatedItem.foreignCost, let rate = foreign.rate {
             updatedPlan.setExchangeRate(rate, for: foreign.currencyCode)
         }
-        // 予約から作った予定なら、金額を予約の費用にも反映する（予約の画面で同じ金額が見える）
+        // 予約から作った予定なら、直した内容を予約にも戻す（時刻・場所・名前と、金額）。
+        // どちらの画面で直しても、同じ予約は同じ内容に見えるようにする
         if let reservationId = updatedItem.reservationId {
-            updatedPlan.syncReservationCost(fromScheduleItemsOf: reservationId)
+            updatedPlan.syncReservationFromItinerary(editedItem: updatedItem, reservationId: reservationId)
         }
 
         viewModel.update(updatedPlan, userId: userId)
@@ -554,7 +533,9 @@ struct EditScheduleItemView: View {
             // 外したときは nil に戻す（固定したことの無い予定と同じ形にする）
             isPinned: isPinned ? true : nil,
             participantIds: SharedMembers.normalizedParticipants(participants, members: plan.sharedWith),
-            foreignCost: costs.foreign
+            foreignCost: costs.foreign,
+            // 予約から作った予定のどの部分か（出発・到着など）を保つ
+            reservationPart: item.reservationPart
         )
     }
 
@@ -791,251 +772,12 @@ struct EditScheduleItemView: View {
         location = historyItem.name
     }
 
-    // MARK: - Map Location Picker（地図から検索）
-    private var locationPickerView: some View {
-        ZStack(alignment: .top) {
-            Map(position: $mapPosition, selection: $selectedMapResult) {
-                ForEach(searchResults, id: \.self) { result in
-                    Marker(item: result).tint(themeManager.currentTheme.error)
-                }
-            }
-            .ignoresSafeArea()
-            .safeAreaInset(edge: .bottom) {
-                if let result = selectedMapResult {
-                    locationResultDetail(result)
-                }
-            }
-            .onMapCameraChange { context in mapVisibleRegion = context.region }
-            // 初回だけ寄せる。すでに場所が入っている予定はその場所、
-            // 入っていなければ旅行の目的地。2回目以降は前に見ていた場所のまま
-            .onAppear {
-                guard !hasCenteredOnDestination else { return }
-                hasCenteredOnDestination = true
-
-                let region: MKCoordinateRegion
-                if let coordinate = selectedCoordinate {
-                    region = MKCoordinateRegion(
-                        center: coordinate,
-                        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-                    )
-                } else {
-                    region = searchStartRegion
-                }
-
-                mapPosition = .region(region)
-                mapVisibleRegion = region
-            }
-
-            VStack(spacing: 0) {
-                // ヘッダー
-                HStack {
-                    Button(action: {
-                        showLocationPicker = false
-                        searchText = ""
-                        searchResults = []
-                        selectedMapResult = nil
-                    }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(textColor)
-                            .padding(10)
-                            .background(Color(.systemBackground).opacity(0.9))
-                            .clipShape(Circle())
-                    }
-                    Spacer()
-                    Text("地図から検索")
-                        .font(.headline)
-                        .foregroundColor(textColor)
-                    Spacer()
-                    Color.clear.frame(width: 36, height: 36)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(.ultraThinMaterial)
-
-                // 検索バー
-                HStack(spacing: 10) {
-                    Image(systemName: isSearching ? "clock" : "magnifyingglass")
-                        .foregroundColor(travelColor)
-                        .font(.system(size: 15))
-                    TextField("場所・スポット名を入力", text: $searchText)
-                        .font(.subheadline)
-                        .onSubmit { Task { await performSearch() } }
-                    if !searchText.isEmpty {
-                        Button(action: {
-                            searchText = ""
-                            searchResults = []
-                            selectedMapResult = nil
-                        }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(themeManager.currentTheme.secondaryText)
-                        }
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 11)
-                .background(Color(.systemBackground))
-                .cornerRadius(12)
-                .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(.ultraThinMaterial)
-
-                // 検索結果リスト
-                if !searchResults.isEmpty && selectedMapResult == nil {
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: 0) {
-                            ForEach(searchResults, id: \.self) { result in
-                                Button(action: {
-                                    withAnimation {
-                                        selectedMapResult = result
-                                        mapPosition = .region(MKCoordinateRegion(
-                                            center: result.placemark.coordinate,
-                                            span: MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005)
-                                        ))
-                                        searchResults = [result]
-                                    }
-                                }) {
-                                    HStack(spacing: 12) {
-                                        Image(systemName: "mappin.circle.fill")
-                                            .foregroundColor(themeManager.currentTheme.error)
-                                            .font(.system(size: 22))
-                                        VStack(alignment: .leading, spacing: 3) {
-                                            Text(result.name ?? "名称なし")
-                                                .font(.subheadline.weight(.semibold))
-                                                .foregroundColor(textColor)
-                                            if let address = result.placemark.title {
-                                                Text(address)
-                                                    .font(.caption)
-                                                    .foregroundColor(themeManager.currentTheme.secondaryText)
-                                                    .lineLimit(1)
-                                            }
-                                        }
-                                        Spacer()
-                                        Image(systemName: "chevron.right")
-                                            .font(.caption2)
-                                            .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
-                                    }
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 12)
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                                Divider().padding(.leading, 56)
-                            }
-                        }
-                    }
-                    .background(Color(.systemBackground))
-                    .frame(height: min(CGFloat(searchResults.count) * 65, 300))
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-            }
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: searchResults.isEmpty)
-    }
-
-    private func performSearch() async {
-        guard !searchText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        isSearching = true
-        let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = searchText
-        request.resultTypes = [.pointOfInterest, .address]
-        request.region = mapVisibleRegion ?? searchStartRegion
-        do {
-            let response = try await MKLocalSearch(request: request).start()
-            searchResults = response.mapItems
-            selectedMapResult = nil
-            if let first = searchResults.first {
-                withAnimation {
-                    mapPosition = .region(MKCoordinateRegion(
-                        center: first.placemark.coordinate,
-                        span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
-                    ))
-                }
-            }
-        } catch {}
-        isSearching = false
-    }
-
-    private func locationResultDetail(_ result: MKMapItem) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(themeManager.currentTheme.error.opacity(0.12))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "mappin.circle.fill")
-                        .foregroundColor(themeManager.currentTheme.error)
-                        .font(.system(size: 22))
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(result.name ?? "名称なし")
-                        .font(.headline)
-                        .foregroundColor(textColor)
-                    if let address = result.placemark.title {
-                        Text(address)
-                            .font(.caption)
-                            .foregroundColor(themeManager.currentTheme.secondaryText)
-                            .lineLimit(2)
-                    }
-                }
-                Spacer()
-                Button(action: { selectedMapResult = nil; searchResults = [] }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(themeManager.currentTheme.secondaryText)
-                        .font(.title3)
-                }
-            }
-
-            HStack(spacing: 10) {
-                Button { navigationTarget = MapDestination(result) } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.triangle.turn.up.right.diamond")
-                        Text("経路")
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 13)
-                    .background(travelColor.opacity(0.1))
-                    .foregroundColor(travelColor)
-                    .cornerRadius(12)
-                }
-                .mapNavigation($navigationTarget)
-                Button {
-                    selectedLocation = result
-                    selectedCoordinate = result.placemark.coordinate
-                    selectedAddress = result.placemark.title
-                    location = result.name ?? ""
-                    if let name = result.name, let coord = result.placemark.location?.coordinate {
-                        locationHistory.add(
-                            name: name,
-                            address: result.placemark.title,
-                            latitude: coord.latitude,
-                            longitude: coord.longitude
-                        )
-                    }
-                    selectedMapResult = nil
-                    searchResults = []
-                    searchText = ""
-                    showLocationPicker = false
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "checkmark.circle.fill")
-                        Text("この場所を選択")
-                    }
-                    .font(.subheadline.weight(.bold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 13)
-                    .background(travelColor)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
-                }
-            }
-        }
-        .padding(18)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .shadow(color: .black.opacity(0.15), radius: 14, x: 0, y: -4)
-        .padding(.horizontal, 14)
-        .padding(.bottom, 14)
+    /// 地図で選んだ場所を、この予定の場所にする
+    private func applyPickedPlace(_ picked: PickedPlace) {
+        let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: picked.coordinate))
+        mapItem.name = picked.name
+        selectedLocation = mapItem
+        selectedCoordinate = picked.coordinate
+        selectedAddress = picked.address
     }
 }

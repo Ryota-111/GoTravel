@@ -138,6 +138,18 @@ struct Reservation: Identifiable, Codable, Equatable {
     /// 外貨で入れたときの元の金額とレート。`cost` はこれを円に直したもの（`ForeignCost.swift`）
     var foreignCost: ForeignCost?
 
+    // MARK: - 場所（地図で選んだもの）
+    //
+    // 予約の時点で地図の場所を入れておけば、「行程にも追加する」で作った予定にそのまま入り、
+    // 日程タブで場所を入れ直さずに済む（ご要望から）。どれも JSON の中なのでスキーマ変更は要らない
+
+    /// 宿・レストラン・チケットなどの場所。飛行機・新幹線では使わない
+    var location: ReservationLocation?
+    /// 飛行機・新幹線の出発地の位置。名前は `departurePlace`
+    var departureLocation: ReservationLocation?
+    /// 飛行機・新幹線の到着地の位置。名前は `arrivalPlace`
+    var arrivalLocation: ReservationLocation?
+
     /// 経路を表示するかどうか。
     /// 片方しか入っていなくても出す。入れた情報が画面に出ないほうが困る
     var hasRoute: Bool {
@@ -214,6 +226,14 @@ extension Reservation.Kind {
 
 }
 
+/// 予約の場所。地図で選んだときは座標を持つ
+struct ReservationLocation: Codable, Equatable {
+    var name: String
+    var address: String?
+    var latitude: Double?
+    var longitude: Double?
+}
+
 // MARK: - 行程へ持っていく
 
 extension Reservation {
@@ -227,24 +247,41 @@ extension Reservation {
     /// 1件にすると、行程の上では「羽田10:00」としか出ず、
     /// 何時に着くのかが分からなくなる。
     ///
+    /// **宿やレンタカーで終わりの日時もあるときは、始まりと終わりの2件に分ける。**
+    /// 2泊以上の宿で、チェックアウトの日の行程に何も出ないと、その日の動きが組めない
+    /// （ご報告から）。泊まっている間の毎日に出したいときは「日程の一番上に表示」を使う。
+    ///
     /// 時刻が決まっていない予約（宿の予約番号だけ控えた場合など）は空を返す。
     /// 置く場所が決められないため
     func itineraryItems() -> [ScheduleItem] {
         guard let date else { return [] }
 
-        let note = confirmationNumber
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .flatMap { $0.isEmpty ? nil : "予約番号 \($0)" }
+        let note = itineraryNotes
 
         guard kind.usesRoute else {
-            return [ScheduleItem(time: date,
-                                 title: title,
-                                 location: nil,
-                                 notes: note,
-                                 cost: cost,
-                                 reservationId: id,
-                                 timeZoneIdentifier: timeZoneIdentifier,
-                                 foreignCost: foreignCost)]
+            var items = [ScheduleItem(time: date,
+                                      title: title,
+                                      location: location?.name,
+                                      notes: note,
+                                      latitude: location?.latitude,
+                                      longitude: location?.longitude,
+                                      cost: cost,
+                                      reservationId: id,
+                                      timeZoneIdentifier: timeZoneIdentifier,
+                                      foreignCost: foreignCost,
+                                      reservationPart: ReservationPart.main.rawValue)]
+            // 終わり（チェックアウト・返却）。費用は始まりにだけ入れる（2重に数えない）
+            if kind.usesPeriod, let endDate, endDate > date {
+                items.append(ScheduleItem(time: endDate,
+                                          title: "\(title) \(kind.endLabel)",
+                                          location: location?.name,
+                                          latitude: location?.latitude,
+                                          longitude: location?.longitude,
+                                          reservationId: id,
+                                          timeZoneIdentifier: timeZoneIdentifier,
+                                          reservationPart: ReservationPart.end.rawValue))
+            }
+            return items
         }
 
         // 経路のある予約は、便名を見出しにしたほうが行程で読みやすい。
@@ -258,10 +295,13 @@ extension Reservation {
                          title: "\(name) 出発",
                          location: departurePlace,
                          notes: note,
+                         latitude: departureLocation?.latitude,
+                         longitude: departureLocation?.longitude,
                          cost: cost,
                          reservationId: id,
                          timeZoneIdentifier: timeZoneIdentifier,
-                         foreignCost: foreignCost)
+                         foreignCost: foreignCost,
+                         reservationPart: ReservationPart.departure.rawValue)
         ]
 
         if let arrivalDate {
@@ -270,10 +310,36 @@ extension Reservation {
                              title: "\(name) 到着",
                              location: arrivalPlace,
                              notes: nil,
+                             latitude: arrivalLocation?.latitude,
+                             longitude: arrivalLocation?.longitude,
                              reservationId: id,
-                             timeZoneIdentifier: arrivalTimeZoneIdentifier)
+                             timeZoneIdentifier: arrivalTimeZoneIdentifier,
+                             reservationPart: ReservationPart.arrival.rawValue)
             )
         }
         return items
+    }
+}
+
+extension Reservation {
+    /// 行程の予定に入れるメモ。予約番号の行の下に、予約のメモを続ける
+    var itineraryNotes: String? {
+        let number = confirmationNumber?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let memo = note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let lines = [number.isEmpty ? nil : Self.confirmationLine(number), memo.isEmpty ? nil : memo].compactMap { $0 }
+        return lines.isEmpty ? nil : lines.joined(separator: "\n")
+    }
+
+    static func confirmationLine(_ number: String) -> String { "予約番号 \(number)" }
+
+    /// 行程の予定のメモから、予約のメモの部分を取り出す（先頭の予約番号の行は除く）
+    func memo(fromItineraryNotes notes: String?) -> String? {
+        var lines = (notes ?? "").components(separatedBy: "\n")
+        if let number = confirmationNumber?.trimmingCharacters(in: .whitespacesAndNewlines), !number.isEmpty,
+           lines.first?.trimmingCharacters(in: .whitespaces) == Self.confirmationLine(number) {
+            lines.removeFirst()
+        }
+        let memo = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        return memo.isEmpty ? nil : memo
     }
 }
