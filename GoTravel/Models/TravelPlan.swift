@@ -135,6 +135,25 @@ struct PackingItem: Identifiable, Codable {
     }
 }
 
+extension TravelPlan {
+    /// リストの項目を、渡した順に並べ直す（持ち物・お土産・やりたいことのどれか1つ）。
+    ///
+    /// 3つのリストは1つの配列に混ざって入っているので、渡した項目が入っていた位置だけを
+    /// 新しい順で埋め直す。ほかのリストの項目や、ほかの人だけに見える項目の位置は動かさない
+    mutating func reorderPackingItems(orderedIds: [String]) {
+        let wanted = Set(orderedIds)
+        let byId = Dictionary(packingItems.filter { wanted.contains($0.id) }.map { ($0.id, $0) },
+                              uniquingKeysWith: { first, _ in first })
+        let ordered = orderedIds.compactMap { byId[$0] }
+        guard ordered.count == byId.count else { return }
+
+        var next = ordered.makeIterator()
+        packingItems = packingItems.map { item in
+            wanted.contains(item.id) ? (next.next() ?? item) : item
+        }
+    }
+}
+
 struct TravelPlan: Identifiable, Codable {
     var id: String?
     var title: String

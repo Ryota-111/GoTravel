@@ -21,6 +21,7 @@ struct PackingListView: View {
     @State private var selectedPresets: Set<String> = []
     @State private var showPresetEditor = false
     @State private var showImport = false
+    @State private var showReorder = false
     @FocusState private var isInputFocused: Bool
 
     private var currentPlan: TravelPlan? {
@@ -92,6 +93,9 @@ struct PackingListView: View {
             if items.isEmpty {
                 emptyStateView
             } else {
+                if items.count >= 2 {
+                    reorderButton
+                }
                 itemsList
 
                 // 候補は空のときだけ出していたが、それだと
@@ -101,6 +105,12 @@ struct PackingListView: View {
         }
         .sheet(isPresented: $showPresetEditor) {
             PackingPresetEditorView(kind: kind)
+        }
+        .sheet(isPresented: $showReorder) {
+            // 見えている順（済んだものは下）から並べ替え始める
+            PackingReorderView(kind: kind, items: sortedItems) { orderedIds in
+                saveOrder(orderedIds)
+            }
         }
         .sheet(isPresented: $showImport) {
             PackingImportView(kind: kind,
@@ -216,6 +226,28 @@ struct PackingListView: View {
 
     private var trimmedNewItemName: String {
         newItemName.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
+    // MARK: - 並び替え
+
+    private var reorderButton: some View {
+        HStack {
+            Spacer()
+            Button {
+                showReorder = true
+            } label: {
+                Label("並び替え", systemImage: "arrow.up.arrow.down")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(accent)
+            }
+        }
+    }
+
+    private func saveOrder(_ orderedIds: [String]) {
+        guard let userId = authVM.userId,
+              var updatedPlan = currentPlan ?? Optional(plan) else { return }
+        updatedPlan.reorderPackingItems(orderedIds: orderedIds)
+        viewModel.update(updatedPlan, userId: userId)
     }
 
     // MARK: - 一覧
