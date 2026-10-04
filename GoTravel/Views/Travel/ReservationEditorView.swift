@@ -817,7 +817,7 @@ struct ReservationEditorView: View {
         VStack(alignment: .leading, spacing: 8) {
             Toggle(isOn: $hasDate) {
                 // 宿泊ならチェックイン、レンタカーなら受け取り。期間の始まりになる
-                Text(kind == .hotel || kind == .rentalCar ? "\(kind.startLabel)を設定する" : "日時を設定する")
+                Text(kind == .hotel || kind == .rentalCar || kind == .parking ? "\(kind.startLabel)を設定する" : "日時を設定する")
                     .font(.subheadline)
                     .foregroundColor(textColor)
             }

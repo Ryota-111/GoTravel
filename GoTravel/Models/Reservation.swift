@@ -11,11 +11,21 @@ struct Reservation: Identifiable, Codable, Equatable {
         case train
         case hotel
         case rentalCar
+        /// 駐車場（2.9）。**保存では「その他」として書き、`kindDetail` に "parking" と添える。**
+        /// 古いバージョンは知らない種類を読めず、予約の一覧をまるごと失うため（`Reservation.CodingKeys`）
+        case parking
         case restaurant
         case ticket
         case other
 
         var id: String { rawValue }
+
+        /// 知らない種類（新しいバージョンで足されたもの）は「その他」として読む。
+        /// 読めずに失敗すると、予約の一覧がまるごと空になる
+        init(from decoder: Decoder) throws {
+            let raw = try decoder.singleValueContainer().decode(String.self)
+            self = Kind(rawValue: raw) ?? .other
+        }
 
         var label: String {
             switch self {
@@ -23,6 +33,7 @@ struct Reservation: Identifiable, Codable, Equatable {
             case .train: return "新幹線・電車"
             case .hotel: return "宿泊"
             case .rentalCar: return "レンタカー"
+            case .parking: return "駐車場"
             case .restaurant: return "レストラン"
             case .ticket: return "チケット"
             case .other: return "その他"
@@ -35,6 +46,7 @@ struct Reservation: Identifiable, Codable, Equatable {
             case .train: return "tram.fill"
             case .hotel: return "bed.double.fill"
             case .rentalCar: return "car.fill"
+            case .parking: return "parkingsign.circle.fill"
             case .restaurant: return "fork.knife"
             case .ticket: return "ticket.fill"
             case .other: return "checkmark.seal.fill"
@@ -47,6 +59,7 @@ struct Reservation: Identifiable, Codable, Equatable {
             case .train: return "例：のぞみ21号 東京→新大阪"
             case .hotel: return "例：〇〇ホテル"
             case .rentalCar: return "例：〇〇レンタカー 那覇空港店"
+            case .parking: return "例：〇〇駐車場"
             case .restaurant: return "例：〇〇亭 ディナー"
             case .ticket: return "例：〇〇水族館 入場チケット"
             case .other: return "例：予約の名前"
@@ -63,6 +76,7 @@ struct Reservation: Identifiable, Codable, Equatable {
         if has(["空港", "飛行機", "フライト", "搭乗", "便", "ana", "jal", "peach", "スカイマーク"]) { return .flight }
         if has(["新幹線", "電車", "列車", "のぞみ", "ひかり", "こだま", "はやぶさ", "特急", "駅"]) { return .train }
         if has(["ホテル", "宿", "旅館", "チェックイン", "泊", "ゲストハウス", "リゾート", "イン"]) { return .hotel }
+        if has(["駐車場", "パーキング", "駐車"]) { return .parking }
         if has(["レンタカー", "レンタル", "車の受け取り", "car"]) { return .rentalCar }
         if has(["レストラン", "ランチ", "ディナー", "昼食", "夕食", "朝食", "食事", "居酒屋", "カフェ", "寿司", "焼肉", "ラーメン"]) { return .restaurant }
         if has(["チケット", "入場", "水族館", "美術館", "博物館", "動物園", "遊園地", "テーマパーク", "ツアー", "体験"]) { return .ticket }
@@ -70,7 +84,22 @@ struct Reservation: Identifiable, Codable, Equatable {
     }
 
     var id: String
-    var kind: Kind
+
+    /// 種類。駐車場だけは保存の形が違う（下の `storedKind` と `kindDetail`）
+    var kind: Kind {
+        get { kindDetail == Self.parkingDetail ? .parking : storedKind }
+        set {
+            storedKind = newValue == .parking ? .other : newValue
+            kindDetail = newValue == .parking ? Self.parkingDetail : nil
+        }
+    }
+
+    /// 保存する種類。駐車場は "other" として書く（古いバージョンが読めるように）
+    private var storedKind: Kind
+    /// 種類の詳しい印。駐車場なら "parking"。古いバージョンは読み飛ばす
+    private var kindDetail: String?
+    private static let parkingDetail = "parking"
+
     var title: String
     /// 搭乗・チェックインなどの日時。決まっていない予約もあるので任意。
     /// 飛行機では出発時刻として扱う
@@ -150,6 +179,18 @@ struct Reservation: Identifiable, Codable, Equatable {
     /// 飛行機・新幹線の到着地の位置。名前は `arrivalPlace`
     var arrivalLocation: ReservationLocation?
 
+    /// 保存のときの項目名。**項目を足したら、ここにも必ず足すこと**（足さないと保存されない）。
+    /// `storedKind` は "kind" として書く（駐車場以外は今までと同じ形）
+    enum CodingKeys: String, CodingKey {
+        case id
+        case storedKind = "kind"
+        case kindDetail
+        case title, date, confirmationNumber, note, linkURL
+        case transportNumber, departurePlace, arrivalPlace, arrivalDate, seat, terminal
+        case timeZoneIdentifier, arrivalTimeZoneIdentifier, endDate, pinsDuringPeriod
+        case cost, foreignCost, location, departureLocation, arrivalLocation
+    }
+
     /// 経路を表示するかどうか。
     /// 片方しか入っていなくても出す。入れた情報が画面に出ないほうが困る
     var hasRoute: Bool {
@@ -176,7 +217,8 @@ struct Reservation: Identifiable, Codable, Equatable {
          cost: Double? = nil,
          foreignCost: ForeignCost? = nil) {
         self.id = id
-        self.kind = kind
+        self.storedKind = kind == .parking ? .other : kind
+        self.kindDetail = kind == .parking ? Self.parkingDetail : nil
         self.title = title
         self.date = date
         self.confirmationNumber = confirmationNumber
@@ -211,6 +253,7 @@ extension Reservation.Kind {
         switch self {
         case .hotel: return "チェックイン"
         case .rentalCar: return "受け取り"
+        case .parking: return "入庫"
         default: return "開始"
         }
     }
@@ -220,6 +263,7 @@ extension Reservation.Kind {
         switch self {
         case .hotel: return "チェックアウト"
         case .rentalCar: return "返却"
+        case .parking: return "出庫"
         default: return "終了"
         }
     }
