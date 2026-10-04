@@ -432,8 +432,7 @@ struct ShareTravelPlanView: View {
     }
 
     private static func publishErrorText(for error: Error) -> String {
-        if let ckError = error as? CKError,
-           ckError.code == .notAuthenticated {
+        if ICloudGuidanceText.isAccountProblem(error) {
             return ICloudGuidanceText.sharingUnavailable
         }
         return "通信環境をご確認のうえ、もう一度お試しください。"

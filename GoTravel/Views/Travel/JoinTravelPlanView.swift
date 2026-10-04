@@ -244,7 +244,7 @@ struct JoinTravelPlanView: View {
                     default:
                         errorMessage = apiError.localizedDescription
                     }
-                } else if let ckError = error as? CKError, ckError.code == .notAuthenticated {
+                } else if ICloudGuidanceText.isAccountProblem(error) {
                     // 汎用文言では原因に辿り着けないため、確認手順ごと案内する
                     errorMessage = ICloudGuidanceText.sharingUnavailable
                 } else {

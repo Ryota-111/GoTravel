@@ -1,4 +1,5 @@
 import Foundation
+import CloudKit
 
 /// iCloudが使えないときにユーザーへ出す案内文。
 ///
@@ -8,12 +9,28 @@ import Foundation
 /// 発行側・参加側で文言がずれないよう1か所にまとめる。
 enum ICloudGuidanceText {
 
+    /// iCloud のアカウントが原因で CloudKit が使えないときのエラーか。
+    ///
+    /// サインインしていない（`notAuthenticated`）だけでなく、アカウントの確認待ちなどで
+    /// 「一時的に使えない」ときもある。そのときパブリックDBは読めるのに書き込みだけが
+    /// `permissionFailure`（WRITE operation not permitted）で断られ、共有コードは見つかるのに
+    /// 参加できない。通信環境の案内では解決しないので、iCloud の確認手順を出す
+    static func isAccountProblem(_ error: Error) -> Bool {
+        guard let ckError = error as? CKError else { return false }
+        switch ckError.code {
+        case .notAuthenticated, .permissionFailure, .accountTemporarilyUnavailable:
+            return true
+        default:
+            return false
+        }
+    }
+
     /// 共有機能（コード発行・参加）用
     static let sharingUnavailable = """
     iCloudが利用できない状態です。以下の順にご確認ください。
 
     1. 設定アプリを開き、一番上のお名前をタップ
-    2. 規約への同意などの確認が保留になっていれば同意する
+    2. パスワードの入力や規約への同意などの確認が出ていれば済ませる
     3. 「iCloud」→「iCloudに保存済み」→「すべてを見る」で Travory をオンにする
 
     解決しない場合は、お手数ですがプロフィールの「ヘルプ・サポート」からお問い合わせください。
