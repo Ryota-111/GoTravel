@@ -54,9 +54,15 @@ class ThemeManager: ObservableObject {
     /// 無料テーマは常に使える。追加テーマは購入済みか、季節テーマがその季節にあるとき。
     func canUse(_ type: ThemePreset.ThemeType, now: Date = Date()) -> Bool {
         if !type.isPremium { return true }
+        #if DEBUG
+        // 開発者だけ（Xcode から入れた開発用のビルド）。テーマの見た目を確かめるため、全部使えるようにする。
+        // App Store・TestFlight のビルド（Release）には入らない。Pro の他の機能（取り込み・写真の保管）は変えない
+        return true
+        #else
         if isPremiumUnlocked { return true }
         if let season = type.season, season.contains(now) { return true }
         return false
+        #endif
     }
 
     /// 未購入でも今だけ使える季節テーマか（一覧に「今だけ」と出すため）
