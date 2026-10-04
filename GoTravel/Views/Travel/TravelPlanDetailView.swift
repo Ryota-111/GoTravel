@@ -66,6 +66,8 @@ struct TravelPlanDetailView: View {
     @State private var selectedTab: DetailTab = .schedule
     /// 「リスト」タブの中で見ているもの（持ち物／お土産／やりたいこと）
     @State private var selectedListKind: PackingItem.Kind = .packing
+    /// リストのタブで、メモ帳を開いているか（持ち物などのリストの代わりに出す）
+    @State private var showsTripMemo = false
     /// 地図タブで、地図と行程表のどちらから選んでも共有する項目
     @State private var focusedItemID: String?
     /// 1回のドラッグで何度もタブが飛ばないようにする目印
@@ -1644,20 +1646,43 @@ struct TravelPlanDetailView: View {
         }
     }
 
+    /// リストの種類の切り替え。nil はメモ帳
+    private var listSelection: Binding<PackingItem.Kind?> {
+        Binding(
+            get: { showsTripMemo ? nil : selectedListKind },
+            set: { kind in
+                if let kind {
+                    selectedListKind = kind
+                    showsTripMemo = false
+                } else {
+                    showsTripMemo = true
+                }
+            }
+        )
+    }
+
     private func packingTab(plan: TravelPlan) -> some View {
         VStack(spacing: 14) {
             // 持ち物・お土産・やりたいことは、どれも「名前とチェック」で形が同じ。
             // 上のタブを3つ増やすと窮屈になるので、ここで切り替える
-            Picker("リストの種類", selection: $selectedListKind) {
+            // メモ帳もここに並べる（「リストに加えて自由な文章を残したい」というご要望から）
+            Picker("リストの種類", selection: listSelection) {
                 ForEach(PackingItem.Kind.allCases) { kind in
-                    Text(kind.title).tag(kind)
+                    Text(kind.title).tag(Optional(kind))
                 }
+                Text("メモ").tag(PackingItem.Kind?.none)
             }
             .pickerStyle(.segmented)
 
-            PackingListView(plan: plan, kind: selectedListKind)
-                .environmentObject(viewModel)
-                .environmentObject(authVM)
+            if showsTripMemo {
+                TripMemoView(plan: plan)
+                    .environmentObject(viewModel)
+                    .environmentObject(authVM)
+            } else {
+                PackingListView(plan: plan, kind: selectedListKind)
+                    .environmentObject(viewModel)
+                    .environmentObject(authVM)
+            }
         }
         .padding(16)
         .padding(.bottom, 30)

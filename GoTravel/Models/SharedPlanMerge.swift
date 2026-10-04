@@ -161,7 +161,18 @@ enum SharedPlanMerge {
 
         merged.packingItems = mergePackingItems(local: local, remote: remote, base: base)
 
+        // メモ帳：片方しか書き換えていなければ、書き換えたほうを採る。
+        // 両方が書き換えていたら新しいほうを採る（1枚の文章なので混ぜられない）
+        merged.memo = mergeValue(local: local.memo, remote: remote.memo, base: base.memo, newer: newer.memo)
+
         return merged
+    }
+
+    /// 1つしかない値の突き合わせ。前回そろえたときから変えた側を採る
+    private static func mergeValue<Value: Equatable>(local: Value, remote: Value, base: Value, newer: Value) -> Value {
+        if local == base { return remote }
+        if remote == base { return local }
+        return newer
     }
 
     // MARK: - 予定（日ごとに入れ子になっている）

@@ -710,6 +710,12 @@ final class CloudKitService {
         record["lastEditedBy"] = plan.lastEditedBy
         // 割り勘の人数は同行者に合わせて手動設定されるためメンバー間で共有する
         record["customSplitCount"] = plan.customSplitCount
+        // 旅行のメモ帳（2.9）。**Production にこの項目を反映してからリリースすること。**
+        // 反映していないと共有レコードの保存そのものが失敗する。被害を小さくするため、
+        // メモを書いた計画（か、前に書いてあった計画）でだけ値を入れる
+        if plan.memo != nil || record["memoText"] != nil {
+            record["memoText"] = plan.memo
+        }
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -1043,7 +1049,8 @@ final class CloudKitService {
             lastEditedBy: lastEditedBy,
             updatedAt: updatedAt,
             customSplitCount: (record["customSplitCount"] as? Int64).map { Int($0) }
-                ?? record["customSplitCount"] as? Int
+                ?? record["customSplitCount"] as? Int,
+            memo: record["memoText"] as? String
         )
     }
 }

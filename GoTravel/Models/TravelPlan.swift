@@ -181,6 +181,10 @@ struct TravelPlan: Identifiable, Codable {
     /// 費用を何人で割るか。nil なら人数から自動で決める（`splitCount(defaultingTo:)`）
     var customSplitCount: Int?
 
+    /// 旅行のメモ帳（自由な文章1枚）。共有した旅行では全員が見て書ける。
+    /// まとまった文章を残したい、というご要望から（`docs/設計_旅行のメモ帳.md`）
+    var memo: String?
+
     /// 共有メンバーの表示名（ユーザーID → 名前）。**パブリックDBから読んだときだけ入る。**
     ///
     /// 保存（Core Data・JSON）には載せない。名前は共有レコードが正で、端末には
@@ -191,6 +195,7 @@ struct TravelPlan: Identifiable, Codable {
         case id, title, startDate, endDate, destination, latitude, longitude, localImageFileName, cardColorHex, createdAt, userId, daySchedules, packingItems
         case reservations
         case isShared, shareCode, sharedWith, ownerId, lastEditedBy, updatedAt, customSplitCount
+        case memo
     }
 
     /// 実際に割り勘に使う人数。
@@ -231,7 +236,8 @@ struct TravelPlan: Identifiable, Codable {
          ownerId: String? = nil,
          lastEditedBy: String? = nil,
          updatedAt: Date = Date(),
-         customSplitCount: Int? = nil) {
+         customSplitCount: Int? = nil,
+         memo: String? = nil) {
         self.id = id
         self.title = title
         self.startDate = startDate
@@ -253,6 +259,7 @@ struct TravelPlan: Identifiable, Codable {
         self.lastEditedBy = lastEditedBy
         self.updatedAt = updatedAt
         self.customSplitCount = customSplitCount
+        self.memo = memo
     }
 
     init(from decoder: Decoder) throws {
@@ -277,6 +284,7 @@ struct TravelPlan: Identifiable, Codable {
         lastEditedBy = try container.decodeIfPresent(String.self, forKey: .lastEditedBy)
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
         customSplitCount = try container.decodeIfPresent(Int.self, forKey: .customSplitCount)
+        memo = try container.decodeIfPresent(String.self, forKey: .memo)
 
         if let hex = try container.decodeIfPresent(String.self, forKey: .cardColorHex) {
             cardColor = Color(hex: hex)
@@ -308,6 +316,7 @@ struct TravelPlan: Identifiable, Codable {
         try container.encodeIfPresent(lastEditedBy, forKey: .lastEditedBy)
         try container.encode(updatedAt, forKey: .updatedAt)
         try container.encodeIfPresent(customSplitCount, forKey: .customSplitCount)
+        try container.encodeIfPresent(memo, forKey: .memo)
     }
 
     // Helper methods
@@ -360,6 +369,7 @@ struct TravelPlan: Identifiable, Codable {
             && localImageFileName == other.localImageFileName
             && cardColorHex == other.cardColorHex
             && customSplitCount == other.customSplitCount
+            && memo == other.memo
             && isShared == other.isShared
             && shareCode == other.shareCode
             && sharedWith == other.sharedWith
