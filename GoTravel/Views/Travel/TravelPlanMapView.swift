@@ -61,6 +61,9 @@ struct TravelPlanMapView: View {
     @State private var selectedGroupID: String?
     @State private var cameraPosition: MapCameraPosition
     @State private var navigationTarget: MapDestination?
+    /// 地図に初めから出ている施設（羽田空港など）を押したもの。経路を出せる
+    @State private var featureSelection: MapFeature?
+    @State private var selectedFeatureItem: MKMapItem?
 
     /// 実際に使う絞り込み。行程表と並べているときは向こうの日に従う
     private var effectiveScope: Scope {
@@ -274,6 +277,14 @@ struct TravelPlanMapView: View {
             if !isSplitMode, let selected = selectedGroup {
                 detailPanel(selected)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if let feature = selectedFeatureItem {
+                MapFeatureInfoCard(item: feature, accent: themeManager.currentTheme.actionFill) {
+                    withAnimation {
+                        featureSelection = nil
+                        selectedFeatureItem = nil
+                    }
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .overlay(alignment: .topTrailing) {
@@ -303,7 +314,7 @@ struct TravelPlanMapView: View {
 
     // MARK: - Map Layer
     private var mapLayer: some View {
-        Map(position: $cameraPosition) {
+        Map(position: $cameraPosition, selection: $featureSelection) {
             ForEach(routeSegments) { segment in
                 // 測地線で引く。まっすぐ結ぶと、羽田 → ハワイが太平洋を渡らず
                 // アジアとヨーロッパの側を回る線になる
@@ -322,9 +333,28 @@ struct TravelPlanMapView: View {
         }
         .mapStyle(.standard(elevation: .flat))
         .ignoresSafeArea()
-        .onTapGesture {
+        // 何もない所を押したら閉じる。施設を押したことは妨げない（simultaneous にする）
+        .simultaneousGesture(TapGesture().onEnded {
             withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
                 selectedGroupID = nil
+            }
+        })
+        .onChange(of: featureSelection) { _, feature in
+            guard let feature else {
+                withAnimation { selectedFeatureItem = nil }
+                return
+            }
+            selectedGroupID = nil
+            Task {
+                let item = await MapFeatureLookup.mapItem(for: feature)
+                withAnimation { selectedFeatureItem = item }
+            }
+        }
+        // 予定のピンを選んだら、施設の案内は閉じる（2つを同時に出さない）
+        .onChange(of: selectedGroupID) { _, id in
+            if id != nil {
+                featureSelection = nil
+                selectedFeatureItem = nil
             }
         }
     }
@@ -726,7 +756,7 @@ struct TravelPlanMapView: View {
                             .background(color.opacity(0.14), in: Capsule())
                     }
 
-                    Text(item.timeText)
+                    Text(item.timeRangeText)
                         .font(.caption.weight(.semibold))
                         .foregroundColor(themeManager.currentTheme.secondaryText)
 
@@ -737,11 +767,12 @@ struct TravelPlanMapView: View {
                     }
                 }
 
+                // 日程タブと同じく、メモは全部の行を出す
                 if let notes = item.notes, !notes.isEmpty {
                     Text(notes)
                         .font(.caption)
                         .foregroundColor(themeManager.currentTheme.secondaryText)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
             }
 

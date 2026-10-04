@@ -290,7 +290,7 @@ struct ProfileView: View {
             GlassMenuCard(
                 icon: "paintpalette.fill",
                 title: "アプリ設定",
-                subtitle: "アプリカラー",
+                subtitle: "テーマ・操作",
                 gradientColors: [Color.purple, Color.indigo.opacity(0.8)]
             )
         }
@@ -1112,6 +1112,7 @@ struct HelpSupportView: View {
 
 struct AppSettingView: View {
     @ObservedObject var themeManager = ThemeManager.shared
+    @AppStorage(TravelPlanDetailView.tabSwipeKey) private var switchesTabBySwipe = true
     @Environment(\.colorScheme) var colorScheme
     @State private var animateCards = false
     /// 未購入のテーマが選ばれたとき、どれから開かれたかを覚えて購入画面を出す
@@ -1159,9 +1160,10 @@ struct AppSettingView: View {
 
                             Spacer()
 
+                            // 半透明のカードの上なので、重ねた色から決める（ダークモードで読めなかった）
                             Text(themeManager.currentTheme.type.displayName)
                                 .font(.headline)
-                                .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
+                                .foregroundColor(themeManager.currentTheme.textOnCardBackground2(for: colorScheme))
                         }
                         .padding()
                         .background(
@@ -1178,6 +1180,12 @@ struct AppSettingView: View {
                     .opacity(animateCards ? 1 : 0)
                     .offset(y: animateCards ? 0 : 20)
                     .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: animateCards)
+
+                    operationSection
+                        .padding(.horizontal)
+                        .opacity(animateCards ? 1 : 0)
+                        .offset(y: animateCards ? 0 : 20)
+                        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.15), value: animateCards)
 
                     // Theme Selection
                     VStack(alignment: .leading, spacing: 16) {
@@ -1265,6 +1273,42 @@ struct AppSettingView: View {
             endPoint: .bottomTrailing
         )
         .ignoresSafeArea()
+    }
+
+    // MARK: - 操作
+
+    /// 旅行計画の画面で、横にスライドしてタブを移るか
+    private var operationSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("操作")
+                .font(.headline)
+                .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
+
+            VStack(alignment: .leading, spacing: 6) {
+                Toggle(isOn: $switchesTabBySwipe) {
+                    Text("横にスライドしてタブを切り替える")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(themeManager.currentTheme.textOnCardBackground2(for: colorScheme))
+                }
+                .tint(themeManager.currentTheme.actionFill)
+
+                Text(switchesTabBySwipe
+                     ? "旅行計画の画面で、日程や持ち物を横にスライドすると隣のタブへ移ります。"
+                     : "タブは上のボタンで切り替えます。日程を横になぞっても、地図のタブへ移りません。")
+                    .font(.caption)
+                    .foregroundColor(themeManager.currentTheme.textOnCardBackground2(for: colorScheme).opacity(0.75))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .padding()
+            .background(
+                RoundedRectangle(cornerRadius: 16)
+                    .fill(themeManager.currentTheme.cardBackground2)
+            )
+            .overlay(
+                RoundedRectangle(cornerRadius: 16)
+                    .stroke(themeManager.currentTheme.cardBorder, lineWidth: 1)
+            )
+        }
     }
 }
 

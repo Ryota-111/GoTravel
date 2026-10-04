@@ -116,6 +116,28 @@ extension ScheduleItem {
         ScheduleClock.timeText(time, in: timeZone)
     }
 
+    /// 終わる時刻（入れたとおりの時:分）。無ければ nil
+    var endTimeText: String? {
+        endTime.map { ScheduleClock.timeText($0, in: timeZone) }
+    }
+
+    /// 「10:00〜11:30」。終わりが無ければ「10:00」
+    var timeRangeText: String {
+        endTimeText.map { "\(timeText)〜\($0)" } ?? timeText
+    }
+
+    /// 終わりの時:分を、始まりの日に合わせた日時にする。
+    /// 始まりより前（23:00〜1:00 のような）なら翌日の時刻とみなす
+    static func endTime(hourAndMinuteOf end: Date, after start: Date, in zone: TimeZone) -> Date {
+        let clock = ScheduleClock.calendar(in: zone)
+        let hm = clock.dateComponents([.hour, .minute], from: end)
+        var day = clock.dateComponents([.year, .month, .day], from: start)
+        day.hour = hm.hour
+        day.minute = hm.minute
+        let sameDay = clock.date(from: day) ?? end
+        return sameDay > start ? sameDay : (clock.date(byAdding: .day, value: 1, to: sameDay) ?? sameDay)
+    }
+
     /// この予定の時計で、0:00 から何分か
     var minutesOfDay: Int {
         ScheduleClock.minutesOfDay(time, in: timeZone)

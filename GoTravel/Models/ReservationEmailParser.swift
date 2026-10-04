@@ -63,6 +63,10 @@ enum ReservationEmailParser {
             drafts = [periodDraft(kind: .hotel, in: text, events: events,
                                   startWords: ["チェックイン", "宿泊日", "到着日", "check-in", "check in"],
                                   endWords: ["チェックアウト", "出発日", "check-out", "check out"])]
+        case .parking:
+            drafts = [periodDraft(kind: .parking, in: text, events: events,
+                                  startWords: ["入庫", "利用開始", "駐車開始", "利用日時"],
+                                  endWords: ["出庫", "利用終了", "駐車終了"])]
         case .rentalCar:
             drafts = [periodDraft(kind: .rentalCar, in: text, events: events,
                                   startWords: ["貸出", "貸渡", "出発", "受取", "受け取り", "pick-up", "pickup"],
@@ -193,6 +197,8 @@ enum ReservationEmailParser {
             (.train, trainCount * 3 + score(["新幹線", "号車", "乗車", "列車", "えきねっと", "スマートex", "ex予約"])),
             (.hotel, score(["チェックイン", "チェックアウト", "宿泊", "ご宿泊", "泊", "check-in", "hotel"])),
             (.rentalCar, score(["レンタカー", "貸出", "貸渡", "返却", "車種", "rent a car", "rental car"])),
+            // 「駐車場」だけでは決めない。宿やレストランの案内にも駐車場のことが書いてあるため
+            (.parking, score(["入庫", "出庫", "駐車予約", "駐車場の予約", "駐車場予約", "akippa", "特p", "軒先パーキング", "タイムズのb"]) * 2),
             // 「来店」だけでは決めない。体験や来店予約、店頭での受け取りでも使う言葉のため
             (.restaurant, score(["レストラン", "ご来店日時", "ディナー", "ランチ", "お席", "コース料理", "restaurant"])),
             // 来店予約・入場予約・体験・施設の予約はチケットとして扱う
@@ -741,6 +747,8 @@ enum ReservationEmailParser {
             labels = ["宿泊施設名", "宿泊施設", "施設名", "ホテル名", "宿名", "宿泊先", "施設", "ホテル", "property", "hotel name"]
         case .rentalCar:
             labels = ["貸出店舗", "貸渡店舗", "出発店舗", "出発場所名", "店舗名", "営業所", "pick-up location"]
+        case .parking:
+            labels = ["駐車場名", "駐車場", "利用駐車場", "パーキング名", "施設名"]
         default:
             labels = ["レストラン名", "店舗名", "店舗", "店名", "施設名", "会場", "イベント名", "公演名"]
         }

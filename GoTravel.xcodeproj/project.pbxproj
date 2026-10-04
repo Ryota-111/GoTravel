@@ -10,6 +10,7 @@
 		6CE7BFAE3018E05700D30B9F /* WidgetKit.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6CE7BFAD3018E05700D30B9F /* WidgetKit.framework */; };
 		6CE7BFB03018E05700D30B9F /* SwiftUI.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 6CE7BFAF3018E05700D30B9F /* SwiftUI.framework */; };
 		6CE7BFBD3018E05900D30B9F /* GoTravelWidgetExtension.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6CE7BFAB3018E05700D30B9F /* GoTravelWidgetExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		6CE7DAEC306FF6C900D30B9F /* TravoryShare.appex in Embed Foundation Extensions */ = {isa = PBXBuildFile; fileRef = 6CE7DAE2306FF6C800D30B9F /* TravoryShare.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -34,6 +35,13 @@
 			remoteGlobalIDString = 6CE7BFAA3018E05700D30B9F;
 			remoteInfo = GoTravelWidgetExtension;
 		};
+		6CE7DAEA306FF6C900D30B9F /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 6C713E382E80F8240072D26B /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 6CE7DAE1306FF6C800D30B9F;
+			remoteInfo = TravoryShare;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -43,6 +51,7 @@
 			dstPath = "";
 			dstSubfolderSpec = 13;
 			files = (
+				6CE7DAEC306FF6C900D30B9F /* TravoryShare.appex in Embed Foundation Extensions */,
 				6CE7BFBD3018E05900D30B9F /* GoTravelWidgetExtension.appex in Embed Foundation Extensions */,
 			);
 			name = "Embed Foundation Extensions";
@@ -58,6 +67,7 @@
 		6CE7BFAD3018E05700D30B9F /* WidgetKit.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WidgetKit.framework; path = System/Library/Frameworks/WidgetKit.framework; sourceTree = SDKROOT; };
 		6CE7BFAF3018E05700D30B9F /* SwiftUI.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = SwiftUI.framework; path = System/Library/Frameworks/SwiftUI.framework; sourceTree = SDKROOT; };
 		6CE7BFC33018E07300D30B9F /* GoTravelWidgetExtension.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = GoTravelWidgetExtension.entitlements; sourceTree = "<group>"; };
+		6CE7DAE2306FF6C800D30B9F /* TravoryShare.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = TravoryShare.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedBuildFileExceptionSet section */
@@ -81,6 +91,13 @@
 				Widget/WidgetSnapshot.swift,
 			);
 			target = 6CE7BFAA3018E05700D30B9F /* GoTravelWidgetExtension */;
+		};
+		6CE7DAF0306FF6C900D30B9F /* Exceptions for "TravoryShare" folder in "TravoryShare" target */ = {
+			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
+			membershipExceptions = (
+				Info.plist,
+			);
+			target = 6CE7DAE1306FF6C800D30B9F /* TravoryShare */;
 		};
 /* End PBXFileSystemSynchronizedBuildFileExceptionSet section */
 
@@ -110,6 +127,14 @@
 				6CE7BFC13018E05900D30B9F /* Exceptions for "GoTravelWidget" folder in "GoTravelWidgetExtension" target */,
 			);
 			path = GoTravelWidget;
+			sourceTree = "<group>";
+		};
+		6CE7DAE3306FF6C800D30B9F /* TravoryShare */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			exceptions = (
+				6CE7DAF0306FF6C900D30B9F /* Exceptions for "TravoryShare" folder in "TravoryShare" target */,
+			);
+			path = TravoryShare;
 			sourceTree = "<group>";
 		};
 /* End PBXFileSystemSynchronizedRootGroup section */
@@ -145,6 +170,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		6CE7DADF306FF6C800D30B9F /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
@@ -156,6 +188,7 @@
 				6C713E502E80F8270072D26B /* GoTravelTests */,
 				6C713E5A2E80F8270072D26B /* GoTravelUITests */,
 				6CE7BFB13018E05700D30B9F /* GoTravelWidget */,
+				6CE7DAE3306FF6C800D30B9F /* TravoryShare */,
 				6CE7BFAC3018E05700D30B9F /* Frameworks */,
 				6C713E412E80F8240072D26B /* Products */,
 			);
@@ -168,6 +201,7 @@
 				6C713E4D2E80F8270072D26B /* GoTravelTests.xctest */,
 				6C713E572E80F8270072D26B /* GoTravelUITests.xctest */,
 				6CE7BFAB3018E05700D30B9F /* GoTravelWidgetExtension.appex */,
+				6CE7DAE2306FF6C800D30B9F /* TravoryShare.appex */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -197,6 +231,7 @@
 			);
 			dependencies = (
 				6CE7BFBC3018E05900D30B9F /* PBXTargetDependency */,
+				6CE7DAEB306FF6C900D30B9F /* PBXTargetDependency */,
 			);
 			fileSystemSynchronizedGroups = (
 				6C713E422E80F8240072D26B /* GoTravel */,
@@ -274,6 +309,28 @@
 			productReference = 6CE7BFAB3018E05700D30B9F /* GoTravelWidgetExtension.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
+		6CE7DAE1306FF6C800D30B9F /* TravoryShare */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 6CE7DAED306FF6C900D30B9F /* Build configuration list for PBXNativeTarget "TravoryShare" */;
+			buildPhases = (
+				6CE7DADE306FF6C800D30B9F /* Sources */,
+				6CE7DADF306FF6C800D30B9F /* Frameworks */,
+				6CE7DAE0306FF6C800D30B9F /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			fileSystemSynchronizedGroups = (
+				6CE7DAE3306FF6C800D30B9F /* TravoryShare */,
+			);
+			name = TravoryShare;
+			packageProductDependencies = (
+			);
+			productName = TravoryShare;
+			productReference = 6CE7DAE2306FF6C800D30B9F /* TravoryShare.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
 /* End PBXNativeTarget section */
 
 /* Begin PBXProject section */
@@ -298,6 +355,9 @@
 					6CE7BFAA3018E05700D30B9F = {
 						CreatedOnToolsVersion = 26.6;
 					};
+					6CE7DAE1306FF6C800D30B9F = {
+						CreatedOnToolsVersion = 26.6;
+					};
 				};
 			};
 			buildConfigurationList = 6C713E3B2E80F8240072D26B /* Build configuration list for PBXProject "GoTravel" */;
@@ -318,6 +378,7 @@
 				6C713E4C2E80F8270072D26B /* GoTravelTests */,
 				6C713E562E80F8270072D26B /* GoTravelUITests */,
 				6CE7BFAA3018E05700D30B9F /* GoTravelWidgetExtension */,
+				6CE7DAE1306FF6C800D30B9F /* TravoryShare */,
 			);
 		};
 /* End PBXProject section */
@@ -345,6 +406,13 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 		6CE7BFA93018E05700D30B9F /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		6CE7DAE0306FF6C800D30B9F /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
@@ -382,6 +450,13 @@
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
+		6CE7DADE306FF6C800D30B9F /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 /* End PBXSourcesBuildPhase section */
 
 /* Begin PBXTargetDependency section */
@@ -399,6 +474,11 @@
 			isa = PBXTargetDependency;
 			target = 6CE7BFAA3018E05700D30B9F /* GoTravelWidgetExtension */;
 			targetProxy = 6CE7BFBB3018E05900D30B9F /* PBXContainerItemProxy */;
+		};
+		6CE7DAEB306FF6C900D30B9F /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 6CE7DAE1306FF6C800D30B9F /* TravoryShare */;
+			targetProxy = 6CE7DAEA306FF6C900D30B9F /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -530,7 +610,7 @@
 				CODE_SIGN_ENTITLEMENTS = GoTravel/GoTravel.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 17;
+				CURRENT_PROJECT_VERSION = 18;
 				DEVELOPMENT_TEAM = S698QDGA49;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -549,7 +629,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.8;
+				MARKETING_VERSION = 2.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gmail.taismryotasis.Travory;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -571,7 +651,7 @@
 				CODE_SIGN_ENTITLEMENTS = GoTravel/GoTravel.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 17;
+				CURRENT_PROJECT_VERSION = 18;
 				DEVELOPMENT_TEAM = S698QDGA49;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
@@ -590,7 +670,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.8;
+				MARKETING_VERSION = 2.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gmail.taismryotasis.Travory;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -692,7 +772,7 @@
 				CODE_SIGN_ENTITLEMENTS = GoTravelWidgetExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 17;
+				CURRENT_PROJECT_VERSION = 18;
 				DEVELOPMENT_TEAM = S698QDGA49;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = GoTravelWidget/Info.plist;
@@ -704,7 +784,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.8;
+				MARKETING_VERSION = 2.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gmail.taismryotasis.Travory.GoTravelWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -725,7 +805,7 @@
 				CODE_SIGN_ENTITLEMENTS = GoTravelWidgetExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 17;
+				CURRENT_PROJECT_VERSION = 18;
 				DEVELOPMENT_TEAM = S698QDGA49;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = GoTravelWidget/Info.plist;
@@ -737,9 +817,73 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.8;
+				MARKETING_VERSION = 2.9;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gmail.taismryotasis.Travory.GoTravelWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		6CE7DAEE306FF6C900D30B9F /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TravoryShare/TravoryShare.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 18;
+				DEVELOPMENT_TEAM = S698QDGA49;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TravoryShare/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Travory;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.9;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gmail.taismryotasis.Travory.TravoryShare;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
+				SKIP_INSTALL = YES;
+				STRING_CATALOG_GENERATE_SYMBOLS = YES;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		6CE7DAEF306FF6C900D30B9F /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				CODE_SIGN_ENTITLEMENTS = TravoryShare/TravoryShare.entitlements;
+				CODE_SIGN_IDENTITY = "Apple Development";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 18;
+				DEVELOPMENT_TEAM = S698QDGA49;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = TravoryShare/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = Travory;
+				INFOPLIST_KEY_NSHumanReadableCopyright = "";
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 2.9;
+				PRODUCT_BUNDLE_IDENTIFIER = com.gmail.taismryotasis.Travory.TravoryShare;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				PROVISIONING_PROFILE_SPECIFIER = "";
 				SKIP_INSTALL = YES;
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -794,6 +938,15 @@
 			buildConfigurations = (
 				6CE7BFBF3018E05900D30B9F /* Debug */,
 				6CE7BFC03018E05900D30B9F /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		6CE7DAED306FF6C900D30B9F /* Build configuration list for PBXNativeTarget "TravoryShare" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				6CE7DAEE306FF6C900D30B9F /* Debug */,
+				6CE7DAEF306FF6C900D30B9F /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;

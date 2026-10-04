@@ -135,6 +135,25 @@ struct PackingItem: Identifiable, Codable {
     }
 }
 
+extension TravelPlan {
+    /// リストの項目を、渡した順に並べ直す（持ち物・お土産・やりたいことのどれか1つ）。
+    ///
+    /// 3つのリストは1つの配列に混ざって入っているので、渡した項目が入っていた位置だけを
+    /// 新しい順で埋め直す。ほかのリストの項目や、ほかの人だけに見える項目の位置は動かさない
+    mutating func reorderPackingItems(orderedIds: [String]) {
+        let wanted = Set(orderedIds)
+        let byId = Dictionary(packingItems.filter { wanted.contains($0.id) }.map { ($0.id, $0) },
+                              uniquingKeysWith: { first, _ in first })
+        let ordered = orderedIds.compactMap { byId[$0] }
+        guard ordered.count == byId.count else { return }
+
+        var next = ordered.makeIterator()
+        packingItems = packingItems.map { item in
+            wanted.contains(item.id) ? (next.next() ?? item) : item
+        }
+    }
+}
+
 struct TravelPlan: Identifiable, Codable {
     var id: String?
     var title: String
@@ -162,16 +181,26 @@ struct TravelPlan: Identifiable, Codable {
     /// 費用を何人で割るか。nil なら人数から自動で決める（`splitCount(defaultingTo:)`）
     var customSplitCount: Int?
 
+    /// 旅行のメモ帳（自由な文章1枚）。共有した旅行では全員が見て書ける。
+    /// まとまった文章を残したい、というご要望から（`docs/設計_旅行のメモ帳.md`）
+    var memo: String?
+
     /// 共有メンバーの表示名（ユーザーID → 名前）。**パブリックDBから読んだときだけ入る。**
     ///
     /// 保存（Core Data・JSON）には載せない。名前は共有レコードが正で、端末には
     /// `SharedMemberNameStore` が控えを持つ。各自が自分の分だけを書く
     var memberNames: [String: String] = [:]
 
+    /// 共有レコードに載っているヘッダー写真の版と、取ってきた写真のファイル。
+    /// **パブリックDBから読んだときだけ入る**（保存には載せない。`SharedCoverPhoto`）
+    var sharedCoverVersion: String? = nil
+    var sharedCoverFileURL: URL? = nil
+
     enum CodingKeys: String, CodingKey {
         case id, title, startDate, endDate, destination, latitude, longitude, localImageFileName, cardColorHex, createdAt, userId, daySchedules, packingItems
         case reservations
         case isShared, shareCode, sharedWith, ownerId, lastEditedBy, updatedAt, customSplitCount
+        case memo
     }
 
     /// 実際に割り勘に使う人数。
@@ -212,7 +241,8 @@ struct TravelPlan: Identifiable, Codable {
          ownerId: String? = nil,
          lastEditedBy: String? = nil,
          updatedAt: Date = Date(),
-         customSplitCount: Int? = nil) {
+         customSplitCount: Int? = nil,
+         memo: String? = nil) {
         self.id = id
         self.title = title
         self.startDate = startDate
@@ -234,6 +264,7 @@ struct TravelPlan: Identifiable, Codable {
         self.lastEditedBy = lastEditedBy
         self.updatedAt = updatedAt
         self.customSplitCount = customSplitCount
+        self.memo = memo
     }
 
     init(from decoder: Decoder) throws {
@@ -258,6 +289,7 @@ struct TravelPlan: Identifiable, Codable {
         lastEditedBy = try container.decodeIfPresent(String.self, forKey: .lastEditedBy)
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
         customSplitCount = try container.decodeIfPresent(Int.self, forKey: .customSplitCount)
+        memo = try container.decodeIfPresent(String.self, forKey: .memo)
 
         if let hex = try container.decodeIfPresent(String.self, forKey: .cardColorHex) {
             cardColor = Color(hex: hex)
@@ -289,6 +321,7 @@ struct TravelPlan: Identifiable, Codable {
         try container.encodeIfPresent(lastEditedBy, forKey: .lastEditedBy)
         try container.encode(updatedAt, forKey: .updatedAt)
         try container.encodeIfPresent(customSplitCount, forKey: .customSplitCount)
+        try container.encodeIfPresent(memo, forKey: .memo)
     }
 
     // Helper methods
@@ -341,6 +374,7 @@ struct TravelPlan: Identifiable, Codable {
             && localImageFileName == other.localImageFileName
             && cardColorHex == other.cardColorHex
             && customSplitCount == other.customSplitCount
+            && memo == other.memo
             && isShared == other.isShared
             && shareCode == other.shareCode
             && sharedWith == other.sharedWith
@@ -441,27 +475,6 @@ struct TravelPlan: Identifiable, Codable {
         }
     }
 
-    /// 予約の内容を行程に反映する。
-    ///
-    /// **いったん消してから入れ直す。** 予約の時刻や便名を書き換えたときに、
-    /// 古い予定が残ったまま新しいものが増えるのを防ぐ。
-    /// `isOn` が false なら消すだけ
-    mutating func syncScheduleItems(for reservation: Reservation, isOn: Bool) {
-        // 行程の側で入れた実績の金額は、予約には無いので作り直すと消えてしまう。
-        // 費用を持つ1件目に引き継ぐ
-        let actualCost = scheduleItems(forReservation: reservation.id).lazy.compactMap(\.actualCost).first
-
-        removeScheduleItems(forReservation: reservation.id)
-        guard isOn else { return }
-
-        for (index, var item) in reservation.itineraryItems().enumerated() {
-            if index == 0 { item.actualCost = actualCost }
-            if let dayNumber = dayNumber(forDate: item.time, in: item.timeZone) {
-                addScheduleItem(item, onDay: dayNumber)
-            }
-        }
-    }
-
     /// その予約から作られた予定（時刻順）
     func scheduleItems(forReservation reservationId: String) -> [ScheduleItem] {
         daySchedules
@@ -476,8 +489,18 @@ struct TravelPlan: Identifiable, Codable {
     /// 飛行機の到着の予定に金額を入れた場合も、2重に数えずに済む
     mutating func syncReservationCost(fromScheduleItemsOf reservationId: String) {
         guard let index = reservations.firstIndex(where: { $0.id == reservationId }) else { return }
-        let costs = scheduleItems(forReservation: reservationId).compactMap(\.cost)
+        let items = scheduleItems(forReservation: reservationId)
+        let costs = items.compactMap(\.cost)
         reservations[index].cost = costs.isEmpty ? nil : costs.reduce(0, +)
+
+        // 外貨で入れていれば、予約の側も同じ通貨で持つ（通貨が混ざっていたら円だけにする）
+        let foreign = items.compactMap(\.foreignCost).filter { $0.amount != nil }
+        if let first = foreign.first, foreign.allSatisfy({ $0.currencyCode == first.currencyCode }) {
+            reservations[index].foreignCost = ForeignCost(currencyCode: first.currencyCode, rate: first.rate,
+                                                          amount: foreign.compactMap(\.amount).reduce(0, +))
+        } else {
+            reservations[index].foreignCost = nil
+        }
     }
 
     /// 費用が入っていて、行程には出ていない予約。

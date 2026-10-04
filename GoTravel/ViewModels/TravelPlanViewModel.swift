@@ -175,6 +175,8 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
                 do {
                     try FileManager.saveImageDataToDocuments(data: imageData, named: fileName)
                     planToSave.localImageFileName = fileName
+                    // 共有した旅行なら、次に送るときに写真も載せる（全員がこの写真になる）
+                    SharedCoverPhoto.markChanged(planId: planId)
                 } catch {
                 }
             }
@@ -687,10 +689,55 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
         await task.value
     }
 
-    /// 相手の内容と手元を突き合わせる。戻り値は取り込んだかどうか
+    /// 相手の内容と手元を突き合わせ、共有のヘッダー写真も取り込む。戻り値は取り込んだかどうか
     @MainActor
     @discardableResult
     private func reconcile(remote: TravelPlan, userId: String) async throws -> Bool {
+        let tookRemote = try await reconcileContent(remote: remote, userId: userId)
+        await adoptSharedCover(from: remote)
+        return tookRemote
+    }
+
+    /// 共有レコードのヘッダー写真を、ルールに沿ってこの端末の写真にする（`SharedCoverPhoto`）
+    @MainActor
+    private func adoptSharedCover(from remote: TravelPlan) async {
+        guard let planId = remote.id,
+              let version = remote.sharedCoverVersion,
+              let local = travelPlans.first(where: { $0.id == planId }) else { return }
+
+        switch SharedCoverPhoto.adoption(remoteVersion: version,
+                                         adoptedVersion: SharedCoverPhoto.adoptedVersion(planId: planId),
+                                         hasLocalPhoto: SharedCoverPhoto.hasLocalPhoto(local),
+                                         changedLocally: SharedCoverPhoto.isChanged(planId: planId)) {
+        case .none:
+            return
+        case .keepOwn:
+            SharedCoverPhoto.setAdopted(version, planId: planId)
+        case .adopt:
+            guard let url = remote.sharedCoverFileURL, let data = try? Data(contentsOf: url) else { return }
+            let fileName = "travel_plan_\(UUID().uuidString).jpg"
+            do {
+                try FileManager.saveImageDataToDocuments(data: data, named: fileName)
+                var updated = local
+                let oldFileName = updated.localImageFileName
+                updated.localImageFileName = fileName
+                // 写真のファイル名は端末の中の話なので、送り返さずに手元だけ書き換える
+                try await saveSharedPlanLocally(updated)
+                if let oldFileName { try? FileManager.removeDocumentFile(named: oldFileName) }
+                // カードと詳細の写真はここから読むので、すぐ差し替える
+                planImages[planId] = UIImage(data: data)
+                SharedCoverPhoto.setAdopted(version, planId: planId)
+                CloudKitService.shareLogger.notice("ヘッダー写真を取り込み planId=\(planId, privacy: .public)")
+            } catch {
+                try? FileManager.removeDocumentFile(named: fileName)
+            }
+        }
+    }
+
+    /// 相手の内容と手元を突き合わせる。戻り値は取り込んだかどうか
+    @MainActor
+    @discardableResult
+    private func reconcileContent(remote: TravelPlan, userId: String) async throws -> Bool {
         guard let planId = remote.id else { return false }
 
         // 名前は共有レコードが正。取り込むたびに控えへ写し、自分の名前が無ければ書く

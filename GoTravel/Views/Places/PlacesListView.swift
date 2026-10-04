@@ -15,6 +15,9 @@ struct PlacesListView: View {
     @State private var showManageCategories = false
     @State private var showMap = false
     @State private var selectedPlace: VisitedPlace?
+    /// 地図に初めから出ている施設（羽田空港など）を押したもの
+    @State private var featureSelection: MapFeature?
+    @State private var selectedFeatureItem: MKMapItem?
     @State private var mapPosition: MapCameraPosition = .region(MKCoordinateRegion(
         center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
         span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
@@ -386,14 +389,28 @@ struct PlacesListView: View {
             if let place = selectedPlace {
                 placeBottomPanel(place)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if let feature = selectedFeatureItem {
+                // 地図に初めから出ている施設（羽田空港など）。経路を出したり、そのまま保存したりできる
+                MapFeatureInfoCard(item: feature, accent: themeManager.currentTheme.actionFill, onSave: {
+                    placePicker.presentSave(name: feature.name ?? "", at: feature.placemark.coordinate)
+                    clearFeatureSelection()
+                }, onClose: clearFeatureSelection)
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             } else {
                 LongPressHintLabel()
             }
         }
     }
 
+    private func clearFeatureSelection() {
+        withAnimation {
+            featureSelection = nil
+            selectedFeatureItem = nil
+        }
+    }
+
     private var placesMap: some View {
-        Map(position: $mapPosition) {
+        Map(position: $mapPosition, selection: $featureSelection) {
             // 長押しで立てたピン
             droppedPinContent(at: placePicker.coordinate, color: themeManager.currentTheme.success)
 
@@ -432,8 +449,20 @@ struct PlacesListView: View {
                     }
                 }
             }
-        .onTapGesture {
+        // 何もない所を押したら閉じる。施設を押したことは妨げない（simultaneous にする）
+        .simultaneousGesture(TapGesture().onEnded {
             withAnimation { selectedPlace = nil }
+        })
+        .onChange(of: featureSelection) { _, feature in
+            guard let feature else {
+                selectedFeatureItem = nil
+                return
+            }
+            selectedPlace = nil
+            Task {
+                let item = await MapFeatureLookup.mapItem(for: feature)
+                withAnimation { selectedFeatureItem = item }
+            }
         }
     }
 

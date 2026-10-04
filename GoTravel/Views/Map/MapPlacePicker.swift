@@ -41,6 +41,13 @@ final class MapPlacePicker: ObservableObject {
         coordinate = nil
     }
 
+    /// 地図の施設（羽田空港など）を押して「保存」したとき。名前が分かっているので、住所から引かずに保存画面を開く
+    func presentSave(name: String, at coordinate: CLLocationCoordinate2D) {
+        self.coordinate = coordinate
+        title = name
+        isPresentingSheet = true
+    }
+
     private func dropPin(at coordinate: CLLocationCoordinate2D) {
         self.coordinate = coordinate
         title = ""

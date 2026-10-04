@@ -66,6 +66,8 @@ struct TravelPlanDetailView: View {
     @State private var selectedTab: DetailTab = .schedule
     /// 「リスト」タブの中で見ているもの（持ち物／お土産／やりたいこと）
     @State private var selectedListKind: PackingItem.Kind = .packing
+    /// リストのタブで、メモ帳を開いているか（持ち物などのリストの代わりに出す）
+    @State private var showsTripMemo = false
     /// 地図タブで、地図と行程表のどちらから選んでも共有する項目
     @State private var focusedItemID: String?
     /// 1回のドラッグで何度もタブが飛ばないようにする目印
@@ -79,6 +81,13 @@ struct TravelPlanDetailView: View {
     @State private var pinnedHeaderFrame: CGRect = .zero
     /// 横にスクロールする部品の位置。ここで始めた横のドラッグではタブを変えない
     @State private var swipeExclusionZones = SwipeExclusionZones()
+    /// 横にスライドして隣のタブへ移るか（アプリ設定で切り替える）。
+    /// 便利だと使っている人がいる一方、日程を横になぞって地図へ移ってしまうのが
+    /// ストレスだという声も続いたので、選べるようにした。最初はオン（今までどおり）
+    @AppStorage(TravelPlanDetailView.tabSwipeKey) private var switchesTabBySwipe = true
+    static let tabSwipeKey = "TravelPlanTabSwipeEnabled"
+    /// 2.9 に上げた人に1度だけ、横スライドでタブを移るかを聞く（`TabSwipePrompt`）
+    @State private var showsTabSwipePrompt = false
 
     /// ScrollView の見えている高さ。scrollTo の anchor は割合指定なので必要
     @State private var scrollViewportHeight: CGFloat = 0
@@ -253,7 +262,8 @@ struct TravelPlanDetailView: View {
                 }
                 // スワイプは ScrollView に付ける。内側の要素に付けると
                 // ScrollView に取り込まれて、ほとんど反応しなくなる
-                .simultaneousGesture(tabSwipeGesture)
+                // オフのときは、このジェスチャだけ止める（中のスクロールや地図の操作はそのまま）
+                .simultaneousGesture(tabSwipeGesture, including: switchesTabBySwipe ? .all : .subviews)
                 // 引っぱって更新。共有中なら相手の変更を取り込み、天気も取り直す
                 .refreshable { await pullToRefresh() }
                 // anchor は割合で指定するので、枠の高さが要る
@@ -433,6 +443,25 @@ struct TravelPlanDetailView: View {
             if Calendar.current.startOfDay(for: plan.endDate) < Calendar.current.startOfDay(for: Date()) {
                 ReviewRequestManager.shared.record(.travelCompleted)
             }
+
+            // 画面が出きってから聞く（開いた直後に出すと、何の話か分かりにくい）
+            if TabSwipePrompt.shouldAsk() {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    showsTabSwipePrompt = true
+                }
+            }
+        }
+        .alert("横にスライドしてタブを切り替えますか？", isPresented: $showsTabSwipePrompt) {
+            Button("切り替える（今までどおり）") {
+                switchesTabBySwipe = true
+                TabSwipePrompt.markAsked()
+            }
+            Button("切り替えない") {
+                switchesTabBySwipe = false
+                TabSwipePrompt.markAsked()
+            }
+        } message: {
+            Text("旅行計画の画面で、日程や持ち物を横にスライドすると、隣のタブ（地図など）へ移ります。切り替えない場合は、上のタブを押して移ります。\n\nあとからプロフィールの「アプリ設定」→「操作」でも変えられます。")
         }
     }
 
@@ -514,6 +543,16 @@ struct TravelPlanDetailView: View {
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
+
+                // 終わりの時刻があれば、始まりの下に小さく添える（次の予定までの間が分かる）
+                if let endText = item.endTimeText {
+                    Text("〜\(endText)")
+                        .font(.system(size: 11, weight: .semibold))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .opacity(0.75)
+                }
 
                 // 見ている人の時計と違う予定だけ、どこの時刻かを添える
                 if let zoneLabel = item.zoneLabel(destination: destinationTimeZone) {
@@ -600,7 +639,7 @@ struct TravelPlanDetailView: View {
 
                 // 実績が入っているときは予算と並べる。
                 // 金額が2つ並ぶので、どちらか分かるよう「予算」と明示する
-                if (item.cost ?? 0) > 0 || item.actualCost != nil {
+                if (item.cost ?? 0) > 0 || item.actualCost != nil || item.costNote != nil {
                     HStack(spacing: 10) {
                         if let cost = item.cost, cost > 0 {
                             HStack(spacing: 4) {
@@ -621,14 +660,23 @@ struct TravelPlanDetailView: View {
                             }
                             .foregroundColor(themeManager.currentTheme.info)
                         }
+
+                        if let costNote = item.costNote {
+                            Text(costNote)
+                                .font(.system(size: 12))
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
+                                .fixedSize(horizontal: false, vertical: true)
+                        }
                     }
                 }
 
+                // メモは全部の行を出す。駐車場や集合場所のように、何行かに分けて
+                // 書いた情報を現地で見るため（2行で切っていたら続きが見えなかった）
                 if let notes = item.notes, !notes.isEmpty {
                     Text(notes)
                         .font(.system(size: 12))
                         .foregroundColor(themeManager.currentTheme.secondaryText)
-                        .lineLimit(2)
+                        .fixedSize(horizontal: false, vertical: true)
                 }
 
                 // 入力できるのに表示先が無く、開く手段がなかったため追加
@@ -878,7 +926,7 @@ struct TravelPlanDetailView: View {
 
     /// 固定した予定の添え書き。時刻と場所
     private func pinnedItemDetail(_ item: ScheduleItem) -> String {
-        [item.timeText, item.location]
+        [item.timeRangeText, item.location]
             .compactMap { $0?.isEmpty == false ? $0 : nil }
             .joined(separator: "・")
     }
@@ -1619,20 +1667,43 @@ struct TravelPlanDetailView: View {
         }
     }
 
+    /// リストの種類の切り替え。nil はメモ帳
+    private var listSelection: Binding<PackingItem.Kind?> {
+        Binding(
+            get: { showsTripMemo ? nil : selectedListKind },
+            set: { kind in
+                if let kind {
+                    selectedListKind = kind
+                    showsTripMemo = false
+                } else {
+                    showsTripMemo = true
+                }
+            }
+        )
+    }
+
     private func packingTab(plan: TravelPlan) -> some View {
         VStack(spacing: 14) {
             // 持ち物・お土産・やりたいことは、どれも「名前とチェック」で形が同じ。
             // 上のタブを3つ増やすと窮屈になるので、ここで切り替える
-            Picker("リストの種類", selection: $selectedListKind) {
+            // メモ帳もここに並べる（「リストに加えて自由な文章を残したい」というご要望から）
+            Picker("リストの種類", selection: listSelection) {
                 ForEach(PackingItem.Kind.allCases) { kind in
-                    Text(kind.title).tag(kind)
+                    Text(kind.title).tag(Optional(kind))
                 }
+                Text("メモ").tag(PackingItem.Kind?.none)
             }
             .pickerStyle(.segmented)
 
-            PackingListView(plan: plan, kind: selectedListKind)
-                .environmentObject(viewModel)
-                .environmentObject(authVM)
+            if showsTripMemo {
+                TripMemoView(plan: plan)
+                    .environmentObject(viewModel)
+                    .environmentObject(authVM)
+            } else {
+                PackingListView(plan: plan, kind: selectedListKind)
+                    .environmentObject(viewModel)
+                    .environmentObject(authVM)
+            }
         }
         .padding(16)
         .padding(.bottom, 30)

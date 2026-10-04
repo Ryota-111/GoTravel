@@ -534,7 +534,8 @@ struct EnjoyWorldView: View {
                 }
                 .frame(width: 200, height: 200)
                 .background(themeManager.currentTheme.tertiary)
-                .cornerRadius(25)
+                // 旅行計画のカードと同じ角の丸み（テーマで変わる）
+                .cornerRadius(themeManager.currentTheme.style.cardRadius)
                 // 実際のカードと同じ理由で影は付けない（TravelPlanCard を参照）
                 .padding(.horizontal, 20)
                 // ScrollView直下は中央揃えになるため、実際のカードと同じ左端に寄せる
@@ -822,11 +823,11 @@ struct EnjoyWorldView: View {
             .background(
                 // 背景のグラデーションは上が濃く下は白に近い。
                 // 単色を敷くとどちらかで沈むため、下地の明るさに追従する材質にする
-                RoundedRectangle(cornerRadius: 25)
+                RoundedRectangle(cornerRadius: themeManager.currentTheme.style.cardRadius)
                     .fill(.ultraThinMaterial)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 25)
+                RoundedRectangle(cornerRadius: themeManager.currentTheme.style.cardRadius)
                     .strokeBorder(
                         addTravelTintColor.opacity(0.45),
                         style: StrokeStyle(lineWidth: 1.5, dash: [8, 6])
@@ -864,6 +865,7 @@ struct EnjoyWorldView: View {
     /// 横並びの末尾に置く追加口。写真の入ったカードと張り合わないよう、
     /// 同じ角丸のまま点線の枠だけにして「これから埋める1枚」に見せる。
     /// 影は付けない（`TravelPlanCard` と同じ理由で、帯からはみ出した分が切り取られる）
+    /// 角の丸みは旅行計画のカードと同じ（テーマで変わる）
     private var addTravelPlanButton: some View {
         Button(action: {
             showAddTravelPlan = true
@@ -888,11 +890,11 @@ struct EnjoyWorldView: View {
             }
             .frame(width: 150, height: 200)
             .background(
-                RoundedRectangle(cornerRadius: 25)
+                RoundedRectangle(cornerRadius: themeManager.currentTheme.style.cardRadius)
                     .fill(addTravelTintColor.opacity(0.10))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 25)
+                RoundedRectangle(cornerRadius: themeManager.currentTheme.style.cardRadius)
                     .strokeBorder(
                         addTravelTintColor.opacity(0.45),
                         style: StrokeStyle(lineWidth: 1.5, dash: [8, 6])
@@ -1029,6 +1031,8 @@ struct EnjoyWorldView: View {
     /// 一覧の末尾に置く追加口。予定カードと同じ形・同じ左端のまま、
     /// 点線と薄い塗りで「まだ中身が無い次の1枚」に見せる。
     /// 面で塗りつぶすと iOS では無効状態の色に見えてしまうため
+    /// 角の丸みは予定カードと同じ（テーマで変わる）。数字で決め打ちすると、
+    /// 角の小さいテーマで、隣のカードと形が違って見える
     private var addPlanButton: some View {
         Button(action: {
             showAddPlan = true
@@ -1061,11 +1065,11 @@ struct EnjoyWorldView: View {
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity)
             .background(
-                RoundedRectangle(cornerRadius: 18)
+                RoundedRectangle(cornerRadius: themeManager.currentTheme.style.rowRadius)
                     .fill(addAccentColor.opacity(colorScheme == .dark ? 0.12 : 0.06))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 18)
+                RoundedRectangle(cornerRadius: themeManager.currentTheme.style.rowRadius)
                     .strokeBorder(
                         addAccentColor.opacity(0.35),
                         style: StrokeStyle(lineWidth: 1.5, dash: [7, 5])

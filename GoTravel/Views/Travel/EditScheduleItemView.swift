@@ -3,8 +3,6 @@ import MapKit
 
 // タイムスケジュールの予定編集画面（AddScheduleItemViewと同じデザイン言語）
 struct EditScheduleItemView: View {
-    /// 経路案内の行き先。開くアプリはプロフィールの設定に従う（`mapNavigation`）
-    @State private var navigationTarget: MapDestination?
     // MARK: - Properties
     @Environment(\.presentationMode) var presentationMode
     @EnvironmentObject var viewModel: TravelPlanViewModel
@@ -28,8 +26,11 @@ struct EditScheduleItemView: View {
     @State private var isPinned: Bool
     /// 共有した旅行で、この予定に参加する人。空なら全員
     @State private var participants: Set<String>
-    @State private var cost: String
-    @State private var actualCost: String
+    /// 予算と実際に使った金額。外貨でも入れられる（`CurrencyCostFields`）
+    @State private var costInput: CostInput
+    @State private var costNote: String
+    @State private var hasEndTime: Bool
+    @State private var endTime: Date
     @State private var linkURL: String
     @State private var showDeleteConfirmation = false
 
@@ -42,16 +43,6 @@ struct EditScheduleItemView: View {
     @State private var selectedLocation: MKMapItem?
     @State private var selectedCoordinate: CLLocationCoordinate2D?
     @State private var selectedAddress: String?
-    @State private var searchText = ""
-    @State private var searchResults: [MKMapItem] = []
-    @State private var isSearching = false
-    @State private var mapPosition: MapCameraPosition = .region(MKCoordinateRegion(
-        center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
-        span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
-    ))
-    @State private var selectedMapResult: MKMapItem?
-    @State private var mapVisibleRegion: MKCoordinateRegion?
-    @State private var hasCenteredOnDestination = false
 
     // MARK: - Initialization
     init(plan: TravelPlan, daySchedule: DaySchedule, item: ScheduleItem) {
@@ -66,8 +57,10 @@ struct EditScheduleItemView: View {
         _timeZone = State(initialValue: item.timeZone)
         _isPinned = State(initialValue: item.isPinned == true)
         _participants = State(initialValue: Set(item.participantIds ?? []))
-        _cost = State(initialValue: item.cost != nil ? String(Int(item.cost!)) : "")
-        _actualCost = State(initialValue: item.actualCost != nil ? String(Int(item.actualCost!)) : "")
+        _costInput = State(initialValue: CostInput(cost: item.cost, actualCost: item.actualCost, foreign: item.foreignCost))
+        _costNote = State(initialValue: item.costNote ?? "")
+        _hasEndTime = State(initialValue: item.endTime != nil)
+        _endTime = State(initialValue: item.endTime ?? item.time.addingTimeInterval(60 * 60))
         _linkURL = State(initialValue: item.linkURL ?? "")
 
         // 既存の場所情報を選択済み状態として復元
@@ -84,19 +77,6 @@ struct EditScheduleItemView: View {
     // MARK: - Computed
     private var canSave: Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty }
 
-    /// 地図と検索の起点（`AddScheduleItemView` と同じ理由・同じ内容）
-    private var searchStartRegion: MKCoordinateRegion {
-        guard let latitude = plan.latitude, let longitude = plan.longitude else {
-            return MKCoordinateRegion(
-                center: CLLocationCoordinate2D(latitude: 36.2048, longitude: 138.2529),
-                span: MKCoordinateSpan(latitudeDelta: 10, longitudeDelta: 10)
-            )
-        }
-        return MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: latitude, longitude: longitude),
-            span: MKCoordinateSpan(latitudeDelta: 0.3, longitudeDelta: 0.3)
-        )
-    }
 
     private var travelColor: Color {
         switch themeManager.currentTheme.type {
@@ -107,6 +87,11 @@ struct EditScheduleItemView: View {
 
     private var textColor: Color {
         colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
+    }
+
+    /// 最新の旅行（外貨のレートを読むのに使う）
+    private var currentPlan: TravelPlan {
+        viewModel.travelPlans.first(where: { $0.id == plan.id }) ?? plan
     }
 
     private var fieldBg: Color {
@@ -170,8 +155,11 @@ struct EditScheduleItemView: View {
             }
             .environmentObject(authVM)
         }
+        // 地図で探す。地図に出ている施設を押しても、長押しでピンを立てても選べる（`MapPlaceSearchView`）
         .fullScreenCover(isPresented: $showLocationPicker) {
-            locationPickerView
+            MapPlaceSearchView(title: "地図から検索", startRegion: plan.placeSearchRegion, accent: travelColor) { picked in
+                applyPickedPlace(picked)
+            }
         }
     }
 
@@ -246,6 +234,21 @@ struct EditScheduleItemView: View {
                     fieldBackground: fieldBg
                 )
                 .task { await resolveDestinationTimeZone() }
+
+                ScheduleEndTimeField(
+                    hasEndTime: $hasEndTime,
+                    endTime: $endTime,
+                    startTime: time,
+                    timeZone: timeZone,
+                    tint: travelColor,
+                    textColor: textColor,
+                    secondaryText: themeManager.currentTheme.secondaryText,
+                    fieldBackground: fieldBg
+                )
+                // 現地時間・日本時間を切り替えたら、終わりも同じ時:分のまま付け替える
+                .onChange(of: timeZone) { oldZone, newZone in
+                    endTime = ScheduleClock.keepingWallClock(endTime, from: oldZone, to: newZone)
+                }
 
                 // 共有していて2人以上のときだけ出る
                 ParticipantPicker(
@@ -351,39 +354,30 @@ struct EditScheduleItemView: View {
             VStack(alignment: .leading, spacing: 12) {
                 sectionLabel("その他（任意）", icon: "ellipsis.circle")
 
-                HStack(spacing: 12) {
-                    Image(systemName: "yensign.circle")
-                        .foregroundColor(travelColor.opacity(0.7))
-                        .frame(width: 24)
-                    TextField("予算", text: $cost)
-                        .keyboardType(.decimalPad)
-                        .foregroundColor(textColor)
-                    Text("円")
-                        .foregroundColor(themeManager.currentTheme.secondaryText)
-                }
-                .padding(14)
-                .background(fieldBg)
-                .cornerRadius(12)
+                CurrencyCostFields(
+                    input: $costInput,
+                    showsActual: true,
+                    tripRates: currentPlan.exchangeRates,
+                    accent: travelColor,
+                    textColor: textColor,
+                    secondaryText: themeManager.currentTheme.secondaryText,
+                    successColor: themeManager.currentTheme.success,
+                    fieldBackground: fieldBg
+                )
 
-                // 旅行後に実際いくら使ったかを記録する欄
-                HStack(spacing: 12) {
-                    Image(systemName: "checkmark.circle")
-                        .foregroundColor(themeManager.currentTheme.success.opacity(0.8))
-                        .frame(width: 24)
-                    TextField("実際に使った金額", text: $actualCost)
-                        .keyboardType(.decimalPad)
-                        .foregroundColor(textColor)
-                    Text("円")
-                        .foregroundColor(themeManager.currentTheme.secondaryText)
-                }
-                .padding(14)
-                .background(fieldBg)
-                .cornerRadius(12)
+                // 費用のメモ（「2人分」「駐車場代込み」など）。金額の横に出す
+                TextField("費用のメモ（例：2人分・駐車場代込み）", text: $costNote)
+                    .font(.subheadline)
+                    .foregroundColor(textColor)
+                    .padding(14)
+                    .background(fieldBg)
+                    .cornerRadius(12)
 
                 if let diff = costDifference {
+                    let unit = costInput.currencyCode
                     Text(diff > 0
-                         ? "予算より \(Int(diff))円 多く使いました"
-                         : (diff < 0 ? "予算より \(Int(-diff))円 少なく済みました" : "予算どおりです"))
+                         ? "予算より \(CurrencyCatalog.format(diff, code: unit)) 多く使いました"
+                         : (diff < 0 ? "予算より \(CurrencyCatalog.format(-diff, code: unit)) 少なく済みました" : "予算どおりです"))
                         .font(.caption)
                         .foregroundColor(diff > 0 ? themeManager.currentTheme.error : themeManager.currentTheme.success)
                 }
@@ -523,9 +517,14 @@ struct EditScheduleItemView: View {
 
         let updatedItem = createUpdatedItem()
         var updatedPlan = updatePlanWithItem(updatedItem)
-        // 予約から作った予定なら、金額を予約の費用にも反映する（予約の画面で同じ金額が見える）
+        // 外貨のレートは旅行ごとに1つ。この予定で入れたレートに、同じ通貨の費用をすべて揃える
+        if let foreign = updatedItem.foreignCost, let rate = foreign.rate {
+            updatedPlan.setExchangeRate(rate, for: foreign.currencyCode)
+        }
+        // 予約から作った予定なら、直した内容を予約にも戻す（時刻・場所・名前と、金額）。
+        // どちらの画面で直しても、同じ予約は同じ内容に見えるようにする
         if let reservationId = updatedItem.reservationId {
-            updatedPlan.syncReservationCost(fromScheduleItemsOf: reservationId)
+            updatedPlan.syncReservationFromItinerary(editedItem: updatedItem, reservationId: reservationId)
         }
 
         viewModel.update(updatedPlan, userId: userId)
@@ -542,7 +541,7 @@ struct EditScheduleItemView: View {
     }
 
     private func createUpdatedItem() -> ScheduleItem {
-        let costValue = cost.isEmpty ? nil : Double(cost)
+        let costs = costInput.result
         let locationName = selectedLocation?.name ?? (location.isEmpty ? nil : location.trimmingCharacters(in: .whitespacesAndNewlines))
 
         return ScheduleItem(
@@ -553,8 +552,8 @@ struct EditScheduleItemView: View {
             notes: notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes.trimmingCharacters(in: .whitespacesAndNewlines),
             latitude: selectedCoordinate?.latitude,
             longitude: selectedCoordinate?.longitude,
-            cost: costValue,
-            actualCost: actualCost.isEmpty ? nil : Double(actualCost),
+            cost: costs.cost,
+            actualCost: costs.actualCost,
             linkURL: linkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : linkURL.trimmingCharacters(in: .whitespacesAndNewlines),
             // 予約から作った予定は、予約とのつながりを保つ。
             // 以前はここで落としていたため、編集すると予約側のトグルや削除が効かなくなっていた
@@ -562,13 +561,19 @@ struct EditScheduleItemView: View {
             timeZoneIdentifier: timeZone.identifier,
             // 外したときは nil に戻す（固定したことの無い予定と同じ形にする）
             isPinned: isPinned ? true : nil,
-            participantIds: SharedMembers.normalizedParticipants(participants, members: plan.sharedWith)
+            participantIds: SharedMembers.normalizedParticipants(participants, members: plan.sharedWith),
+            foreignCost: costs.foreign,
+            // 予約から作った予定のどの部分か（出発・到着など）を保つ
+            reservationPart: item.reservationPart,
+            costNote: costNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? nil : costNote.trimmingCharacters(in: .whitespacesAndNewlines),
+            endTime: hasEndTime ? ScheduleItem.endTime(hourAndMinuteOf: endTime, after: time, in: timeZone) : nil
         )
     }
 
     /// 実績 - 予算。どちらかが未入力なら比較しない
     private var costDifference: Double? {
-        guard let budget = Double(cost), let actual = Double(actualCost) else { return nil }
+        guard let budget = costInput.amount, let actual = costInput.actualAmount else { return nil }
         return actual - budget
     }
 
@@ -799,251 +804,12 @@ struct EditScheduleItemView: View {
         location = historyItem.name
     }
 
-    // MARK: - Map Location Picker（地図から検索）
-    private var locationPickerView: some View {
-        ZStack(alignment: .top) {
-            Map(position: $mapPosition, selection: $selectedMapResult) {
-                ForEach(searchResults, id: \.self) { result in
-                    Marker(item: result).tint(themeManager.currentTheme.error)
-                }
-            }
-            .ignoresSafeArea()
-            .safeAreaInset(edge: .bottom) {
-                if let result = selectedMapResult {
-                    locationResultDetail(result)
-                }
-            }
-            .onMapCameraChange { context in mapVisibleRegion = context.region }
-            // 初回だけ寄せる。すでに場所が入っている予定はその場所、
-            // 入っていなければ旅行の目的地。2回目以降は前に見ていた場所のまま
-            .onAppear {
-                guard !hasCenteredOnDestination else { return }
-                hasCenteredOnDestination = true
-
-                let region: MKCoordinateRegion
-                if let coordinate = selectedCoordinate {
-                    region = MKCoordinateRegion(
-                        center: coordinate,
-                        span: MKCoordinateSpan(latitudeDelta: 0.01, longitudeDelta: 0.01)
-                    )
-                } else {
-                    region = searchStartRegion
-                }
-
-                mapPosition = .region(region)
-                mapVisibleRegion = region
-            }
-
-            VStack(spacing: 0) {
-                // ヘッダー
-                HStack {
-                    Button(action: {
-                        showLocationPicker = false
-                        searchText = ""
-                        searchResults = []
-                        selectedMapResult = nil
-                    }) {
-                        Image(systemName: "xmark")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(textColor)
-                            .padding(10)
-                            .background(Color(.systemBackground).opacity(0.9))
-                            .clipShape(Circle())
-                    }
-                    Spacer()
-                    Text("地図から検索")
-                        .font(.headline)
-                        .foregroundColor(textColor)
-                    Spacer()
-                    Color.clear.frame(width: 36, height: 36)
-                }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
-                .background(.ultraThinMaterial)
-
-                // 検索バー
-                HStack(spacing: 10) {
-                    Image(systemName: isSearching ? "clock" : "magnifyingglass")
-                        .foregroundColor(travelColor)
-                        .font(.system(size: 15))
-                    TextField("場所・スポット名を入力", text: $searchText)
-                        .font(.subheadline)
-                        .onSubmit { Task { await performSearch() } }
-                    if !searchText.isEmpty {
-                        Button(action: {
-                            searchText = ""
-                            searchResults = []
-                            selectedMapResult = nil
-                        }) {
-                            Image(systemName: "xmark.circle.fill")
-                                .foregroundColor(themeManager.currentTheme.secondaryText)
-                        }
-                    }
-                }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 11)
-                .background(Color(.systemBackground))
-                .cornerRadius(12)
-                .shadow(color: .black.opacity(0.08), radius: 4, x: 0, y: 2)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-                .background(.ultraThinMaterial)
-
-                // 検索結果リスト
-                if !searchResults.isEmpty && selectedMapResult == nil {
-                    ScrollView(showsIndicators: false) {
-                        VStack(spacing: 0) {
-                            ForEach(searchResults, id: \.self) { result in
-                                Button(action: {
-                                    withAnimation {
-                                        selectedMapResult = result
-                                        mapPosition = .region(MKCoordinateRegion(
-                                            center: result.placemark.coordinate,
-                                            span: MKCoordinateSpan(latitudeDelta: 0.005, longitudeDelta: 0.005)
-                                        ))
-                                        searchResults = [result]
-                                    }
-                                }) {
-                                    HStack(spacing: 12) {
-                                        Image(systemName: "mappin.circle.fill")
-                                            .foregroundColor(themeManager.currentTheme.error)
-                                            .font(.system(size: 22))
-                                        VStack(alignment: .leading, spacing: 3) {
-                                            Text(result.name ?? "名称なし")
-                                                .font(.subheadline.weight(.semibold))
-                                                .foregroundColor(textColor)
-                                            if let address = result.placemark.title {
-                                                Text(address)
-                                                    .font(.caption)
-                                                    .foregroundColor(themeManager.currentTheme.secondaryText)
-                                                    .lineLimit(1)
-                                            }
-                                        }
-                                        Spacer()
-                                        Image(systemName: "chevron.right")
-                                            .font(.caption2)
-                                            .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
-                                    }
-                                    .padding(.horizontal, 16)
-                                    .padding(.vertical, 12)
-                                }
-                                .buttonStyle(PlainButtonStyle())
-                                Divider().padding(.leading, 56)
-                            }
-                        }
-                    }
-                    .background(Color(.systemBackground))
-                    .frame(height: min(CGFloat(searchResults.count) * 65, 300))
-                    .transition(.opacity.combined(with: .move(edge: .top)))
-                }
-            }
-        }
-        .animation(.spring(response: 0.3, dampingFraction: 0.8), value: searchResults.isEmpty)
-    }
-
-    private func performSearch() async {
-        guard !searchText.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-        isSearching = true
-        let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = searchText
-        request.resultTypes = [.pointOfInterest, .address]
-        request.region = mapVisibleRegion ?? searchStartRegion
-        do {
-            let response = try await MKLocalSearch(request: request).start()
-            searchResults = response.mapItems
-            selectedMapResult = nil
-            if let first = searchResults.first {
-                withAnimation {
-                    mapPosition = .region(MKCoordinateRegion(
-                        center: first.placemark.coordinate,
-                        span: MKCoordinateSpan(latitudeDelta: 0.05, longitudeDelta: 0.05)
-                    ))
-                }
-            }
-        } catch {}
-        isSearching = false
-    }
-
-    private func locationResultDetail(_ result: MKMapItem) -> some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 12) {
-                ZStack {
-                    Circle()
-                        .fill(themeManager.currentTheme.error.opacity(0.12))
-                        .frame(width: 44, height: 44)
-                    Image(systemName: "mappin.circle.fill")
-                        .foregroundColor(themeManager.currentTheme.error)
-                        .font(.system(size: 22))
-                }
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(result.name ?? "名称なし")
-                        .font(.headline)
-                        .foregroundColor(textColor)
-                    if let address = result.placemark.title {
-                        Text(address)
-                            .font(.caption)
-                            .foregroundColor(themeManager.currentTheme.secondaryText)
-                            .lineLimit(2)
-                    }
-                }
-                Spacer()
-                Button(action: { selectedMapResult = nil; searchResults = [] }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(themeManager.currentTheme.secondaryText)
-                        .font(.title3)
-                }
-            }
-
-            HStack(spacing: 10) {
-                Button { navigationTarget = MapDestination(result) } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "arrow.triangle.turn.up.right.diamond")
-                        Text("経路")
-                    }
-                    .font(.subheadline.weight(.semibold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 13)
-                    .background(travelColor.opacity(0.1))
-                    .foregroundColor(travelColor)
-                    .cornerRadius(12)
-                }
-                .mapNavigation($navigationTarget)
-                Button {
-                    selectedLocation = result
-                    selectedCoordinate = result.placemark.coordinate
-                    selectedAddress = result.placemark.title
-                    location = result.name ?? ""
-                    if let name = result.name, let coord = result.placemark.location?.coordinate {
-                        locationHistory.add(
-                            name: name,
-                            address: result.placemark.title,
-                            latitude: coord.latitude,
-                            longitude: coord.longitude
-                        )
-                    }
-                    selectedMapResult = nil
-                    searchResults = []
-                    searchText = ""
-                    showLocationPicker = false
-                } label: {
-                    HStack(spacing: 6) {
-                        Image(systemName: "checkmark.circle.fill")
-                        Text("この場所を選択")
-                    }
-                    .font(.subheadline.weight(.bold))
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 13)
-                    .background(travelColor)
-                    .foregroundColor(.white)
-                    .cornerRadius(12)
-                }
-            }
-        }
-        .padding(18)
-        .background(.ultraThinMaterial)
-        .clipShape(RoundedRectangle(cornerRadius: 20))
-        .shadow(color: .black.opacity(0.15), radius: 14, x: 0, y: -4)
-        .padding(.horizontal, 14)
-        .padding(.bottom, 14)
+    /// 地図で選んだ場所を、この予定の場所にする
+    private func applyPickedPlace(_ picked: PickedPlace) {
+        let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: picked.coordinate))
+        mapItem.name = picked.name
+        selectedLocation = mapItem
+        selectedCoordinate = picked.coordinate
+        selectedAddress = picked.address
     }
 }

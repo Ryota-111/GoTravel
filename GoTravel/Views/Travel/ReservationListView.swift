@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreLocation
 
 /// 旅行の予約をまとめる画面。
 ///
@@ -17,6 +18,8 @@ struct ReservationListView: View {
 
     @State private var editing: Reservation?
     @State private var copiedId: String?
+    /// 予約の場所への経路案内
+    @State private var navigationTarget: MapDestination?
     /// 目的地の時間帯。時刻に「現地」「日本」を添えるのに使う
     @State private var destinationTimeZone: TimeZone?
 
@@ -216,6 +219,10 @@ struct ReservationListView: View {
                 routeRow(reservation)
             }
 
+            if let location = reservation.location {
+                locationRow(location)
+            }
+
             if !detailChips(reservation).isEmpty {
                 FlowDetailChips(chips: detailChips(reservation),
                                 textColor: textColor,
@@ -250,6 +257,35 @@ struct ReservationListView: View {
                 .overlay(RoundedRectangle(cornerRadius: 14).stroke(textColor.opacity(0.12), lineWidth: 1))
         )
 
+    }
+
+    /// 宿・お店などの場所。地図で選んでいれば、押すと経路案内を開く
+    @ViewBuilder
+    private func locationRow(_ location: ReservationLocation) -> some View {
+        let row = HStack(spacing: 6) {
+            Image(systemName: "mappin.circle.fill")
+                .foregroundColor(accent)
+            Text(location.name)
+                .font(.caption.weight(.medium))
+                .foregroundColor(textColor)
+                .lineLimit(1)
+            if location.latitude != nil {
+                Image(systemName: "arrow.triangle.turn.up.right.diamond")
+                    .font(.caption)
+                    .foregroundColor(accent)
+            }
+        }
+        if let latitude = location.latitude, let longitude = location.longitude {
+            Button {
+                navigationTarget = MapDestination(name: location.name,
+                                                  coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude))
+            } label: { row }
+            .buttonStyle(.plain)
+            .mapNavigation($navigationTarget)
+            .accessibilityLabel(Text("\(location.name)への経路"))
+        } else {
+            row
+        }
     }
 
     /// 出発地 → 到着地。時刻が入っていればその下に添える

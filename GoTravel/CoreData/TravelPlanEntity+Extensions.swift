@@ -26,6 +26,8 @@ public class TravelPlanEntity: NSManagedObject {
     @NSManaged public var packingItemsData: Data?
     @NSManaged public var reservationsData: Data?
     @NSManaged public var customSplitCount: NSNumber?
+    /// 旅行のメモ帳。2.9 で足した（Production への反映が要る）
+    @NSManaged public var memoText: String?
     /// ゴミ箱に入れた日時。入っていなければ nil。
     ///
     /// 削除してもすぐには消さず、30日間は「最近削除した旅行計画」から戻せるようにする。
@@ -136,7 +138,8 @@ extension TravelPlanEntity {
             ownerId: ownerId,
             lastEditedBy: lastEditedBy,
             updatedAt: updatedAt ?? Date(),
-            customSplitCount: customSplitCount?.intValue
+            customSplitCount: customSplitCount?.intValue,
+            memo: memoText
         )
     }
 
@@ -170,6 +173,7 @@ extension TravelPlanEntity {
         self.lastEditedBy = plan.lastEditedBy
         self.updatedAt = plan.updatedAt
         self.customSplitCount = plan.customSplitCount.map { NSNumber(value: $0) }
+        self.memoText = plan.memo
 
         // sharedWithをエンコード（空になった場合もクリアして反映する）
         if !plan.sharedWith.isEmpty {

@@ -28,7 +28,7 @@ enum TravelPlanTextExporter {
                 lines.append("◆ Day \(day.dayNumber)  \(dateString(plan.date(forDay: day.dayNumber)))")
 
                 for item in sortedByTime(day.scheduleItems) {
-                    var row = "\(item.timeText)  \(item.title)"
+                    var row = "\(item.timeRangeText)  \(item.title)"
                     if let location = item.location, !location.isEmpty {
                         row += "  @\(location)"
                     }
@@ -269,11 +269,18 @@ struct TravelPlanShareCard: View {
 
     private func row(item: ScheduleItem, isLast: Bool) -> some View {
         HStack(alignment: .top, spacing: 12) {
-            Text(item.timeText)
-                .font(.system(size: 13, weight: .bold, design: .rounded).monospacedDigit())
-                .foregroundColor(accentColor)
-                .frame(width: 44, alignment: .leading)
-                .padding(.top, 1)
+            VStack(alignment: .leading, spacing: 0) {
+                Text(item.timeText)
+                    .font(.system(size: 13, weight: .bold, design: .rounded).monospacedDigit())
+                if let endText = item.endTimeText {
+                    Text("〜\(endText)")
+                        .font(.system(size: 10, weight: .semibold, design: .rounded).monospacedDigit())
+                        .opacity(0.75)
+                }
+            }
+            .foregroundColor(accentColor)
+            .frame(width: 44, alignment: .leading)
+            .padding(.top, 1)
 
             // 時系列がつながって見えるよう、点と縦線で結ぶ
             VStack(spacing: 0) {

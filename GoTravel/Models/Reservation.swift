@@ -11,11 +11,21 @@ struct Reservation: Identifiable, Codable, Equatable {
         case train
         case hotel
         case rentalCar
+        /// 駐車場（2.9）。**保存では「その他」として書き、`kindDetail` に "parking" と添える。**
+        /// 古いバージョンは知らない種類を読めず、予約の一覧をまるごと失うため（`Reservation.CodingKeys`）
+        case parking
         case restaurant
         case ticket
         case other
 
         var id: String { rawValue }
+
+        /// 知らない種類（新しいバージョンで足されたもの）は「その他」として読む。
+        /// 読めずに失敗すると、予約の一覧がまるごと空になる
+        init(from decoder: Decoder) throws {
+            let raw = try decoder.singleValueContainer().decode(String.self)
+            self = Kind(rawValue: raw) ?? .other
+        }
 
         var label: String {
             switch self {
@@ -23,6 +33,7 @@ struct Reservation: Identifiable, Codable, Equatable {
             case .train: return "新幹線・電車"
             case .hotel: return "宿泊"
             case .rentalCar: return "レンタカー"
+            case .parking: return "駐車場"
             case .restaurant: return "レストラン"
             case .ticket: return "チケット"
             case .other: return "その他"
@@ -35,6 +46,7 @@ struct Reservation: Identifiable, Codable, Equatable {
             case .train: return "tram.fill"
             case .hotel: return "bed.double.fill"
             case .rentalCar: return "car.fill"
+            case .parking: return "parkingsign.circle.fill"
             case .restaurant: return "fork.knife"
             case .ticket: return "ticket.fill"
             case .other: return "checkmark.seal.fill"
@@ -47,6 +59,7 @@ struct Reservation: Identifiable, Codable, Equatable {
             case .train: return "例：のぞみ21号 東京→新大阪"
             case .hotel: return "例：〇〇ホテル"
             case .rentalCar: return "例：〇〇レンタカー 那覇空港店"
+            case .parking: return "例：〇〇駐車場"
             case .restaurant: return "例：〇〇亭 ディナー"
             case .ticket: return "例：〇〇水族館 入場チケット"
             case .other: return "例：予約の名前"
@@ -63,6 +76,7 @@ struct Reservation: Identifiable, Codable, Equatable {
         if has(["空港", "飛行機", "フライト", "搭乗", "便", "ana", "jal", "peach", "スカイマーク"]) { return .flight }
         if has(["新幹線", "電車", "列車", "のぞみ", "ひかり", "こだま", "はやぶさ", "特急", "駅"]) { return .train }
         if has(["ホテル", "宿", "旅館", "チェックイン", "泊", "ゲストハウス", "リゾート", "イン"]) { return .hotel }
+        if has(["駐車場", "パーキング", "駐車"]) { return .parking }
         if has(["レンタカー", "レンタル", "車の受け取り", "car"]) { return .rentalCar }
         if has(["レストラン", "ランチ", "ディナー", "昼食", "夕食", "朝食", "食事", "居酒屋", "カフェ", "寿司", "焼肉", "ラーメン"]) { return .restaurant }
         if has(["チケット", "入場", "水族館", "美術館", "博物館", "動物園", "遊園地", "テーマパーク", "ツアー", "体験"]) { return .ticket }
@@ -70,7 +84,22 @@ struct Reservation: Identifiable, Codable, Equatable {
     }
 
     var id: String
-    var kind: Kind
+
+    /// 種類。駐車場だけは保存の形が違う（下の `storedKind` と `kindDetail`）
+    var kind: Kind {
+        get { kindDetail == Self.parkingDetail ? .parking : storedKind }
+        set {
+            storedKind = newValue == .parking ? .other : newValue
+            kindDetail = newValue == .parking ? Self.parkingDetail : nil
+        }
+    }
+
+    /// 保存する種類。駐車場は "other" として書く（古いバージョンが読めるように）
+    private var storedKind: Kind
+    /// 種類の詳しい印。駐車場なら "parking"。古いバージョンは読み飛ばす
+    private var kindDetail: String?
+    private static let parkingDetail = "parking"
+
     var title: String
     /// 搭乗・チェックインなどの日時。決まっていない予約もあるので任意。
     /// 飛行機では出発時刻として扱う
@@ -135,6 +164,33 @@ struct Reservation: Identifiable, Codable, Equatable {
     /// JSON の中の項目なので、CloudKit のスキーマ変更は要らない
     var cost: Double?
 
+    /// 外貨で入れたときの元の金額とレート。`cost` はこれを円に直したもの（`ForeignCost.swift`）
+    var foreignCost: ForeignCost?
+
+    // MARK: - 場所（地図で選んだもの）
+    //
+    // 予約の時点で地図の場所を入れておけば、「行程にも追加する」で作った予定にそのまま入り、
+    // 日程タブで場所を入れ直さずに済む（ご要望から）。どれも JSON の中なのでスキーマ変更は要らない
+
+    /// 宿・レストラン・チケットなどの場所。飛行機・新幹線では使わない
+    var location: ReservationLocation?
+    /// 飛行機・新幹線の出発地の位置。名前は `departurePlace`
+    var departureLocation: ReservationLocation?
+    /// 飛行機・新幹線の到着地の位置。名前は `arrivalPlace`
+    var arrivalLocation: ReservationLocation?
+
+    /// 保存のときの項目名。**項目を足したら、ここにも必ず足すこと**（足さないと保存されない）。
+    /// `storedKind` は "kind" として書く（駐車場以外は今までと同じ形）
+    enum CodingKeys: String, CodingKey {
+        case id
+        case storedKind = "kind"
+        case kindDetail
+        case title, date, confirmationNumber, note, linkURL
+        case transportNumber, departurePlace, arrivalPlace, arrivalDate, seat, terminal
+        case timeZoneIdentifier, arrivalTimeZoneIdentifier, endDate, pinsDuringPeriod
+        case cost, foreignCost, location, departureLocation, arrivalLocation
+    }
+
     /// 経路を表示するかどうか。
     /// 片方しか入っていなくても出す。入れた情報が画面に出ないほうが困る
     var hasRoute: Bool {
@@ -158,9 +214,11 @@ struct Reservation: Identifiable, Codable, Equatable {
          arrivalTimeZoneIdentifier: String? = nil,
          endDate: Date? = nil,
          pinsDuringPeriod: Bool? = nil,
-         cost: Double? = nil) {
+         cost: Double? = nil,
+         foreignCost: ForeignCost? = nil) {
         self.id = id
-        self.kind = kind
+        self.storedKind = kind == .parking ? .other : kind
+        self.kindDetail = kind == .parking ? Self.parkingDetail : nil
         self.title = title
         self.date = date
         self.confirmationNumber = confirmationNumber
@@ -177,6 +235,7 @@ struct Reservation: Identifiable, Codable, Equatable {
         self.endDate = endDate
         self.pinsDuringPeriod = pinsDuringPeriod
         self.cost = cost
+        self.foreignCost = foreignCost
     }
 }
 
@@ -194,6 +253,7 @@ extension Reservation.Kind {
         switch self {
         case .hotel: return "チェックイン"
         case .rentalCar: return "受け取り"
+        case .parking: return "入庫"
         default: return "開始"
         }
     }
@@ -203,10 +263,19 @@ extension Reservation.Kind {
         switch self {
         case .hotel: return "チェックアウト"
         case .rentalCar: return "返却"
+        case .parking: return "出庫"
         default: return "終了"
         }
     }
 
+}
+
+/// 予約の場所。地図で選んだときは座標を持つ
+struct ReservationLocation: Codable, Equatable {
+    var name: String
+    var address: String?
+    var latitude: Double?
+    var longitude: Double?
 }
 
 // MARK: - 行程へ持っていく
@@ -222,23 +291,41 @@ extension Reservation {
     /// 1件にすると、行程の上では「羽田10:00」としか出ず、
     /// 何時に着くのかが分からなくなる。
     ///
+    /// **宿やレンタカーで終わりの日時もあるときは、始まりと終わりの2件に分ける。**
+    /// 2泊以上の宿で、チェックアウトの日の行程に何も出ないと、その日の動きが組めない
+    /// （ご報告から）。泊まっている間の毎日に出したいときは「日程の一番上に表示」を使う。
+    ///
     /// 時刻が決まっていない予約（宿の予約番号だけ控えた場合など）は空を返す。
     /// 置く場所が決められないため
     func itineraryItems() -> [ScheduleItem] {
         guard let date else { return [] }
 
-        let note = confirmationNumber
-            .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
-            .flatMap { $0.isEmpty ? nil : "予約番号 \($0)" }
+        let note = itineraryNotes
 
         guard kind.usesRoute else {
-            return [ScheduleItem(time: date,
-                                 title: title,
-                                 location: nil,
-                                 notes: note,
-                                 cost: cost,
-                                 reservationId: id,
-                                 timeZoneIdentifier: timeZoneIdentifier)]
+            var items = [ScheduleItem(time: date,
+                                      title: title,
+                                      location: location?.name,
+                                      notes: note,
+                                      latitude: location?.latitude,
+                                      longitude: location?.longitude,
+                                      cost: cost,
+                                      reservationId: id,
+                                      timeZoneIdentifier: timeZoneIdentifier,
+                                      foreignCost: foreignCost,
+                                      reservationPart: ReservationPart.main.rawValue)]
+            // 終わり（チェックアウト・返却）。費用は始まりにだけ入れる（2重に数えない）
+            if kind.usesPeriod, let endDate, endDate > date {
+                items.append(ScheduleItem(time: endDate,
+                                          title: "\(title) \(kind.endLabel)",
+                                          location: location?.name,
+                                          latitude: location?.latitude,
+                                          longitude: location?.longitude,
+                                          reservationId: id,
+                                          timeZoneIdentifier: timeZoneIdentifier,
+                                          reservationPart: ReservationPart.end.rawValue))
+            }
+            return items
         }
 
         // 経路のある予約は、便名を見出しにしたほうが行程で読みやすい。
@@ -252,9 +339,13 @@ extension Reservation {
                          title: "\(name) 出発",
                          location: departurePlace,
                          notes: note,
+                         latitude: departureLocation?.latitude,
+                         longitude: departureLocation?.longitude,
                          cost: cost,
                          reservationId: id,
-                         timeZoneIdentifier: timeZoneIdentifier)
+                         timeZoneIdentifier: timeZoneIdentifier,
+                         foreignCost: foreignCost,
+                         reservationPart: ReservationPart.departure.rawValue)
         ]
 
         if let arrivalDate {
@@ -263,10 +354,36 @@ extension Reservation {
                              title: "\(name) 到着",
                              location: arrivalPlace,
                              notes: nil,
+                             latitude: arrivalLocation?.latitude,
+                             longitude: arrivalLocation?.longitude,
                              reservationId: id,
-                             timeZoneIdentifier: arrivalTimeZoneIdentifier)
+                             timeZoneIdentifier: arrivalTimeZoneIdentifier,
+                             reservationPart: ReservationPart.arrival.rawValue)
             )
         }
         return items
+    }
+}
+
+extension Reservation {
+    /// 行程の予定に入れるメモ。予約番号の行の下に、予約のメモを続ける
+    var itineraryNotes: String? {
+        let number = confirmationNumber?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let memo = note?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let lines = [number.isEmpty ? nil : Self.confirmationLine(number), memo.isEmpty ? nil : memo].compactMap { $0 }
+        return lines.isEmpty ? nil : lines.joined(separator: "\n")
+    }
+
+    static func confirmationLine(_ number: String) -> String { "予約番号 \(number)" }
+
+    /// 行程の予定のメモから、予約のメモの部分を取り出す（先頭の予約番号の行は除く）
+    func memo(fromItineraryNotes notes: String?) -> String? {
+        var lines = (notes ?? "").components(separatedBy: "\n")
+        if let number = confirmationNumber?.trimmingCharacters(in: .whitespacesAndNewlines), !number.isEmpty,
+           lines.first?.trimmingCharacters(in: .whitespaces) == Self.confirmationLine(number) {
+            lines.removeFirst()
+        }
+        let memo = lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+        return memo.isEmpty ? nil : memo
     }
 }

@@ -109,3 +109,59 @@ struct LocalTimeZoneChooser: View {
         return "日本時間で入力しています。現地では \(otherClockText(in: destination)) です"
     }
 }
+
+/// 予定の終わる時刻（任意）。始まりの時刻の欄の下に置く。
+///
+/// 入れていないときは「終了時刻を追加」だけを出し、押すと始まりの1時間後から入れ始める
+struct ScheduleEndTimeField: View {
+    @Binding var hasEndTime: Bool
+    @Binding var endTime: Date
+    let startTime: Date
+    let timeZone: TimeZone
+    let tint: Color
+    let textColor: Color
+    let secondaryText: Color
+    let fieldBackground: Color
+
+    var body: some View {
+        if hasEndTime {
+            HStack {
+                Image(systemName: "clock.badge.checkmark")
+                    .foregroundColor(tint.opacity(0.8))
+                    .frame(width: 24)
+                Text("終了時刻")
+                    .font(.subheadline)
+                    .foregroundColor(textColor)
+                Spacer()
+                DatePicker("", selection: $endTime, displayedComponents: .hourAndMinute)
+                    .environment(\.timeZone, timeZone)
+                    .colorMultiply(tint)
+                    .datePickerStyle(.compact)
+                    .labelsHidden()
+                Button {
+                    hasEndTime = false
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundColor(secondaryText)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("終了時刻を消す"))
+            }
+            .padding(14)
+            .background(fieldBackground)
+            .cornerRadius(12)
+        } else {
+            Button {
+                endTime = startTime.addingTimeInterval(60 * 60)
+                hasEndTime = true
+            } label: {
+                Label("終了時刻を追加", systemImage: "plus.circle")
+                    .font(.subheadline)
+                    .foregroundColor(tint)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .padding(.horizontal, 4)
+        }
+    }
+}

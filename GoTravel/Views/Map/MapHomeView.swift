@@ -79,6 +79,8 @@ struct MapHomeView: View {
     ))
     @State private var visibleRegion: MKCoordinateRegion?
     @State private var selectedResult: MKMapItem?
+    /// 地図の上で押したもの（検索結果のピン、または地図に初めから出ている施設）
+    @State private var mapSelection: MapSelection<MKMapItem>?
     @State private var showingSaveSheet: Bool = false
     @State private var isSearching = false
     @State private var hasLoadedPlaces = false
@@ -103,7 +105,7 @@ struct MapHomeView: View {
     }
 
     private func mapBody(proxy: MapProxy) -> some View {
-        Map(position: $position, selection: $selectedResult) {
+        Map(position: $position, selection: $mapSelection) {
             // 現在地の青い点。
             //
             // **中身を渡してはいけない。** 渡すと標準の青い点がそれに
@@ -117,6 +119,7 @@ struct MapHomeView: View {
             ForEach(searchResults, id: \.self) { result in
                 Marker(item: result)
                     .tint(themeManager.currentTheme.error)
+                    .tag(MapSelection(result))
             }
 
             // 長押しで立てたピン
@@ -150,6 +153,19 @@ struct MapHomeView: View {
             }
         }
         .animation(.spring(response: 0.4, dampingFraction: 0.85), value: selectedResult != nil)
+        // 地図の施設（羽田空港など）を押したら、検索結果を押したのと同じ案内（経路・保存）を出す
+        .onChange(of: mapSelection) { _, selection in
+            if let value = selection?.value {
+                selectedResult = value
+            } else if let feature = selection?.feature {
+                Task { selectedResult = await MapFeatureLookup.mapItem(for: feature) }
+            } else {
+                selectedResult = nil
+            }
+        }
+        .onChange(of: selectedResult) { _, result in
+            if result == nil { mapSelection = nil }
+        }
         .onMapCameraChange { context in
             visibleRegion = context.region
         }
