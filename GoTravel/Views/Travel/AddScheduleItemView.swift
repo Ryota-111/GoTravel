@@ -22,6 +22,8 @@ struct AddScheduleItemView: View {
     /// 費用。外貨でも入れられる（`CurrencyCostFields`）
     @State private var costInput = CostInput()
     @State private var costNote = ""
+    @State private var hasEndTime = false
+    @State private var endTime = Date()
     @State private var notes = ""
     @State private var linkURL = ""
 
@@ -185,6 +187,21 @@ struct AddScheduleItemView: View {
                     fieldBackground: fieldBg
                 )
                 .task { await resolveDestinationTimeZone() }
+
+                ScheduleEndTimeField(
+                    hasEndTime: $hasEndTime,
+                    endTime: $endTime,
+                    startTime: time,
+                    timeZone: timeZone,
+                    tint: travelColor,
+                    textColor: textColor,
+                    secondaryText: themeManager.currentTheme.secondaryText,
+                    fieldBackground: fieldBg
+                )
+                // 現地時間・日本時間を切り替えたら、終わりも同じ時:分のまま付け替える
+                .onChange(of: timeZone) { oldZone, newZone in
+                    endTime = ScheduleClock.keepingWallClock(endTime, from: oldZone, to: newZone)
+                }
 
                 // 共有していて2人以上のときだけ出る
                 ParticipantPicker(
@@ -433,7 +450,8 @@ struct AddScheduleItemView: View {
             participantIds: SharedMembers.normalizedParticipants(participants, members: basePlan.sharedWith),
             foreignCost: costs.foreign,
             costNote: costNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? nil : costNote.trimmingCharacters(in: .whitespacesAndNewlines)
+                ? nil : costNote.trimmingCharacters(in: .whitespacesAndNewlines),
+            endTime: hasEndTime ? ScheduleItem.endTime(hourAndMinuteOf: endTime, after: time, in: timeZone) : nil
         )
 
         var updatedPlan = basePlan

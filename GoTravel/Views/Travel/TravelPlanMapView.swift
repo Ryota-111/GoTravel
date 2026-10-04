@@ -756,7 +756,7 @@ struct TravelPlanMapView: View {
                             .background(color.opacity(0.14), in: Capsule())
                     }
 
-                    Text(item.timeText)
+                    Text(item.timeRangeText)
                         .font(.caption.weight(.semibold))
                         .foregroundColor(themeManager.currentTheme.secondaryText)
 

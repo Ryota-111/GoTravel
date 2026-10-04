@@ -521,6 +521,16 @@ struct TravelPlanDetailView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
 
+                // 終わりの時刻があれば、始まりの下に小さく添える（次の予定までの間が分かる）
+                if let endText = item.endTimeText {
+                    Text("〜\(endText)")
+                        .font(.system(size: 11, weight: .semibold))
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                        .opacity(0.75)
+                }
+
                 // 見ている人の時計と違う予定だけ、どこの時刻かを添える
                 if let zoneLabel = item.zoneLabel(destination: destinationTimeZone) {
                     Text(zoneLabel)
@@ -893,7 +903,7 @@ struct TravelPlanDetailView: View {
 
     /// 固定した予定の添え書き。時刻と場所
     private func pinnedItemDetail(_ item: ScheduleItem) -> String {
-        [item.timeText, item.location]
+        [item.timeRangeText, item.location]
             .compactMap { $0?.isEmpty == false ? $0 : nil }
             .joined(separator: "・")
     }

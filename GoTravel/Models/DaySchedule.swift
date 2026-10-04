@@ -75,8 +75,12 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
     /// 費用のメモ（「2人分」「駐車場代込み」など）。金額の横に出す（ご要望から）
     var costNote: String?
 
+    /// 終わる時刻（任意）。`time` と同じ時計で読む。
+    /// 予定と予定の間にどれだけ移動の時間があるかが分かるように（ご要望から）
+    var endTime: Date?
+
     enum CodingKeys: String, CodingKey {
-        case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId, timeZoneIdentifier, isPinned, participantIds, foreignCost, reservationPart, costNote
+        case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId, timeZoneIdentifier, isPinned, participantIds, foreignCost, reservationPart, costNote, endTime
     }
 
     /// 書き出しや共有カードに出す金額。
@@ -111,7 +115,8 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
          participantIds: [String]? = nil,
          foreignCost: ForeignCost? = nil,
          reservationPart: String? = nil,
-         costNote: String? = nil) {
+         costNote: String? = nil,
+         endTime: Date? = nil) {
         self.id = id
         self.time = time
         self.title = title
@@ -130,5 +135,6 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
         self.foreignCost = foreignCost
         self.reservationPart = reservationPart
         self.costNote = costNote
+        self.endTime = endTime
     }
 }

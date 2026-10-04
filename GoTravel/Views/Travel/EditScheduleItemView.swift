@@ -29,6 +29,8 @@ struct EditScheduleItemView: View {
     /// 予算と実際に使った金額。外貨でも入れられる（`CurrencyCostFields`）
     @State private var costInput: CostInput
     @State private var costNote: String
+    @State private var hasEndTime: Bool
+    @State private var endTime: Date
     @State private var linkURL: String
     @State private var showDeleteConfirmation = false
 
@@ -57,6 +59,8 @@ struct EditScheduleItemView: View {
         _participants = State(initialValue: Set(item.participantIds ?? []))
         _costInput = State(initialValue: CostInput(cost: item.cost, actualCost: item.actualCost, foreign: item.foreignCost))
         _costNote = State(initialValue: item.costNote ?? "")
+        _hasEndTime = State(initialValue: item.endTime != nil)
+        _endTime = State(initialValue: item.endTime ?? item.time.addingTimeInterval(60 * 60))
         _linkURL = State(initialValue: item.linkURL ?? "")
 
         // 既存の場所情報を選択済み状態として復元
@@ -230,6 +234,21 @@ struct EditScheduleItemView: View {
                     fieldBackground: fieldBg
                 )
                 .task { await resolveDestinationTimeZone() }
+
+                ScheduleEndTimeField(
+                    hasEndTime: $hasEndTime,
+                    endTime: $endTime,
+                    startTime: time,
+                    timeZone: timeZone,
+                    tint: travelColor,
+                    textColor: textColor,
+                    secondaryText: themeManager.currentTheme.secondaryText,
+                    fieldBackground: fieldBg
+                )
+                // 現地時間・日本時間を切り替えたら、終わりも同じ時:分のまま付け替える
+                .onChange(of: timeZone) { oldZone, newZone in
+                    endTime = ScheduleClock.keepingWallClock(endTime, from: oldZone, to: newZone)
+                }
 
                 // 共有していて2人以上のときだけ出る
                 ParticipantPicker(
@@ -547,7 +566,8 @@ struct EditScheduleItemView: View {
             // 予約から作った予定のどの部分か（出発・到着など）を保つ
             reservationPart: item.reservationPart,
             costNote: costNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? nil : costNote.trimmingCharacters(in: .whitespacesAndNewlines)
+                ? nil : costNote.trimmingCharacters(in: .whitespacesAndNewlines),
+            endTime: hasEndTime ? ScheduleItem.endTime(hourAndMinuteOf: endTime, after: time, in: timeZone) : nil
         )
     }
 
