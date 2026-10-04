@@ -286,6 +286,55 @@ struct ThemeStyle {
                 typeSpineWidth: 5
             )
 
+        case .milkTea:
+            // カフェのカップ。角は大きく丸く、影はふんわり。縁は描かない
+            return ThemeStyle(
+                radiusSmall: 12, radiusMedium: 16, radiusLarge: 22,
+                rowRadius: 24, cardRadius: 28,
+                borderWidth: 0,
+                shadowStrength: 0.6, shadowRadius: 16, shadowY: 6,
+                fontDesign: .rounded,
+                displayFontName: nil,
+                bodyFontName: "ZenKakuGothicNew-Regular"
+            )
+
+        case .dustyRose:
+            // ドライフラワー。見出しを明朝にして大人っぽく。角はやや丸く、影は控えめ
+            return ThemeStyle(
+                radiusSmall: 9, radiusMedium: 13, radiusLarge: 18,
+                rowRadius: 18, cardRadius: 22,
+                borderWidth: 0.75,
+                shadowStrength: 0.5, shadowRadius: 12, shadowY: 4,
+                fontDesign: .serif,
+                displayFontName: "ZenAntique-Regular",
+                bodyFontName: "ZenKakuGothicNew-Regular"
+            )
+
+        case .afternoonTea:
+            // ホテルのティーセット。金の罫でくっきり縁取り、角は小さく、影は浅く。見出しは明朝。
+            // 丸くやわらかいミルクティーとは、形でも見分けがつくようにする
+            return ThemeStyle(
+                radiusSmall: 4, radiusMedium: 7, radiusLarge: 10,
+                rowRadius: 8, cardRadius: 12,
+                borderWidth: 1.25,
+                shadowStrength: 0.4, shadowRadius: 10, shadowY: 3,
+                fontDesign: .serif,
+                displayFontName: "ZenAntique-Regular",
+                bodyFontName: "ZenKakuGothicNew-Regular"
+            )
+
+        case .whiteGold:
+            // ホテルのラウンジ。角はほとんど丸めず、細い金の罫で縁取る。影はごく薄く、見出しは明朝
+            return ThemeStyle(
+                radiusSmall: 3, radiusMedium: 5, radiusLarge: 8,
+                rowRadius: 6, cardRadius: 8,
+                borderWidth: 1,
+                shadowStrength: 0.25, shadowRadius: 8, shadowY: 2,
+                fontDesign: .serif,
+                displayFontName: "ZenAntique-Regular",
+                bodyFontName: "ZenKakuGothicNew-Regular"
+            )
+
         case .neonNight:
             // 発光。縁を光らせ、影を広く強く
             return ThemeStyle(

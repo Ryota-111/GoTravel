@@ -89,8 +89,8 @@ struct ProView: View {
                 .multilineTextAlignment(.center)
 
             Text(highlighted == nil
-                 ? "予約確認メールを貼り付けるだけで、予約が入ります。追加テーマ14種と写真のiCloud保管も、一度のお支払いで使えるようになります。月額や年額はありません。"
-                 : "一度のお支払いで、予約確認メールの取り込み・追加テーマ14種・写真のiCloud保管が使えるようになります。月額や年額はありません。")
+                 ? "予約確認メールを貼り付けるだけで、予約が入ります。追加テーマ18種と写真のiCloud保管も、一度のお支払いで使えるようになります。月額や年額はありません。"
+                 : "一度のお支払いで、予約確認メールの取り込み・追加テーマ18種・写真のiCloud保管が使えるようになります。月額や年額はありません。")
                 .font(.subheadline)
                 .foregroundColor(theme.secondaryText)
                 .multilineTextAlignment(.center)
@@ -119,7 +119,7 @@ struct ProView: View {
         VStack(alignment: .leading, spacing: 12) {
             featureHeading(
                 icon: "paintpalette.fill",
-                title: "テーマが14種類増えます",
+                title: "テーマが18種類増えます",
                 detail: "色だけではありません。書体・角の丸み・縁・影・カードの形まで変わるので、"
                       + "同じアプリでも別物のように見えます。"
             )

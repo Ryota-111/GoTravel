@@ -36,6 +36,13 @@ struct ThemePreset {
         case whiteBlack = "白黒(白色メイン)"
         case pastelPink = "パステルピンク"
 
+        // 有料。やわらかく大人っぽい配色（2.9 で追加）。
+        // 新しいテーマを見つけてもらえるよう、追加テーマの先頭に置く（一覧はこの順に並ぶ）
+        case milkTea = "ミルクティー"
+        case dustyRose = "くすみピンク"
+        case afternoonTea = "アフタヌーンティー"
+        case whiteGold = "ホワイトゴールド"
+
         // 有料。色だけで成立するもの。
         case aiKinari = "藍と生成り"
         case sumi = "墨"
@@ -53,6 +60,7 @@ struct ThemePreset {
         case morningAirport = "早朝の空港"
         case mountainHut = "山小屋"
         case neonNight = "ネオン夜市"
+
 
         var displayName: String { rawValue }
 
@@ -94,6 +102,10 @@ struct ThemePreset {
             case .morningAirport: return "白とガラスの青。影を持たない"
             case .mountainHut: return "深緑と樹皮、地形図の紙"
             case .neonNight: return "黒地にシアンとマゼンタ。常に暗い"
+            case .milkTea: return "ミルクティーとラテ、キャラメルとココア。茶色だけで"
+            case .dustyRose: return "ドライフラワーのくすんだ薔薇。ピンクの濃淡で"
+            case .afternoonTea: return "白い器にフランボワーズ。金の縁取り"
+            case .whiteGold: return "白と金だけ。ホテルのラウンジのように"
             }
         }
 
@@ -641,6 +653,67 @@ extension ThemePreset {
                     planOuting: hex(0x2FE0D0), planDaily: hex(0xFF4D8D), planTravel: hex(0xFFD23F),
                     album: [hex(0x2FE0D0), hex(0xFF4D8D), hex(0xFFD23F),
                             hex(0x7B5CFF), hex(0x4DFF9A), hex(0xFF7A3D)]
+                )
+
+            case .milkTea:
+                // カフェのミルクティー。茶色だけでまとめる（ミルクティー・ラテ・キャラメル・ココア）。
+                // 赤みを入れると、アフタヌーンティーと見分けがつかなくなる
+                return Palette(
+                    bgLight: hex(0xEEE2D4), surfaceLight: hex(0xFBF5EE),
+                    bgDark: hex(0x1E1712), surfaceDark: hex(0x2A211B),
+                    ink: hex(0x3B2A1F), ink2: hex(0x82695A), ink3: hex(0xB09B8A),
+                    inkDark: hex(0xEEE2D4), inkDark2: hex(0xB09B8A),
+                    accent: hex(0x84552F),
+                    planOuting: hex(0x84552F), planDaily: hex(0xB08D6C), planTravel: hex(0xA4703F),
+                    album: [hex(0x84552F), hex(0xB08D6C), hex(0xA4703F),
+                            hex(0x6B5243), hex(0xC9A47C), hex(0x947766)],
+                    rule: hex(0xD6C2AC)
+                )
+
+            case .dustyRose:
+                // ドライフラワー。くすんだ薔薇を主役に、ピンクの濃淡（ローズ・ピーチ・モーヴ）だけで分ける。
+                // 地もほんのり薔薇色にする
+                return Palette(
+                    bgLight: hex(0xF5E8E8), surfaceLight: hex(0xFFF8F8),
+                    bgDark: hex(0x1C1517), surfaceDark: hex(0x271E21),
+                    ink: hex(0x3E2A30), ink2: hex(0x8D7278), ink3: hex(0xB9A0A6),
+                    inkDark: hex(0xF5E8E8), inkDark2: hex(0xB9A0A6),
+                    accent: hex(0xA65D6E),
+                    planOuting: hex(0xC48394), planDaily: hex(0xD4998C), planTravel: hex(0xA65D6E),
+                    album: [hex(0xA65D6E), hex(0xC48394), hex(0xD4998C),
+                            hex(0x9A7088), hex(0xE0AFB3), hex(0x8E5361)],
+                    rule: hex(0xE8CDD1)
+                )
+
+            case .afternoonTea:
+                // ホテルのアフタヌーンティー。白に近いアイボリーの地に、主役はフランボワーズ。
+                // 金は縁取りの罫だけに使う（茶色でまとめたミルクティーと見分けるため）
+                return Palette(
+                    bgLight: hex(0xFCFAF6), surfaceLight: hex(0xFFFFFF),
+                    bgDark: hex(0x1A1714), surfaceDark: hex(0x24201B),
+                    ink: hex(0x2B2527), ink2: hex(0x7A6F72), ink3: hex(0xA99FA2),
+                    inkDark: hex(0xFCFAF6), inkDark2: hex(0xA99FA2),
+                    accent: hex(0x9C3454),
+                    planOuting: hex(0x9C3454), planDaily: hex(0x5F8579), planTravel: hex(0xB2426A),
+                    album: [hex(0x9C3454), hex(0x5F8579), hex(0xB2426A),
+                            hex(0x4F6A8F), hex(0xC9A35C), hex(0x7E5A86)],
+                    rule: hex(0xCBAA62)
+                )
+
+            case .whiteGold:
+                // 白と金だけで組むラグジュアリー。黒や灰色は使わず、金の濃淡（シャンパン〜アンティーク）で分ける。
+                // 文字も金になじむ焦げ茶寄りの黒にする。
+                // 金はそのまま文字にすると白地で薄いので、差し色はやや深い金にしている
+                return Palette(
+                    bgLight: hex(0xFFFDF8), surfaceLight: hex(0xFFFFFF),
+                    bgDark: hex(0x15130F), surfaceDark: hex(0x1F1C17),
+                    ink: hex(0x2E2616), ink2: hex(0x8A7A55), ink3: hex(0xB9AB86),
+                    inkDark: hex(0xFFFDF8), inkDark2: hex(0xB9AB86),
+                    accent: hex(0x9C7A2B),
+                    planOuting: hex(0x9C7A2B), planDaily: hex(0xC9AE6A), planTravel: hex(0xB89443),
+                    album: [hex(0xB89443), hex(0xD7C08A), hex(0x9C7A2B),
+                            hex(0xE6D6AA), hex(0x7E6127), hex(0xC7A25E)],
+                    rule: hex(0xD9C285)
                 )
 
             case .originalColor, .whiteBlack, .pastelPink:
