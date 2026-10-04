@@ -63,8 +63,12 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
     /// （`docs/設計_メンバーごとの時間軸.md`）。旧バージョンが編集すると消えて全員の予定に戻る
     var participantIds: [String]?
 
+    /// 外貨で入れたときの元の金額とレート。`cost` / `actualCost` はこれを円に直したもの。
+    /// 円で入れた予定は nil（`ForeignCost.swift`）
+    var foreignCost: ForeignCost?
+
     enum CodingKeys: String, CodingKey {
-        case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId, timeZoneIdentifier, isPinned, participantIds
+        case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId, timeZoneIdentifier, isPinned, participantIds, foreignCost
     }
 
     /// 書き出しや共有カードに出す金額。
@@ -96,7 +100,8 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
          reservationId: String? = nil,
          timeZoneIdentifier: String? = nil,
          isPinned: Bool? = nil,
-         participantIds: [String]? = nil) {
+         participantIds: [String]? = nil,
+         foreignCost: ForeignCost? = nil) {
         self.id = id
         self.time = time
         self.title = title
@@ -112,5 +117,6 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
         self.timeZoneIdentifier = timeZoneIdentifier
         self.isPinned = isPinned
         self.participantIds = participantIds
+        self.foreignCost = foreignCost
     }
 }

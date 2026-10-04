@@ -49,8 +49,8 @@ struct ReservationEditorView: View {
     /// 開いた直後の「宿泊」は既定なだけなので、選んだことにしない
     @State private var hasChosenKind = false
     @State private var didApplyInitialImports = false
-    /// 費用の入力欄。数字以外を打たれても消さずに持っておく
-    @State private var costText = ""
+    /// 費用。外貨でも入れられる（`CurrencyCostFields`）
+    @State private var costInput = CostInput()
 
     private var plan: TravelPlan? {
         viewModel.travelPlans.first(where: { $0.id == planId })
@@ -239,7 +239,7 @@ struct ReservationEditorView: View {
         // いま行程に出ているかどうかを、そのままトグルの状態にする。
         // これをしないと、一度オンにしたものをオフに戻せない
         addsToItinerary = plan?.hasScheduleItems(forReservation: reservation.id) ?? false
-        costText = reservation.cost.map { String(Int($0)) } ?? ""
+        costInput = CostInput(cost: reservation.cost, foreign: reservation.foreignCost)
     }
 
     /// 予約確認メールから入れる。種類を選んでから押すと、その種類として読む
@@ -336,7 +336,12 @@ struct ReservationEditorView: View {
         if first.reservation.confirmationNumber == nil { first.reservation.confirmationNumber = typed.confirmationNumber }
         first.reservation.note = typed.note
         first.reservation.linkURL = typed.linkURL
-        if first.reservation.cost == nil { first.reservation.cost = typed.cost ?? Double(costText) }
+        // メールに金額が無ければ、先に入れていた費用を残す（メールの金額は円）
+        if first.reservation.cost == nil {
+            let typedCost = costInput.result
+            first.reservation.cost = typedCost.cost
+            first.reservation.foreignCost = typedCost.foreign
+        }
 
         load(first.reservation)
         importNotes = first.notes
@@ -814,15 +819,14 @@ struct ReservationEditorView: View {
                 .font(.caption.weight(.semibold))
                 .foregroundColor(themeManager.currentTheme.secondaryText)
 
-            HStack(spacing: 6) {
-                Text("¥")
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-                TextField("例：12000", text: $costText)
-                    .keyboardType(.numberPad)
-                    .foregroundColor(textColor)
-            }
-            .padding(14)
-            .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+            CurrencyCostFields(
+                input: $costInput,
+                tripRates: plan?.exchangeRates ?? [:],
+                accent: accent,
+                textColor: textColor,
+                secondaryText: themeManager.currentTheme.secondaryText,
+                fieldBackground: cardFill
+            )
 
             Text("予算の画面の合計に入ります。行程にも追加すると、行程の予定の金額として並びます。")
                 .font(.caption2)
@@ -831,16 +835,6 @@ struct ReservationEditorView: View {
         }
     }
 
-    /// "12,000" や全角で打たれても読めるようにする。読めなければ nil（空欄と同じ）
-    private var parsedCost: Double? {
-        let digits = ReservationEmailParser.normalized(costText)
-            .replacingOccurrences(of: ",", with: "")
-            .replacingOccurrences(of: "¥", with: "")
-            .replacingOccurrences(of: "円", with: "")
-            .trimmingCharacters(in: .whitespaces)
-        guard let value = Double(digits), value > 0 else { return nil }
-        return value
-    }
 
     private var optionalFields: some View {
         VStack(spacing: 16) {
@@ -907,7 +901,9 @@ struct ReservationEditorView: View {
         edited.confirmationNumber = edited.confirmationNumber?.trimmingCharacters(in: .whitespacesAndNewlines)
         edited.note = edited.note?.trimmingCharacters(in: .whitespacesAndNewlines)
         edited.linkURL = edited.linkURL?.trimmingCharacters(in: .whitespacesAndNewlines)
-        edited.cost = parsedCost
+        let costs = costInput.result
+        edited.cost = costs.cost
+        edited.foreignCost = costs.foreign
 
         if let index = plan.reservations.firstIndex(where: { $0.id == edited.id }) {
             plan.reservations[index] = edited
@@ -918,6 +914,10 @@ struct ReservationEditorView: View {
         // 行程との連動。オンなら入れ直し、オフなら消す。
         // 予約の時刻や便名を書き換えたときに古い予定が残らないよう、
         // どちらの場合もいったん消してから作り直す
+        // 外貨のレートは旅行ごとに1つ。この予約で入れたレートに、同じ通貨の費用をすべて揃える
+        if let foreign = edited.foreignCost, let rate = foreign.rate {
+            plan.setExchangeRate(rate, for: foreign.currencyCode)
+        }
         plan.syncScheduleItems(for: edited, isOn: addsToItinerary)
 
         viewModel.update(plan, userId: userId)

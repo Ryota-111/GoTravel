@@ -21,7 +21,8 @@ struct AddScheduleItemView: View {
     @State private var destinationTimeZone: TimeZone?
     /// 共有した旅行で、この予定に参加する人。空なら全員
     @State private var participants: Set<String> = []
-    @State private var cost = ""
+    /// 費用。外貨でも入れられる（`CurrencyCostFields`）
+    @State private var costInput = CostInput()
     @State private var notes = ""
     @State private var linkURL = ""
 
@@ -298,19 +299,15 @@ struct AddScheduleItemView: View {
             VStack(alignment: .leading, spacing: 12) {
                 sectionLabel("その他（任意）", icon: "ellipsis.circle")
 
-                HStack(spacing: 12) {
-                    Image(systemName: "yensign.circle")
-                        .foregroundColor(travelColor.opacity(0.7))
-                        .frame(width: 24)
-                    TextField("金額", text: $cost)
-                        .keyboardType(.decimalPad)
-                        .foregroundColor(textColor)
-                    Text("円")
-                        .foregroundColor(themeManager.currentTheme.secondaryText)
-                }
-                .padding(14)
-                .background(fieldBg)
-                .cornerRadius(12)
+                CurrencyCostFields(
+                    input: $costInput,
+                    tripRates: currentPlan.exchangeRates,
+                    accent: travelColor,
+                    textColor: textColor,
+                    secondaryText: themeManager.currentTheme.secondaryText,
+                    fieldBackground: fieldBg
+                )
+                .onAppear(perform: preselectTripCurrency)
 
                 Divider()
 
@@ -439,6 +436,7 @@ struct AddScheduleItemView: View {
 
         // viewModelから常に最新のplanを取得（古いスナップショットを使わない）
         let basePlan = viewModel.travelPlans.first(where: { $0.id == plan.id }) ?? plan
+        let costs = costInput.result
 
         let newItem = ScheduleItem(
             time: time,
@@ -447,10 +445,11 @@ struct AddScheduleItemView: View {
             notes: notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes.trimmingCharacters(in: .whitespacesAndNewlines),
             latitude: selectedCoordinate?.latitude,
             longitude: selectedCoordinate?.longitude,
-            cost: cost.isEmpty ? nil : Double(cost),
+            cost: costs.cost,
             linkURL: linkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : linkURL.trimmingCharacters(in: .whitespacesAndNewlines),
             timeZoneIdentifier: timeZone.identifier,
-            participantIds: SharedMembers.normalizedParticipants(participants, members: basePlan.sharedWith)
+            participantIds: SharedMembers.normalizedParticipants(participants, members: basePlan.sharedWith),
+            foreignCost: costs.foreign
         )
 
         var updatedPlan = basePlan
@@ -462,8 +461,28 @@ struct AddScheduleItemView: View {
             updatedPlan.daySchedules.sort { $0.dayNumber < $1.dayNumber }
         }
 
+        // 外貨のレートは旅行ごとに1つ。この予定で入れたレートに、同じ通貨の費用をすべて揃える
+        if let foreign = newItem.foreignCost, let rate = foreign.rate {
+            updatedPlan.setExchangeRate(rate, for: foreign.currencyCode)
+        }
+
         viewModel.update(updatedPlan, userId: userId)
         presentationMode.wrappedValue.dismiss()
+    }
+
+    /// 最新の旅行（外貨のレートを読むのに使う）
+    private var currentPlan: TravelPlan {
+        viewModel.travelPlans.first(where: { $0.id == plan.id }) ?? plan
+    }
+
+    /// この旅行で外貨を1種類だけ使っていれば、最初からその通貨にしておく。
+    /// 海外旅行では現地の通貨で続けて入れることが多く、毎回選び直すのは手間
+    private func preselectTripCurrency() {
+        guard !costInput.isForeign, costInput.amountText.isEmpty else { return }
+        let foreign = currentPlan.exchangeRates.filter { $0.key != CurrencyCatalog.yen }
+        guard foreign.count == 1, let (code, rate) = foreign.first else { return }
+        costInput.currencyCode = code
+        costInput.rateText = CurrencyCatalog.editingText(rate)
     }
 
     // MARK: - Location Method Sheet（選択方法）

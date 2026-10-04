@@ -450,12 +450,19 @@ struct TravelPlan: Identifiable, Codable {
         // 行程の側で入れた実績の金額は、予約には無いので作り直すと消えてしまう。
         // 費用を持つ1件目に引き継ぐ
         let actualCost = scheduleItems(forReservation: reservation.id).lazy.compactMap(\.actualCost).first
+        let actualForeign = scheduleItems(forReservation: reservation.id).lazy.compactMap(\.foreignCost?.actualAmount).first
 
         removeScheduleItems(forReservation: reservation.id)
         guard isOn else { return }
 
         for (index, var item) in reservation.itineraryItems().enumerated() {
-            if index == 0 { item.actualCost = actualCost }
+            if index == 0 {
+                item.actualCost = actualCost
+                if item.foreignCost != nil {
+                    item.foreignCost?.actualAmount = actualForeign
+                    item.actualCost = item.foreignCost?.yenActualAmount ?? actualCost
+                }
+            }
             if let dayNumber = dayNumber(forDate: item.time, in: item.timeZone) {
                 addScheduleItem(item, onDay: dayNumber)
             }
@@ -476,8 +483,18 @@ struct TravelPlan: Identifiable, Codable {
     /// 飛行機の到着の予定に金額を入れた場合も、2重に数えずに済む
     mutating func syncReservationCost(fromScheduleItemsOf reservationId: String) {
         guard let index = reservations.firstIndex(where: { $0.id == reservationId }) else { return }
-        let costs = scheduleItems(forReservation: reservationId).compactMap(\.cost)
+        let items = scheduleItems(forReservation: reservationId)
+        let costs = items.compactMap(\.cost)
         reservations[index].cost = costs.isEmpty ? nil : costs.reduce(0, +)
+
+        // 外貨で入れていれば、予約の側も同じ通貨で持つ（通貨が混ざっていたら円だけにする）
+        let foreign = items.compactMap(\.foreignCost).filter { $0.amount != nil }
+        if let first = foreign.first, foreign.allSatisfy({ $0.currencyCode == first.currencyCode }) {
+            reservations[index].foreignCost = ForeignCost(currencyCode: first.currencyCode, rate: first.rate,
+                                                          amount: foreign.compactMap(\.amount).reduce(0, +))
+        } else {
+            reservations[index].foreignCost = nil
+        }
     }
 
     /// 費用が入っていて、行程には出ていない予約。

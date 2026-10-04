@@ -34,12 +34,17 @@ struct BudgetSummaryView: View {
     /// 宿の予約番号と金額だけ控えた人の分も、予算に入れる。
     /// 行程に出ている予約は予定の金額として日ごとに数えるので、ここには入れない
     private var reservationCosts: [ItemCost] {
-        currentPlan.reservationsWithCostOutsideItinerary.map {
-            ItemCost(id: $0.id,
-                     title: $0.title.isEmpty ? $0.kind.label : $0.title,
-                     budget: $0.cost,
-                     actual: nil)
-        }
+        currentPlan.reservations
+            .filter { (($0.cost ?? 0) > 0 || $0.foreignCost != nil)
+                && !currentPlan.hasScheduleItems(forReservation: $0.id) }
+            .map {
+                ItemCost(id: $0.id,
+                         title: $0.title.isEmpty ? $0.kind.label : $0.title,
+                         budget: $0.cost,
+                         actual: nil,
+                         foreignText: Self.foreignText($0.foreignCost),
+                         missingRate: $0.foreignCost != nil && $0.foreignCost?.rate == nil)
+            }
     }
 
     /// 実際に使った金額の合計。未入力の項目は集計しない
@@ -77,8 +82,10 @@ struct BudgetSummaryView: View {
     private var costByDay: [DayCost] {
         currentPlan.daySchedulesInRange.compactMap { day in
             let items = day.scheduleItems
-                .filter { ($0.cost ?? 0) > 0 || ($0.actualCost ?? 0) > 0 }
-                .map { ItemCost(id: $0.id, title: $0.title, budget: $0.cost, actual: $0.actualCost) }
+                .filter { ($0.cost ?? 0) > 0 || ($0.actualCost ?? 0) > 0 || $0.foreignCost != nil }
+                .map { ItemCost(id: $0.id, title: $0.title, budget: $0.cost, actual: $0.actualCost,
+                                foreignText: Self.foreignText($0.foreignCost),
+                                missingRate: $0.foreignCost != nil && $0.foreignCost?.rate == nil) }
             guard !items.isEmpty else { return nil }
 
             return DayCost(
@@ -107,6 +114,16 @@ struct BudgetSummaryView: View {
         let title: String
         let budget: Double?
         let actual: Double?
+        /// 外貨で入れた元の金額（"$120"）。円で入れたものは nil
+        var foreignText: String? = nil
+        /// 外貨で入れたがレートがまだ無く、円の金額に入っていない
+        var missingRate = false
+    }
+
+    /// 外貨の元の金額の書き方。実績があれば実績、無ければ予算
+    private static func foreignText(_ foreign: ForeignCost?) -> String? {
+        guard let foreign, let amount = foreign.actualAmount ?? foreign.amount else { return nil }
+        return CurrencyCatalog.format(amount, code: foreign.currencyCode)
     }
 
 
@@ -187,6 +204,10 @@ struct BudgetSummaryView: View {
             // 共有していなくても同行者と割り勘したい場面があるため常に出す
             if splitBaseCost > 0 {
                 costSplitCard
+            }
+
+            if !foreignRates.isEmpty {
+                exchangeRateCard
             }
 
             if !costByDay.isEmpty || !reservationCosts.isEmpty {
@@ -417,6 +438,58 @@ struct BudgetSummaryView: View {
         travelPlanViewModel.update(updated, userId: userId)
     }
 
+    // MARK: - 外貨のレート
+
+    /// この旅行で使っている外貨（円は除く）。通貨コード順
+    private var foreignRates: [(code: String, rate: Double?)] {
+        currentPlan.exchangeRates
+            .filter { $0.key != CurrencyCatalog.yen }
+            .map { (code: $0.key, rate: $0.value) }
+            .sorted { $0.code < $1.code }
+    }
+
+    /// 旅行ごとのレート。ここで直すと、その通貨の費用がすべて円に直し直される
+    private var exchangeRateCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 6) {
+                Image(systemName: "arrow.left.arrow.right.circle")
+                    .foregroundColor(budgetColor)
+                    .font(.subheadline)
+                Text("為替レート")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(accentColor)
+            }
+
+            ForEach(foreignRates, id: \.code) { entry in
+                ExchangeRateRow(code: entry.code, rate: entry.rate,
+                                textColor: ThemePreset.readableText(on: cardBg),
+                                secondaryText: themeManager.currentTheme.secondaryText,
+                                errorColor: themeManager.currentTheme.error) { newRate in
+                    updateExchangeRate(newRate, for: entry.code)
+                }
+            }
+
+            Text("両替したときのレートを入れてください。この旅行のその通貨の費用は、すべてこのレートで円に直して合計します。")
+                .font(.caption2)
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding(16)
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(cardBg)
+                .overlay(RoundedRectangle(cornerRadius: 16).stroke(cardStroke, lineWidth: 1))
+                .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
+        )
+    }
+
+    private func updateExchangeRate(_ rate: Double?, for code: String) {
+        guard let userId = authVM.userId else { return }
+        var updated = currentPlan
+        updated.setExchangeRate(rate, for: code)
+        travelPlanViewModel.update(updated, userId: userId)
+    }
+
     // MARK: - 3枚目：日ごと
 
     /// 日別の合計と、その日の明細を1枚にまとめる。
@@ -553,6 +626,17 @@ struct BudgetSummaryView: View {
 
             Spacer(minLength: 4)
 
+            if let foreignText = item.foreignText {
+                Text(foreignText)
+                    .font(.caption2)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+            if item.missingRate {
+                Text("レート未入力")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(themeManager.currentTheme.error)
+            }
+
             // 実績が入っていればそれを出し、予算しか無ければ予算を出す
             if let actual = item.actual {
                 Text(formatCurrency(actual))
@@ -616,5 +700,61 @@ struct BudgetSummaryView: View {
         let formatter = DateFormatter.japanese
         formatter.dateFormat = "M月d日(E)"
         return formatter.string(from: date)
+    }
+}
+
+
+/// 為替レートの1行。打ち終わったとき（確定・フォーカスが外れたとき）だけ保存する。
+/// 1文字ごとに保存すると、そのたびに旅行全体を書き直して共有にも送ってしまう
+private struct ExchangeRateRow: View {
+    let code: String
+    let rate: Double?
+    let textColor: Color
+    let secondaryText: Color
+    let errorColor: Color
+    let onCommit: (Double?) -> Void
+
+    @State private var text = ""
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("1 \(code) =")
+                .font(.subheadline)
+                .foregroundColor(textColor)
+            TextField("未入力", text: $text)
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .focused($isFocused)
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(textColor)
+                .frame(maxWidth: 100)
+            Text("円")
+                .font(.subheadline)
+                .foregroundColor(secondaryText)
+            Spacer(minLength: 4)
+            Text(CurrencyCatalog.name(of: code))
+                .font(.caption)
+                .foregroundColor(rate == nil ? errorColor : secondaryText)
+                .lineLimit(1)
+        }
+        .onAppear { text = CurrencyCatalog.editingText(rate) }
+        .onChange(of: rate) { _, newValue in
+            if !isFocused { text = CurrencyCatalog.editingText(newValue) }
+        }
+        .onChange(of: isFocused) { _, focused in
+            guard !focused else { return }
+            let newRate = CurrencyCatalog.parse(text).flatMap { $0 > 0 ? $0 : nil }
+            if newRate != rate { onCommit(newRate) }
+        }
+        // 数字のキーボードには確定のキーが無いので、上に「完了」を出す
+        .toolbar {
+            if isFocused {
+                ToolbarItemGroup(placement: .keyboard) {
+                    Spacer()
+                    Button("完了") { isFocused = false }
+                }
+            }
+        }
     }
 }

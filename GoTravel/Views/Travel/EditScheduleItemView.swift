@@ -28,8 +28,8 @@ struct EditScheduleItemView: View {
     @State private var isPinned: Bool
     /// 共有した旅行で、この予定に参加する人。空なら全員
     @State private var participants: Set<String>
-    @State private var cost: String
-    @State private var actualCost: String
+    /// 予算と実際に使った金額。外貨でも入れられる（`CurrencyCostFields`）
+    @State private var costInput: CostInput
     @State private var linkURL: String
     @State private var showDeleteConfirmation = false
 
@@ -66,8 +66,7 @@ struct EditScheduleItemView: View {
         _timeZone = State(initialValue: item.timeZone)
         _isPinned = State(initialValue: item.isPinned == true)
         _participants = State(initialValue: Set(item.participantIds ?? []))
-        _cost = State(initialValue: item.cost != nil ? String(Int(item.cost!)) : "")
-        _actualCost = State(initialValue: item.actualCost != nil ? String(Int(item.actualCost!)) : "")
+        _costInput = State(initialValue: CostInput(cost: item.cost, actualCost: item.actualCost, foreign: item.foreignCost))
         _linkURL = State(initialValue: item.linkURL ?? "")
 
         // 既存の場所情報を選択済み状態として復元
@@ -107,6 +106,11 @@ struct EditScheduleItemView: View {
 
     private var textColor: Color {
         colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
+    }
+
+    /// 最新の旅行（外貨のレートを読むのに使う）
+    private var currentPlan: TravelPlan {
+        viewModel.travelPlans.first(where: { $0.id == plan.id }) ?? plan
     }
 
     private var fieldBg: Color {
@@ -351,39 +355,22 @@ struct EditScheduleItemView: View {
             VStack(alignment: .leading, spacing: 12) {
                 sectionLabel("その他（任意）", icon: "ellipsis.circle")
 
-                HStack(spacing: 12) {
-                    Image(systemName: "yensign.circle")
-                        .foregroundColor(travelColor.opacity(0.7))
-                        .frame(width: 24)
-                    TextField("予算", text: $cost)
-                        .keyboardType(.decimalPad)
-                        .foregroundColor(textColor)
-                    Text("円")
-                        .foregroundColor(themeManager.currentTheme.secondaryText)
-                }
-                .padding(14)
-                .background(fieldBg)
-                .cornerRadius(12)
-
-                // 旅行後に実際いくら使ったかを記録する欄
-                HStack(spacing: 12) {
-                    Image(systemName: "checkmark.circle")
-                        .foregroundColor(themeManager.currentTheme.success.opacity(0.8))
-                        .frame(width: 24)
-                    TextField("実際に使った金額", text: $actualCost)
-                        .keyboardType(.decimalPad)
-                        .foregroundColor(textColor)
-                    Text("円")
-                        .foregroundColor(themeManager.currentTheme.secondaryText)
-                }
-                .padding(14)
-                .background(fieldBg)
-                .cornerRadius(12)
+                CurrencyCostFields(
+                    input: $costInput,
+                    showsActual: true,
+                    tripRates: currentPlan.exchangeRates,
+                    accent: travelColor,
+                    textColor: textColor,
+                    secondaryText: themeManager.currentTheme.secondaryText,
+                    successColor: themeManager.currentTheme.success,
+                    fieldBackground: fieldBg
+                )
 
                 if let diff = costDifference {
+                    let unit = costInput.currencyCode
                     Text(diff > 0
-                         ? "予算より \(Int(diff))円 多く使いました"
-                         : (diff < 0 ? "予算より \(Int(-diff))円 少なく済みました" : "予算どおりです"))
+                         ? "予算より \(CurrencyCatalog.format(diff, code: unit)) 多く使いました"
+                         : (diff < 0 ? "予算より \(CurrencyCatalog.format(-diff, code: unit)) 少なく済みました" : "予算どおりです"))
                         .font(.caption)
                         .foregroundColor(diff > 0 ? themeManager.currentTheme.error : themeManager.currentTheme.success)
                 }
@@ -523,6 +510,10 @@ struct EditScheduleItemView: View {
 
         let updatedItem = createUpdatedItem()
         var updatedPlan = updatePlanWithItem(updatedItem)
+        // 外貨のレートは旅行ごとに1つ。この予定で入れたレートに、同じ通貨の費用をすべて揃える
+        if let foreign = updatedItem.foreignCost, let rate = foreign.rate {
+            updatedPlan.setExchangeRate(rate, for: foreign.currencyCode)
+        }
         // 予約から作った予定なら、金額を予約の費用にも反映する（予約の画面で同じ金額が見える）
         if let reservationId = updatedItem.reservationId {
             updatedPlan.syncReservationCost(fromScheduleItemsOf: reservationId)
@@ -542,7 +533,7 @@ struct EditScheduleItemView: View {
     }
 
     private func createUpdatedItem() -> ScheduleItem {
-        let costValue = cost.isEmpty ? nil : Double(cost)
+        let costs = costInput.result
         let locationName = selectedLocation?.name ?? (location.isEmpty ? nil : location.trimmingCharacters(in: .whitespacesAndNewlines))
 
         return ScheduleItem(
@@ -553,8 +544,8 @@ struct EditScheduleItemView: View {
             notes: notes.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : notes.trimmingCharacters(in: .whitespacesAndNewlines),
             latitude: selectedCoordinate?.latitude,
             longitude: selectedCoordinate?.longitude,
-            cost: costValue,
-            actualCost: actualCost.isEmpty ? nil : Double(actualCost),
+            cost: costs.cost,
+            actualCost: costs.actualCost,
             linkURL: linkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : linkURL.trimmingCharacters(in: .whitespacesAndNewlines),
             // 予約から作った予定は、予約とのつながりを保つ。
             // 以前はここで落としていたため、編集すると予約側のトグルや削除が効かなくなっていた
@@ -562,13 +553,14 @@ struct EditScheduleItemView: View {
             timeZoneIdentifier: timeZone.identifier,
             // 外したときは nil に戻す（固定したことの無い予定と同じ形にする）
             isPinned: isPinned ? true : nil,
-            participantIds: SharedMembers.normalizedParticipants(participants, members: plan.sharedWith)
+            participantIds: SharedMembers.normalizedParticipants(participants, members: plan.sharedWith),
+            foreignCost: costs.foreign
         )
     }
 
     /// 実績 - 予算。どちらかが未入力なら比較しない
     private var costDifference: Double? {
-        guard let budget = Double(cost), let actual = Double(actualCost) else { return nil }
+        guard let budget = costInput.amount, let actual = costInput.actualAmount else { return nil }
         return actual - budget
     }
 

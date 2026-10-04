@@ -135,6 +135,9 @@ struct Reservation: Identifiable, Codable, Equatable {
     /// JSON の中の項目なので、CloudKit のスキーマ変更は要らない
     var cost: Double?
 
+    /// 外貨で入れたときの元の金額とレート。`cost` はこれを円に直したもの（`ForeignCost.swift`）
+    var foreignCost: ForeignCost?
+
     /// 経路を表示するかどうか。
     /// 片方しか入っていなくても出す。入れた情報が画面に出ないほうが困る
     var hasRoute: Bool {
@@ -158,7 +161,8 @@ struct Reservation: Identifiable, Codable, Equatable {
          arrivalTimeZoneIdentifier: String? = nil,
          endDate: Date? = nil,
          pinsDuringPeriod: Bool? = nil,
-         cost: Double? = nil) {
+         cost: Double? = nil,
+         foreignCost: ForeignCost? = nil) {
         self.id = id
         self.kind = kind
         self.title = title
@@ -177,6 +181,7 @@ struct Reservation: Identifiable, Codable, Equatable {
         self.endDate = endDate
         self.pinsDuringPeriod = pinsDuringPeriod
         self.cost = cost
+        self.foreignCost = foreignCost
     }
 }
 
@@ -238,7 +243,8 @@ extension Reservation {
                                  notes: note,
                                  cost: cost,
                                  reservationId: id,
-                                 timeZoneIdentifier: timeZoneIdentifier)]
+                                 timeZoneIdentifier: timeZoneIdentifier,
+                                 foreignCost: foreignCost)]
         }
 
         // 経路のある予約は、便名を見出しにしたほうが行程で読みやすい。
@@ -254,7 +260,8 @@ extension Reservation {
                          notes: note,
                          cost: cost,
                          reservationId: id,
-                         timeZoneIdentifier: timeZoneIdentifier)
+                         timeZoneIdentifier: timeZoneIdentifier,
+                         foreignCost: foreignCost)
         ]
 
         if let arrivalDate {
