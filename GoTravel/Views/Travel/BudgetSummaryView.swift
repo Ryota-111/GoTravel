@@ -85,7 +85,8 @@ struct BudgetSummaryView: View {
                 .filter { ($0.cost ?? 0) > 0 || ($0.actualCost ?? 0) > 0 || $0.foreignCost != nil }
                 .map { ItemCost(id: $0.id, title: $0.title, budget: $0.cost, actual: $0.actualCost,
                                 foreignText: Self.foreignText($0.foreignCost),
-                                missingRate: $0.foreignCost != nil && $0.foreignCost?.rate == nil) }
+                                missingRate: $0.foreignCost != nil && $0.foreignCost?.rate == nil,
+                                note: $0.costNote) }
             guard !items.isEmpty else { return nil }
 
             return DayCost(
@@ -118,6 +119,8 @@ struct BudgetSummaryView: View {
         var foreignText: String? = nil
         /// 外貨で入れたがレートがまだ無く、円の金額に入っていない
         var missingRate = false
+        /// 費用のメモ（「2人分」など）
+        var note: String? = nil
     }
 
     /// 外貨の元の金額の書き方。実績があれば実績、無ければ予算
@@ -619,10 +622,18 @@ struct BudgetSummaryView: View {
 
     private func itemRow(_ item: ItemCost) -> some View {
         HStack(spacing: 8) {
-            Text("・\(item.title)")
-                .font(.caption)
-                .foregroundColor(accentColor)
-                .lineLimit(1)
+            VStack(alignment: .leading, spacing: 1) {
+                Text("・\(item.title)")
+                    .font(.caption)
+                    .foregroundColor(accentColor)
+                    .lineLimit(1)
+                if let note = item.note {
+                    Text(note)
+                        .font(.caption2)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .padding(.leading, 10)
+                }
+            }
 
             Spacer(minLength: 4)
 

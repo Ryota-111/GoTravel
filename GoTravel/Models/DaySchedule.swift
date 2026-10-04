@@ -72,8 +72,11 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
     /// 2.9 より前に作った予定には無い（時刻の順で当てる。`ReservationItinerarySync.swift`）
     var reservationPart: String?
 
+    /// 費用のメモ（「2人分」「駐車場代込み」など）。金額の横に出す（ご要望から）
+    var costNote: String?
+
     enum CodingKeys: String, CodingKey {
-        case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId, timeZoneIdentifier, isPinned, participantIds, foreignCost, reservationPart
+        case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId, timeZoneIdentifier, isPinned, participantIds, foreignCost, reservationPart, costNote
     }
 
     /// 書き出しや共有カードに出す金額。
@@ -107,7 +110,8 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
          isPinned: Bool? = nil,
          participantIds: [String]? = nil,
          foreignCost: ForeignCost? = nil,
-         reservationPart: String? = nil) {
+         reservationPart: String? = nil,
+         costNote: String? = nil) {
         self.id = id
         self.time = time
         self.title = title
@@ -125,5 +129,6 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
         self.participantIds = participantIds
         self.foreignCost = foreignCost
         self.reservationPart = reservationPart
+        self.costNote = costNote
     }
 }

@@ -28,6 +28,7 @@ struct EditScheduleItemView: View {
     @State private var participants: Set<String>
     /// 予算と実際に使った金額。外貨でも入れられる（`CurrencyCostFields`）
     @State private var costInput: CostInput
+    @State private var costNote: String
     @State private var linkURL: String
     @State private var showDeleteConfirmation = false
 
@@ -55,6 +56,7 @@ struct EditScheduleItemView: View {
         _isPinned = State(initialValue: item.isPinned == true)
         _participants = State(initialValue: Set(item.participantIds ?? []))
         _costInput = State(initialValue: CostInput(cost: item.cost, actualCost: item.actualCost, foreign: item.foreignCost))
+        _costNote = State(initialValue: item.costNote ?? "")
         _linkURL = State(initialValue: item.linkURL ?? "")
 
         // 既存の場所情報を選択済み状態として復元
@@ -344,6 +346,14 @@ struct EditScheduleItemView: View {
                     fieldBackground: fieldBg
                 )
 
+                // 費用のメモ（「2人分」「駐車場代込み」など）。金額の横に出す
+                TextField("費用のメモ（例：2人分・駐車場代込み）", text: $costNote)
+                    .font(.subheadline)
+                    .foregroundColor(textColor)
+                    .padding(14)
+                    .background(fieldBg)
+                    .cornerRadius(12)
+
                 if let diff = costDifference {
                     let unit = costInput.currencyCode
                     Text(diff > 0
@@ -535,7 +545,9 @@ struct EditScheduleItemView: View {
             participantIds: SharedMembers.normalizedParticipants(participants, members: plan.sharedWith),
             foreignCost: costs.foreign,
             // 予約から作った予定のどの部分か（出発・到着など）を保つ
-            reservationPart: item.reservationPart
+            reservationPart: item.reservationPart,
+            costNote: costNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? nil : costNote.trimmingCharacters(in: .whitespacesAndNewlines)
         )
     }
 

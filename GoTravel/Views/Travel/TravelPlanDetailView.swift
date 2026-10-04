@@ -606,7 +606,7 @@ struct TravelPlanDetailView: View {
 
                 // 実績が入っているときは予算と並べる。
                 // 金額が2つ並ぶので、どちらか分かるよう「予算」と明示する
-                if (item.cost ?? 0) > 0 || item.actualCost != nil {
+                if (item.cost ?? 0) > 0 || item.actualCost != nil || item.costNote != nil {
                     HStack(spacing: 10) {
                         if let cost = item.cost, cost > 0 {
                             HStack(spacing: 4) {
@@ -626,6 +626,13 @@ struct TravelPlanDetailView: View {
                                     .font(.system(size: 12, weight: .semibold))
                             }
                             .foregroundColor(themeManager.currentTheme.info)
+                        }
+
+                        if let costNote = item.costNote {
+                            Text(costNote)
+                                .font(.system(size: 12))
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
+                                .fixedSize(horizontal: false, vertical: true)
                         }
                     }
                 }

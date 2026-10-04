@@ -21,6 +21,7 @@ struct AddScheduleItemView: View {
     @State private var participants: Set<String> = []
     /// 費用。外貨でも入れられる（`CurrencyCostFields`）
     @State private var costInput = CostInput()
+    @State private var costNote = ""
     @State private var notes = ""
     @State private var linkURL = ""
 
@@ -282,6 +283,14 @@ struct AddScheduleItemView: View {
                 )
                 .onAppear(perform: preselectTripCurrency)
 
+                // 費用のメモ（「2人分」「駐車場代込み」など）。金額の横に出す
+                TextField("費用のメモ（例：2人分・駐車場代込み）", text: $costNote)
+                    .font(.subheadline)
+                    .foregroundColor(textColor)
+                    .padding(14)
+                    .background(fieldBg)
+                    .cornerRadius(12)
+
                 Divider()
 
                 VStack(alignment: .leading, spacing: 6) {
@@ -422,7 +431,9 @@ struct AddScheduleItemView: View {
             linkURL: linkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : linkURL.trimmingCharacters(in: .whitespacesAndNewlines),
             timeZoneIdentifier: timeZone.identifier,
             participantIds: SharedMembers.normalizedParticipants(participants, members: basePlan.sharedWith),
-            foreignCost: costs.foreign
+            foreignCost: costs.foreign,
+            costNote: costNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                ? nil : costNote.trimmingCharacters(in: .whitespacesAndNewlines)
         )
 
         var updatedPlan = basePlan
