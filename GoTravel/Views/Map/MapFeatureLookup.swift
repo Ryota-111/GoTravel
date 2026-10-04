@@ -62,7 +62,9 @@ struct MapFeatureInfoCard: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .background(accent.opacity(0.12))
-                        .foregroundColor(accent)
+                        // 差し色を薄く敷いた上なので、読める濃さに寄せる（地図の上の白っぽい面）
+                        .foregroundColor(ThemePreset.readableTint(
+                            accent, on: ThemePreset.composite(accent, over: .white, opacity: 0.12)))
                         .cornerRadius(12)
                 }
                 .mapNavigation($navigationTarget)

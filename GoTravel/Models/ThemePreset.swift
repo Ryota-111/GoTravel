@@ -676,8 +676,38 @@ extension ThemePreset {
     var actionFill: Color {
         switch type {
         case .whiteBlack: return .black
-        default: return primary
+        default:
+            // 明るい地のテーマで primary が地に近すぎるときは、読める濃さまで寄せる。
+            // 夜行列車の金色（地との比 2.48）がこれにあたり、リンクの文字も塗りのボタンも読みにくかった。
+            // 色相と鮮やかさは保つので、テーマの印象は変わらない
+            guard type.preferredColorScheme == .light,
+                  Self.contrastRatio(primary, backgroundLight) < 3.0 else { return primary }
+            return Self.readableTint(primary, on: backgroundLight)
         }
+    }
+
+    /// 差し色を薄く敷いた面（`actionFill.opacity(0.12)`）に、差し色の文字を置くときの色。
+    /// そのまま置くと、明るい差し色のテーマで比が 3 を切る（デフォルトカラーで 2.76）
+    func tintedLabel(on base: Color, opacity: CGFloat = 0.12) -> Color {
+        Self.readableTint(actionFill, on: Self.composite(actionFill, over: base, opacity: opacity))
+    }
+
+    /// 半透明の色を、下の色に重ねたときの色（比を測るために使う）
+    static func composite(_ color: Color, over base: Color, opacity: CGFloat = 1) -> Color {
+        var r1: CGFloat = 0, g1: CGFloat = 0, b1: CGFloat = 0, a1: CGFloat = 0
+        var r2: CGFloat = 0, g2: CGFloat = 0, b2: CGFloat = 0, a2: CGFloat = 0
+        UIColor(base).getRed(&r1, green: &g1, blue: &b1, alpha: &a1)
+        UIColor(color).getRed(&r2, green: &g2, blue: &b2, alpha: &a2)
+        let a = a2 * opacity
+        return Color(red: r1 + (r2 - r1) * a, green: g1 + (g2 - g1) * a, blue: b1 + (b2 - b1) * a)
+    }
+
+    /// `cardBackground2`（半透明）を敷いたカードの上の文字色。
+    /// デフォルトカラーのダークモードでは白を 60% 重ねた明るい灰色になるので、
+    /// `adaptiveText`（明るい文字）だと比 2.6 しかなかった
+    func textOnCardBackground2(for scheme: ColorScheme) -> Color {
+        let ground = scheme == .dark ? backgroundDark : backgroundLight
+        return Self.readableText(on: Self.composite(cardBackground2, over: ground))
     }
 
     /// テーマ色を薄く敷いた上に、その色で文字を置くときの色。
@@ -769,6 +799,14 @@ extension ThemePreset {
         var r: CGFloat = 0, g: CGFloat = 0, b: CGFloat = 0, a: CGFloat = 0
         UIColor(background).getRed(&r, green: &g, blue: &b, alpha: &a)
         let brightness = 0.299 * r + 0.587 * g + 0.114 * b
-        return brightness > 0.6 ? Color(white: 0.12) : Color(white: 0.97)
+        let ink = Color(white: 0.12), paper = Color(white: 0.97)
+        let chosen = brightness > 0.6 ? ink : paper
+        // 中くらいの明るさの色（金色など）では、明るさだけで選ぶと比が 3 を切ることがある。
+        // そのときは、もう一方のほうが読めるなら入れ替える
+        let other = brightness > 0.6 ? paper : ink
+        if contrastRatio(chosen, background) < 3.0, contrastRatio(other, background) > contrastRatio(chosen, background) {
+            return other
+        }
+        return chosen
     }
 }

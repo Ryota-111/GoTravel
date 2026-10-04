@@ -280,7 +280,8 @@ struct ReservationEditorView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(themeManager.currentTheme.secondaryText)
             }
-            .foregroundColor(accent)
+            // 差し色を薄く敷いた上なので、読める濃さに寄せた差し色を使う
+            .foregroundColor(themeManager.currentTheme.tintedLabel(on: cardFill))
             .padding(14)
             .background(RoundedRectangle(cornerRadius: 12).fill(accent.opacity(0.12)))
         }
@@ -388,7 +389,8 @@ struct ReservationEditorView: View {
                     .font(.system(size: 12, weight: .semibold))
                     .foregroundColor(themeManager.currentTheme.secondaryText)
             }
-            .foregroundColor(accent)
+            // 差し色を薄く敷いた上なので、読める濃さに寄せた差し色を使う
+            .foregroundColor(themeManager.currentTheme.tintedLabel(on: cardFill))
             .padding(14)
             .background(RoundedRectangle(cornerRadius: 12).fill(accent.opacity(0.12)))
         }

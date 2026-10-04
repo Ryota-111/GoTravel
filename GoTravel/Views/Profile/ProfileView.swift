@@ -1160,9 +1160,10 @@ struct AppSettingView: View {
 
                             Spacer()
 
+                            // 半透明のカードの上なので、重ねた色から決める（ダークモードで読めなかった）
                             Text(themeManager.currentTheme.type.displayName)
                                 .font(.headline)
-                                .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
+                                .foregroundColor(themeManager.currentTheme.textOnCardBackground2(for: colorScheme))
                         }
                         .padding()
                         .background(
@@ -1287,7 +1288,7 @@ struct AppSettingView: View {
                 Toggle(isOn: $switchesTabBySwipe) {
                     Text("横にスライドしてタブを切り替える")
                         .font(.subheadline.weight(.semibold))
-                        .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
+                        .foregroundColor(themeManager.currentTheme.textOnCardBackground2(for: colorScheme))
                 }
                 .tint(themeManager.currentTheme.actionFill)
 
@@ -1295,7 +1296,7 @@ struct AppSettingView: View {
                      ? "旅行計画の画面で、日程や持ち物を横にスライドすると隣のタブへ移ります。"
                      : "タブは上のボタンで切り替えます。日程を横になぞっても、地図のタブへ移りません。")
                     .font(.caption)
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .foregroundColor(themeManager.currentTheme.textOnCardBackground2(for: colorScheme).opacity(0.75))
                     .fixedSize(horizontal: false, vertical: true)
             }
             .padding()

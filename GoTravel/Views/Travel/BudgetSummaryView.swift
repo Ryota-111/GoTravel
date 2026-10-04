@@ -645,7 +645,7 @@ struct BudgetSummaryView: View {
             if item.missingRate {
                 Text("レート未入力")
                     .font(.caption2.weight(.semibold))
-                    .foregroundColor(themeManager.currentTheme.error)
+                    .foregroundColor(ThemePreset.readableTint(themeManager.currentTheme.error, on: cardBg))
             }
 
             // 実績が入っていればそれを出し、予算しか無ければ予算を出す
