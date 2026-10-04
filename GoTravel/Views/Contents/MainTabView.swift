@@ -77,6 +77,9 @@ struct MainTabView: View {
                 PhotoSyncService.shared.backfill()
             }
 
+            // 2.9 に上げた人かを、お知らせで記録が変わる前に覚えておく（`TabSwipePrompt`）
+            TabSwipePrompt.prepareOnLaunch()
+
             if !hasCheckedICloud {
                 hasCheckedICloud = true
                 await checkICloudStatus()

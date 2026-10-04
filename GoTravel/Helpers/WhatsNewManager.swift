@@ -40,6 +40,15 @@ enum WhatsNewManager {
         return lastShown != currentVersion
     }
 
+    /// 前の版から上げてきた人か（新しく入れた人ではないか）。お知らせを出す前に読むこと
+    static var isUpdateFromOlderVersion: Bool {
+        guard let lastShown = UserDefaults.standard.string(forKey: lastShownVersionKey) else {
+            // この仕組みを入れる前から使っている人。新しく入れた人はオンボーディングで記録が入る
+            return OnboardingManager.shared.hasCompletedOnboarding
+        }
+        return lastShown != currentVersion
+    }
+
     /// 表示済みとして記録する
     static func markAsShown() {
         UserDefaults.standard.set(currentVersion, forKey: lastShownVersionKey)

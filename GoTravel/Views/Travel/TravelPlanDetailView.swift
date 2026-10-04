@@ -86,6 +86,8 @@ struct TravelPlanDetailView: View {
     /// ストレスだという声も続いたので、選べるようにした。最初はオン（今までどおり）
     @AppStorage(TravelPlanDetailView.tabSwipeKey) private var switchesTabBySwipe = true
     static let tabSwipeKey = "TravelPlanTabSwipeEnabled"
+    /// 2.9 に上げた人に1度だけ、横スライドでタブを移るかを聞く（`TabSwipePrompt`）
+    @State private var showsTabSwipePrompt = false
 
     /// ScrollView の見えている高さ。scrollTo の anchor は割合指定なので必要
     @State private var scrollViewportHeight: CGFloat = 0
@@ -441,6 +443,25 @@ struct TravelPlanDetailView: View {
             if Calendar.current.startOfDay(for: plan.endDate) < Calendar.current.startOfDay(for: Date()) {
                 ReviewRequestManager.shared.record(.travelCompleted)
             }
+
+            // 画面が出きってから聞く（開いた直後に出すと、何の話か分かりにくい）
+            if TabSwipePrompt.shouldAsk() {
+                DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
+                    showsTabSwipePrompt = true
+                }
+            }
+        }
+        .alert("横にスライドしてタブを切り替えますか？", isPresented: $showsTabSwipePrompt) {
+            Button("切り替える（今までどおり）") {
+                switchesTabBySwipe = true
+                TabSwipePrompt.markAsked()
+            }
+            Button("切り替えない") {
+                switchesTabBySwipe = false
+                TabSwipePrompt.markAsked()
+            }
+        } message: {
+            Text("旅行計画の画面で、日程や持ち物を横にスライドすると、隣のタブ（地図など）へ移ります。切り替えない場合は、上のタブを押して移ります。\n\nあとからプロフィールの「アプリ設定」→「操作」でも変えられます。")
         }
     }
 
