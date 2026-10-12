@@ -26,6 +26,9 @@ struct EnjoyWorldView: View {
     @State private var showManagePlanTags = false
     @StateObject private var taskManager = TaskManager.shared
     @State private var showAddTravelPlan = false
+    /// iCloud が使えない・保存できていないとき、旅行計画の上に知らせる
+    @ObservedObject private var iCloudMonitor = ICloudSyncMonitor.shared
+    @State private var showsICloudGuide = false
     @State private var showAddPlan = false
     @State private var showJoinPlan = false
     @State private var planToDelete: TravelPlan?
@@ -213,6 +216,11 @@ struct EnjoyWorldView: View {
                         }
                     )
                 ScrollView(.vertical, showsIndicators: false) {
+                    if let problem = iCloudMonitor.problem {
+                        ICloudStatusBanner(problem: problem)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 6)
+                    }
                     travelEventsTitleSection
                     tabSelectionSection
                     travelPlansSection
@@ -774,11 +782,37 @@ struct EnjoyWorldView: View {
     }
 
     private var emptyTravelPlansView: some View {
-        emptyAddCard(
-            title: "旅行計画を作成",
-            subtitle: "日程・費用・持ち物をまとめて残せます"
-        ) {
-            showAddTravelPlan = true
+        VStack(alignment: .leading, spacing: 10) {
+            emptyAddCard(
+                title: "旅行計画を作成",
+                subtitle: "日程・費用・持ち物をまとめて残せます"
+            ) {
+                showAddTravelPlan = true
+            }
+
+            // 前に作った旅行計画が見えないとき、慌ててアプリを消してしまわないように案内する。
+            // 多くは iCloud の状態で一時的に見えていないだけ（`ICloudSyncMonitor`）。
+            // 消した旅行計画は、下の「最近削除した旅行計画」から戻せる
+            Button {
+                showsICloudGuide = true
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "questionmark.circle")
+                        .font(.caption)
+                    Text("以前の旅行計画が見当たらないときは")
+                        .font(.caption.weight(.semibold))
+                    Image(systemName: "chevron.right")
+                        .font(.caption2)
+                }
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+            .buttonStyle(.plain)
+            .alert("以前の旅行計画が見当たらないときは", isPresented: $showsICloudGuide) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(ICloudGuidanceText.dataUnavailable
+                     + "\n\n削除した旅行計画は、30日間は「最近削除した旅行計画」から戻せます（プロフィールからも開けます）。")
+            }
         }
         .padding(.horizontal, 20)
     }
