@@ -56,12 +56,23 @@ struct FeedbackFormView: View {
 
     @FocusState private var messageFocused: Bool
 
+    /// データの診断の結果（`DataDiagnostics.text`）。あれば本文に添えて送る
+    private let diagnostics: String?
+    @State private var showsDiagnostics = false
+
+    init(kind: FeedbackKind = .request, diagnostics: String? = nil) {
+        _kind = State(initialValue: kind)
+        self.diagnostics = diagnostics
+    }
+
     private var trimmedMessage: String {
         message.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
     private var canSend: Bool {
-        !trimmedMessage.isEmpty && trimmedMessage.count <= FeedbackService.messageLimit && !isSending
+        // 診断の結果を送るときは、本文が空でも送れる
+        (!trimmedMessage.isEmpty || diagnostics != nil)
+            && trimmedMessage.count <= FeedbackService.messageLimit && !isSending
     }
 
     var body: some View {
@@ -104,6 +115,9 @@ struct FeedbackFormView: View {
                 kindPicker
                 messageField
                 emailField
+                if diagnostics != nil {
+                    diagnosticsNote
+                }
                 collectedInfoNote
                 sendButton
             }
@@ -231,6 +245,44 @@ struct FeedbackFormView: View {
         )
     }
 
+    /// 添える診断の結果。何を送るのかを隠さず、開けば中身を見られるようにする
+    private var diagnosticsNote: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { showsDiagnostics.toggle() }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "stethoscope")
+                    Text("データの診断の結果を添えて送ります")
+                        .font(.caption.weight(.semibold))
+                    Spacer()
+                    Image(systemName: showsDiagnostics ? "chevron.up" : "chevron.down")
+                        .font(.caption2)
+                }
+                .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
+            }
+            .buttonStyle(.plain)
+
+            Text("旅行計画などの件数と、iCloudとの同期の記録だけです。旅行計画の中身や名前は含まれません。")
+                .font(.caption2)
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+
+            if showsDiagnostics, let diagnostics {
+                Text(diagnostics)
+                    .font(.system(.caption2, design: .monospaced))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .textSelection(.enabled)
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: 12)
+                .fill(cardFill)
+        )
+    }
+
     private var sendButton: some View {
         Button(action: send) {
             HStack(spacing: 8) {
@@ -334,7 +386,8 @@ struct FeedbackFormView: View {
                 try await FeedbackService.shared.submit(
                     kind: kind,
                     message: message,
-                    contactEmail: contactEmail
+                    contactEmail: contactEmail,
+                    diagnostics: diagnostics
                 )
                 isSending = false
                 withAnimation { didSend = true }
