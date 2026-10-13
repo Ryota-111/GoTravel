@@ -124,7 +124,8 @@ extension TravelPlan {
     static func location(of item: ScheduleItem, keepingAddressOf old: ReservationLocation?) -> ReservationLocation? {
         guard let name = item.location?.trimmingCharacters(in: .whitespacesAndNewlines), !name.isEmpty else { return nil }
         let sameplace = old?.name == name && old?.latitude == item.latitude && old?.longitude == item.longitude
-        return ReservationLocation(name: name, address: sameplace ? old?.address : nil,
+        // 予定が住所を持っていればそれを使い、無ければ同じ場所のときだけ予約の住所を残す
+        return ReservationLocation(name: name, address: item.address ?? (sameplace ? old?.address : nil),
                                    latitude: item.latitude, longitude: item.longitude)
     }
 
@@ -168,6 +169,7 @@ extension TravelPlan {
             locationUntouched = current.latitude == nil || current.longitude == nil
         }
         if locationUntouched {
+            item.address = fresh.address ?? (fresh.location == nil ? current.address : nil)
             item.location = fresh.location ?? current.location
             item.latitude = fresh.latitude ?? (fresh.location == nil ? current.latitude : nil)
             item.longitude = fresh.longitude ?? (fresh.location == nil ? current.longitude : nil)

@@ -483,6 +483,11 @@ struct PackingItemRow: View {
     let item: PackingItem
     let planId: String
 
+    /// 名前（とメモ）を書き換える
+    @State private var showsEditor = false
+    @State private var editingName = ""
+    @State private var editingNote = ""
+
     private var currentPlan: TravelPlan? {
         viewModel.travelPlans.first(where: { $0.id == planId })
     }
@@ -525,17 +530,20 @@ struct PackingItemRow: View {
 
             Spacer(minLength: 0)
 
-            // 長押しの contextMenu だけだと削除に気づけないので常に出す。
-            // チェックの丸は左端なので、右端なら間違って押しにくい
-            Button(action: deleteItem) {
-                Image(systemName: "xmark")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.7))
-                    .frame(width: 28, height: 28)
+            // 編集と削除は右端の「…」から。長押しの contextMenu だけだと気づけないので常に出す。
+            // チェックの丸は左端なので、右端なら間違って押しにくい（予約や旅行計画のカードと同じ形）
+            Menu {
+                Button("編集", systemImage: "pencil", action: startEditing)
+                Button("削除", systemImage: "trash", role: .destructive, action: deleteItem)
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.8))
+                    .frame(width: 30, height: 28)
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text("\(item.name)を削除"))
+            .accessibilityLabel(Text("\(item.name)のメニュー"))
         }
         .padding(.leading, 14)
         .padding(.trailing, 6)
@@ -563,8 +571,37 @@ struct PackingItemRow: View {
         .accessibilityAddTraits(item.isChecked ? [.isButton, .isSelected] : .isButton)
         .accessibilityAction(named: "切り替える", toggleCheck)
         .contextMenu {
-            Button("削除", role: .destructive, action: deleteItem)
+            Button("編集", systemImage: "pencil", action: startEditing)
+            Button("削除", systemImage: "trash", role: .destructive, action: deleteItem)
         }
+        .alert("\(item.kind.title)を編集", isPresented: $showsEditor) {
+            TextField("名前", text: $editingName)
+            // お土産は「誰に」、ほかもメモがあれば書き換えられるようにする
+            if item.kind.usesNote || !(item.note ?? "").isEmpty {
+                TextField(item.kind.usesNote ? item.kind.notePlaceholder : "メモ", text: $editingNote)
+            }
+            Button("キャンセル", role: .cancel) {}
+            Button("保存", action: saveEdit)
+        }
+    }
+
+    private func startEditing() {
+        editingName = item.name
+        editingNote = item.note ?? ""
+        showsEditor = true
+    }
+
+    /// 名前が空なら何もしない（空の項目を作らない）
+    private func saveEdit() {
+        let name = editingName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty,
+              var updatedPlan = currentPlan,
+              let index = updatedPlan.packingItems.firstIndex(where: { $0.id == item.id }),
+              let userId = authVM.userId else { return }
+        let note = editingNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        updatedPlan.packingItems[index].name = name
+        updatedPlan.packingItems[index].note = note.isEmpty ? nil : note
+        viewModel.update(updatedPlan, userId: userId)
     }
 
     private var checkmark: some View {

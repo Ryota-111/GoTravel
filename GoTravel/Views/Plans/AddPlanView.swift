@@ -1124,7 +1124,8 @@ struct AddPlanView: View {
             name: result.name ?? "名称不明",
             latitude: result.placemark.coordinate.latitude,
             longitude: result.placemark.coordinate.longitude,
-            address: address ?? result.placemark.title
+            // 地図で選んだ住所だけを使う。緯度・経度から作り直した場所の「住所」は国名になる
+            address: address
         ))
         showMapPicker = false
     }

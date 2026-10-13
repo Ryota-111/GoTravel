@@ -258,6 +258,7 @@ extension ReservationItinerarySyncTests {
         item.location = "海風パーキング"
         item.latitude = 26.31
         item.longitude = 127.71
+        item.address = nil          // 長押しのピンで選んだ場所は住所を持たない（編集画面も住所を差し替える）
         editItem(in: &trip, id: item.id) { $0 = item }
         trip.syncReservation(fromScheduleItem: item)
         #expect(trip.reservations[0].location?.name == "海風パーキング")

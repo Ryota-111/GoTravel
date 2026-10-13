@@ -298,6 +298,19 @@ extension Reservation {
     /// 時刻が決まっていない予約（宿の予約番号だけ控えた場合など）は空を返す。
     /// 置く場所が決められないため
     func itineraryItems() -> [ScheduleItem] {
+        // 住所は、どの部分の予定かに合わせて付ける（宿などは場所、飛行機は出発地・到着地）
+        itineraryItemsWithoutAddress().map { item in
+            var item = item
+            switch item.reservationPart.flatMap(ReservationPart.init(rawValue:)) {
+            case .departure: item.address = departureLocation?.address
+            case .arrival: item.address = arrivalLocation?.address
+            default: item.address = location?.address
+            }
+            return item
+        }
+    }
+
+    private func itineraryItemsWithoutAddress() -> [ScheduleItem] {
         guard let date else { return [] }
 
         let note = itineraryNotes

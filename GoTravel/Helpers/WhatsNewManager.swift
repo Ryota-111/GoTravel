@@ -83,6 +83,36 @@ struct WhatsNew: Identifiable {
 
     private static let all: [WhatsNew] = [
         WhatsNew(
+            version: "2.9.1",
+            items: [
+                Item(
+                    icon: "exclamationmark.icloud.fill",
+                    title: "iCloudにつながっていないときにお知らせします",
+                    detail: "旅行計画はiCloudに保存されています。iCloudからサインアウトしていたり、確認待ちになっていたりすると、一覧が空に見えることがあります。そのときは旅行計画の上にお知らせを出し、確認のしかたをご案内します。iCloudの容量がいっぱいで保存できていないときもお知らせします。"
+                ),
+                Item(
+                    icon: "doc.text.magnifyingglass",
+                    title: "iCloudにつながらなくても予定を確かめられます",
+                    detail: "旅行計画の控えを端末にも残すようにしました。iCloudにつながらず一覧が空のときは、ホームの「前回の控えを見る」から、日程・予約番号・持ち物を見られます（見ることだけできます）。旅行中にiCloudが外れても、予定を確かめられます。"
+                ),
+                Item(
+                    icon: "mappin.circle.fill",
+                    title: "予定の住所が正しく出るようになりました",
+                    detail: "予定の詳細で、場所の住所の代わりに現在地の国名が出ていたのを直しました。ご報告をいただいて修正しました。"
+                ),
+                Item(
+                    icon: "pencil",
+                    title: "持ち物を1つずつ編集できます",
+                    detail: "持ち物・お土産・やりたいことのリストで、項目の右の「…」から名前やメモを書き換えられるようになりました。"
+                ),
+                Item(
+                    icon: "calendar",
+                    title: "日程に曜日が出ます",
+                    detail: "日程の「Day 1」の日付に、曜日も出るようにしました。ご要望をいただいて追加しました。"
+                )
+            ]
+        ),
+        WhatsNew(
             version: "2.9",
             items: [
                 Item(

@@ -70,7 +70,7 @@ struct EditScheduleItemView: View {
             mapItem.name = item.location
             _selectedLocation = State(initialValue: mapItem)
             _selectedCoordinate = State(initialValue: coord)
-            _selectedAddress = State(initialValue: nil)
+            _selectedAddress = State(initialValue: item.address)
         }
     }
 
@@ -284,6 +284,8 @@ struct EditScheduleItemView: View {
         sectionCard {
             VStack(alignment: .leading, spacing: 10) {
                 sectionLabel("場所（任意）", icon: "mappin.circle.fill")
+                    // 住所を保存していなかった予定は、緯度・経度から引いて出す（保存すると残る）
+                    .task { await lookUpAddressIfMissing() }
 
                 if selectedLocation != nil || !location.isEmpty {
                     HStack(spacing: 12) {
@@ -294,7 +296,9 @@ struct EditScheduleItemView: View {
                             Text(selectedLocation?.name ?? (location.isEmpty ? "場所" : location))
                                 .font(.subheadline.weight(.medium))
                                 .foregroundColor(textColor)
-                            if let address = selectedAddress ?? selectedLocation?.placemark.title {
+                            // 保存した住所だけを出す。緯度・経度から作り直した場所の「住所」は、
+                            // 端末の地域の国名になるので使わない（`ScheduleItem.address` の注意）
+                            if let address = selectedAddress {
                                 Text(address)
                                     .font(.caption)
                                     .foregroundColor(themeManager.currentTheme.secondaryText)
@@ -567,7 +571,8 @@ struct EditScheduleItemView: View {
             reservationPart: item.reservationPart,
             costNote: costNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? nil : costNote.trimmingCharacters(in: .whitespacesAndNewlines),
-            endTime: hasEndTime ? ScheduleItem.endTime(hourAndMinuteOf: endTime, after: time, in: timeZone) : nil
+            endTime: hasEndTime ? ScheduleItem.endTime(hourAndMinuteOf: endTime, after: time, in: timeZone) : nil,
+            address: selectedCoordinate == nil ? nil : selectedAddress
         )
     }
 
@@ -802,6 +807,16 @@ struct EditScheduleItemView: View {
         selectedCoordinate = coord
         selectedAddress = historyItem.address
         location = historyItem.name
+    }
+
+    /// 住所を持っていない予定（2.9 までに作ったもの）の住所を、緯度・経度から引く
+    private func lookUpAddressIfMissing() async {
+        guard selectedAddress == nil, let coordinate = selectedCoordinate else { return }
+        let address = await AddressLookup.address(latitude: coordinate.latitude, longitude: coordinate.longitude)
+        // 引いている間に場所を選び直していたら、上書きしない
+        guard selectedAddress == nil, selectedCoordinate?.latitude == coordinate.latitude,
+              selectedCoordinate?.longitude == coordinate.longitude else { return }
+        selectedAddress = address
     }
 
     /// 地図で選んだ場所を、この予定の場所にする

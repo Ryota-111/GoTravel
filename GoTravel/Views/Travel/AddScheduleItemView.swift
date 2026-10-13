@@ -231,7 +231,8 @@ struct AddScheduleItemView: View {
                             Text(selected.name ?? "場所")
                                 .font(.subheadline.weight(.medium))
                                 .foregroundColor(textColor)
-                            if let address = selectedAddress ?? selected.placemark.title {
+                            // 保存する住所だけを出す（`ScheduleItem.address` の注意）
+                            if let address = selectedAddress {
                                 Text(address)
                                     .font(.caption)
                                     .foregroundColor(themeManager.currentTheme.secondaryText)
@@ -451,7 +452,8 @@ struct AddScheduleItemView: View {
             foreignCost: costs.foreign,
             costNote: costNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? nil : costNote.trimmingCharacters(in: .whitespacesAndNewlines),
-            endTime: hasEndTime ? ScheduleItem.endTime(hourAndMinuteOf: endTime, after: time, in: timeZone) : nil
+            endTime: hasEndTime ? ScheduleItem.endTime(hourAndMinuteOf: endTime, after: time, in: timeZone) : nil,
+            address: selectedLocation == nil ? nil : selectedAddress
         )
 
         var updatedPlan = basePlan

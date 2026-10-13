@@ -79,6 +79,8 @@ struct MainTabView: View {
 
             // 2.9 に上げた人かを、お知らせで記録が変わる前に覚えておく（`TabSwipePrompt`）
             TabSwipePrompt.prepareOnLaunch()
+            // iCloud が使えない・保存できていないときにホームで知らせる
+            ICloudSyncMonitor.shared.start()
 
             if !hasCheckedICloud {
                 hasCheckedICloud = true
@@ -116,6 +118,8 @@ struct MainTabView: View {
             }
             // 共有メニューから予約を送ったあと、アプリに戻ってきたとき
             if phase == .active { checkSharedImports() }
+            // 設定アプリで iCloud を直して戻ってきたとき、帯を消す
+            if phase == .active { ICloudSyncMonitor.shared.refresh() }
         }
         .alert("iCloudが必要です", isPresented: $showICloudAlert) {
             Button("設定を開く", role: .none) {

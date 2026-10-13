@@ -79,8 +79,15 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
     /// 予定と予定の間にどれだけ移動の時間があるかが分かるように（ご要望から）
     var endTime: Date?
 
+    /// 場所の住所（地図で選んだときのもの）。場所の名前の下に出す。
+    ///
+    /// 2.9 までは保存しておらず、予定を開き直すと緯度・経度だけから場所を作り直して
+    /// その「住所」を出していた。住所を持たない場所では iOS が端末の地域の国名を返すため、
+    /// 「現在地の国名が出る」と報告された。無い予定は、開いたときに緯度・経度から引き直す
+    var address: String?
+
     enum CodingKeys: String, CodingKey {
-        case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId, timeZoneIdentifier, isPinned, participantIds, foreignCost, reservationPart, costNote, endTime
+        case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId, timeZoneIdentifier, isPinned, participantIds, foreignCost, reservationPart, costNote, endTime, address
     }
 
     /// 書き出しや共有カードに出す金額。
@@ -116,7 +123,8 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
          foreignCost: ForeignCost? = nil,
          reservationPart: String? = nil,
          costNote: String? = nil,
-         endTime: Date? = nil) {
+         endTime: Date? = nil,
+         address: String? = nil) {
         self.id = id
         self.time = time
         self.title = title
@@ -136,5 +144,6 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
         self.reservationPart = reservationPart
         self.costNote = costNote
         self.endTime = endTime
+        self.address = address
     }
 }

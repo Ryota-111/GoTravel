@@ -92,6 +92,25 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
 
         // ローカル画像を読み込み
         loadLocalImages()
+
+        // 端末に控えを書き出す（iCloud が外れても読めるように。`TravelPlanBackupStore`）
+        scheduleBackup()
+    }
+
+    /// 控えの書き出しは少し待ってまとめて行う。同期で一覧が立て続けに変わるため
+    private var backupWorkItem: DispatchWorkItem?
+
+    private func scheduleBackup() {
+        guard !CoreDataManager.isEmptyDataMode, let userId = currentUserId else { return }
+        backupWorkItem?.cancel()
+        let plans = travelPlans
+        let work = DispatchWorkItem {
+            DispatchQueue.global(qos: .utility).async {
+                TravelPlanBackupStore.save(plans, userId: userId)
+            }
+        }
+        backupWorkItem = work
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2, execute: work)
     }
 
     /// ローカルファイルシステムから画像を読み込む
