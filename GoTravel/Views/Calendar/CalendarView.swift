@@ -2,7 +2,21 @@ import SwiftUI
 
 // MARK: - Calendar Timeline Item Model
 struct CalendarTimelineItem: Identifiable {
-    let id = UUID()
+    /// 行の目印。**予定の種類と予定の id から決まる、変わらない値にする。**
+    ///
+    /// 以前は `UUID()` で、一覧を作り直すたびに別の行になっていた。旅行計画を開いた直後に
+    /// 計画が保存し直される（目的地の座標を引き直す・共有を最新にする）と、裏のカレンダーの
+    /// 一覧が作り直され、開いた行が消えたとみなされて詳細画面が勝手に閉じていた
+    var id: String {
+        let typeKey: String
+        switch type {
+        case .dailyPlan: typeKey = "daily"
+        case .outingPlan: typeKey = "outing"
+        case .anniversary: typeKey = "anniversary"
+        case .travel: typeKey = "travel"
+        }
+        return "\(typeKey):\(relatedPlan?.id ?? relatedTravelPlan?.id ?? title)"
+    }
     let time: Date
     let title: String
     let subtitle: String?
