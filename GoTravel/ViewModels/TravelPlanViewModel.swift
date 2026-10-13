@@ -250,6 +250,9 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
             return
         }
 
+        // 本人が消したことを残す。一覧が 0 件になっても「見えなくなった」と知らせないため
+        SyncDiagnosticsLog.recordUserAction("delete")
+
         // 通知をキャンセル（戻したときに入れ直す）
         NotificationService.shared.cancelTravelPlanNotifications(for: planId)
 

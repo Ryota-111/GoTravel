@@ -263,7 +263,7 @@ struct FeedbackFormView: View {
             }
             .buttonStyle(.plain)
 
-            Text("旅行計画などの件数と、iCloudとの同期の記録だけです。旅行計画の中身や名前は含まれません。")
+            Text("旅行計画などの件数、iCloudとの同期の記録、iCloudの利用者ID（名前やメールアドレスではありません）だけです。旅行計画の中身や名前は含まれません。")
                 .font(.caption2)
                 .foregroundColor(themeManager.currentTheme.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)

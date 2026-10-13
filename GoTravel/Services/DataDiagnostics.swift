@@ -64,6 +64,9 @@ enum DataDiagnostics {
         var date = Date()
         var userId: String
         var accountStatus: CKAccountStatus?
+        /// iCloud の利用者の ID（"_92796a…"）。CloudKit Console の Logs の userId と同じもの。
+        /// お問い合わせのときに、Logs のどの人かを突き合わせるのに使う（名前やメールアドレスではない）
+        var cloudUserId: String? = nil
         var local: LocalCounts
         var cloud: CloudResult
         var backupCount: Int?
@@ -145,14 +148,16 @@ enum DataDiagnostics {
         let local = countLocal(userId: userId, context: CoreDataManager.shared.viewContext)
 
         let cloud: CloudResult
+        var cloudUserId: String?
         if status == .available {
             cloud = await countCloud(userId: userId, database: container.privateCloudDatabase)
+            cloudUserId = try? await container.userRecordID().recordName
         } else {
             cloud = .skipped
         }
 
         let backup = TravelPlanBackupStore.load(userId: userId)
-        return Report(userId: userId, accountStatus: status, local: local, cloud: cloud,
+        return Report(userId: userId, accountStatus: status, cloudUserId: cloudUserId, local: local, cloud: cloud,
                       backupCount: backup?.plans.count, backupSavedAt: backup?.savedAt,
                       log: SyncDiagnosticsLog.entries())
     }
@@ -296,6 +301,8 @@ enum DataDiagnostics {
         lines.append("診断日時: \(formatter.string(from: report.date))")
         lines.append("ID末尾: \(shortId(report.userId))")
         lines.append("iCloud: \(SyncDiagnosticsLog.describe(report.accountStatus))")
+        // Logs の userId と突き合わせるため、これは末尾だけにせずそのまま送る
+        lines.append("iCloudユーザー: \(report.cloudUserId ?? "不明")")
 
         let l = report.local
         var localLine = "端末: 旅行\(l.travelPlans) ゴミ箱\(l.trashedTravelPlans) 予定\(l.plans) 場所\(l.places)"

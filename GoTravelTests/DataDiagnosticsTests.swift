@@ -131,13 +131,16 @@ struct DataDiagnosticsTests {
     func text() {
         var local = DataDiagnostics.LocalCounts()
         local.otherUserTravelPlans = ["001234.abcdefabcdef.0999": 1]
-        var r = DataDiagnostics.Report(userId: "001234.abcdefabcdef.1234", accountStatus: .available, local: local,
+        var r = DataDiagnostics.Report(userId: "001234.abcdefabcdef.1234", accountStatus: .available,
+                                       cloudUserId: "_92796a9552a24cc36576401dce483ac7", local: local,
                                        cloud: .counted(counts(travel: 2)), backupCount: nil, backupSavedAt: nil,
                                        log: [.init(kind: .import, date: Date(), succeeded: false, error: "CKErrorDomain 25")])
         r.date = Date()
         let text = DataDiagnostics.text(for: r)
         #expect(text.contains("判定: otherUser(1)"))
         #expect(text.contains("ID末尾: f.1234"))
+        // Logs と突き合わせるため、iCloud の利用者 ID はそのまま入る
+        #expect(text.contains("iCloudユーザー: _92796a9552a24cc36576401dce483ac7"))
         #expect(text.contains("f.0999=1"))
         #expect(text.contains("iCloud内: 旅行2"))
         #expect(text.contains("import NG CKErrorDomain 25"))
@@ -178,6 +181,30 @@ struct SyncDiagnosticsLogTests {
         #expect(entries.first?.date == start.addingTimeInterval(1))
     }
 
+    @Test("本人が消していないのに 0 件になったときだけ知らせる")
+    func unexplainedDrop() {
+        let d = defaults()
+        let start = Date(timeIntervalSince1970: 1_000)
+        SyncDiagnosticsLog.recordPlanCount(5, date: start, defaults: d)
+        SyncDiagnosticsLog.recordPlanCount(0, date: start.addingTimeInterval(60), defaults: d)
+        let drop = SyncDiagnosticsLog.unexplainedDropToZero(in: SyncDiagnosticsLog.entries(defaults: d))
+        #expect(drop?.from == 5)
+
+        // 0 から戻ったら、もう知らせない
+        SyncDiagnosticsLog.recordPlanCount(5, date: start.addingTimeInterval(120), defaults: d)
+        #expect(SyncDiagnosticsLog.unexplainedDropToZero(in: SyncDiagnosticsLog.entries(defaults: d)) == nil)
+
+        // 直前に本人が消していれば知らせない（最後の1件を消した・アカウント削除）
+        SyncDiagnosticsLog.recordUserAction("delete", date: start.addingTimeInterval(170), defaults: d)
+        SyncDiagnosticsLog.recordPlanCount(0, date: start.addingTimeInterval(180), defaults: d)
+        #expect(SyncDiagnosticsLog.unexplainedDropToZero(in: SyncDiagnosticsLog.entries(defaults: d)) == nil)
+
+        // 本人の操作から時間がたってから 0 になったなら知らせる
+        SyncDiagnosticsLog.recordPlanCount(3, date: start.addingTimeInterval(200), defaults: d)
+        SyncDiagnosticsLog.recordPlanCount(0, date: start.addingTimeInterval(200 + 3600), defaults: d)
+        #expect(SyncDiagnosticsLog.unexplainedDropToZero(in: SyncDiagnosticsLog.entries(defaults: d))?.from == 3)
+    }
+
     @Test("アカウントの状態は変わったときだけ残し、古いものから捨てる")
     func accountAndLimit() {
         let d = defaults()
@@ -191,5 +218,22 @@ struct SyncDiagnosticsLogTests {
                                       succeeded: false, error: "\(i)", defaults: d)
         }
         #expect(SyncDiagnosticsLog.entries(defaults: d).count == SyncDiagnosticsLog.limit)
+    }
+}
+
+/// アカウント削除の前に残す控え
+struct AccountDeletionBackupTests {
+    @Test("旅行計画（予約番号つき）・予定・場所が入る")
+    func text() {
+        let start = Date(timeIntervalSince1970: 1_790_000_000)
+        var trip = TravelPlan(title: "沖縄旅行", startDate: start, endDate: start.addingTimeInterval(86_400), destination: "沖縄")
+        trip.reservations = [Reservation(kind: .flight, title: "羽田 → 那覇", date: start, confirmationNumber: "ABC123")]
+        let plan = Plan(title: "歯医者", startDate: start, endDate: start, places: [], planType: .daily)
+        let place = VisitedPlace(title: "首里城", latitude: 26.2, longitude: 127.7, createdAt: start, categoryId: "other")
+        let text = AccountDeletionBackup.text(travelPlans: [trip], plans: [plan], places: [place], now: start)
+        #expect(text.contains("【沖縄旅行】"))
+        #expect(text.contains("ABC123"))
+        #expect(text.contains("歯医者"))
+        #expect(text.contains("首里城"))
     }
 }
