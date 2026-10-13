@@ -201,10 +201,21 @@ enum SharedPlanMerge {
         // 手元の id のままだと中身が同じでも「違う」ことになって毎回送ってしまう
         let remoteDayIDs = Dictionary(remote.daySchedules.map { ($0.dayNumber, $0.id) },
                                       uniquingKeysWith: { first, _ in first })
+        // 日の時間帯（3.0）は、日ごとに書き換えた側を採る。新しいほうの日をそのまま使うと、
+        // 相手が予定を足しただけで、こちらが決めた時間帯が消えてしまう
+        func dayZone(_ plan: TravelPlan?, _ dayNumber: Int) -> String? {
+            plan?.daySchedules.first { $0.dayNumber == dayNumber }?.timeZoneIdentifier
+        }
         var days = frame.daySchedules.map { day -> DaySchedule in
             var copy = day
             copy.id = remoteDayIDs[day.dayNumber] ?? day.id
             copy.scheduleItems = []
+            if let base {
+                copy.timeZoneIdentifier = mergeValue(local: dayZone(local, day.dayNumber),
+                                                     remote: dayZone(remote, day.dayNumber),
+                                                     base: dayZone(base, day.dayNumber),
+                                                     newer: day.timeZoneIdentifier)
+            }
             return copy
         }
 

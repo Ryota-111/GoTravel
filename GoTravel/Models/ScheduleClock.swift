@@ -67,7 +67,8 @@ enum ScheduleClock {
         if showsSameTime(zone, legacyTimeZone, at: date) {
             return "日本"
         }
-        return displayName(of: zone)
+        // 何ヶ国も回る旅行では「現地」が1つに決まらないので、都市名で出す
+        return cityName(of: zone)
     }
 
     /// その時計で 0:00 から何分か
@@ -121,9 +122,10 @@ extension ScheduleItem {
         endTime.map { ScheduleClock.timeText($0, in: timeZone) }
     }
 
-    /// 「10:00〜11:30」。終わりが無ければ「10:00」
+    /// 「10:00〜11:30」。終わりが無ければ「10:00」。日をまたいで直した予定は「前日 17:00」
     var timeRangeText: String {
-        endTimeText.map { "\(timeText)〜\($0)" } ?? timeText
+        let range = endTimeText.map { "\(timeText)〜\($0)" } ?? timeText
+        return dayShiftLabel.map { "\($0) \(range)" } ?? range
     }
 
     /// 終わりの時:分を、始まりの日に合わせた日時にする。
@@ -148,7 +150,7 @@ extension ScheduleItem {
     /// 時:分をそのまま比べると、日本を 22:00 に出てホノルルに同じ日の 10:00 に
     /// 着く便で、到着が出発より前に並んでしまう
     var chronologicalMinutes: Int {
-        minutesOfDay - timeZone.secondsFromGMT(for: time) / 60
+        minutesOfDay - timeZone.secondsFromGMT(for: time) / 60 + (dayShift ?? 0) * 24 * 60
     }
 
     /// 起きる順に並べるための比較
@@ -168,6 +170,8 @@ extension ScheduleItem {
     func keepingWallClock(in target: TimeZone) -> ScheduleItem {
         var copy = self
         copy.time = ScheduleClock.keepingWallClock(time, from: timeZone, to: target)
+        // 終わりも同じ時:分のまま付け替える（2.9 まではここが抜けていて、終わりの時刻がずれていた）
+        copy.endTime = endTime.map { ScheduleClock.keepingWallClock($0, from: timeZone, to: target) }
         copy.timeZoneIdentifier = target.identifier
         return copy
     }

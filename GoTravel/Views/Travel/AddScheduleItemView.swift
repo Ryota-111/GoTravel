@@ -17,6 +17,8 @@ struct AddScheduleItemView: View {
     @State private var timeZone: TimeZone = .current
     /// 目的地の時間帯。日本と時差があるときだけ入る
     @State private var destinationTimeZone: TimeZone?
+    /// 入れ始める時計を決めたか（その日の時間帯か、目的地か）
+    @State private var didSetInitialZone = false
     /// 共有した旅行で、この予定に参加する人。空なら全員
     @State private var participants: Set<String> = []
     /// 費用。外貨でも入れられる（`CurrencyCostFields`）
@@ -180,6 +182,8 @@ struct AddScheduleItemView: View {
                 ScheduleTimeField(
                     time: $time,
                     timeZone: $timeZone,
+                    place: selectedCoordinate,
+                    dayZone: dayTimeZone,
                     destination: destinationTimeZone,
                     tint: travelColor,
                     textColor: textColor,
@@ -419,13 +423,25 @@ struct AddScheduleItemView: View {
         return formatter.string(from: dayDate)
     }
 
-    /// 目的地が海外なら、現地の時計で入れ始める。
+    /// その日の時間帯（決めてあれば）
+    private var dayTimeZone: TimeZone? {
+        (viewModel.travelPlans.first(where: { $0.id == plan.id }) ?? plan).dayTimeZone(dayNumber)
+    }
+
+    /// 入れ始める時計を決める。その日の時間帯を決めてあればそれ、無ければ目的地が海外なら現地の時計。
     /// 時:分は変えないので、開いた直後に入力欄の時刻が動いて見えることはない
     private func resolveDestinationTimeZone() async {
+        if !didSetInitialZone, let dayZone = dayTimeZone {
+            didSetInitialZone = true
+            time = ScheduleClock.keepingWallClock(time, from: timeZone, to: dayZone)
+            timeZone = dayZone
+        }
         guard destinationTimeZone == nil,
               let zone = await DestinationTimeZoneService.shared.timeZone(for: plan),
               ScheduleClock.isForeign(zone, at: dayDate) else { return }
         destinationTimeZone = zone
+        guard !didSetInitialZone else { return }
+        didSetInitialZone = true
         time = ScheduleClock.keepingWallClock(time, from: timeZone, to: zone)
         timeZone = zone
     }
@@ -437,6 +453,7 @@ struct AddScheduleItemView: View {
         // viewModelから常に最新のplanを取得（古いスナップショットを使わない）
         let basePlan = viewModel.travelPlans.first(where: { $0.id == plan.id }) ?? plan
         let costs = costInput.result
+        RecentTimeZones.record(timeZone)
 
         let newItem = ScheduleItem(
             time: time,
