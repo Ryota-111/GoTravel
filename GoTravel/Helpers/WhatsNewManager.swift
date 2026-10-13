@@ -83,6 +83,26 @@ struct WhatsNew: Identifiable {
 
     private static let all: [WhatsNew] = [
         WhatsNew(
+            version: "2.9.1",
+            items: [
+                Item(
+                    icon: "exclamationmark.icloud.fill",
+                    title: "iCloudにつながっていないときにお知らせします",
+                    detail: "旅行計画はiCloudに保存されています。iCloudからサインアウトしていたり、確認待ちになっていたりすると、一覧が空に見えることがあります。そのときは旅行計画の上にお知らせを出し、確認のしかたをご案内します。iCloudの容量がいっぱいで保存できていないときもお知らせします。"
+                ),
+                Item(
+                    icon: "mappin.circle.fill",
+                    title: "予定の住所が正しく出るようになりました",
+                    detail: "予定の詳細で、場所の住所の代わりに現在地の国名が出ていたのを直しました。ご報告をいただいて修正しました。"
+                ),
+                Item(
+                    icon: "calendar",
+                    title: "日程に曜日が出ます",
+                    detail: "日程の「Day 1」の日付に、曜日も出るようにしました。ご要望をいただいて追加しました。"
+                )
+            ]
+        ),
+        WhatsNew(
             version: "2.9",
             items: [
                 Item(
