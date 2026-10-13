@@ -48,9 +48,15 @@ final class FeedbackService {
         max(0, dailyLimit - todaysSubmissions().count)
     }
 
-    func submit(kind: FeedbackKind, message: String, contactEmail: String) async throws {
-        let body = message.trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !body.isEmpty else { throw SubmitError.emptyMessage }
+    /// - Parameter diagnostics: データの診断の結果（`DataDiagnostics.text`）。本文の後ろに添える。
+    ///   レコードに項目を足すと Production へのスキーマ反映が要るため、本文に入れて送る
+    func submit(kind: FeedbackKind, message: String, contactEmail: String, diagnostics: String? = nil) async throws {
+        let typed = message.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !typed.isEmpty || diagnostics != nil else { throw SubmitError.emptyMessage }
+        var body = String(typed.prefix(Self.messageLimit))
+        if let diagnostics {
+            body += (body.isEmpty ? "" : "\n\n") + "--- データの診断 ---\n" + diagnostics
+        }
         guard remainingToday > 0 else { throw SubmitError.rateLimited }
 
         // サインインしていないと保存が必ず失敗するので、送信前に理由を出し分ける
@@ -59,7 +65,7 @@ final class FeedbackService {
 
         let record = CKRecord(recordType: Self.recordType)
         record["kind"] = kind.rawValue as CKRecordValue
-        record["message"] = String(body.prefix(Self.messageLimit)) as CKRecordValue
+        record["message"] = body as CKRecordValue
         record["contactEmail"] = contactEmail.trimmingCharacters(in: .whitespacesAndNewlines) as CKRecordValue
         record["appVersion"] = Self.appVersion as CKRecordValue
         record["osVersion"] = UIDevice.current.systemVersion as CKRecordValue

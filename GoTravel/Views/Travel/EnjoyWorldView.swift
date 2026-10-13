@@ -28,7 +28,7 @@ struct EnjoyWorldView: View {
     @State private var showAddTravelPlan = false
     /// iCloud が使えない・保存できていないとき、旅行計画の上に知らせる
     @ObservedObject private var iCloudMonitor = ICloudSyncMonitor.shared
-    @State private var showsICloudGuide = false
+    @State private var showsDataDiagnostics = false
     /// 端末に残した旅行計画の控え（`TravelPlanBackupStore`）。iCloud が外れたときに読むだけで見せる
     @State private var backup: TravelPlanBackupStore.Backup?
     @State private var showsBackup = false
@@ -839,11 +839,10 @@ struct EnjoyWorldView: View {
                 showAddTravelPlan = true
             }
 
-            // 前に作った旅行計画が見えないとき、慌ててアプリを消してしまわないように案内する。
-            // 多くは iCloud の状態で一時的に見えていないだけ（`ICloudSyncMonitor`）。
-            // 消した旅行計画は、下の「最近削除した旅行計画」から戻せる
+            // 前に作った旅行計画が見えないとき、慌ててアプリを消してしまわないように、
+            // データの診断で端末と iCloud のどちらに残っているかを確かめてもらう（`DataDiagnosticsView`）
             Button {
-                showsICloudGuide = true
+                showsDataDiagnostics = true
             } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "questionmark.circle")
@@ -856,11 +855,9 @@ struct EnjoyWorldView: View {
                 .foregroundColor(themeManager.currentTheme.secondaryText)
             }
             .buttonStyle(.plain)
-            .alert("以前の旅行計画が見当たらないときは", isPresented: $showsICloudGuide) {
-                Button("OK", role: .cancel) {}
-            } message: {
-                Text(ICloudGuidanceText.dataUnavailable
-                     + "\n\n削除した旅行計画は、30日間は「最近削除した旅行計画」から戻せます（プロフィールからも開けます）。")
+            .sheet(isPresented: $showsDataDiagnostics) {
+                DataDiagnosticsView()
+                    .environmentObject(authVM)
             }
         }
         .padding(.horizontal, 20)

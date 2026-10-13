@@ -951,6 +951,8 @@ struct HelpSupportView: View {
     @State private var showUserGuide = false
     @State private var showContactAlert = false
     @State private var showFeedbackForm = false
+    @State private var showDataDiagnostics = false
+    @EnvironmentObject private var authVM: AuthViewModel
 
     var body: some View {
         ZStack {
@@ -1012,6 +1014,19 @@ struct HelpSupportView: View {
                         .offset(y: animateCards ? 0 : 20)
                         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.15), value: animateCards)
 
+                        // 旅行計画が見当たらないとき（`DataDiagnosticsView`）
+                        Button(action: { showDataDiagnostics = true }) {
+                            HelpCard(
+                                icon: "stethoscope",
+                                title: "データの診断",
+                                description: "旅行計画が見当たらないときに、端末とiCloudのどちらに残っているかを確かめます",
+                                color: .teal
+                            )
+                        }
+                        .opacity(animateCards ? 1 : 0)
+                        .offset(y: animateCards ? 0 : 20)
+                        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.16), value: animateCards)
+
                         // Contact
                         Button(action: { showContactAlert = true }) {
                             HelpCard(
@@ -1066,6 +1081,10 @@ struct HelpSupportView: View {
         }
         .sheet(isPresented: $showFeedbackForm) {
             FeedbackFormView()
+        }
+        .sheet(isPresented: $showDataDiagnostics) {
+            DataDiagnosticsView()
+                .environmentObject(authVM)
         }
         .alert("お問い合わせ", isPresented: $showContactAlert) {
             Button("メールを送る") {

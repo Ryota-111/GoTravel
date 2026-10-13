@@ -61,6 +61,7 @@ final class ICloudSyncMonitor: ObservableObject {
         Task {
             let status = try? await CKContainer(identifier: "iCloud.com.gmail.taismryotasis.Travory").accountStatus()
             accountProblem = Self.problem(for: status)
+            SyncDiagnosticsLog.recordAccount(status)
             publish()
         }
     }
@@ -92,6 +93,7 @@ final class ICloudSyncMonitor: ObservableObject {
 
     private func handle(_ event: NSPersistentCloudKitContainer.Event) {
         guard event.endDate != nil else { return }   // 終わった知らせだけを見る
+        SyncDiagnosticsLog.record(event)   // データの診断で見せる記録
         if Self.isQuotaError(event.error) {
             quotaExceeded = true
         } else if event.type == .export, event.succeeded {

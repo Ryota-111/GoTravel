@@ -89,6 +89,10 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
         }
 
         travelPlans = entities.map { $0.toTravelPlan() }
+        if !CoreDataManager.isEmptyDataMode {
+            // 件数が減った・0 になったときを残す（データの診断 `SyncDiagnosticsLog`）
+            SyncDiagnosticsLog.recordPlanCount(travelPlans.count)
+        }
 
         // ローカル画像を読み込み
         loadLocalImages()
