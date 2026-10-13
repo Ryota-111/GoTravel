@@ -29,6 +29,9 @@ struct EnjoyWorldView: View {
     /// iCloud が使えない・保存できていないとき、旅行計画の上に知らせる
     @ObservedObject private var iCloudMonitor = ICloudSyncMonitor.shared
     @State private var showsICloudGuide = false
+    /// 端末に残した旅行計画の控え（`TravelPlanBackupStore`）。iCloud が外れたときに読むだけで見せる
+    @State private var backup: TravelPlanBackupStore.Backup?
+    @State private var showsBackup = false
     @State private var showAddPlan = false
     @State private var showJoinPlan = false
     @State private var planToDelete: TravelPlan?
@@ -221,6 +224,12 @@ struct EnjoyWorldView: View {
                             .padding(.horizontal, 20)
                             .padding(.top, 6)
                     }
+                    // iCloud が外れている、または一覧が空のときだけ、前回の控えへの入口を出す
+                    if backup != nil, iCloudMonitor.problem != nil || isTravelPlansEmpty {
+                        backupButton
+                            .padding(.horizontal, 20)
+                            .padding(.top, 6)
+                    }
                     travelEventsTitleSection
                     tabSelectionSection
                     travelPlansSection
@@ -229,6 +238,9 @@ struct EnjoyWorldView: View {
                     planTabSelectionSection
                     planEventsListSection
                 }
+                .onAppear(perform: reloadBackup)
+                .onChange(of: iCloudMonitor.problem) { _, _ in reloadBackup() }
+                .onChange(of: isTravelPlansEmpty) { _, _ in reloadBackup() }
                 .refreshable {
                     if let userId = authVM.userId {
                         await travelPlanViewModel.refreshSharedPlans(userId: userId)
@@ -778,6 +790,43 @@ struct EnjoyWorldView: View {
                     .fill(fill)
                     .matchedGeometryEffect(id: geometryID, in: animation)
             }
+        }
+    }
+
+    private var isTravelPlansEmpty: Bool {
+        if case .empty = travelPlansState { return true }
+        return false
+    }
+
+    /// 前回の控えを読むだけで開く
+    private var backupButton: some View {
+        Button {
+            showsBackup = true
+        } label: {
+            Label("前回の控えを見る（日程・予約番号・持ち物）", systemImage: "doc.text.magnifyingglass")
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(addTravelTintColor)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(12)
+                .background(
+                    RoundedRectangle(cornerRadius: themeManager.currentTheme.style.radiusMedium)
+                        .stroke(addTravelTintColor.opacity(0.5), lineWidth: 1)
+                )
+        }
+        .buttonStyle(.plain)
+        .sheet(isPresented: $showsBackup) {
+            if let backup {
+                TravelPlanBackupView(backup: backup)
+            }
+        }
+    }
+
+    /// 控えを読み直す。一覧が空になったときや、iCloud の状態が変わったときに呼ぶ
+    private func reloadBackup() {
+        guard let userId = authVM.userId else { backup = nil; return }
+        DispatchQueue.global(qos: .utility).async {
+            let loaded = TravelPlanBackupStore.load(userId: userId)
+            DispatchQueue.main.async { backup = loaded }
         }
     }
 
