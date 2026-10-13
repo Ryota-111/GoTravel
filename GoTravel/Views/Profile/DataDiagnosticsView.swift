@@ -186,22 +186,24 @@ struct DataDiagnosticsView: View {
     }
 
     private func cloudRows(_ report: DataDiagnostics.Report) -> [(String, String)] {
-        let account = ("状態", report.accountStatus == .available ? "使えます" : "使えません")
+        var account = [("状態", report.accountStatus == .available ? "使えます" : "使えません")]
+        // お問い合わせのときに読み上げてもらえるよう、iCloud の利用者 ID も出す
+        if let id = report.cloudUserId { account.append(("利用者 ID", id)) }
         switch report.cloud {
         case .counted(let counts):
-            return [account,
+            return account + [
                     ("旅行計画", "\(counts.travelPlans)件"),
                     ("最近削除した旅行計画", "\(counts.trashedTravelPlans)件"),
                     ("予定", "\(counts.plans)件"),
                     ("保存した場所", "\(counts.places)件")]
         case .zoneMissing:
-            return [account, ("Travoryのデータ", "ありません")]
+            return account + [("Travoryのデータ", "ありません")]
         case .zoneDeleted:
-            return [account, ("Travoryのデータ", "削除されています")]
+            return account + [("Travoryのデータ", "削除されています")]
         case .skipped:
-            return [account]
+            return account
         case .failed:
-            return [account, ("Travoryのデータ", "確かめられませんでした")]
+            return account + [("Travoryのデータ", "確かめられませんでした")]
         }
     }
 
@@ -214,7 +216,11 @@ struct DataDiagnosticsView: View {
                 HStack {
                     Text(row.0)
                     Spacer()
-                    Text(row.1).monospacedDigit()
+                    Text(row.1)
+                        .monospacedDigit()
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.6)
+                        .textSelection(.enabled)
                 }
                 .font(.subheadline)
                 .foregroundColor(textColor)

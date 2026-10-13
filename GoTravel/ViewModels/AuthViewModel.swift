@@ -117,6 +117,10 @@ final class AuthViewModel: ObservableObject {
 
     // アカウント削除
     func deleteAccount() {
+        // アカウント削除をしたことを残す。あとで「全部消えた」とお問い合わせがあったときに、
+        // 本人の操作かどうかを診断で見分けられるように（2026年10月のお問い合わせから）
+        SyncDiagnosticsLog.recordUserAction("deleteAccount")
+
         // Core Data上のユーザーデータを削除（CloudKitへも削除が同期される）
         if let userId = userId {
             // アルバムは写真ファイルも消す必要があるため専用の処理を通す

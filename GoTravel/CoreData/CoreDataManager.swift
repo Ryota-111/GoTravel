@@ -186,11 +186,17 @@ class CoreDataManager {
 
     /// 指定ユーザーの全データを削除（アカウント削除用）
     /// NSBatchDeleteRequestはCloudKitへ同期されないため、オブジェクト単位で削除する
+    ///
+    /// 2.9 までは持ち物の候補・やることリスト・写真の記録が消えずに残っていた（退会としては不完全）
     func deleteAllUserData(userId: String) {
+        let byUser = NSPredicate(format: "userId == %@", userId)
         let entityPredicates: [(String, NSPredicate)] = [
-            ("PlanEntity", NSPredicate(format: "userId == %@", userId)),
-            ("VisitedPlaceEntity", NSPredicate(format: "userId == %@", userId)),
-            ("TravelPlanEntity", NSPredicate(format: "userId == %@ OR ownerId == %@", userId, userId))
+            ("PlanEntity", byUser),
+            ("VisitedPlaceEntity", byUser),
+            ("TravelPlanEntity", NSPredicate(format: "userId == %@ OR ownerId == %@", userId, userId)),
+            ("PackingPresetEntity", byUser),
+            ("TaskEntity", byUser),
+            ("PhotoAssetEntity", byUser)
         ]
 
         for (entityName, predicate) in entityPredicates {
@@ -207,6 +213,9 @@ class CoreDataManager {
         }
 
         saveContext()
+
+        // 次にサインインした人には、持ち物の候補をまた用意する
+        UserDefaults.standard.removeObject(forKey: "PackingPresetsSeeded_v1")
     }
 
     // MARK: - CloudKit Status

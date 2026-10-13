@@ -23,6 +23,9 @@ enum SyncDiagnosticsLog {
             case account
             /// 旅行計画の件数が変わった（減ったときと、0 になったとき・0 から戻ったとき）
             case planCount
+            /// 利用者が自分で消した（"delete" / "deletePermanently" / "emptyTrash" / "deleteAccount"）。
+            /// 件数が減ったのが本人の操作か、そうでないかを見分けるのに使う
+            case userAction
         }
 
         let kind: Kind
@@ -108,6 +111,31 @@ enum SyncDiagnosticsLog {
         guard let previous, previous != count else { return }
         guard count < previous || previous == 0 else { return }
         append(Entry(kind: .planCount, date: date, detail: "\(previous) → \(count)"), defaults: defaults)
+    }
+
+    /// 本人が消したことを残す
+    static func recordUserAction(_ action: String, date: Date = Date(), defaults: UserDefaults = .standard) {
+        append(Entry(kind: .userAction, date: date, detail: action), defaults: defaults)
+    }
+
+    /// 本人の操作によらずに、旅行計画が 0 件になったときの記録。
+    ///
+    /// 0 になった直前（`explainedWindow` の間）に本人が消していれば、本人の操作として数えない。
+    /// そのあとまた増えていれば（0 から戻った）、もう知らせる必要は無いので nil
+    static let explainedWindow: TimeInterval = 10 * 60
+
+    static func unexplainedDropToZero(in entries: [Entry]) -> (from: Int, date: Date)? {
+        guard let index = entries.lastIndex(where: { $0.kind == .planCount }) else { return nil }
+        let entry = entries[index]
+        guard let detail = entry.detail else { return nil }
+        let parts = detail.components(separatedBy: " → ").compactMap { Int($0) }
+        guard parts.count == 2, parts[1] == 0, parts[0] > 0 else { return nil }
+        let explained = entries.contains {
+            $0.kind == .userAction
+                && $0.date <= entry.date
+                && entry.date.timeIntervalSince($0.date) <= explainedWindow
+        }
+        return explained ? nil : (parts[0], entry.date)
     }
 
     static func clear(defaults: UserDefaults = .standard) {
