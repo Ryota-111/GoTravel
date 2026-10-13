@@ -2141,9 +2141,10 @@ struct TravelPlanDetailView: View {
         return "\(formatter.string(from: plan.startDate)) - \(formatter.string(from: plan.endDate))"
     }
 
+    /// Day のタブの日付。「10月1日(木)」。曜日があると、旅行中にどの日か分かりやすい（ご要望から）
     private func formatDate(_ date: Date) -> String {
         let formatter = DateFormatter.japanese
-        formatter.dateFormat = "M月d日"
+        formatter.dateFormat = "M月d日(E)"
         return formatter.string(from: date)
     }
 
