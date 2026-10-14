@@ -83,6 +83,41 @@ struct WhatsNew: Identifiable {
 
     private static let all: [WhatsNew] = [
         WhatsNew(
+            version: "3.0",
+            items: [
+                Item(
+                    icon: "globe",
+                    title: "予定ごとに時間帯を選べます",
+                    detail: "何ヶ国も回る旅行でも、予定ごとに現地の時刻で入れられます。場所を選ぶとその場所の時刻になり、日ごとに時間帯も決められます。旅行中に日本時間の予定があれば、現地の時刻に合わせるかをお聞きします。ご要望をいただいて追加しました。"
+                ),
+                Item(
+                    icon: "calendar.badge.plus",
+                    title: "iPhoneのカレンダーに追加できます",
+                    detail: "旅行計画や予定を、iPhoneのカレンダーにも追加できます。追加先にGoogleのカレンダーを選べばGoogleカレンダーにも出ます。Travoryで直すと、カレンダーの予定も直ります。ご要望をいただいて追加しました。"
+                ),
+                Item(
+                    icon: "calendar",
+                    title: "iPhoneの予定をTravoryで見られます",
+                    detail: "祝日や仕事などのiPhoneのカレンダーの予定を、Travoryのカレンダーに並べて見られます。予定を組むときに、空いている日がすぐ分かります。"
+                ),
+                Item(
+                    icon: "note.text",
+                    title: "メモを何枚も書けます",
+                    detail: "旅行のメモ帳に、メモを何枚も書けるようになりました。共有した旅行では、メモごとに「みんなで見る」か「自分だけ」を選べます。ご要望をいただいて追加しました。"
+                ),
+                Item(
+                    icon: "person.2.fill",
+                    title: "カレンダーを分けて、友達と共有できます",
+                    detail: "カレンダーの上の「＋」で「家族」「友達」のようなカテゴリを作ると、カレンダーを分けられます。カテゴリを共有すれば、その予定を家族や友達と一緒に見て書けます。カレンダーでタグを選ぶと、そのタグの予定だけを表示できます。"
+                ),
+                Item(
+                    icon: "externaldrive.fill",
+                    title: "データを書き出して保存できます",
+                    detail: "プロフィールの「データの書き出し・読み込み」から、旅行計画・予定・場所・写真を1つのファイルにして保存できます。iCloudのデータが失われても、このファイルから戻せます。iPhoneの中にも毎日の控えを残しています。"
+                )
+            ]
+        ),
+        WhatsNew(
             version: "2.9.1",
             items: [
                 Item(

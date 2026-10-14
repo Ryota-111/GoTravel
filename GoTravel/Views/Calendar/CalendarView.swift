@@ -2,7 +2,22 @@ import SwiftUI
 
 // MARK: - Calendar Timeline Item Model
 struct CalendarTimelineItem: Identifiable {
-    let id = UUID()
+    /// 行の目印。**予定の種類と予定の id から決まる、変わらない値にする。**
+    ///
+    /// 以前は `UUID()` で、一覧を作り直すたびに別の行になっていた。旅行計画を開いた直後に
+    /// 計画が保存し直される（目的地の座標を引き直す・共有を最新にする）と、裏のカレンダーの
+    /// 一覧が作り直され、開いた行が消えたとみなされて詳細画面が勝手に閉じていた
+    var id: String {
+        let typeKey: String
+        switch type {
+        case .dailyPlan: typeKey = "daily"
+        case .outingPlan: typeKey = "outing"
+        case .anniversary: typeKey = "anniversary"
+        case .travel: typeKey = "travel"
+        case .external: typeKey = "external"
+        }
+        return "\(typeKey):\(relatedPlan?.id ?? relatedTravelPlan?.id ?? externalEvent?.id ?? title)"
+    }
     let time: Date
     let title: String
     let subtitle: String?
@@ -17,6 +32,8 @@ struct CalendarTimelineItem: Identifiable {
     /// 「過ぎた予定」の判定に混ぜると、日付が変わった瞬間に
     /// 0:00 の予定として過去扱いになり、当日なのに薄く表示されてしまう
     var hasTime: Bool = false
+    /// iPhone のカレンダーの予定（`.external` のときだけ）。見るだけで、開く画面は無い
+    var externalEvent: ExternalCalendarEvent? = nil
 }
 
 enum CalendarItemType {
@@ -24,6 +41,8 @@ enum CalendarItemType {
     case outingPlan
     case anniversary
     case travel
+    /// iPhone のカレンダーの予定（3.0。`CalendarExportService.externalEvents`）
+    case external
 }
 
 struct CalendarView: View {
@@ -42,6 +61,16 @@ struct CalendarView: View {
         let date: Date
     }
     @State private var currentMonth = Date()
+    /// iPhone のカレンダーの予定（見ている月の分）。出す設定のときだけ入る
+    @State private var externalEvents: [ExternalCalendarEvent] = []
+    /// どのカテゴリ（カレンダー）を見ているか（3.0）。閉じても覚えておく
+    @AppStorage("calendarCategorySelection") private var categorySelectionKey = "all"
+    /// 選んでいるタグ。選んでいる間は、そのタグの予定だけを出す（どれかが付いていれば出す）
+    @State private var selectedTagIDs: Set<String> = []
+    @State private var editingCategory: PlanCategory?
+    @State private var showsNewCategory = false
+    @ObservedObject private var categoryManager = PlanCategoryManager.shared
+    @ObservedObject private var calendarService = CalendarExportService.shared
     @State private var showAddSheet = false
     @State private var dragOffset: CGFloat = 0
     @State private var isTimelineExpanded = false
@@ -72,6 +101,23 @@ struct CalendarView: View {
                 // Calendar content
                 VStack(spacing: 0) {
                     monthNavigationHeader
+
+                    // カテゴリ（カレンダー）の切り替えと、タグの絞り込み（3.0）
+                    PlanCategoryBar(
+                        selection: categorySelectionBinding,
+                        tint: themeManager.currentTheme.secondary,
+                        textColor: colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1,
+                        onAdd: { showsNewCategory = true },
+                        onEdit: { editingCategory = $0 }
+                    )
+                    if !filterTags.isEmpty {
+                        PlanTagFilterBar(
+                            tags: filterTags,
+                            selectedIDs: $selectedTagIDs,
+                            textColor: colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
+                        )
+                        .padding(.top, 4)
+                    }
 
                     monthCalendarGrid
                         .padding(.horizontal, 16)
@@ -128,14 +174,34 @@ struct CalendarView: View {
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: {
-                        showAddSheet = true
-                    }) {
-                        Image(systemName: "plus.circle.fill")
-                            .font(.title3)
-                            .foregroundColor(themeManager.currentTheme.secondary)
+                    HStack(spacing: 14) {
+                        // iPhone のカレンダーの予定を並べる・入れる設定（3.0）
+                        NavigationLink(destination: CalendarExportSettingsView()
+                            .environmentObject(viewModel)
+                            .environmentObject(travelViewModel)) {
+                            Image(systemName: calendarService.showsExternalEvents ? "calendar.badge.checkmark" : "calendar.badge.plus")
+                                .font(.title3)
+                                .foregroundColor(themeManager.currentTheme.secondary)
+                        }
+                        .accessibilityLabel("iPhone のカレンダー")
+
+                        Button(action: {
+                            showAddSheet = true
+                        }) {
+                            Image(systemName: "plus.circle.fill")
+                                .font(.title3)
+                                .foregroundColor(themeManager.currentTheme.secondary)
+                        }
+                        .accessibilityLabel("予定を追加")
                     }
-                    .accessibilityLabel("予定を追加")
+                }
+            }
+            .sheet(item: $editingCategory) { category in
+                PlanCategoryEditorView(editing: category)
+            }
+            .sheet(isPresented: $showsNewCategory) {
+                PlanCategoryEditorView(editing: nil) { created in
+                    categorySelectionKey = PlanCategorySelection.category(created.id).storageKey
                 }
             }
             .sheet(item: $historyTarget) { target in
@@ -147,7 +213,9 @@ struct CalendarView: View {
             .sheet(isPresented: $showAddSheet) {
                 // 選んでいる日で始める。今日の日付で始まると、
                 // 8月30日を見ていても8月30日の予定は作れない
-                AddPlanView(historyPlans: viewModel.plans, initialDate: selectedDate) { newPlan in
+                // 見ているカテゴリに入れ始める（「すべて」を見ているときは自分用）
+                AddPlanView(historyPlans: viewModel.plans, initialDate: selectedDate,
+                            initialCategoryId: categorySelection.categoryIdForNewPlan) { newPlan in
                     if let userId = authVM.userId {
                         viewModel.add(newPlan, userId: userId)
                     } else {
@@ -160,6 +228,11 @@ struct CalendarView: View {
             } message: {
                 Text("予定を保存するには、アプリを再起動してApple IDでサインインしてください。")
             }
+            .onAppear(perform: reloadExternalEvents)
+            .onChange(of: currentMonth) { _, _ in reloadExternalEvents() }
+            .onChange(of: calendarService.eventsRevision) { _, _ in reloadExternalEvents() }
+            .onChange(of: calendarService.showsExternalEvents) { _, _ in reloadExternalEvents() }
+            .onChange(of: calendarService.hiddenCalendarIds) { _, _ in reloadExternalEvents() }
             .task {
                 // Core DataのFetchedResultsControllerをセットアップ（初回のみ）
                 if !hasLoadedData, let userId = authVM.userId {
@@ -172,9 +245,58 @@ struct CalendarView: View {
         .navigationViewStyle(.stack)
     }
 
+    // MARK: - カテゴリとタグ（3.0）
+
+    private var categorySelection: PlanCategorySelection {
+        PlanCategorySelection(storageKey: categorySelectionKey)
+    }
+
+    private var categorySelectionBinding: Binding<PlanCategorySelection> {
+        Binding(
+            get: { categorySelection },
+            set: { newValue in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    categorySelectionKey = newValue.storageKey
+                    // カテゴリを変えたら、タグの絞り込みは外す（タグはカテゴリごとに違う）
+                    selectedTagIDs = []
+                }
+            }
+        )
+    }
+
+    /// 絞り込みに出すタグ（「すべて」では全部、カテゴリを選んでいればそのカテゴリのタグ）
+    private var filterTags: [PlanTag] {
+        switch categorySelection {
+        case .all: return tagManager.tags
+        case .personal: return tagManager.tags(inCategory: nil)
+        case .category(let id): return tagManager.tags(inCategory: id)
+        }
+    }
+
+    /// カテゴリとタグで絞った予定
+    private var visiblePlans: [Plan] {
+        viewModel.plans.filter { plan in
+            categorySelection.includes(categoryId: plan.categoryId)
+                && (selectedTagIDs.isEmpty || !selectedTagIDs.isDisjoint(with: plan.tagIDs))
+        }
+    }
+
+    /// 旅行計画と iPhone の予定はカテゴリに入らない。「すべて」と「自分用」で、タグを選んでいないときだけ出す
+    private var showsUncategorized: Bool {
+        categorySelection.showsUncategorized && selectedTagIDs.isEmpty
+    }
+
+    private var visibleTravelPlans: [TravelPlan] {
+        showsUncategorized ? travelViewModel.travelPlans : []
+    }
+
+    private var visibleExternalEvents: [ExternalCalendarEvent] {
+        showsUncategorized ? externalEvents : []
+    }
+
     // MARK: - Computed Properties
     private var selectedDatePlans: [Plan] {
-        viewModel.plans.filter { plan in
+        visiblePlans.filter { plan in
             isDateInPlanRange(date: selectedDate, plan: plan)
         }.sorted { plan1, plan2 in
             // 時系列順にソート (0時→24時)
@@ -193,7 +315,7 @@ struct CalendarView: View {
 
     private var dailyTimeline: [CalendarTimelineItem] {
         // Daily plan items
-        let dailyPlanItems = viewModel.plans
+        let dailyPlanItems = visiblePlans
             .filter { plan in
                 plan.planType == .daily &&
                 isDateInPlanRange(date: selectedDate, plan: plan)
@@ -213,7 +335,7 @@ struct CalendarView: View {
             }
 
         // Outing plan items
-        let outingPlanItems = viewModel.plans
+        let outingPlanItems = visiblePlans
             .filter { plan in
                 plan.planType == .outing &&
                 isDateInPlanRange(date: selectedDate, plan: plan)
@@ -233,7 +355,7 @@ struct CalendarView: View {
             }
 
         // 記念日。時刻を持たないので、その日の先頭に置く
-        let anniversaryItems = viewModel.plans
+        let anniversaryItems = visiblePlans
             .filter { plan in
                 plan.planType == .anniversary &&
                 isDateInPlanRange(date: selectedDate, plan: plan)
@@ -250,7 +372,7 @@ struct CalendarView: View {
             }
 
         // Travel plan items
-        let travelItems = travelViewModel.travelPlans
+        let travelItems = visibleTravelPlans
             .filter { travelPlan in
                 isDateInTravelPlanRange(date: selectedDate, travelPlan: travelPlan)
             }
@@ -266,8 +388,27 @@ struct CalendarView: View {
                 )
             }
 
+        // iPhone のカレンダーの予定（見るだけ）
+        let externalItems = visibleExternalEvents
+            .filter { $0.occurs(on: selectedDate, calendar: calendar) }
+            .map { event -> CalendarTimelineItem in
+                // その日に始まる時刻つきの予定だけ時刻で並べる。前の日からの続きや終日は先頭に置く
+                let startsToday = calendar.isDate(event.start, inSameDayAs: selectedDate)
+                let timed = !event.isAllDay && startsToday
+                return CalendarTimelineItem(
+                    time: timed ? event.start : calendar.startOfDay(for: selectedDate),
+                    title: event.title,
+                    subtitle: event.calendarName,
+                    type: .external,
+                    relatedPlan: nil,
+                    relatedTravelPlan: nil,
+                    hasTime: timed,
+                    externalEvent: event
+                )
+            }
+
         // 時系列順にソート
-        return (anniversaryItems + dailyPlanItems + outingPlanItems + travelItems).sorted { item1, item2 in
+        return (anniversaryItems + dailyPlanItems + outingPlanItems + travelItems + externalItems).sorted { item1, item2 in
             let components1 = calendar.dateComponents([.hour, .minute], from: item1.time)
             let components2 = calendar.dateComponents([.hour, .minute], from: item2.time)
 
@@ -517,11 +658,11 @@ struct CalendarView: View {
     }
 
     private func hasEventsOn(date: Date) -> Bool {
-        let hasPlans = viewModel.plans.contains { plan in
+        let hasPlans = visiblePlans.contains { plan in
             isDateInPlanRange(date: date, plan: plan)
         }
 
-        let hasTravelPlans = travelViewModel.travelPlans.contains { travelPlan in
+        let hasTravelPlans = visibleTravelPlans.contains { travelPlan in
             isDateInTravelPlanRange(date: date, travelPlan: travelPlan)
         }
 
@@ -548,12 +689,14 @@ struct CalendarView: View {
         var colors: [Color] = []
 
         // 旅行計画はタグを持たないので、専用の色を1つだけ
-        if travelViewModel.travelPlans.contains(where: { isDateInTravelPlanRange(date: date, travelPlan: $0) }) {
+        if visibleTravelPlans.contains(where: { isDateInTravelPlanRange(date: date, travelPlan: $0) }) {
             colors.append(themeManager.currentTheme.travelColor)
         }
 
-        let plansOfDay = viewModel.plans.filter { isDateInPlanRange(date: date, plan: $0) }
-        guard !plansOfDay.isEmpty else { return colors }
+        let plansOfDay = visiblePlans.filter { isDateInPlanRange(date: date, plan: $0) }
+        // Travory の予定が無い日も、iPhone の予定（祝日など）の点は出す。
+        // 前はここで終わっていて、祝日だけの日に点が付かなかった
+        guard !plansOfDay.isEmpty else { return colors + externalDotColor(for: date) }
 
         // 同じタグは1つにまとめる。並びは絞り込み行と同じ順にしたいので、
         // その日のタグを拾うのではなくタグ側の並びを走る
@@ -568,7 +711,26 @@ struct CalendarView: View {
             colors.append(themeManager.currentTheme.secondaryText.opacity(0.55))
         }
 
-        return colors
+        return colors + externalDotColor(for: date)
+    }
+
+    /// iPhone の予定がある日の点。その予定のカレンダーの色で1つ（祝日なら祝日のカレンダーの色）。
+    /// 前は薄い灰色にしていて、地の色に溶けて見えなかった
+    private func externalDotColor(for date: Date) -> [Color] {
+        guard let event = visibleExternalEvents.first(where: { $0.occurs(on: date, calendar: calendar) }) else { return [] }
+        return [event.color.map { Color(cgColor: $0) } ?? themeManager.currentTheme.secondaryText]
+    }
+
+    /// 見ている月（前後の週を含む）の、iPhone のカレンダーの予定を読み直す
+    private func reloadExternalEvents() {
+        guard calendarService.showsExternalEvents,
+              let interval = calendar.dateInterval(of: .month, for: currentMonth) else {
+            externalEvents = []
+            return
+        }
+        let start = calendar.date(byAdding: .day, value: -7, to: interval.start) ?? interval.start
+        let end = calendar.date(byAdding: .day, value: 7, to: interval.end) ?? interval.end
+        externalEvents = calendarService.externalEvents(from: start, to: end)
     }
 
     /// 「10回目の結婚記念日」。開始年からの経過で数える

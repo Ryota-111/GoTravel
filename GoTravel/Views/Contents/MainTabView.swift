@@ -62,6 +62,8 @@ struct MainTabView: View {
             if let userId = authVM.userId {
                 PlaceCategoryManager.shared.setup(userId: userId)
                 PlanTagManager.shared.setup(userId: userId)
+                // 予定のカテゴリ（カレンダー）。3.0
+                PlanCategoryManager.shared.setup(userId: userId)
                 // やることリストはホームのバッジからも数を出すので、ここで用意する。
                 // 初回は UserDefaults に残っているぶんを Core Data へ移す
                 TaskManager.shared.setup(userId: userId)

@@ -131,6 +131,17 @@ enum DataDiagnostics {
         }
     }
 
+    /// 端末の中の毎日の控え（`LocalSnapshotStore`）から戻してよいか。
+    ///
+    /// **iCloud にデータが無いと確かめられたときだけ。** iCloud にあるのに戻すと、
+    /// あとで iCloud から読み込まれた分と2重になる
+    static func canRestoreFromSnapshot(_ verdict: Verdict) -> Bool {
+        switch verdict {
+        case .cloudEmpty, .cloudDeleted: return true
+        default: return false
+        }
+    }
+
     // MARK: - 調べる
 
     static let zoneID = CKRecordZone.ID(zoneName: "com.apple.coredata.cloudkit.zone",

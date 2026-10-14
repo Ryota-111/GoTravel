@@ -419,12 +419,22 @@ private struct BackupPlanDetailView: View {
                     .padding(12)
                     .background(palette.cardBackground(radius: 12))
                 }
-            } else if let memo = plan.memo, !memo.isEmpty {
-                Text(memo)
-                    .foregroundColor(palette.text)
+            } else if !plan.memos.isEmpty {
+                // 3.0 からはメモが何枚もある
+                ForEach(plan.memos) { memo in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(memo.displayTitle)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(palette.text)
+                        if !memo.body.isEmpty {
+                            Text(memo.body)
+                                .foregroundColor(palette.text)
+                        }
+                    }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(14)
                     .background(palette.cardBackground(radius: 14))
+                }
             } else {
                 emptyText("メモはありません")
             }

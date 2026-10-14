@@ -13,6 +13,8 @@ struct AddPlanView: View {
     var historyPlans: [Plan] = []
     /// 開始日の初期値。カレンダーで選んでいる日から作るときに渡す
     var initialDate: Date? = nil
+    /// 入れ始めるカテゴリ（3.0。カレンダーで見ているカテゴリ。nil は「自分用」）
+    var initialCategoryId: String? = nil
     var onSave: (Plan) -> Void
 
     // Wizard state
@@ -40,6 +42,8 @@ struct AddPlanView: View {
     @State private var linkURL: String = ""
     @State private var recurrence: PlanRecurrence = .none
     @State private var selectedTagIDs: [String] = []
+    @State private var selectedCategoryId: String?
+    @State private var hasAppliedInitialCategory = false
 
     // Map state
     @State private var showMapPicker: Bool = false
@@ -202,6 +206,10 @@ struct AddPlanView: View {
             Text("作成途中のプランは保存されません")
         }
         .onAppear {
+            if !hasAppliedInitialCategory {
+                hasAppliedInitialCategory = true
+                selectedCategoryId = initialCategoryId
+            }
             // 渡された日で始める。時刻は今のままにして、日付だけ合わせる
             guard !hasAppliedInitialDate, let initialDate else { return }
             hasAppliedInitialDate = true
@@ -483,11 +491,20 @@ struct AddPlanView: View {
     /// そのため見出しに「任意」とは書かない
     private var tagField: some View {
         VStack(alignment: .leading, spacing: 10) {
+            // カテゴリ（カレンダー）。作っている人だけに出る（3.0）
+            if !PlanCategoryManager.shared.categories.isEmpty {
+                Text("カテゴリ")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundColor(uiAccentColor.opacity(0.5))
+                PlanCategoryPicker(categoryId: $selectedCategoryId, tagIDs: $selectedTagIDs, accentColor: uiAccentColor)
+                    .padding(.bottom, 6)
+            }
+
             Text("タグ")
                 .font(.system(size: 12, weight: .bold))
                 .foregroundColor(uiAccentColor.opacity(0.5))
 
-            PlanTagPicker(selectedIDs: $selectedTagIDs, accentColor: uiAccentColor)
+            PlanTagPicker(selectedIDs: $selectedTagIDs, accentColor: uiAccentColor, categoryId: selectedCategoryId)
         }
         .padding(.horizontal, 20)
     }
@@ -1082,6 +1099,7 @@ struct AddPlanView: View {
         linkURL = source.linkURL ?? ""
         // 同じ予定をまた作るなら仕分けも同じはず。付け直させない
         selectedTagIDs = source.tagIDs
+        selectedCategoryId = source.categoryId
 
         // 日付は引き継がない（毎回変わるため）
         startDate = today
@@ -1195,7 +1213,9 @@ struct AddPlanView: View {
             )
         }
 
-        onSave(plan)
+        var saved = plan
+        saved.categoryId = selectedCategoryId
+        onSave(saved)
         presentationMode.wrappedValue.dismiss()
     }
 }

@@ -113,6 +113,9 @@ enum SharedPlanMerge {
 
         adopted.packingItems = mergePackingItems(local: local, remote: remote, base: base)
 
+        // 自分だけのメモは共有レコードに載っていないので、手元の分を残す
+        adopted.memos = remote.sharedMemos + (local?.privateMemos ?? [])
+
         return adopted
     }
 
@@ -137,6 +140,7 @@ enum SharedPlanMerge {
                     + local.packingItems.filter { $0.ownerId != nil },
                 local: local.packingItems
             )
+            merged.memos = newer.sharedMemos + local.privateMemos
             return merged
         }
 
@@ -161,9 +165,15 @@ enum SharedPlanMerge {
 
         merged.packingItems = mergePackingItems(local: local, remote: remote, base: base)
 
-        // メモ帳：片方しか書き換えていなければ、書き換えたほうを採る。
-        // 両方が書き換えていたら新しいほうを採る（1枚の文章なので混ぜられない）
-        merged.memo = mergeValue(local: local.memo, remote: remote.memo, base: base.memo, newer: newer.memo)
+        // メモ（3.0 から何枚も）：共有メモは1枚ずつ、書き換えたほうを採る。
+        // 自分だけのメモは共有レコードに載っていないので、手元の分をそのまま残す
+        merged.memos = merge(
+            local: local.sharedMemos,
+            remote: remote.sharedMemos,
+            base: base.sharedMemos,
+            id: \.id,
+            hasBase: true
+        ) + local.privateMemos
 
         return merged
     }
@@ -295,7 +305,7 @@ enum SharedPlanMerge {
     ///
     /// `hasBase` が false のときは前回の内容が無いということなので、
     /// 相手を正として素直に置き換える（初回の取り込みなど）
-    private static func merge<Element>(local: [Element],
+    static func merge<Element>(local: [Element],
                                        remote: [Element],
                                        base: [Element],
                                        id: KeyPath<Element, String>,
@@ -341,7 +351,7 @@ enum SharedPlanMerge {
         return result
     }
 
-    private static func merge<Element: Equatable>(local: [Element],
+    static func merge<Element: Equatable>(local: [Element],
                                                   remote: [Element],
                                                   base: [Element],
                                                   id: KeyPath<Element, String>,

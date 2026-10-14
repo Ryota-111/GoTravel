@@ -610,13 +610,14 @@
 				CODE_SIGN_ENTITLEMENTS = GoTravel/GoTravel.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 21;
 				DEVELOPMENT_TEAM = S698QDGA49;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = GoTravel/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Travory;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.travel";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "旅行計画や予定をカレンダーに入れ、旅行計画を直したときにカレンダーの予定も直すために使用します。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "現在地を地図に表示し、近くの場所を探すために使用します。位置情報を継続的に記録することはありません。";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "訪問した場所の写真を保存・表示するためにフォトライブラリへのアクセスが必要です。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -629,7 +630,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.9.1;
+				MARKETING_VERSION = 3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gmail.taismryotasis.Travory;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -651,13 +652,14 @@
 				CODE_SIGN_ENTITLEMENTS = GoTravel/GoTravel.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 21;
 				DEVELOPMENT_TEAM = S698QDGA49;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = GoTravel/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = Travory;
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.travel";
+				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "旅行計画や予定をカレンダーに入れ、旅行計画を直したときにカレンダーの予定も直すために使用します。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "現在地を地図に表示し、近くの場所を探すために使用します。位置情報を継続的に記録することはありません。";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "訪問した場所の写真を保存・表示するためにフォトライブラリへのアクセスが必要です。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
@@ -670,7 +672,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 2.9.1;
+				MARKETING_VERSION = 3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gmail.taismryotasis.Travory;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -772,7 +774,7 @@
 				CODE_SIGN_ENTITLEMENTS = GoTravelWidgetExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 21;
 				DEVELOPMENT_TEAM = S698QDGA49;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = GoTravelWidget/Info.plist;
@@ -784,7 +786,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.9.1;
+				MARKETING_VERSION = 3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gmail.taismryotasis.Travory.GoTravelWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -805,7 +807,7 @@
 				CODE_SIGN_ENTITLEMENTS = GoTravelWidgetExtension.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 21;
 				DEVELOPMENT_TEAM = S698QDGA49;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = GoTravelWidget/Info.plist;
@@ -817,7 +819,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.9.1;
+				MARKETING_VERSION = 3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gmail.taismryotasis.Travory.GoTravelWidget;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -836,7 +838,7 @@
 				CODE_SIGN_ENTITLEMENTS = TravoryShare/TravoryShare.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 21;
 				DEVELOPMENT_TEAM = S698QDGA49;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TravoryShare/Info.plist;
@@ -848,7 +850,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.9.1;
+				MARKETING_VERSION = 3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gmail.taismryotasis.Travory.TravoryShare;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -868,7 +870,7 @@
 				CODE_SIGN_ENTITLEMENTS = TravoryShare/TravoryShare.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 19;
+				CURRENT_PROJECT_VERSION = 21;
 				DEVELOPMENT_TEAM = S698QDGA49;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = TravoryShare/Info.plist;
@@ -880,7 +882,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 2.9.1;
+				MARKETING_VERSION = 3.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gmail.taismryotasis.Travory.TravoryShare;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

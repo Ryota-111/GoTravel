@@ -121,6 +121,8 @@ struct TravelPlanDetailView: View {
     @AppStorage("dismissedLocalTimeBanners") private var dismissedLocalTimeBanners: String = ""
     /// 日の時間帯・予定の時間帯をまとめて変える画面
     @State private var showsTimeZoneSheet = false
+    /// カレンダーに入れる画面（3.0）
+    @State private var showsCalendarExport = false
     @State private var editingItem: ScheduleItem?
 
     // Weather Properties
@@ -360,6 +362,13 @@ struct TravelPlanDetailView: View {
                 EditScheduleItemView(plan: plan, daySchedule: daySchedule, item: item)
                     .environmentObject(viewModel)
                     .environmentObject(authVM)
+            }
+        }
+        .sheet(isPresented: $showsCalendarExport) {
+            if let plan = currentPlan {
+                CalendarExportSheet(target: .travel(plan), tint: scheduleAccentColor) { message in
+                    showToast(message)
+                }
             }
         }
         .sheet(isPresented: $showsTimeZoneSheet) {
@@ -1162,6 +1171,13 @@ struct TravelPlanDetailView: View {
                             showExportOptions = true
                         } label: {
                             Label("画像で送る", systemImage: "photo")
+                        }
+
+                        // iPhone のカレンダー（Google カレンダーも）に入れる。ご要望から（3.0）
+                        Button {
+                            showsCalendarExport = true
+                        } label: {
+                            Label("iPhone のカレンダーに追加", systemImage: "calendar.badge.plus")
                         }
 
                         Divider()

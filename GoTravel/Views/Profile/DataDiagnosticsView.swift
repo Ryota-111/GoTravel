@@ -1,4 +1,5 @@
 import SwiftUI
+import CoreData
 import CloudKit
 
 // MARK: - データの診断
@@ -20,6 +21,10 @@ struct DataDiagnosticsView: View {
     @State private var backup: TravelPlanBackupStore.Backup?
     @State private var showsAdoptConfirmation = false
     @State private var adoptedCount: Int?
+    /// 端末の中の毎日の控え（3.0）
+    @State private var snapshot: LocalSnapshotStore.Snapshot?
+    @State private var showsRestoreConfirmation = false
+    @State private var restoreMessage: String?
 
     private var theme: ThemePreset { themeManager.currentTheme }
     private var textColor: Color { theme.adaptiveText(for: colorScheme) }
@@ -73,6 +78,17 @@ struct DataDiagnosticsView: View {
             } message: {
                 Text("前に別のApple アカウントでサインインしたときの旅行計画・予定・保存した場所を、今のアカウントの一覧に出します。")
             }
+            .alert("控えから戻しますか？", isPresented: $showsRestoreConfirmation) {
+                Button("戻す") { restoreFromSnapshot() }
+                Button("キャンセル", role: .cancel) {}
+            } message: {
+                Text(snapshot.map { "\($0.savedAt.formatted(.dateTime.month().day().hour().minute()))の控え（\($0.export.summary)）から戻します。写真は戻りません。" } ?? "")
+            }
+            .alert("戻しました", isPresented: restoreBinding) {
+                Button("OK", role: .cancel) { restoreMessage = nil }
+            } message: {
+                Text(restoreMessage ?? "")
+            }
             .alert("表示しました", isPresented: adoptedBinding) {
                 Button("OK", role: .cancel) { adoptedCount = nil }
             } message: {
@@ -123,6 +139,13 @@ struct DataDiagnosticsView: View {
             if case .otherUser = report.verdict {
                 actionButton("今のアカウントで表示する", icon: "person.crop.circle.badge.checkmark", primary: true) {
                     showsAdoptConfirmation = true
+                }
+            }
+            // iCloud にデータが無いと確かめられたときだけ、毎日の控えから戻せる
+            if let snapshot, DataDiagnostics.canRestoreFromSnapshot(report.verdict) {
+                actionButton("控えから戻す（\(snapshot.savedAt.formatted(.dateTime.month().day()))の控え）",
+                             icon: "arrow.uturn.backward.circle.fill", primary: true) {
+                    showsRestoreConfirmation = true
                 }
             }
             if backup != nil, !report.verdict.isGood {
@@ -231,14 +254,32 @@ struct DataDiagnosticsView: View {
         isRunning = true
         let result = await DataDiagnostics.run(userId: userId)
         backup = TravelPlanBackupStore.load(userId: userId)
+        snapshot = LocalSnapshotStore.latest(userId: userId)
         report = result
         isRunning = false
+    }
+
+    /// 毎日の控えから戻す。ID で突き合わせ、無いものだけを足す（`DataExportService.apply`）
+    private func restoreFromSnapshot() {
+        guard let snapshot, let userId = authVM.userId else { return }
+        Task {
+            let result = await Task.detached(priority: .userInitiated) { () -> DataExportService.ImportResult in
+                let context = CoreDataManager.shared.persistentContainer.newBackgroundContext()
+                return DataExportService.apply(snapshot.export, userId: userId, context: context)
+            }.value
+            restoreMessage = result.message
+            await run()
+        }
     }
 
     private func adopt() {
         guard let userId = authVM.userId else { return }
         adoptedCount = DataDiagnostics.adoptOtherUserData(into: userId, context: CoreDataManager.shared.viewContext)
         Task { await run() }
+    }
+
+    private var restoreBinding: Binding<Bool> {
+        Binding(get: { restoreMessage != nil }, set: { if !$0 { restoreMessage = nil } })
     }
 
     private var adoptedBinding: Binding<Bool> {

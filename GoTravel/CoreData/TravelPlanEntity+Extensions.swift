@@ -28,6 +28,9 @@ public class TravelPlanEntity: NSManagedObject {
     @NSManaged public var customSplitCount: NSNumber?
     /// 旅行のメモ帳。2.9 で足した（Production への反映が要る）
     @NSManaged public var memoText: String?
+    /// 旅行のメモの一覧（JSON）。3.0 で足した（Production への反映が要る）。
+    /// `memoText` には、2.9 以前のアプリのために1枚目の共有メモの本文を写す
+    @NSManaged public var memosJSON: String?
     /// ゴミ箱に入れた日時。入っていなければ nil。
     ///
     /// 削除してもすぐには消さず、30日間は「最近削除した旅行計画」から戻せるようにする。
@@ -139,7 +142,8 @@ extension TravelPlanEntity {
             lastEditedBy: lastEditedBy,
             updatedAt: updatedAt ?? Date(),
             customSplitCount: customSplitCount?.intValue,
-            memo: memoText
+            memo: memoText,
+            memos: TripMemoLegacy.decode(memosJSON)
         )
     }
 
@@ -174,6 +178,7 @@ extension TravelPlanEntity {
         self.updatedAt = plan.updatedAt
         self.customSplitCount = plan.customSplitCount.map { NSNumber(value: $0) }
         self.memoText = plan.memo
+        self.memosJSON = TripMemoLegacy.encode(plan.memos)
 
         // sharedWithをエンコード（空になった場合もクリアして反映する）
         if !plan.sharedWith.isEmpty {
