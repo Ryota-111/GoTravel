@@ -833,7 +833,6 @@ struct AccountActionView: View {
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
     @State private var showSignOutConfirm = false
-    @State private var showDeleteConfirm = false
     @State private var animateButtons = false
 
     var body: some View {
@@ -854,7 +853,7 @@ struct AccountActionView: View {
                                 .font(.title2.bold())
                                 .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
 
-                            Text("サインアウトまたはアカウント削除を行います")
+                            Text("サインアウトしても、データは消えません")
                                 .font(.subheadline)
                                 .foregroundColor(themeManager.currentTheme.secondaryText)
                                 .multilineTextAlignment(.center)
@@ -894,35 +893,6 @@ struct AccountActionView: View {
                         .offset(y: animateButtons ? 0 : 20)
                         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: animateButtons)
 
-                        // Delete Account Button
-                        Button(action: {
-                            showDeleteConfirm = true
-                        }) {
-                            HStack {
-                                Image(systemName: "trash.fill")
-                                    .font(.title3)
-                                    .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
-
-                                Text("アカウント削除")
-                                    .font(.headline)
-                                    .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
-
-                                Spacer()
-                            }
-                            .padding()
-                            .background(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .fill(themeManager.currentTheme.cardBackground2)
-                            )
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 16)
-                                    .stroke(Color.red.opacity(0.3), lineWidth: 1)
-                            )
-                        }
-                        .opacity(animateButtons ? 1 : 0)
-                        .offset(y: animateButtons ? 0 : 20)
-                        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.15), value: animateButtons)
-
                         // Warning Text
                         VStack(alignment: .leading, spacing: 8) {
                             Text("⚠️ 注意事項")
@@ -933,7 +903,7 @@ struct AccountActionView: View {
                                 .font(.caption)
                                 .foregroundColor(themeManager.currentTheme.secondaryText)
 
-                            Text("• アカウント削除: すべてのデータが完全に削除されます。この操作は取り消せません")
+                            Text("• アカウント削除: iCloud のデータも含めてすべて消え、取り消せません")
                                 .font(.caption)
                                 .foregroundColor(themeManager.currentTheme.secondaryText)
                         }
@@ -949,6 +919,17 @@ struct AccountActionView: View {
                         .opacity(animateButtons ? 1 : 0)
                         .offset(y: animateButtons ? 0 : 20)
                         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.2), value: animateButtons)
+
+                        // アカウント削除は、サインアウトと並べずに離して置き、別の画面で確かめる。
+                        // 並んでいると押し間違えるおそれがある（`AccountDeletionView`）
+                        NavigationLink(destination: AccountDeletionView()) {
+                            Text("アカウントを削除する…")
+                                .font(.footnote.weight(.semibold))
+                                .foregroundColor(.red.opacity(0.8))
+                                .padding(.vertical, 8)
+                        }
+                        .padding(.top, 40)
+                        .opacity(animateButtons ? 1 : 0)
                     }
                     .padding(.horizontal)
                 }
@@ -968,13 +949,6 @@ struct AccountActionView: View {
             }
         } message: {
             Text("再度ログインすることでアカウントを復元できます")
-        }
-        .confirmationDialog("アカウントを削除しますか？", isPresented: $showDeleteConfirm) {
-            Button("削除", role: .destructive) {
-                authVM.deleteAccount()
-            }
-        } message: {
-            Text("この操作は取り消せません。すべてのデータが完全に削除されます。")
         }
     }
 

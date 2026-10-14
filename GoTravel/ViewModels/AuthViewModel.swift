@@ -117,6 +117,10 @@ final class AuthViewModel: ObservableObject {
 
     // アカウント削除
     func deleteAccount() {
+        // アカウント削除をしたことを残す。あとで「全部消えた」とお問い合わせがあったときに、
+        // 本人の操作かどうかを診断で見分けられるように（2026年10月のお問い合わせから）
+        SyncDiagnosticsLog.recordUserAction("deleteAccount")
+
         // 端末の中の毎日の控えも消す（退会した人の控えを残さない）
         LocalSnapshotStore.removeAll()
 

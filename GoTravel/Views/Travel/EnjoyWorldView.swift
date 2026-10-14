@@ -32,6 +32,10 @@ struct EnjoyWorldView: View {
     /// 端末に残した旅行計画の控え（`TravelPlanBackupStore`）。iCloud が外れたときに読むだけで見せる
     @State private var backup: TravelPlanBackupStore.Backup?
     @State private var showsBackup = false
+    /// 本人が消していないのに旅行計画が 0 件になったときの知らせ（`SyncDiagnosticsLog.unexplainedDropToZero`）
+    @State private var unexplainedDrop: (from: Int, date: Date)?
+    /// 知らせを閉じた、0 件になった時刻（同じ知らせを二度出さない）
+    @AppStorage("dismissedPlanDropAt") private var dismissedPlanDropAt: Double = 0
     @State private var showAddPlan = false
     @State private var showJoinPlan = false
     @State private var planToDelete: TravelPlan?
@@ -221,6 +225,13 @@ struct EnjoyWorldView: View {
                 ScrollView(.vertical, showsIndicators: false) {
                     if let problem = iCloudMonitor.problem {
                         ICloudStatusBanner(problem: problem)
+                            .padding(.horizontal, 20)
+                            .padding(.top, 6)
+                    }
+                    // 本人が消していないのに 0 件になったら、空の画面のままにせず知らせる
+                    if isTravelPlansEmpty, let drop = unexplainedDrop,
+                       drop.date.timeIntervalSince1970 != dismissedPlanDropAt {
+                        planDropNotice(drop)
                             .padding(.horizontal, 20)
                             .padding(.top, 6)
                     }
@@ -826,8 +837,61 @@ struct EnjoyWorldView: View {
         }
     }
 
+    /// 「旅行計画が見えなくなりました」の知らせ。
+    ///
+    /// 2.9 までは空の一覧が出るだけで、慌ててアプリを消したりアカウントを消したりしかねなかった。
+    /// 何件あったかと、まず何をすればいいか（診断・控え）を出す
+    private func planDropNotice(_ drop: (from: Int, date: Date)) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "exclamationmark.icloud.fill")
+                    .font(.title3)
+                    .foregroundColor(addTravelTintColor)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("旅行計画が見えなくなりました（\(drop.from)件）")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
+                    Text("\(drop.date.formatted(.dateTime.month().day().hour().minute()))ごろから見えていません。iCloud とのつながりが変わると、一時的に見えなくなることがあります。アプリやアカウントは削除せず、まずデータの診断で、どこに残っているかを確かめてください。")
+                        .font(.caption)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            HStack(spacing: 10) {
+                Button {
+                    showsDataDiagnostics = true
+                } label: {
+                    Label("データの診断", systemImage: "stethoscope")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .background(addTravelTintColor)
+                        .foregroundColor(.white)
+                        .cornerRadius(10)
+                }
+                .buttonStyle(.plain)
+                Button("閉じる") {
+                    withAnimation { dismissedPlanDropAt = drop.date.timeIntervalSince1970 }
+                }
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+                .padding(.horizontal, 8)
+            }
+        }
+        .padding(14)
+        .background(
+            RoundedRectangle(cornerRadius: themeManager.currentTheme.style.radiusMedium)
+                .fill(addTravelTintColor.opacity(0.08))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: themeManager.currentTheme.style.radiusMedium)
+                .stroke(addTravelTintColor.opacity(0.35), lineWidth: 1)
+        )
+    }
+
     /// 控えを読み直す。一覧が空になったときや、iCloud の状態が変わったときに呼ぶ
     private func reloadBackup() {
+        unexplainedDrop = SyncDiagnosticsLog.unexplainedDropToZero(in: SyncDiagnosticsLog.entries())
         guard let userId = authVM.userId else { backup = nil; return }
         DispatchQueue.global(qos: .utility).async {
             let loaded = TravelPlanBackupStore.load(userId: userId)
