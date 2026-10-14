@@ -1,4 +1,5 @@
 import SwiftUI
+import EventKit
 
 struct BottomTimelineCard: View {
     let selectedDate: Date
@@ -252,11 +253,30 @@ struct TimelineItemCard: View {
     @ObservedObject var themeManager = ThemeManager.shared
     @ObservedObject var tagManager = PlanTagManager.shared
     @Environment(\.colorScheme) var colorScheme
+    /// 押した iPhone のカレンダーの予定（詳細を出しているあいだだけ入る）
+    @State private var externalEvent: EKEvent?
+
+    private var externalEventBinding: Binding<Bool> {
+        Binding(get: { externalEvent != nil }, set: { if !$0 { externalEvent = nil } })
+    }
 
     var body: some View {
-        // iPhone のカレンダーの予定は見るだけ。開く画面は無い（直すのはカレンダーアプリで）
         if item.type == .external {
-            cardContent
+            // iPhone のカレンダーの予定。押すと、iOS のカレンダーと同じ詳細を出す
+            Button {
+                if let id = item.externalEvent?.eventIdentifier {
+                    externalEvent = CalendarExportService.shared.event(identifier: id)
+                }
+            } label: {
+                cardContent
+            }
+            .buttonStyle(PlainButtonStyle())
+            .sheet(isPresented: externalEventBinding) {
+                if let externalEvent {
+                    ExternalEventDetailView(event: externalEvent) { self.externalEvent = nil }
+                        .ignoresSafeArea()
+                }
+            }
         } else {
             NavigationLink(destination: destinationView) {
                 cardContent

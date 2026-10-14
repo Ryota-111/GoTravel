@@ -69,6 +69,13 @@ struct CalendarView: View {
     @State private var selectedTagIDs: Set<String> = []
     @State private var editingCategory: PlanCategory?
     @State private var showsNewCategory = false
+    @State private var showsTagFilter = false
+    /// 共有カレンダーを作る（共有をはじめからオンにしたカテゴリの作成）
+    @State private var showsNewSharedCategory = false
+    @State private var showsJoin = false
+    /// 「カレンダーを共有できます」の案内を閉じたか（1回だけ出す）
+    @AppStorage("calendarShareTipDismissed") private var shareTipDismissed = false
+    @State private var showsCalendarSettings = false
     @ObservedObject private var categoryManager = PlanCategoryManager.shared
     @ObservedObject private var calendarService = CalendarExportService.shared
     @State private var showAddSheet = false
@@ -102,21 +109,17 @@ struct CalendarView: View {
                 VStack(spacing: 0) {
                     monthNavigationHeader
 
-                    // カテゴリ（カレンダー）の切り替えと、タグの絞り込み（3.0）
-                    PlanCategoryBar(
-                        selection: categorySelectionBinding,
-                        tint: themeManager.currentTheme.secondary,
-                        textColor: colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1,
-                        onAdd: { showsNewCategory = true },
-                        onEdit: { editingCategory = $0 }
-                    )
-                    if !filterTags.isEmpty {
-                        PlanTagFilterBar(
-                            tags: filterTags,
-                            selectedIDs: $selectedTagIDs,
-                            textColor: colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
-                        )
-                        .padding(.top, 4)
+                    // カレンダーを共有できることを、1回だけ知らせる（3.0）
+                    if showsShareTip {
+                        shareTip
+                            .padding(.horizontal, 16)
+                            .padding(.bottom, 10)
+                    }
+
+                    // タグで絞っているときだけ、何で絞っているかを小さく出す（3.0）
+                    if !selectedTagIDs.isEmpty {
+                        tagFilterSummary
+                            .padding(.bottom, 10)
                     }
 
                     monthCalendarGrid
@@ -167,23 +170,24 @@ struct CalendarView: View {
                     }
                 }
 
+                // 題名はカテゴリ（カレンダー）の切り替え（3.0）。押すとカテゴリを選べる
                 ToolbarItem(placement: .principal) {
-                    Text(monthYearString)
-                        .font(.headline)
-                        .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+                    categoryMenu
                 }
 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 14) {
-                        // iPhone のカレンダーの予定を並べる・入れる設定（3.0）
-                        NavigationLink(destination: CalendarExportSettingsView()
-                            .environmentObject(viewModel)
-                            .environmentObject(travelViewModel)) {
-                            Image(systemName: calendarService.showsExternalEvents ? "calendar.badge.checkmark" : "calendar.badge.plus")
+                        // タグで絞り込む。選んでいる間は塗りつぶしのアイコンにする
+                        Button {
+                            showsTagFilter = true
+                        } label: {
+                            Image(systemName: selectedTagIDs.isEmpty
+                                  ? "line.3.horizontal.decrease.circle"
+                                  : "line.3.horizontal.decrease.circle.fill")
                                 .font(.title3)
                                 .foregroundColor(themeManager.currentTheme.secondary)
                         }
-                        .accessibilityLabel("iPhone のカレンダー")
+                        .accessibilityLabel("タグで絞り込む")
 
                         Button(action: {
                             showAddSheet = true
@@ -195,6 +199,32 @@ struct CalendarView: View {
                         .accessibilityLabel("予定を追加")
                     }
                 }
+            }
+            .sheet(isPresented: $showsTagFilter) {
+                PlanTagFilterSheet(tags: filterTags, selectedIDs: $selectedTagIDs,
+                                   categoryName: categorySelectionName)
+                    .presentationDetents([.medium, .large])
+            }
+            .sheet(isPresented: $showsCalendarSettings) {
+                NavigationStack {
+                    CalendarExportSettingsView()
+                        .environmentObject(viewModel)
+                        .environmentObject(travelViewModel)
+                        .toolbar {
+                            ToolbarItem(placement: .confirmationAction) {
+                                Button("閉じる") { showsCalendarSettings = false }
+                            }
+                        }
+                }
+            }
+            .sheet(isPresented: $showsNewSharedCategory) {
+                PlanCategoryEditorView(editing: nil, sharesOnCreate: true) { created in
+                    categorySelectionKey = PlanCategorySelection.category(created.id).storageKey
+                }
+            }
+            .sheet(isPresented: $showsJoin) {
+                JoinTravelPlanView()
+                    .environmentObject(travelViewModel)
             }
             .sheet(item: $editingCategory) { category in
                 PlanCategoryEditorView(editing: category)
@@ -262,6 +292,169 @@ struct CalendarView: View {
                 }
             }
         )
+    }
+
+    /// 題名に出すカテゴリの名前
+    private var categorySelectionName: String {
+        switch categorySelection {
+        case .all: return "すべて"
+        case .personal: return PlanCategory.personalName
+        case .category(let id): return categoryManager.name(for: id)
+        }
+    }
+
+    /// 題名のカテゴリの切り替え。カテゴリの追加・編集・共有と、iPhone のカレンダーの設定もここから
+    private var categoryMenu: some View {
+        let textColor = colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
+        return Menu {
+            Picker("カテゴリ", selection: categorySelectionBinding) {
+                Text("すべて").tag(PlanCategorySelection.all)
+                Text(PlanCategory.personalName).tag(PlanCategorySelection.personal)
+                ForEach(categoryManager.categories) { category in
+                    Label(category.name, systemImage: category.isShared ? "person.2.fill" : "circle.fill")
+                        .tag(PlanCategorySelection.category(category.id))
+                }
+            }
+            Divider()
+            // 共有できることが分かるよう、いつもここに置く
+            Button {
+                openSharing()
+            } label: {
+                Label("家族・友達と共有する…", systemImage: "person.2.fill")
+            }
+            Button {
+                showsJoin = true
+            } label: {
+                Label("共有コードで参加", systemImage: "person.badge.plus")
+            }
+            Divider()
+            Button {
+                showsNewCategory = true
+            } label: {
+                Label("カテゴリを追加", systemImage: "plus")
+            }
+            if case .category(let id) = categorySelection, let category = categoryManager.category(for: id) {
+                Button {
+                    editingCategory = category
+                } label: {
+                    Label("「\(category.name)」を編集・共有", systemImage: "pencil")
+                }
+            }
+            Divider()
+            Button {
+                showsCalendarSettings = true
+            } label: {
+                Label("iPhone のカレンダー", systemImage: "calendar")
+            }
+        } label: {
+            HStack(spacing: 5) {
+                if case .category(let id) = categorySelection, let category = categoryManager.category(for: id) {
+                    Circle().fill(category.color).frame(width: 9, height: 9)
+                    if category.isShared {
+                        Image(systemName: "person.2.fill").font(.system(size: 11))
+                    }
+                }
+                Text(categorySelectionName)
+                    .font(.headline)
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 11, weight: .bold))
+            }
+            .foregroundColor(textColor)
+        }
+        .accessibilityLabel("カテゴリ：\(categorySelectionName)")
+    }
+
+    /// 共有の入口。共有していないカテゴリを見ていればその共有画面、それ以外は共有カレンダーを新しく作る
+    private func openSharing() {
+        if case .category(let id) = categorySelection, let category = categoryManager.category(for: id) {
+            editingCategory = category
+        } else {
+            showsNewSharedCategory = true
+        }
+    }
+
+    /// 共有したカテゴリが1つも無く、案内を閉じていなければ出す
+    private var showsShareTip: Bool {
+        !shareTipDismissed && !categoryManager.categories.contains(where: \.isShared)
+    }
+
+    private var shareTip: some View {
+        let textColor = colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
+        return VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .top, spacing: 10) {
+                Image(systemName: "person.2.fill")
+                    .font(.title3)
+                    .foregroundColor(themeManager.currentTheme.secondary)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("カレンダーを家族や友達と共有できます")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(textColor)
+                    Text("「家族」「友達」のようにカレンダーを分けて、予定を一緒に見て書けます。")
+                        .font(.caption)
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                Spacer(minLength: 0)
+                Button {
+                    withAnimation { shareTipDismissed = true }
+                } label: {
+                    Image(systemName: "xmark")
+                        .font(.caption.weight(.bold))
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                }
+                .accessibilityLabel("閉じる")
+            }
+            HStack(spacing: 10) {
+                Button {
+                    showsNewSharedCategory = true
+                } label: {
+                    Text("共有カレンダーを作る")
+                        .font(.subheadline.weight(.semibold))
+                        .frame(maxWidth: .infinity)
+                        .padding(.vertical, 9)
+                        .background(Capsule().fill(themeManager.currentTheme.secondary))
+                        .foregroundColor(ThemePreset.readableText(on: themeManager.currentTheme.secondary))
+                }
+                Button {
+                    showsJoin = true
+                } label: {
+                    Text("コードで参加")
+                        .font(.subheadline.weight(.semibold))
+                        .padding(.horizontal, 14)
+                        .padding(.vertical, 9)
+                        .background(Capsule().stroke(themeManager.currentTheme.secondary.opacity(0.5), lineWidth: 1))
+                        .foregroundColor(themeManager.currentTheme.secondary)
+                }
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: 16).fill(themeManager.currentTheme.secondary.opacity(0.08)))
+    }
+
+    /// タグで絞っているときの表示。「✕」で絞り込みをやめる
+    private var tagFilterSummary: some View {
+        let names = tagManager.tags(for: Array(selectedTagIDs)).map(\.name).joined(separator: "・")
+        return HStack(spacing: 8) {
+            Button {
+                showsTagFilter = true
+            } label: {
+                Label(names.isEmpty ? "タグ" : names, systemImage: "number")
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+            }
+            Button {
+                withAnimation { selectedTagIDs = [] }
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+            }
+            .accessibilityLabel("絞り込みをやめる")
+        }
+        .foregroundColor(themeManager.currentTheme.secondary)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(Capsule().fill(themeManager.currentTheme.secondary.opacity(0.12)))
     }
 
     /// 絞り込みに出すタグ（「すべて」では全部、カテゴリを選んでいればそのカテゴリのタグ）
@@ -522,6 +715,13 @@ struct CalendarView: View {
 
             Spacer()
 
+            // 年月は矢印のあいだに置く（題名はカテゴリの切り替えに使うため）
+            Text(monthYearString)
+                .font(.headline)
+                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
+
+            Spacer()
+
             Button(action: {
                 withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
                     changeMonth(by: 1)
@@ -714,11 +914,13 @@ struct CalendarView: View {
         return colors + externalDotColor(for: date)
     }
 
-    /// iPhone の予定がある日の点。その予定のカレンダーの色で1つ（祝日なら祝日のカレンダーの色）。
-    /// 前は薄い灰色にしていて、地の色に溶けて見えなかった
+    /// iPhone の予定がある日の点。**カレンダーごとに1つずつ**、そのカレンダーの色で出す
+    /// （仕事と祝日があれば2つ）。前は1日に1つしか出しておらず、予定が2つあっても点が1つだった
     private func externalDotColor(for date: Date) -> [Color] {
-        guard let event = visibleExternalEvents.first(where: { $0.occurs(on: date, calendar: calendar) }) else { return [] }
-        return [event.color.map { Color(cgColor: $0) } ?? themeManager.currentTheme.secondaryText]
+        var seen = Set<String>()
+        return visibleExternalEvents
+            .filter { $0.occurs(on: date, calendar: calendar) && seen.insert($0.calendarId).inserted }
+            .map { event in event.color.map { Color(cgColor: $0) } ?? themeManager.currentTheme.secondaryText }
     }
 
     /// 見ている月（前後の週を含む）の、iPhone のカレンダーの予定を読み直す

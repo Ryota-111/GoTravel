@@ -201,4 +201,16 @@ struct CalendarExportTests {
         let reminder = event(at(10, 0, in: japan), at(10, 0, in: japan))
         #expect(reminder.occurs(on: at(10, 0, in: japan), calendar: calendar))
     }
+
+    @Test("同じ日の同じ予定が別のカレンダーにもあれば1つにする（祝日を2か所で購読しているとき）")
+    func removesDuplicateHolidays() {
+        func holiday(_ id: String, calendar: String, title: String = "スポーツの日") -> ExternalCalendarEvent {
+            ExternalCalendarEvent(id: id, calendarId: calendar, title: title, start: at(12, 0, in: japan),
+                                  end: at(13, 0, in: japan), isAllDay: true, location: nil,
+                                  calendarName: calendar, color: nil)
+        }
+        let events = [holiday("a", calendar: "Gmail"), holiday("b", calendar: "Subscribed"),
+                      holiday("c", calendar: "Gmail", title: "会議")]
+        #expect(CalendarExportService.removingDuplicates(events).map(\.id) == ["a", "c"])
+    }
 }

@@ -2,118 +2,61 @@ import SwiftUI
 
 // MARK: - カテゴリ（カレンダー）の画面（3.0）
 
-/// カレンダータブの上の、カテゴリの切り替え。「すべて」「自分用」「家族👥」…「＋」
-struct PlanCategoryBar: View {
-    @Binding var selection: PlanCategorySelection
-    let tint: Color
-    let textColor: Color
-    /// 「＋」を押したとき（新しいカテゴリ）
-    let onAdd: () -> Void
-    /// 長押しで編集
-    let onEdit: (PlanCategory) -> Void
-
-    @ObservedObject private var manager = PlanCategoryManager.shared
-
-    var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 8) {
-                chip(title: "すべて", color: tint, selected: selection == .all) { selection = .all }
-                chip(title: PlanCategory.personalName, color: tint, selected: selection == .personal) { selection = .personal }
-                ForEach(manager.categories) { category in
-                    chip(title: category.name, color: category.color, shared: category.isShared,
-                         selected: selection == .category(category.id)) {
-                        selection = .category(category.id)
-                    }
-                    .contextMenu {
-                        Button {
-                            onEdit(category)
-                        } label: {
-                            Label("編集・共有", systemImage: "pencil")
-                        }
-                    }
-                }
-                // 選んでいるカテゴリの編集・共有（長押しに気づかない人のため、ボタンでも開ける）
-                if case .category(let id) = selection, let category = manager.category(for: id) {
-                    Button { onEdit(category) } label: {
-                        Image(systemName: category.isShared ? "person.2.circle" : "slider.horizontal.3")
-                            .font(.system(size: 15, weight: .semibold))
-                            .foregroundColor(tint)
-                            .frame(width: 34, height: 30)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("「\(category.name)」の編集・共有")
-                }
-                Button(action: onAdd) {
-                    Image(systemName: "plus")
-                        .font(.system(size: 13, weight: .bold))
-                        .foregroundColor(tint)
-                        .frame(width: 34, height: 30)
-                        .background(Capsule().strokeBorder(tint.opacity(0.4), style: StrokeStyle(lineWidth: 1, dash: [4, 3])))
-                }
-                .buttonStyle(.plain)
-                .accessibilityLabel("カテゴリを追加")
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 4)
-        }
-    }
-
-    private func chip(title: String, color: Color, shared: Bool = false, selected: Bool,
-                      action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            HStack(spacing: 4) {
-                if shared {
-                    Image(systemName: "person.2.fill").font(.system(size: 9, weight: .bold))
-                }
-                Text(title).font(.system(size: 13, weight: .semibold)).lineLimit(1)
-            }
-            .foregroundColor(selected ? ThemePreset.readableText(on: color) : textColor)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .background(
-                Capsule().fill(selected ? AnyShapeStyle(color) : AnyShapeStyle(color.opacity(0.14)))
-            )
-        }
-        .buttonStyle(.plain)
-    }
-}
-
-/// カレンダータブでタグを選ぶ（選んでいる間は、そのタグの予定だけを出す）
-struct PlanTagFilterBar: View {
+/// カレンダーをタグで絞り込む（右上の絞り込みボタンから）。選んでいる間は、そのタグの予定だけを出す
+struct PlanTagFilterSheet: View {
     let tags: [PlanTag]
     @Binding var selectedIDs: Set<String>
-    let textColor: Color
+    let categoryName: String
+
+    @Environment(\.dismiss) private var dismiss
 
     var body: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 6) {
-                Image(systemName: "number")
-                    .font(.system(size: 11, weight: .bold))
-                    .foregroundColor(textColor.opacity(0.5))
-                ForEach(tags) { tag in
-                    let selected = selectedIDs.contains(tag.id)
-                    Button {
-                        if selected { selectedIDs.remove(tag.id) } else { selectedIDs.insert(tag.id) }
-                    } label: {
-                        Text(tag.name)
-                            .font(.system(size: 12, weight: .semibold))
-                            .lineLimit(1)
-                            .foregroundColor(selected ? .white : tag.color)
-                            .padding(.horizontal, 10)
-                            .padding(.vertical, 5)
-                            .background(Capsule().fill(selected
-                                ? AnyShapeStyle(ThemePreset.readableTint(tag.color, on: .white))
-                                : AnyShapeStyle(tag.color.opacity(0.12))))
+        NavigationStack {
+            List {
+                if tags.isEmpty {
+                    Text("「\(categoryName)」にはタグがありません。タグは予定を作るときや、タグ管理から作れます。")
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
+                } else {
+                    Section {
+                        ForEach(tags) { tag in
+                            Button {
+                                if selectedIDs.contains(tag.id) {
+                                    selectedIDs.remove(tag.id)
+                                } else {
+                                    selectedIDs.insert(tag.id)
+                                }
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Circle().fill(tag.color).frame(width: 14, height: 14)
+                                    Text(tag.name).foregroundColor(.primary)
+                                    Spacer()
+                                    if selectedIDs.contains(tag.id) {
+                                        Image(systemName: "checkmark").foregroundColor(.accentColor)
+                                    }
+                                }
+                            }
+                        }
+                    } footer: {
+                        Text("選んだタグのどれかが付いている予定だけを、カレンダーに表示します。")
                     }
-                    .buttonStyle(.plain)
-                }
-                if !selectedIDs.isEmpty {
-                    Button("すべて表示") { selectedIDs = [] }
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundColor(textColor.opacity(0.6))
                 }
             }
-            .padding(.horizontal, 16)
+            .navigationTitle("タグで絞り込む")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("すべて表示") {
+                        selectedIDs = []
+                        dismiss()
+                    }
+                    .disabled(selectedIDs.isEmpty)
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完了") { dismiss() }
+                        .fontWeight(.semibold)
+                }
+            }
         }
     }
 }
@@ -122,6 +65,8 @@ struct PlanTagFilterBar: View {
 struct PlanCategoryEditorView: View {
     /// nil なら新しく作る
     let editing: PlanCategory?
+    /// 新しく作るとき、はじめから「共有する」をオンにしておくか（共有カレンダーを作る入口から開いたとき）
+    var sharesOnCreate = false
     var onCreated: ((PlanCategory) -> Void)? = nil
 
     @ObservedObject private var manager = PlanCategoryManager.shared
@@ -132,7 +77,16 @@ struct PlanCategoryEditorView: View {
     @State private var colorHex = PlanTagPalette.swatches[0].hex
     @State private var showsDeleteConfirm = false
 
-    private var current: PlanCategory? { editing.flatMap { manager.category(for: $0.id) } ?? editing }
+    /// 作ってすぐ共有したカテゴリ（作ったあとも画面を閉じず、共有コードを見せる）
+    @State private var createdId: String?
+    @State private var shareAfterCreate = false
+    @State private var isCreatingShare = false
+    @State private var shareError: String?
+
+    private var current: PlanCategory? {
+        if let createdId { return manager.category(for: createdId) }
+        return editing.flatMap { manager.category(for: $0.id) } ?? editing
+    }
     private var color: Color { Color(hex: colorHex) ?? .gray }
     private var trimmed: String { name.trimmingCharacters(in: .whitespaces) }
 
@@ -145,6 +99,17 @@ struct PlanCategoryEditorView: View {
                     Text("カテゴリ名")
                 } footer: {
                     Text("カテゴリごとにカレンダーが分かれます。予定を入れるときに、どのカテゴリに入れるかを選びます。")
+                }
+
+                // 共有は色より先に出す（共有できることが目に入るように）
+                if let current {
+                    PlanCategoryShareSection(categoryId: current.id, tint: color)
+                } else {
+                    Section {
+                        Toggle("作ったら、家族や友達と共有する", isOn: $shareAfterCreate)
+                    } footer: {
+                        Text("共有すると、このカテゴリの予定とタグを、家族や友達と一緒に見て書けます。共有コードを送るだけで参加できます（相手も Travory 3.0 以降）。")
+                    }
                 }
 
                 Section("色") {
@@ -166,9 +131,7 @@ struct PlanCategoryEditorView: View {
                     .padding(.vertical, 4)
                 }
 
-                if let current {
-                    PlanCategoryShareSection(categoryId: current.id, tint: color)
-
+                if current != nil {
                     Section {
                         Button("このカテゴリを削除", role: .destructive) { showsDeleteConfirm = true }
                     } footer: {
@@ -177,19 +140,34 @@ struct PlanCategoryEditorView: View {
                 }
             }
             .tint(color)
-            .navigationTitle(editing == nil ? "カテゴリを追加" : "カテゴリを編集")
+            .navigationTitle(editing == nil && createdId == nil ? (sharesOnCreate ? "共有カレンダーを作る" : "カテゴリを追加") : "カテゴリを編集")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("キャンセル") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button(editing == nil ? "追加" : "保存") { save() }
-                        .fontWeight(.semibold)
-                        .disabled(trimmed.isEmpty)
+                    if createdId != nil {
+                        Button("完了") { dismiss() }
+                            .fontWeight(.semibold)
+                    } else {
+                        Button(editing == nil ? "追加" : "保存") { save() }
+                            .fontWeight(.semibold)
+                            .disabled(trimmed.isEmpty)
+                    }
                 }
             }
+            .overlay {
+                if isCreatingShare { ProgressView() }
+            }
+            .alert("共有できませんでした", isPresented: Binding(get: { shareError != nil },
+                                                          set: { if !$0 { shareError = nil } })) {
+                Button("OK", role: .cancel) { shareError = nil }
+            } message: {
+                Text(shareError ?? "")
+            }
             .onAppear {
+                shareAfterCreate = sharesOnCreate
                 if let editing {
                     name = editing.name
                     colorHex = editing.colorHex ?? colorHex
@@ -222,8 +200,27 @@ struct PlanCategoryEditorView: View {
             SharedCategoryService.shared.categoryDidChange(updated)
         } else if let created = manager.add(name: trimmed, colorHex: colorHex) {
             onCreated?(created)
+            if shareAfterCreate {
+                // 閉じずに、そのまま共有コードを出す
+                createdId = created.id
+                Task { await shareCreated(created) }
+                return
+            }
         }
         dismiss()
+    }
+
+    private func shareCreated(_ category: PlanCategory) async {
+        guard let userId = manager.userId else { return }
+        isCreatingShare = true
+        do {
+            _ = try await SharedCategoryService.shared.share(category, userId: userId)
+        } catch {
+            shareError = ICloudGuidanceText.isAccountProblem(error)
+                ? ICloudGuidanceText.sharingUnavailable
+                : "カテゴリは作りましたが、共有できませんでした。通信環境をご確認のうえ、下の「このカテゴリを共有する」からもう一度お試しください。"
+        }
+        isCreatingShare = false
     }
 
     private func delete() {

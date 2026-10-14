@@ -9,6 +9,10 @@ import Combine
 struct ExternalCalendarEvent: Identifiable, Equatable {
     /// 繰り返しの予定は同じ ID の回が並ぶので、始まりの時刻も足す
     let id: String
+    /// カレンダーの予定の ID（押したときに、iPhone のカレンダーの詳細を開くのに使う）
+    var eventIdentifier: String? = nil
+    /// どのカレンダーの予定か（点をカレンダーごとに1つずつ出すのに使う）
+    var calendarId: String = ""
     let title: String
     let start: Date
     let end: Date
@@ -181,7 +185,7 @@ final class CalendarExportService: ObservableObject {
         guard !calendars.isEmpty else { return [] }
         let exported = Set(state.links.values.flatMap { $0.events.values })
         let predicate = store.predicateForEvents(withStart: start, end: end, calendars: calendars)
-        return store.events(matching: predicate)
+        let events = store.events(matching: predicate)
             .filter { event in
                 !exported.contains(event.eventIdentifier ?? "")
                     && !(event.notes?.contains(CalendarEventBuilder.footer) ?? false)
@@ -189,6 +193,8 @@ final class CalendarExportService: ObservableObject {
             .map { event in
                 ExternalCalendarEvent(
                     id: "\(event.eventIdentifier ?? UUID().uuidString)@\(event.startDate.timeIntervalSince1970)",
+                    eventIdentifier: event.eventIdentifier,
+                    calendarId: event.calendar.calendarIdentifier,
                     title: event.title ?? "（題名なし）",
                     start: event.startDate,
                     end: event.endDate,
@@ -198,7 +204,26 @@ final class CalendarExportService: ObservableObject {
                     color: event.calendar.cgColor
                 )
             }
+        return Self.removingDuplicates(events)
     }
+
+    /// 同じ日の同じ予定が、別のカレンダーにも入っているときは1つにする
+    /// （祝日を Google と iPhone の両方で購読していると、同じ祝日が2つ並ぶため）
+    nonisolated static func removingDuplicates(_ events: [ExternalCalendarEvent]) -> [ExternalCalendarEvent] {
+        var seen = Set<String>()
+        return events.filter { event in
+            let key = "\(event.title)|\(event.isAllDay)|\(Int(event.start.timeIntervalSince1970))|\(Int(event.end.timeIntervalSince1970))"
+            return seen.insert(key).inserted
+        }
+    }
+
+    /// 押したときに詳細を開くための、カレンダーの予定
+    func event(identifier: String) -> EKEvent? {
+        store.event(withIdentifier: identifier)
+    }
+
+    /// 詳細の画面で使う（iOS のカレンダーの画面は、同じ store を渡す必要がある）
+    var eventStore: EKEventStore { store }
 
     /// Travory から入れるために作った「Travory」カレンダーか
     private func isTravoryCalendar(_ calendar: EKCalendar) -> Bool {
