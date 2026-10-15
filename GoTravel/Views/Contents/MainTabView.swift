@@ -13,6 +13,7 @@ struct MainTabView: View {
     @State private var shownSharedImports: Set<URL> = []
     @StateObject private var plansViewModel = PlansViewModel()
     @StateObject private var travelPlanViewModel = TravelPlanViewModel()
+    @ObservedObject private var icsInbox = ICSImportInbox.shared
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
@@ -109,6 +110,11 @@ struct MainTabView: View {
         // TravelPlan は Equatable ではないため配列を直接監視できないので、
         // 起動時・タブ切り替え時・バックグラウンドへ移る時に更新する
         .onAppear { updateWidgetSnapshot() }
+        // .ics を「Travory で開く」で受け取ったら、カレンダーのタブで確かめる
+        .onChange(of: icsInbox.file?.id) { _, id in
+            if id != nil { selectedTab = 1 }
+        }
+        .onAppear { if icsInbox.file != nil { selectedTab = 1 } }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { updateWidgetSnapshot() }
 
