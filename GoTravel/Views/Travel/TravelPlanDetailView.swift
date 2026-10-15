@@ -144,6 +144,10 @@ struct TravelPlanDetailView: View {
     /// 出せなかった理由。文言とアイコンは種類ごとに変える
     @State private var planWeatherNote: WeatherNote?
     @State private var weatherAttribution: WeatherService.WeatherAttribution?
+    /// 予報を取ってきた時刻（「11:10 に更新」と出す）
+    @State private var weatherFetchedAt: Date?
+    /// アプリに戻ってきたときに、古くなった天気を取り直すため
+    @Environment(\.scenePhase) private var scenePhase
 
     /// 天気が出せないときに1行で出す説明
     private struct WeatherNote {
@@ -270,7 +274,7 @@ struct TravelPlanDetailView: View {
                 // ScrollView に取り込まれて、ほとんど反応しなくなる
                 // オフのときは、このジェスチャだけ止める（中のスクロールや地図の操作はそのまま）
                 .simultaneousGesture(tabSwipeGesture, including: switchesTabBySwipe ? .all : .subviews)
-                // 引っぱって更新。共有中なら相手の変更を取り込み、天気も取り直す
+                // 引っぱって更新。共有中なら相手の変更を取り込む（天気は1時間以内なら取り直さない）
                 .refreshable { await pullToRefresh() }
                 // anchor は割合で指定するので、枠の高さが要る
                 .onScrollGeometryChange(for: CGFloat.self) { geometry in
@@ -462,6 +466,10 @@ struct TravelPlanDetailView: View {
         // 画面を開き直すまで天気が出なかった
         .onChange(of: weatherRequestKey) { _, _ in
             fetchPlanWeather()
+        }
+        // アプリに戻ってきたとき。1時間以上たっていれば取り直す（たっていなければ、覚えた予報を使うだけ）
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { fetchPlanWeather() }
         }
         .onAppear {
             withAnimation {
@@ -2031,6 +2039,12 @@ struct TravelPlanDetailView: View {
     private var weatherAttributionLine: some View {
         if let attribution = weatherAttribution {
             HStack(spacing: 6) {
+                // いつの予報か（1時間たつまでは取り直さない）
+                if let fetchedAt = weatherFetchedAt {
+                    Text("\(Self.weatherUpdatedText(fetchedAt))に更新")
+                        .font(.system(size: 9))
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                }
                 Spacer(minLength: 0)
 
                 AsyncImage(url: colorScheme == .dark ? attribution.combinedMarkDarkURL : attribution.combinedMarkLightURL) { image in
@@ -2046,6 +2060,14 @@ struct TravelPlanDetailView: View {
                 }
             }
         }
+    }
+
+    /// 「11:10」。今日でなければ「10/14 11:10」
+    static func weatherUpdatedText(_ date: Date, now: Date = Date()) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateFormat = Calendar.current.isDate(date, inSameDayAs: now) ? "H:mm" : "M/d H:mm"
+        return formatter.string(from: date)
     }
 
     // MARK: - Helper Methods
@@ -2453,7 +2475,8 @@ struct TravelPlanDetailView: View {
         }
     }
 
-    /// 引っぱって更新。共有中なら相手の変更を取り込み、天気も取り直す
+    /// 引っぱって更新。共有中なら相手の変更を取り込む。
+    /// 天気は1時間以内に取ったものがあればそのまま（引っぱっても問い合わせない。WeatherKit の回数を使わないため）
     private func pullToRefresh() async {
         await refreshSharedPlanIfNeeded()
         fetchPlanWeather()
@@ -2488,6 +2511,7 @@ struct TravelPlanDetailView: View {
         viewModel.update(latest, userId: userId)
     }
 
+    /// 天気を出す。1時間以内に取った予報があれば、問い合わせずにそれを使う
     private func fetchPlanWeather() {
         guard #available(iOS 16.0, *) else {
             return
@@ -2506,6 +2530,19 @@ struct TravelPlanDetailView: View {
             return
         }
 
+        // 1時間以内に取った予報があれば、問い合わせずにすぐ出す（WeatherKit の回数を使わない）
+        if let cached = WeatherService.shared.cachedForecast(
+            latitude: latitude, longitude: longitude, startDate: plan.startDate, endDate: plan.endDate) {
+            planWeatherDays = cached.days
+            weatherFetchedAt = cached.fetchedAt
+            planWeatherNote = cached.days.isEmpty ? WeatherNote(text: Self.notYetAvailableText, icon: "calendar") : nil
+            isLoadingPlanWeather = false
+            Task { @MainActor in
+                weatherAttribution = try? await WeatherService.shared.getWeatherAttribution()
+            }
+            return
+        }
+
         isLoadingPlanWeather = true
         planWeatherNote = nil
 
@@ -2516,17 +2553,19 @@ struct TravelPlanDetailView: View {
             do {
                 // 日程ぶんまとめて取る。1日ずつ問い合わせると同じ予報を人数分叩くうえ、
                 // 開始日だけを見ていた頃は旅行が始まった瞬間に「過去の日付」になって落ちていた
-                let fetchedDays = try await WeatherService.shared.fetchWeatherForTrip(
+                let forecast = try await WeatherService.shared.tripForecast(
                     latitude: latitude,
                     longitude: longitude,
                     startDate: plan.startDate,
                     endDate: plan.endDate
                 )
+                let fetchedDays = forecast.days
 
-                // Fetch attribution
+                // 出典は起動中に1回だけ取る（WeatherService が覚えている）
                 let fetchedAttribution = try await WeatherService.shared.getWeatherAttribution()
 
                 self.planWeatherDays = fetchedDays
+                self.weatherFetchedAt = forecast.fetchedAt
                 self.weatherAttribution = fetchedAttribution
                 self.planWeatherNote = fetchedDays.isEmpty
                     ? WeatherNote(text: Self.notYetAvailableText, icon: "calendar")
