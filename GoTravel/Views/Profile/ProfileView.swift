@@ -9,7 +9,6 @@ struct ProfileView: View {
     @ObservedObject private var proStore = ProStore.shared
     @Environment(\.colorScheme) var colorScheme
     @State private var animateCards = false
-    @State private var showJoinPlan = false
     /// カードの副題を、設定画面から戻ったときに書き換えるため
     @AppStorage(MapNavigator.preferenceKey) private var mapAppPreference: String = MapApp.ask.rawValue
     @EnvironmentObject var travelPlanViewModel: TravelPlanViewModel
@@ -23,39 +22,42 @@ struct ProfileView: View {
                 VStack(spacing: 0) {
                     profileHeaderSection
 
-                    // 上から「本人のこと」「できること」「設定」「困ったとき」「その他」。
+                    // 上から「Pro」「設定」「データ」「サポート」「アカウント」。
                     //
-                    // 設定がヘルプやチップより下にあると、いちばん開く用事のものが
-                    // 一番下になる。アカウント（削除を含む）は最後に置く
-                    VStack(spacing: 16) {
-                        profileEditCard
-
+                    // 前は12枚のカードが同じ大きさで並び、どれが何のまとまりか分からなかった。
+                    // 見出しでまとめ、1行を小さくする。名前の編集は上の名前を押して行う。
+                    // 「共有コードで参加」はホームとカレンダーの一覧にあるので、ここには置かない
+                    VStack(spacing: 22) {
                         proCard
 
-                        joinTravelPlanCard
+                        ProfileMenuGroup(title: "設定") {
+                            appsettingCard
+                            reminderDefaultsCard
+                            calendarExportCard
+                            mapAppCard
+                        }
 
-                        appsettingCard
+                        ProfileMenuGroup(title: "データ") {
+                            dataBackupCard
+                            recentlyDeletedCard
+                        }
 
-                        reminderDefaultsCard
+                        ProfileMenuGroup(title: "サポート") {
+                            helpSupportCard
+                            tipJarCard
+                        }
 
-                        calendarExportCard
-
-                        dataBackupCard
-
-                        mapAppCard
-
-                        recentlyDeletedCard
-
-                        helpSupportCard
-
-                        tipJarCard
-
-                        accountCard
+                        ProfileMenuGroup(title: nil) {
+                            accountCard
+                        }
 
                         // cloudKitTestCard // 開発用：必要時にコメント解除
                     }
-                    .padding(.horizontal, 24)
-                    .padding(.top, 30)
+                    .opacity(animateCards ? 1 : 0)
+                    .offset(y: animateCards ? 0 : 20)
+                    .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.15), value: animateCards)
+                    .padding(.horizontal, 20)
+                    .padding(.top, 8)
                 }
                 .padding(.bottom, 40)
             }
@@ -66,10 +68,6 @@ struct ProfileView: View {
             withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
                 animateCards = true
             }
-        }
-        .sheet(isPresented: $showJoinPlan) {
-            JoinTravelPlanView()
-                .environmentObject(travelPlanViewModel)
         }
     }
 
@@ -133,13 +131,15 @@ struct ProfileView: View {
     }
 
     // MARK: - Profile Header
+    /// 名前と写真。押すと名前・メール・写真を直せる（前は「アカウント編集」のカードが別にあった）
     private var profileHeaderSection: some View {
+        NavigationLink(destination: ProfileEditView(vm: vm)) {
         VStack(spacing: 0) {
             ZStack {
                 // Avatar with glassmorphism effect
                 VStack(spacing: 20) {
                     Spacer()
-                        .frame(height: 40)
+                        .frame(height: 16)
 
                     // Profile Photo
                     ZStack {
@@ -156,7 +156,7 @@ struct ProfileView: View {
                                     endPoint: .bottomTrailing
                                 )
                             )
-                            .frame(width: 150, height: 150)
+                            .frame(width: 110, height: 110)
                             .blur(radius: 20)
 
                         // Avatar container
@@ -166,7 +166,7 @@ struct ProfileView: View {
                                     Image(uiImage: ui)
                                         .resizable()
                                         .scaledToFill()
-                                        .frame(width: 140, height: 140)
+                                        .frame(width: 100, height: 100)
                                 } else {
                                     Circle()
                                         .fill(
@@ -179,14 +179,14 @@ struct ProfileView: View {
                                                 endPoint: .bottomTrailing
                                             )
                                         )
-                                        .frame(width: 140, height: 140)
+                                        .frame(width: 100, height: 100)
 
                                     Image(systemName: "person.fill")
-                                        .font(.system(size: 70))
+                                        .font(.system(size: 48))
                                         .foregroundColor(.white.opacity(0.9))
                                 }
                             }
-                            .frame(width: 140, height: 140)
+                            .frame(width: 100, height: 100)
                             .clipShape(Circle())
                             .overlay(
                                 Circle()
@@ -209,14 +209,19 @@ struct ProfileView: View {
 
                     // User Info with glassmorphism card
                     VStack(spacing: 12) {
+                        HStack(spacing: 6) {
                         Text(authVM.userFullName ?? "ユーザー")
-                            .font(.system(size: 28, weight: .bold, design: .rounded))
+                            .font(.system(size: 24, weight: .bold, design: .rounded))
                             // text は白0.1の固定色で、暗い背景では黒いまま消える
                             .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
+                            Image(systemName: "pencil.circle.fill")
+                                .font(.system(size: 18))
+                                .foregroundColor(themeManager.currentTheme.secondaryTextOnScreen(for: colorScheme))
+                        }
 
                         Text(authVM.userEmail ?? "")
                             .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(themeManager.currentTheme.secondaryText)
+                            .foregroundColor(themeManager.currentTheme.secondaryTextOnCardBackground2(for: colorScheme))
                             .padding(.horizontal, 20)
                             .padding(.vertical, 8)
                             .background(
@@ -228,174 +233,91 @@ struct ProfileView: View {
                                     )
                             )
                     }
-                    .padding(.top, 15)
-                    .padding(.bottom, 30)
+                    .padding(.top, 4)
+                    .padding(.bottom, 20)
                 }
             }
         }
+        }
+        .buttonStyle(CardButtonStyle())
+        .accessibilityLabel("プロフィールを編集")
         .opacity(animateCards ? 1 : 0)
         .scaleEffect(animateCards ? 1 : 0.9)
         .animation(.spring(response: 0.7, dampingFraction: 0.7), value: animateCards)
     }
 
-    // MARK: - Profile Edit Card
-    private var profileEditCard: some View {
-        NavigationLink(destination: ProfileEditView(vm: vm)) {
-            GlassMenuCard(
-                icon: "pencil",
-                title: "アカウント編集",
-                subtitle: "プロフィール情報を変更",
-                gradientColors: [themeManager.currentTheme.xprimary, themeManager.currentTheme.xprimary.opacity(0.7)]
-            )
-        }
-        .buttonStyle(CardButtonStyle())
-        .opacity(animateCards ? 1 : 0)
-        .scaleEffect(animateCards ? 1 : 0.8)
-        .offset(y: animateCards ? 0 : 30)
-        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.15), value: animateCards)
-    }
+    // MARK: - 行（`ProfileMenuGroup` の中に並べる）
 
-    // MARK: - Account Card
-    private var accountCard: some View {
-        NavigationLink(destination: AccountActionView(vm: vm)) {
-            GlassMenuCard(
-                icon: "gearshape",
-                title: "アカウント管理",
-                subtitle: "セキュリティとプライバシー",
-                gradientColors: [themeManager.currentTheme.warning, themeManager.currentTheme.error]
-            )
-        }
-        .buttonStyle(CardButtonStyle())
-        .opacity(animateCards ? 1 : 0)
-        .scaleEffect(animateCards ? 1 : 0.8)
-        .offset(y: animateCards ? 0 : 30)
-        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.45), value: animateCards)
-    }
-
-    // MARK: - Help & Support Card
-    private var helpSupportCard: some View {
-        NavigationLink(destination: HelpSupportView()) {
-            GlassMenuCard(
-                icon: "questionmark.circle",
-                title: "ヘルプサポート",
-                subtitle: "よくある質問とお問い合わせ",
-                gradientColors: [Color.teal, Color.cyan.opacity(0.8)]
-            )
-        }
-        .buttonStyle(CardButtonStyle())
-        .opacity(animateCards ? 1 : 0)
-        .scaleEffect(animateCards ? 1 : 0.8)
-        .offset(y: animateCards ? 0 : 30)
-        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.35), value: animateCards)
-    }
-    
     private var appsettingCard: some View {
         NavigationLink(destination: AppSettingView()) {
-            GlassMenuCard(
-                icon: "paintpalette.fill",
-                title: "アプリ設定",
-                subtitle: "テーマ・操作",
-                gradientColors: [Color.purple, Color.indigo.opacity(0.8)]
-            )
+            ProfileMenuRow(icon: "paintpalette.fill", color: .purple, title: "テーマ・操作")
         }
-        .buttonStyle(CardButtonStyle())
-        .opacity(animateCards ? 1 : 0)
-        .scaleEffect(animateCards ? 1 : 0.8)
-        .offset(y: animateCards ? 0 : 30)
-        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.25), value: animateCards)
     }
 
     private var reminderDefaultsCard: some View {
         NavigationLink(destination: PlanReminderDefaultsView()) {
-            GlassMenuCard(
-                icon: "bell.badge.fill",
-                title: "通知の初期設定",
-                subtitle: "新しい予定に入れる通知",
-                gradientColors: [Color.orange, Color.pink.opacity(0.8)]
-            )
+            ProfileMenuRow(icon: "bell.badge.fill", color: .orange, title: "通知の初期設定")
         }
-        .buttonStyle(CardButtonStyle())
-        .opacity(animateCards ? 1 : 0)
-        .scaleEffect(animateCards ? 1 : 0.8)
-        .offset(y: animateCards ? 0 : 30)
-        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.30), value: animateCards)
     }
 
     /// 旅行計画・予定をまとめてカレンダーに入れる・カレンダーの予定を表示する（3.0）
     private var calendarExportCard: some View {
         NavigationLink(destination: CalendarExportSettingsView()) {
-            GlassMenuCard(
-                icon: "calendar.badge.plus",
-                title: "iPhone のカレンダー",
-                subtitle: "予定を追加する・祝日などを表示する",
-                gradientColors: [Color.red.opacity(0.8), Color.orange.opacity(0.8)]
-            )
+            ProfileMenuRow(icon: "calendar", color: .red, title: "iPhone のカレンダー")
         }
-        .buttonStyle(CardButtonStyle())
-        .opacity(animateCards ? 1 : 0)
-        .scaleEffect(animateCards ? 1 : 0.8)
-        .offset(y: animateCards ? 0 : 30)
-        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.32), value: animateCards)
+    }
+
+    private var mapAppCard: some View {
+        NavigationLink(destination: MapAppSettingView()) {
+            ProfileMenuRow(icon: "arrow.triangle.turn.up.right.diamond.fill", color: .teal, title: "経路案内のアプリ",
+                           value: (MapApp(rawValue: mapAppPreference) ?? .ask).displayName)
+        }
     }
 
     /// データの書き出し・読み込み（3.0）。前の書き出しから3か月たったら、ここで知らせる
     private var dataBackupCard: some View {
         let last = UserDefaults.standard.double(forKey: DataBackupView.lastExportKey)
-        let subtitle: String
+        let value: String
+        var isWarning = false
         if last == 0 {
-            subtitle = "iCloud とは別に、自分で保存しておけます"
+            value = "まだ書き出していません"
         } else if Date().timeIntervalSince1970 - last > DataBackupView.reminderInterval {
-            subtitle = "前回の書き出しから3か月たちました"
+            value = "3か月たちました"
+            isWarning = true
         } else {
-            subtitle = "前回：\(Date(timeIntervalSince1970: last).formatted(.dateTime.month().day()))"
+            value = "前回 \(Date(timeIntervalSince1970: last).formatted(.dateTime.month().day()))"
         }
         return NavigationLink(destination: DataBackupView()) {
-            GlassMenuCard(
-                icon: "externaldrive.fill",
-                title: "データの書き出し・読み込み",
-                subtitle: subtitle,
-                gradientColors: [Color.indigo, Color.blue.opacity(0.8)]
-            )
+            ProfileMenuRow(icon: "externaldrive.fill", color: .indigo, title: "書き出し・読み込み",
+                           value: value, valueIsWarning: isWarning)
         }
-        .buttonStyle(CardButtonStyle())
-        .opacity(animateCards ? 1 : 0)
-        .scaleEffect(animateCards ? 1 : 0.8)
-        .offset(y: animateCards ? 0 : 30)
-        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.33), value: animateCards)
     }
 
     private var recentlyDeletedCard: some View {
         NavigationLink(destination: RecentlyDeletedTravelPlansView().environmentObject(travelPlanViewModel)) {
-            GlassMenuCard(
-                icon: "trash.fill",
-                title: "最近削除した旅行計画",
-                subtitle: travelPlanViewModel.recentlyDeleted.isEmpty
-                    ? "\(TravelPlanViewModel.trashRetentionDays)日間は戻せます"
-                    : "\(travelPlanViewModel.recentlyDeleted.count)件・\(TravelPlanViewModel.trashRetentionDays)日間は戻せます",
-                gradientColors: [Color.gray, Color.gray.opacity(0.7)]
-            )
+            ProfileMenuRow(icon: "trash.fill", color: .gray, title: "最近削除した旅行計画",
+                           value: travelPlanViewModel.recentlyDeleted.isEmpty
+                               ? nil : "\(travelPlanViewModel.recentlyDeleted.count)件")
         }
-        .buttonStyle(CardButtonStyle())
-        .opacity(animateCards ? 1 : 0)
-        .scaleEffect(animateCards ? 1 : 0.8)
-        .offset(y: animateCards ? 0 : 30)
-        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.35), value: animateCards)
     }
 
-    private var mapAppCard: some View {
-        NavigationLink(destination: MapAppSettingView()) {
-            GlassMenuCard(
-                icon: "arrow.triangle.turn.up.right.diamond.fill",
-                title: "経路案内のアプリ",
-                subtitle: (MapApp(rawValue: mapAppPreference) ?? .ask).displayName,
-                gradientColors: [Color.teal, Color.blue.opacity(0.8)]
-            )
+    private var helpSupportCard: some View {
+        NavigationLink(destination: HelpSupportView()) {
+            ProfileMenuRow(icon: "questionmark.circle.fill", color: .cyan, title: "ヘルプ・ご意見")
         }
-        .buttonStyle(CardButtonStyle())
-        .opacity(animateCards ? 1 : 0)
-        .scaleEffect(animateCards ? 1 : 0.8)
-        .offset(y: animateCards ? 0 : 30)
-        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.35), value: animateCards)
+    }
+
+    private var tipJarCard: some View {
+        NavigationLink(destination: TipJarView()) {
+            ProfileMenuRow(icon: "heart.fill", color: .pink, title: "開発者を応援する")
+        }
+    }
+
+    private var accountCard: some View {
+        NavigationLink(destination: AccountActionView(vm: vm)) {
+            ProfileMenuRow(icon: "person.crop.circle", color: .gray, title: "アカウント管理",
+                           value: "サインアウト・削除")
+        }
     }
 
     // MARK: - Pro Card
@@ -419,40 +341,6 @@ struct ProfileView: View {
         .scaleEffect(animateCards ? 1 : 0.8)
         .offset(y: animateCards ? 0 : 30)
         .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.15), value: animateCards)
-    }
-
-    // MARK: - Join Travel Plan Card
-    private var joinTravelPlanCard: some View {
-        Button(action: { showJoinPlan = true }) {
-            GlassMenuCard(
-                icon: "person.badge.plus",
-                title: "共有コードで参加",
-                subtitle: "仲間の旅行計画や予定に参加",
-                gradientColors: [themeManager.currentTheme.success, themeManager.currentTheme.success.opacity(0.7)]
-            )
-        }
-        .buttonStyle(CardButtonStyle())
-        .opacity(animateCards ? 1 : 0)
-        .scaleEffect(animateCards ? 1 : 0.8)
-        .offset(y: animateCards ? 0 : 30)
-        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.20), value: animateCards)
-    }
-
-    // MARK: - Tip Jar Card
-    private var tipJarCard: some View {
-        NavigationLink(destination: TipJarView()) {
-            GlassMenuCard(
-                icon: "heart.fill",
-                title: "開発者を応援する",
-                subtitle: "投げ銭で開発を支援",
-                gradientColors: [Color.pink, Color.pink.opacity(0.6)]
-            )
-        }
-        .buttonStyle(CardButtonStyle())
-        .opacity(animateCards ? 1 : 0)
-        .scaleEffect(animateCards ? 1 : 0.8)
-        .offset(y: animateCards ? 0 : 30)
-        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.40), value: animateCards)
     }
 
     // MARK: - CloudKit Test Card
@@ -515,13 +403,14 @@ struct GlassMenuCard: View {
                 .frame(width: 56, height: 56)
 
                 VStack(alignment: .leading, spacing: 6) {
+                    // 半透明のカードの明るさから文字の色を決める（デフォルトカラーのダークモードでは黒）
                     Text(title)
                         .font(.system(size: 18, weight: .bold, design: .rounded))
-                        .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
+                        .foregroundColor(themeManager.currentTheme.textOnCardBackground2(for: colorScheme))
 
                     Text(subtitle)
                         .font(.system(size: 14, weight: .medium))
-                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .foregroundColor(themeManager.currentTheme.secondaryTextOnCardBackground2(for: colorScheme))
                         .lineLimit(1)
                 }
 
@@ -529,12 +418,98 @@ struct GlassMenuCard: View {
 
                 Image(systemName: "arrow.right")
                     .font(.system(size: 16, weight: .bold))
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .foregroundColor(themeManager.currentTheme.secondaryTextOnCardBackground2(for: colorScheme))
             }
             .padding(.horizontal, 22)
             .padding(.vertical, 20)
         }
         .frame(height: 100)
+    }
+}
+
+// MARK: - まとまり（見出しと、角の丸い枠の中に並ぶ行）
+
+struct ProfileMenuGroup<Content: View>: View {
+    let title: String?
+    @ViewBuilder let content: Content
+    @ObservedObject private var themeManager = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if let title {
+                Text(title)
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(themeManager.currentTheme.secondaryTextOnScreen(for: colorScheme))
+                    .padding(.leading, 6)
+            }
+            // 行と行のあいだに区切り線を入れる
+            Group(subviews: content) { rows in
+                VStack(spacing: 0) {
+                    ForEach(Array(rows.enumerated()), id: \.element.id) { index, row in
+                        row
+                        if index < rows.count - 1 {
+                            Divider().padding(.leading, 58)
+                        }
+                    }
+                }
+            }
+            .background(
+                RoundedRectangle(cornerRadius: 18)
+                    .fill(themeManager.currentTheme.cardBackground2)
+                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(themeManager.currentTheme.cardBorder, lineWidth: 1))
+                    .shadow(color: themeManager.currentTheme.shadow, radius: 10, x: 0, y: 4)
+            )
+            .clipShape(RoundedRectangle(cornerRadius: 18))
+        }
+    }
+}
+
+/// まとまりの中の1行。左に色つきの小さいアイコン、右に今の値
+struct ProfileMenuRow: View {
+    let icon: String
+    let color: Color
+    let title: String
+    var value: String? = nil
+    var valueIsWarning = false
+    @ObservedObject private var themeManager = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+
+    var body: some View {
+        HStack(spacing: 14) {
+            Image(systemName: icon)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(.white)
+                .frame(width: 30, height: 30)
+                .background(RoundedRectangle(cornerRadius: 8).fill(color.gradient))
+            // 文字の色は、行の地（半透明のカード）の明るさから決める。
+            // デフォルトカラーのダークモードではカードが明るい灰色になるので、黒い文字になる
+            Text(title)
+                .font(.system(size: 16, weight: .medium))
+                .foregroundColor(themeManager.currentTheme.textOnCardBackground2(for: colorScheme))
+            Spacer(minLength: 8)
+            if let value {
+                Text(value)
+                    .font(.system(size: 14))
+                    .foregroundColor(valueIsWarning
+                                     ? ThemePreset.readableTint(.orange, on: cardSurface)
+                                     : themeManager.currentTheme.secondaryTextOnCardBackground2(for: colorScheme))
+                    .lineLimit(1)
+            }
+            Image(systemName: "chevron.right")
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(themeManager.currentTheme.secondaryTextOnCardBackground2(for: colorScheme))
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .contentShape(Rectangle())
+    }
+
+    /// 行の地（半透明のカードを画面の地に重ねた色）
+    private var cardSurface: Color {
+        let theme = themeManager.currentTheme
+        return ThemePreset.composite(theme.cardBackground2,
+                                     over: colorScheme == .dark ? theme.backgroundDark : theme.backgroundLight)
     }
 }
 
