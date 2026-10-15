@@ -6,12 +6,20 @@ struct DaySchedule: Identifiable, Codable, Equatable {
     var dayNumber: Int // 1, 2, 3...
     var date: Date
     var scheduleItems: [ScheduleItem]
+    /// この日の時間帯（"Europe/Paris" など）。新しい予定はこの時計で入れ始める。
+    ///
+    /// 何ヶ国も回る旅行で、Day 1〜3 はロンドン、Day 4〜 はパリ、のように決める（3.0）。
+    /// 無い日は今までどおり（目的地か端末の時計）。日程の JSON の中なので Deploy は要らない。
+    /// 2.9 以前の人が共有した旅行を書き換えると消えるが、初期値にしか使わないので困らない
+    var timeZoneIdentifier: String?
 
-    init(id: String = UUID().uuidString, dayNumber: Int, date: Date, scheduleItems: [ScheduleItem] = []) {
+    init(id: String = UUID().uuidString, dayNumber: Int, date: Date, scheduleItems: [ScheduleItem] = [],
+         timeZoneIdentifier: String? = nil) {
         self.id = id
         self.dayNumber = dayNumber
         self.date = date
         self.scheduleItems = scheduleItems
+        self.timeZoneIdentifier = timeZoneIdentifier
     }
 }
 
@@ -86,8 +94,15 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
     /// 「現在地の国名が出る」と報告された。無い予定は、開いたときに緯度・経度から引き直す
     var address: String?
 
+    /// その日（`DaySchedule`）から何日ずれた時刻か。-1 なら「前日」。無い・0 ならその日。
+    ///
+    /// 日本時間で入れた予定を、同じ瞬間の現地の時刻に直すと日付をまたぐことがある
+    /// （日本 9:00 → ロサンゼルス前日 17:00）。予定を勝手に別の日へ動かすと見失うので、
+    /// その日に残したまま「前日 17:00」と出す（3.0、`docs/設計_3.0.md`）
+    var dayShift: Int?
+
     enum CodingKeys: String, CodingKey {
-        case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId, timeZoneIdentifier, isPinned, participantIds, foreignCost, reservationPart, costNote, endTime, address
+        case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId, timeZoneIdentifier, isPinned, participantIds, foreignCost, reservationPart, costNote, endTime, address, dayShift
     }
 
     /// 書き出しや共有カードに出す金額。
@@ -124,7 +139,8 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
          reservationPart: String? = nil,
          costNote: String? = nil,
          endTime: Date? = nil,
-         address: String? = nil) {
+         address: String? = nil,
+         dayShift: Int? = nil) {
         self.id = id
         self.time = time
         self.title = title
@@ -145,5 +161,6 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
         self.costNote = costNote
         self.endTime = endTime
         self.address = address
+        self.dayShift = dayShift
     }
 }

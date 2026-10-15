@@ -38,6 +38,10 @@ struct ProfileView: View {
 
                         reminderDefaultsCard
 
+                        calendarExportCard
+
+                        dataBackupCard
+
                         mapAppCard
 
                         recentlyDeletedCard
@@ -317,6 +321,49 @@ struct ProfileView: View {
         .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.30), value: animateCards)
     }
 
+    /// 旅行計画・予定をまとめてカレンダーに入れる・カレンダーの予定を表示する（3.0）
+    private var calendarExportCard: some View {
+        NavigationLink(destination: CalendarExportSettingsView()) {
+            GlassMenuCard(
+                icon: "calendar.badge.plus",
+                title: "iPhone のカレンダー",
+                subtitle: "予定を追加する・祝日などを表示する",
+                gradientColors: [Color.red.opacity(0.8), Color.orange.opacity(0.8)]
+            )
+        }
+        .buttonStyle(CardButtonStyle())
+        .opacity(animateCards ? 1 : 0)
+        .scaleEffect(animateCards ? 1 : 0.8)
+        .offset(y: animateCards ? 0 : 30)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.32), value: animateCards)
+    }
+
+    /// データの書き出し・読み込み（3.0）。前の書き出しから3か月たったら、ここで知らせる
+    private var dataBackupCard: some View {
+        let last = UserDefaults.standard.double(forKey: DataBackupView.lastExportKey)
+        let subtitle: String
+        if last == 0 {
+            subtitle = "iCloud とは別に、自分で保存しておけます"
+        } else if Date().timeIntervalSince1970 - last > DataBackupView.reminderInterval {
+            subtitle = "前回の書き出しから3か月たちました"
+        } else {
+            subtitle = "前回：\(Date(timeIntervalSince1970: last).formatted(.dateTime.month().day()))"
+        }
+        return NavigationLink(destination: DataBackupView()) {
+            GlassMenuCard(
+                icon: "externaldrive.fill",
+                title: "データの書き出し・読み込み",
+                subtitle: subtitle,
+                gradientColors: [Color.indigo, Color.blue.opacity(0.8)]
+            )
+        }
+        .buttonStyle(CardButtonStyle())
+        .opacity(animateCards ? 1 : 0)
+        .scaleEffect(animateCards ? 1 : 0.8)
+        .offset(y: animateCards ? 0 : 30)
+        .animation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.33), value: animateCards)
+    }
+
     private var recentlyDeletedCard: some View {
         NavigationLink(destination: RecentlyDeletedTravelPlansView().environmentObject(travelPlanViewModel)) {
             GlassMenuCard(
@@ -379,8 +426,8 @@ struct ProfileView: View {
         Button(action: { showJoinPlan = true }) {
             GlassMenuCard(
                 icon: "person.badge.plus",
-                title: "旅行計画に参加",
-                subtitle: "共有コードで仲間の計画に参加",
+                title: "共有コードで参加",
+                subtitle: "仲間の旅行計画や予定に参加",
                 gradientColors: [themeManager.currentTheme.success, themeManager.currentTheme.success.opacity(0.7)]
             )
         }

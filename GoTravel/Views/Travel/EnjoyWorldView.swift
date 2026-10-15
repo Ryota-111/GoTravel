@@ -255,6 +255,8 @@ struct EnjoyWorldView: View {
                 .refreshable {
                     if let userId = authVM.userId {
                         await travelPlanViewModel.refreshSharedPlans(userId: userId)
+                        // 友達と共有したカテゴリの予定（3.0）
+                        await SharedCategoryService.shared.syncAll(userId: userId)
                     }
                 }
             }
@@ -358,10 +360,13 @@ struct EnjoyWorldView: View {
                     travelPlanViewModel.setupFetchedResultsController(userId: userId)
                     plansViewModel.setupFetchedResultsController(userId: userId)
                     hasLoadedData = true
+                    // 友達と共有したカテゴリの予定を最新にする（参加した予定が一覧に出るように。3.0）
+                    Task { await SharedCategoryService.shared.syncAll(userId: userId) }
                 } else if let userId = authVM.userId {
                     // 2回目以降の表示では共有プランの最新状態のみ同期
                     Task {
                         await travelPlanViewModel.refreshSharedPlans(userId: userId)
+                        await SharedCategoryService.shared.syncAll(userId: userId)
                     }
                 }
             }

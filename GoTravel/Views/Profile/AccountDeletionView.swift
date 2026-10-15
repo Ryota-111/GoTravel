@@ -93,7 +93,7 @@ struct AccountDeletionView: View {
                 Text("アカウントを削除すると、この iPhone と iCloud から、次のデータがすべて消えます。ほかの iPhone や iPad からも消えます。")
                     .font(.subheadline)
                 VStack(alignment: .leading, spacing: 6) {
-                    ForEach(["旅行計画（最近削除した旅行計画も）", "予定・記念日", "保存した場所・カテゴリー",
+                    ForEach(["旅行計画（最近削除した旅行計画も）", "予定・記念日・予定のカテゴリ（カレンダー）", "保存した場所・カテゴリー",
                              "アルバム・写真", "持ち物の候補・やることリスト"], id: \.self) { item in
                         Label(item, systemImage: "minus.circle")
                             .font(.subheadline)

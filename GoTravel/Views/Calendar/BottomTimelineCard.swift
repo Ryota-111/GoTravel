@@ -1,4 +1,5 @@
 import SwiftUI
+import EventKit
 
 struct BottomTimelineCard: View {
     let selectedDate: Date
@@ -252,12 +253,36 @@ struct TimelineItemCard: View {
     @ObservedObject var themeManager = ThemeManager.shared
     @ObservedObject var tagManager = PlanTagManager.shared
     @Environment(\.colorScheme) var colorScheme
+    /// 押した iPhone のカレンダーの予定（詳細を出しているあいだだけ入る）
+    @State private var externalEvent: EKEvent?
+
+    private var externalEventBinding: Binding<Bool> {
+        Binding(get: { externalEvent != nil }, set: { if !$0 { externalEvent = nil } })
+    }
 
     var body: some View {
-        NavigationLink(destination: destinationView) {
-            cardContent
+        if item.type == .external {
+            // iPhone のカレンダーの予定。押すと、iOS のカレンダーと同じ詳細を出す
+            Button {
+                if let id = item.externalEvent?.eventIdentifier {
+                    externalEvent = CalendarExportService.shared.event(identifier: id)
+                }
+            } label: {
+                cardContent
+            }
+            .buttonStyle(PlainButtonStyle())
+            .sheet(isPresented: externalEventBinding) {
+                if let externalEvent {
+                    ExternalEventDetailView(event: externalEvent) { self.externalEvent = nil }
+                        .ignoresSafeArea()
+                }
+            }
+        } else {
+            NavigationLink(destination: destinationView) {
+                cardContent
+            }
+            .buttonStyle(PlainButtonStyle())
         }
-        .buttonStyle(PlainButtonStyle())
     }
 
     /// この行の予定に付いているタグ。旅行計画はタグを持たない
@@ -268,6 +293,9 @@ struct TimelineItemCard: View {
 
     /// 終わりの時刻。日常の予定だけが持つ
     private var endTimeText: String? {
+        if let event = item.externalEvent, item.hasTime {
+            return DateFormatter.japaneseTime.string(from: event.end)
+        }
         guard let endTime = item.relatedPlan?.endTime else { return nil }
         return DateFormatter.japaneseTime.string(from: endTime)
     }
@@ -279,7 +307,7 @@ struct TimelineItemCard: View {
     private var cardContent: some View {
         HStack(alignment: .top, spacing: 0) {
             VStack(alignment: .trailing, spacing: 1) {
-                Text(formatTimeOrDate(item.time, type: item.type))
+                Text(formatTimeOrDate(item.time, type: item.type, hasTime: item.hasTime))
                     .font(.system(size: 13, weight: .bold))
                     .monospacedDigit()
                     .lineLimit(1)
@@ -423,6 +451,8 @@ struct TimelineItemCard: View {
             } else {
                 EmptyView()
             }
+        case .external:
+            EmptyView()
         }
     }
 
@@ -432,6 +462,8 @@ struct TimelineItemCard: View {
         case .outingPlan: return themeManager.currentTheme.outingPlanColor
         case .anniversary: return themeManager.currentTheme.anniversaryPlanColor
         case .travel: return themeManager.currentTheme.success
+        // カレンダーアプリと同じ色にして、どのカレンダーの予定か分かるようにする
+        case .external: return item.externalEvent?.color.map { Color(cgColor: $0) } ?? themeManager.currentTheme.secondaryText
         }
     }
 
@@ -441,6 +473,7 @@ struct TimelineItemCard: View {
         case .outingPlan: return "figure.walk"
         case .anniversary: return "heart.fill"
         case .travel: return "airplane"
+        case .external: return "calendar"
         }
     }
 
@@ -451,7 +484,7 @@ struct TimelineItemCard: View {
         return formatter.string(from: time)
     }
 
-    private func formatTimeOrDate(_ time: Date, type: CalendarItemType) -> String {
+    private func formatTimeOrDate(_ time: Date, type: CalendarItemType, hasTime: Bool) -> String {
         let formatter = DateFormatter()
         formatter.locale = Locale(identifier: "ja_JP")
 
@@ -465,6 +498,10 @@ struct TimelineItemCard: View {
         case .outingPlan, .travel:
             // おでかけプランと旅行プランは日付を表示
             formatter.dateFormat = "M月d日"
+        case .external:
+            // iPhone のカレンダーの予定。終日や前の日からの続きは「終日」
+            guard hasTime else { return "終日" }
+            formatter.dateFormat = "HH:mm"
         }
 
         return formatter.string(from: time)

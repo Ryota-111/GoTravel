@@ -63,6 +63,8 @@ struct TravelPlanDetailView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
     @State private var selectedDay: Int = 1
+    /// 旅行中に開いたとき、今日の日を選んだか（1回だけ。そのあと押して選んだ日は動かさない）
+    @State private var didSelectToday = false
     @State private var selectedTab: DetailTab = .schedule
     /// 「リスト」タブの中で見ているもの（持ち物／お土産／やりたいこと）
     @State private var selectedListKind: PackingItem.Kind = .packing
@@ -119,6 +121,10 @@ struct TravelPlanDetailView: View {
     @State private var destinationTimeZone: TimeZone?
     /// 「現地時間にそろえますか」の案内を「このままにする」で閉じた計画
     @AppStorage("dismissedLocalTimeBanners") private var dismissedLocalTimeBanners: String = ""
+    /// 日の時間帯・予定の時間帯をまとめて変える画面
+    @State private var showsTimeZoneSheet = false
+    /// カレンダーに入れる画面（3.0）
+    @State private var showsCalendarExport = false
     @State private var editingItem: ScheduleItem?
 
     // Weather Properties
@@ -138,6 +144,10 @@ struct TravelPlanDetailView: View {
     /// 出せなかった理由。文言とアイコンは種類ごとに変える
     @State private var planWeatherNote: WeatherNote?
     @State private var weatherAttribution: WeatherService.WeatherAttribution?
+    /// 予報を取ってきた時刻（「11:10 に更新」と出す）
+    @State private var weatherFetchedAt: Date?
+    /// アプリに戻ってきたときに、古くなった天気を取り直すため
+    @Environment(\.scenePhase) private var scenePhase
 
     /// 天気が出せないときに1行で出す説明
     private struct WeatherNote {
@@ -264,7 +274,7 @@ struct TravelPlanDetailView: View {
                 // ScrollView に取り込まれて、ほとんど反応しなくなる
                 // オフのときは、このジェスチャだけ止める（中のスクロールや地図の操作はそのまま）
                 .simultaneousGesture(tabSwipeGesture, including: switchesTabBySwipe ? .all : .subviews)
-                // 引っぱって更新。共有中なら相手の変更を取り込み、天気も取り直す
+                // 引っぱって更新。共有中なら相手の変更を取り込む（天気は1時間以内なら取り直さない）
                 .refreshable { await pullToRefresh() }
                 // anchor は割合で指定するので、枠の高さが要る
                 .onScrollGeometryChange(for: CGFloat.self) { geometry in
@@ -360,6 +370,30 @@ struct TravelPlanDetailView: View {
                     .environmentObject(authVM)
             }
         }
+        .sheet(isPresented: $showsCalendarExport) {
+            if let plan = currentPlan {
+                CalendarExportSheet(target: .travel(plan), tint: scheduleAccentColor) { message in
+                    showToast(message)
+                }
+            }
+        }
+        .sheet(isPresented: $showsTimeZoneSheet) {
+            if let plan = currentPlan {
+                TimeZoneSettingsSheet(
+                    plan: plan,
+                    day: selectedDay,
+                    tripDuration: tripDuration,
+                    destination: destinationTimeZone,
+                    tint: scheduleAccentColor
+                ) { updated, message in
+                    guard let userId = authVM.userId else { return }
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        viewModel.update(updated, userId: userId)
+                    }
+                    showToast(message)
+                }
+            }
+        }
         .sheet(isPresented: $showExperienceWeb) {
             if let asoviewURL {
                 SafariView(url: asoviewURL)
@@ -433,11 +467,24 @@ struct TravelPlanDetailView: View {
         .onChange(of: weatherRequestKey) { _, _ in
             fetchPlanWeather()
         }
+        // アプリに戻ってきたとき。1時間以上たっていれば取り直す（たっていなければ、覚えた予報を使うだけ）
+        .onChange(of: scenePhase) { _, phase in
+            if phase == .active { fetchPlanWeather() }
+        }
         .onAppear {
             withAnimation {
                 animateContent = true
             }
             fetchPlanWeather()
+
+            // 旅行中は今日の日（Day 2 など）から見せる。毎回 Day 1 から押し直さなくていいように。
+            // 日付は旅行先の今日で読む（海外にいるときも、現地の今日の日になる）
+            if !didSelectToday {
+                didSelectToday = true
+                if let today = (currentPlan ?? plan).dayNumber(forDate: Date()) {
+                    selectedDay = today
+                }
+            }
 
             // 終わった旅行を見返すのは、思い出が良い形で残っている場面
             if Calendar.current.startOfDay(for: plan.endDate) < Calendar.current.startOfDay(for: Date()) {
@@ -522,7 +569,7 @@ struct TravelPlanDetailView: View {
         // **予定ごとの時計で比べる。** パリの予定をパリの今と比べないと、
         // 日本時間の今と比べて「次の1件」が8時間ずれる
         return items.firstIndex {
-            $0.minutesOfDay >= ScheduleClock.minutesOfDay(now, in: $0.timeZone)
+            $0.minutesOfDay + ($0.dayShift ?? 0) * 24 * 60 >= ScheduleClock.minutesOfDay(now, in: $0.timeZone)
         }
     }
 
@@ -538,6 +585,13 @@ struct TravelPlanDetailView: View {
             // 時刻は塗りつぶさず、等幅で右に揃える。
             // カプセルで塗ると1行ごとに色の面ができて、レールが読めなくなる
             VStack(alignment: .trailing, spacing: 1) {
+                // 時間帯を直して日付をまたいだ予定（「前日 17:00」）
+                if let shift = item.dayShiftLabel {
+                    Text(shift)
+                        .font(.system(size: 9, weight: .bold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
                 Text(item.timeText)
                     .font(.system(size: 13, weight: .bold))
                     .monospacedDigit()
@@ -1138,6 +1192,13 @@ struct TravelPlanDetailView: View {
                             Label("画像で送る", systemImage: "photo")
                         }
 
+                        // iPhone のカレンダー（Google カレンダーも）に入れる。ご要望から（3.0）
+                        Button {
+                            showsCalendarExport = true
+                        } label: {
+                            Label("iPhone のカレンダーに追加", systemImage: "calendar.badge.plus")
+                        }
+
                         Divider()
 
                         // 前回の行程を土台に次の旅行を作りたい、という要望から
@@ -1274,12 +1335,17 @@ struct TravelPlanDetailView: View {
                 bulkItemActionBar(plan: plan)
             }
 
-            if shouldShowLocalTimeBanner(plan), let zone = destinationTimeZone {
-                localTimeBanner(plan: plan, zone: zone)
+            if let suggestion = localTimeSuggestion(plan) {
+                localTimeBanner(plan: plan, suggestion: suggestion)
             }
 
             excludedFromTabSwipe("dayTabs") {
                 dayTabs(plan: plan)
+            }
+
+            // 何ヶ国も回る旅行で、日ごとの時間帯を決める（3.0）
+            if showsDayZoneRow(plan) {
+                dayZoneRow(plan: plan)
             }
 
             // 共有中は、誰の時間軸を見るか選べる（出発地の違うメンバーが現地で集まる旅行のため）
@@ -1828,7 +1894,7 @@ struct TravelPlanDetailView: View {
                 }
             } else if let note = planWeatherNote {
                 weatherNote(note.text, icon: note.icon)
-            } else if plan.dayCount == 1, let weather = planWeatherDays.first {
+            } else if plan.dayCount == 1, let weather = weather(forDay: plan.startDate) {
                 // 1日だけの旅行に「1日目」と付けても意味がないので、今までどおり1行で出す
                 weatherSummary(weather)
             } else if !planWeatherDays.isEmpty {
@@ -1856,10 +1922,15 @@ struct TravelPlanDetailView: View {
         }
     }
 
-    /// その日の予報。取れていない日は nil（10日より先など）
+    /// その日の予報。取れていない日は nil（10日より先など）。
+    ///
+    /// 予報の日付は**目的地の暦**で読む（予報の1日は目的地の 0:00 から始まるため）。
+    /// 日本の暦で読むと、日本より東（ニュージーランドなど）では1日ずれる
     private func weather(forDay date: Date) -> WeatherService.DayWeather? {
-        planWeatherDays.first {
-            Calendar.current.isDate($0.date, inSameDayAs: date)
+        let tripDay = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        let destination = ScheduleClock.calendar(in: destinationTimeZone ?? .current)
+        return planWeatherDays.first {
+            destination.dateComponents([.year, .month, .day], from: $0.date) == tripDay
         }
     }
 
@@ -1968,6 +2039,12 @@ struct TravelPlanDetailView: View {
     private var weatherAttributionLine: some View {
         if let attribution = weatherAttribution {
             HStack(spacing: 6) {
+                // いつの予報か（1時間たつまでは取り直さない）
+                if let fetchedAt = weatherFetchedAt {
+                    Text("\(Self.weatherUpdatedText(fetchedAt))に更新")
+                        .font(.system(size: 9))
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                }
                 Spacer(minLength: 0)
 
                 AsyncImage(url: colorScheme == .dark ? attribution.combinedMarkDarkURL : attribution.combinedMarkLightURL) { image in
@@ -1983,6 +2060,14 @@ struct TravelPlanDetailView: View {
                 }
             }
         }
+    }
+
+    /// 「11:10」。今日でなければ「10/14 11:10」
+    static func weatherUpdatedText(_ date: Date, now: Date = Date()) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateFormat = Calendar.current.isDate(date, inSameDayAs: now) ? "H:mm" : "M/d H:mm"
+        return formatter.string(from: date)
     }
 
     // MARK: - Helper Methods
@@ -2002,81 +2087,111 @@ struct TravelPlanDetailView: View {
         }
     }
     /// 地図に出せる（座標を持つ）スケジュール項目が1件でもあるか
-    // MARK: - 現地時間にそろえる案内
+    // MARK: - 現地の時刻に合わせる案内
     //
-    // 2.7 より前は予定が時間帯を持てず、海外旅行でも日本時間として入っている。
-    // 「現地の 15:00」のつもりで入れた予定は、現地に着くと 8:00 などと出てしまう。
-    // 必要なのは既存の海外旅行を持つ人で、その人は直せることを知らないので、
-    // メニューの奥ではなくタイムラインの上で聞く
+    // 日本時間で入った予定を、現地の時刻に合わせるかを聞く。
+    // - 旅行中で端末が海外の時計なら、いまいる場所に合わせる（目的地の座標が無くても出せる。3.0）。
+    //   「当日海外で見返したら日本の時刻のままだった」というご要望から
+    // - それ以外は、目的地が海外なら目的地に合わせる（2.7 より前に入れた予定のため）
+    // 直し方は2つあり、例の時刻を出して選んでもらう。メニューの奥ではなくタイムラインの上で聞く
 
-    /// 現地時間にそろえられる予定の数。目的地が日本と時差の無い場所なら 0
-    private func localTimeConversionCount(_ plan: TravelPlan) -> Int {
-        guard let zone = destinationTimeZone,
-              ScheduleClock.isForeign(zone, at: plan.startDate) else { return 0 }
-        return plan.scheduleItemCount(notIn: zone)
+    private struct LocalTimeSuggestion {
+        let zone: TimeZone
+        let days: Set<Int>
+        let items: [ScheduleItem]
+        /// いまいる場所に合わせるか（目的地に合わせるか）
+        let isTraveling: Bool
+        /// 「このまま」で閉じたことを覚える鍵
+        let dismissKey: String
     }
 
-    private func shouldShowLocalTimeBanner(_ plan: TravelPlan) -> Bool {
-        guard let planId = plan.id else { return false }
-        return !dismissedLocalTimeBannerIDs.contains(planId) && localTimeConversionCount(plan) > 0
+    private func localTimeSuggestion(_ plan: TravelPlan) -> LocalTimeSuggestion? {
+        guard let planId = plan.id else { return nil }
+        let now = Date()
+        let traveling: (zone: TimeZone, today: Int)? = {
+            guard ScheduleClock.isForeign(.current, at: now), let today = plan.dayNumber(on: now) else { return nil }
+            return (.current, today)
+        }()
+
+        let suggestion: LocalTimeSuggestion
+        if let traveling {
+            let days = Set(traveling.today...max(traveling.today, tripDuration))
+            suggestion = LocalTimeSuggestion(
+                zone: traveling.zone, days: days,
+                items: plan.japanTimeItems(onDays: days, notIn: traveling.zone),
+                isTraveling: true, dismissKey: "\(planId)|\(traveling.zone.identifier)")
+        } else if let zone = destinationTimeZone, ScheduleClock.isForeign(zone, at: plan.startDate) {
+            let days = Set(1...max(1, tripDuration))
+            // 2.9 までと同じ鍵（閉じたものをもう一度出さない）
+            suggestion = LocalTimeSuggestion(
+                zone: zone, days: days, items: plan.japanTimeItems(onDays: days, notIn: zone),
+                isTraveling: false, dismissKey: planId)
+        } else {
+            return nil
+        }
+        guard !suggestion.items.isEmpty, !dismissedLocalTimeBannerIDs.contains(suggestion.dismissKey) else { return nil }
+        return suggestion
     }
 
     private var dismissedLocalTimeBannerIDs: Set<String> {
         Set(dismissedLocalTimeBanners.split(separator: ",").map(String.init))
     }
 
-    private func dismissLocalTimeBanner(_ plan: TravelPlan) {
-        guard let planId = plan.id else { return }
+    private func dismissLocalTimeBanner(_ key: String) {
         withAnimation(.easeInOut(duration: 0.2)) {
-            dismissedLocalTimeBanners = dismissedLocalTimeBannerIDs.union([planId]).sorted().joined(separator: ",")
+            dismissedLocalTimeBanners = dismissedLocalTimeBannerIDs.union([key]).sorted().joined(separator: ",")
         }
     }
 
-    private func localTimeBanner(plan: TravelPlan, zone: TimeZone) -> some View {
-        VStack(alignment: .leading, spacing: 10) {
+    private func localTimeBanner(plan: TravelPlan, suggestion: LocalTimeSuggestion) -> some View {
+        let city = ScheduleClock.cityName(of: suggestion.zone)
+        let sample = suggestion.items.first
+        func example(_ mode: ScheduleZoneConversion) -> String {
+            guard let sample else { return "" }
+            let converted = sample.converted(to: suggestion.zone, mode: mode)
+            return "\(sample.timeText) → \(converted.dayShiftLabel.map { "\($0) " } ?? "")\(converted.timeText)"
+        }
+
+        return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "globe.asia.australia.fill")
                     .font(.system(size: 18))
                     .foregroundColor(scheduleAccentColor)
 
                 VStack(alignment: .leading, spacing: 4) {
-                    Text("予定が日本時間で入っています")
+                    Text("予定が日本時間で入っています（\(suggestion.items.count)件）")
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(accentColor)
-                    Text("現地（\(ScheduleClock.displayName(of: zone))）の時刻として扱いますか？時刻の数字はそのままです。")
+                    Text(suggestion.isTraveling
+                         ? "いまいる場所（\(city)）の時刻に合わせますか？"
+                         : "現地（\(city)）の時刻に合わせますか？")
                         .font(.caption)
                         .foregroundColor(themeManager.currentTheme.secondaryText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
 
-            HStack(spacing: 10) {
-                Button {
-                    convertToLocalTime()
-                } label: {
-                    Text("現地時間にそろえる")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(scheduleAccentColor)
-                        .foregroundColor(.white)
-                        .cornerRadius(10)
-                }
-                .buttonStyle(PlainButtonStyle())
-
-                Button {
-                    dismissLocalTimeBanner(plan)
-                } label: {
-                    Text("このままにする")
-                        .font(.subheadline.weight(.semibold))
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 10)
-                        .background(scheduleAccentColor.opacity(0.12))
-                        .foregroundColor(scheduleAccentColor)
-                        .cornerRadius(10)
-                }
-                .buttonStyle(PlainButtonStyle())
+            localTimeOption(title: "時刻の数字はそのまま、\(city)の時刻にする",
+                            detail: "現地の時刻のつもりで入れていたとき（\(example(.keepWallClock))）",
+                            primary: true) {
+                applyLocalTime(plan: plan, suggestion: suggestion, mode: .keepWallClock)
             }
+            localTimeOption(title: "同じ時刻の、\(city)の時計に直す",
+                            detail: "日本時間で正しく入れていたとき（\(example(.keepMoment))）",
+                            primary: false) {
+                applyLocalTime(plan: plan, suggestion: suggestion, mode: .keepMoment)
+            }
+
+            Button {
+                dismissLocalTimeBanner(suggestion.dismissKey)
+            } label: {
+                Text("このままにする")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+            }
+            .buttonStyle(PlainButtonStyle())
         }
         .padding(14)
         .background(
@@ -2090,14 +2205,83 @@ struct TravelPlanDetailView: View {
         .transition(.opacity)
     }
 
-    private func convertToLocalTime() {
-        guard let plan = currentPlan,
-              let zone = destinationTimeZone,
-              let userId = authVM.userId else { return }
-        withAnimation(.easeInOut(duration: 0.2)) {
-            viewModel.update(plan.withScheduleTimes(keptIn: zone), userId: userId)
+    private func localTimeOption(title: String, detail: String, primary: Bool,
+                                 action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                    .font(.subheadline.weight(.semibold))
+                Text(detail)
+                    .font(.caption)
+                    .opacity(0.85)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 10)
+            .background(primary ? scheduleAccentColor : scheduleAccentColor.opacity(0.12))
+            .foregroundColor(primary ? .white : scheduleAccentColor)
+            .cornerRadius(10)
         }
-        showToast("現地時間にそろえました")
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    /// 日本時間で入った予定だけを直し、その日の時間帯も決める
+    private func applyLocalTime(plan: TravelPlan, suggestion: LocalTimeSuggestion, mode: ScheduleZoneConversion) {
+        guard let userId = authVM.userId else { return }
+        let updated = plan.settingTimeZone(suggestion.zone, onDays: suggestion.days, mode: mode,
+                                           onlyFrom: ScheduleClock.legacyTimeZone)
+        withAnimation(.easeInOut(duration: 0.2)) {
+            viewModel.update(updated, userId: userId)
+        }
+        showToast("予定を\(ScheduleClock.cityName(of: suggestion.zone))の時刻にしました")
+    }
+
+    // MARK: - 日の時間帯
+
+    /// 時間帯の行を出すか。海外が関わる旅行だけ（国内旅行では出さない）
+    private func showsDayZoneRow(_ plan: TravelPlan) -> Bool {
+        let now = Date()
+        if let destinationTimeZone, ScheduleClock.isForeign(destinationTimeZone, at: plan.startDate) { return true }
+        if ScheduleClock.isForeign(.current, at: now), plan.dayNumber(on: now) != nil { return true }
+        return plan.daySchedules.contains { day in
+            day.timeZone != nil || day.scheduleItems.contains { ScheduleClock.isForeign($0.timeZone, at: $0.time) }
+        }
+    }
+
+    /// 「Day 4 の時間帯：パリ・日本より8時間遅い」。押すと決め直せる
+    private func dayZoneRow(plan: TravelPlan) -> some View {
+        let zone = plan.dayTimeZone(selectedDay)
+        return Button {
+            showsTimeZoneSheet = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "globe")
+                    .font(.system(size: 13))
+                    .foregroundColor(scheduleAccentColor)
+                if let zone {
+                    let offset = ScheduleClock.offsetFromJapanText(zone, at: plan.date(forDay: selectedDay))
+                    Text("Day \(selectedDay) の時間帯：\(ScheduleClock.isForeign(zone, at: plan.date(forDay: selectedDay)) ? ScheduleClock.cityName(of: zone) : "日本")\(offset.map { "・\($0)" } ?? "")")
+                        .foregroundColor(accentColor)
+                } else {
+                    Text("Day \(selectedDay) の時間帯を決める")
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption2.weight(.semibold))
+                    .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.6))
+            }
+            .font(.system(size: 13, weight: .semibold))
+            .padding(.horizontal, 12)
+            .padding(.vertical, 9)
+            .background(
+                RoundedRectangle(cornerRadius: 10)
+                    .fill(scheduleAccentColor.opacity(0.06))
+            )
+        }
+        .buttonStyle(PlainButtonStyle())
+        .accessibilityHint("時間帯を決めたり、予定の時間帯をまとめて変えたりできます")
     }
 
     /// 起きる順に並べる。時間帯が違う予定が混ざっていても、実際の順になる
@@ -2291,7 +2475,8 @@ struct TravelPlanDetailView: View {
         }
     }
 
-    /// 引っぱって更新。共有中なら相手の変更を取り込み、天気も取り直す
+    /// 引っぱって更新。共有中なら相手の変更を取り込む。
+    /// 天気は1時間以内に取ったものがあればそのまま（引っぱっても問い合わせない。WeatherKit の回数を使わないため）
     private func pullToRefresh() async {
         await refreshSharedPlanIfNeeded()
         fetchPlanWeather()
@@ -2326,6 +2511,7 @@ struct TravelPlanDetailView: View {
         viewModel.update(latest, userId: userId)
     }
 
+    /// 天気を出す。1時間以内に取った予報があれば、問い合わせずにそれを使う
     private func fetchPlanWeather() {
         guard #available(iOS 16.0, *) else {
             return
@@ -2344,6 +2530,19 @@ struct TravelPlanDetailView: View {
             return
         }
 
+        // 1時間以内に取った予報があれば、問い合わせずにすぐ出す（WeatherKit の回数を使わない）
+        if let cached = WeatherService.shared.cachedForecast(
+            latitude: latitude, longitude: longitude, startDate: plan.startDate, endDate: plan.endDate) {
+            planWeatherDays = cached.days
+            weatherFetchedAt = cached.fetchedAt
+            planWeatherNote = cached.days.isEmpty ? WeatherNote(text: Self.notYetAvailableText, icon: "calendar") : nil
+            isLoadingPlanWeather = false
+            Task { @MainActor in
+                weatherAttribution = try? await WeatherService.shared.getWeatherAttribution()
+            }
+            return
+        }
+
         isLoadingPlanWeather = true
         planWeatherNote = nil
 
@@ -2354,17 +2553,19 @@ struct TravelPlanDetailView: View {
             do {
                 // 日程ぶんまとめて取る。1日ずつ問い合わせると同じ予報を人数分叩くうえ、
                 // 開始日だけを見ていた頃は旅行が始まった瞬間に「過去の日付」になって落ちていた
-                let fetchedDays = try await WeatherService.shared.fetchWeatherForTrip(
+                let forecast = try await WeatherService.shared.tripForecast(
                     latitude: latitude,
                     longitude: longitude,
                     startDate: plan.startDate,
                     endDate: plan.endDate
                 )
+                let fetchedDays = forecast.days
 
-                // Fetch attribution
+                // 出典は起動中に1回だけ取る（WeatherService が覚えている）
                 let fetchedAttribution = try await WeatherService.shared.getWeatherAttribution()
 
                 self.planWeatherDays = fetchedDays
+                self.weatherFetchedAt = forecast.fetchedAt
                 self.weatherAttribution = fetchedAttribution
                 self.planWeatherNote = fetchedDays.isEmpty
                     ? WeatherNote(text: Self.notYetAvailableText, icon: "calendar")

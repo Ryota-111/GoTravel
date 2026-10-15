@@ -10,8 +10,15 @@ struct ManagePlanTagsView: View {
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
 
-    @State private var showAddSheet = false
+    @ObservedObject var categoryManager = PlanCategoryManager.shared
     @State private var editingTag: PlanTag?
+    /// タグを足すカテゴリ（3.0。タグはカテゴリごとに持つ）
+    @State private var addingTarget: AddTarget?
+
+    private struct AddTarget: Identifiable {
+        let categoryId: String?
+        var id: String { categoryId ?? "personal" }
+    }
 
     private var accentColor: Color {
         colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
@@ -20,39 +27,10 @@ struct ManagePlanTagsView: View {
     var body: some View {
         NavigationView {
             List {
-                Section {
-                    if tagManager.tags.isEmpty {
-                        Text("タグがありません")
-                            .font(.subheadline)
-                            .foregroundColor(themeManager.currentTheme.secondaryText)
-                    } else {
-                        ForEach(tagManager.tags) { tag in
-                            Button(action: { editingTag = tag }) {
-                                HStack(spacing: 12) {
-                                    tagSwatch(tag)
-
-                                    Text(tag.name)
-                                        .foregroundColor(accentColor)
-
-                                    Spacer()
-
-                                    Image(systemName: "chevron.right")
-                                        .font(.caption.weight(.bold))
-                                        .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
-                                }
-                                .padding(.vertical, 4)
-                                .contentShape(Rectangle())
-                            }
-                            .buttonStyle(PlainButtonStyle())
-                        }
-                        .onMove { source, destination in
-                            tagManager.move(fromOffsets: source, toOffset: destination)
-                        }
-                    }
-                } footer: {
-                    Text("上から順に、予定一覧の絞り込みに並びます")
-                        .font(.caption)
-                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                tagSection(categoryId: nil, title: PlanCategory.personalName)
+                ForEach(categoryManager.categories) { category in
+                    tagSection(categoryId: category.id,
+                               title: category.isShared ? "\(category.name)（\(category.sharedWith.count)人で共有）" : category.name)
                 }
             }
             .navigationTitle("タグ管理")
@@ -64,20 +42,55 @@ struct ManagePlanTagsView: View {
                             .foregroundColor(accentColor)
                     }
                 }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button(action: { showAddSheet = true }) {
-                        Image(systemName: "plus")
-                            .foregroundColor(themeManager.currentTheme.xprimary)
-                    }
-                }
             }
         }
         .navigationViewStyle(.stack)
-        .sheet(isPresented: $showAddSheet) {
-            PlanTagEditorView(editing: nil)
+        .sheet(item: $addingTarget) { target in
+            PlanTagEditorView(editing: nil, categoryId: target.categoryId)
         }
         .sheet(item: $editingTag) { tag in
             PlanTagEditorView(editing: tag)
+        }
+    }
+
+    /// カテゴリごとのタグ。上から順に、予定一覧の絞り込みに並ぶ
+    private func tagSection(categoryId: String?, title: String) -> some View {
+        let tags = tagManager.tags(inCategory: categoryId)
+        return Section {
+            ForEach(tags) { tag in
+                Button(action: { editingTag = tag }) {
+                    HStack(spacing: 12) {
+                        tagSwatch(tag)
+                        Text(tag.name)
+                            .foregroundColor(accentColor)
+                        Spacer()
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.bold))
+                            .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.5))
+                    }
+                    .padding(.vertical, 4)
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(PlainButtonStyle())
+            }
+            .onMove { source, destination in
+                tagManager.move(inCategory: categoryId, fromOffsets: source, toOffset: destination)
+            }
+
+            Button {
+                addingTarget = AddTarget(categoryId: categoryId)
+            } label: {
+                Label("タグを追加", systemImage: "plus")
+                    .foregroundColor(themeManager.currentTheme.xprimary)
+            }
+        } header: {
+            Text(title)
+        } footer: {
+            if categoryId == nil {
+                Text("タグはカテゴリ（カレンダー）ごとに持ちます。共有したカテゴリのタグは、メンバー全員で同じものを使います。")
+                    .font(.caption)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
         }
     }
 
@@ -99,6 +112,8 @@ struct PlanTagEditorView: View {
     @Environment(\.colorScheme) var colorScheme
 
     let editing: PlanTag?
+    /// 新しく作るタグのカテゴリ（3.0。nil は「自分用」）
+    var categoryId: String? = nil
     var onCreated: ((PlanTag) -> Void)? = nil
 
     @State private var name = ""
@@ -117,9 +132,10 @@ struct PlanTagEditorView: View {
         name.trimmingCharacters(in: .whitespaces)
     }
 
-    /// 同じ名前のタグは作れない。2つあると絞り込みの軸として使えなくなる
+    /// 同じカテゴリに同じ名前のタグは作れない。2つあると絞り込みの軸として使えなくなる
     private var isDuplicateName: Bool {
-        tagManager.tags.contains { $0.name == trimmedName && $0.id != editing?.id }
+        let category = editing?.categoryId ?? categoryId
+        return tagManager.tags.contains { $0.name == trimmedName && $0.id != editing?.id && $0.categoryId == category }
     }
 
     private var canSave: Bool {
@@ -211,8 +227,15 @@ struct PlanTagEditorView: View {
             }
             Button("キャンセル", role: .cancel) {}
         } message: {
-            Text("付いている予定からもこのタグが外れます。予定そのものは消えません。")
+            Text(deleteMessage)
         }
+    }
+
+    private var deleteMessage: String {
+        if let editing, let category = PlanCategoryManager.shared.category(for: editing.categoryId), category.isShared {
+            return "「\(category.name)」のメンバー全員の予定からも、このタグが外れます。予定そのものは消えません。"
+        }
+        return "付いている予定からもこのタグが外れます。予定そのものは消えません。"
     }
 
     /// 一覧に出るのと同じ形で見せる。色を選んだ結果をここで確かめられる
@@ -265,11 +288,12 @@ struct PlanTagEditorView: View {
 
     private func save() {
         if let editing {
-            var updated = editing
+            // 共有の状態は開いている間に変わることがあるので、最新のタグを元にする
+            var updated = tagManager.tag(for: editing.id) ?? editing
             updated.name = trimmedName
             updated.colorHex = selectedHex
             tagManager.update(updated)
-        } else if let created = tagManager.add(name: trimmedName, colorHex: selectedHex) {
+        } else if let created = tagManager.add(name: trimmedName, colorHex: selectedHex, categoryId: categoryId) {
             onCreated?(created)
         }
 

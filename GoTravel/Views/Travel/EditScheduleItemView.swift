@@ -20,6 +20,8 @@ struct EditScheduleItemView: View {
     @State private var time: Date
     /// 時刻をどこの時計で読むか。入れたときのものを引き継ぐ
     @State private var timeZone: TimeZone
+    /// 「前日 17:00」のように、その日からずれた時刻か（`ScheduleItem.dayShift`）
+    @State private var dayShift: Int?
     /// 目的地の時間帯。日本と時差があるときだけ入る
     @State private var destinationTimeZone: TimeZone?
     /// その日の一番上に固定するか
@@ -55,6 +57,7 @@ struct EditScheduleItemView: View {
         _notes = State(initialValue: item.notes ?? "")
         _time = State(initialValue: item.time)
         _timeZone = State(initialValue: item.timeZone)
+        _dayShift = State(initialValue: item.dayShift)
         _isPinned = State(initialValue: item.isPinned == true)
         _participants = State(initialValue: Set(item.participantIds ?? []))
         _costInput = State(initialValue: CostInput(cost: item.cost, actualCost: item.actualCost, foreign: item.foreignCost))
@@ -227,6 +230,8 @@ struct EditScheduleItemView: View {
                 ScheduleTimeField(
                     time: $time,
                     timeZone: $timeZone,
+                    place: selectedCoordinate,
+                    dayZone: daySchedule.timeZone,
                     destination: destinationTimeZone,
                     tint: travelColor,
                     textColor: textColor,
@@ -234,6 +239,10 @@ struct EditScheduleItemView: View {
                     fieldBackground: fieldBg
                 )
                 .task { await resolveDestinationTimeZone() }
+
+                if let label = ScheduleItem.dayShiftLabel(dayShift) {
+                    dayShiftNotice(label)
+                }
 
                 ScheduleEndTimeField(
                     hasEndTime: $hasEndTime,
@@ -535,6 +544,27 @@ struct EditScheduleItemView: View {
         presentationMode.wrappedValue.dismiss()
     }
 
+    /// 時間帯を直したときに日付をまたいだ予定の知らせ。その日の時刻に戻せる
+    private func dayShiftNotice(_ label: String) -> some View {
+        HStack(spacing: 10) {
+            Image(systemName: "calendar.badge.clock")
+                .foregroundColor(travelColor.opacity(0.8))
+            Text("Day \(daySchedule.dayNumber) の\(label)の時刻として入っています")
+                .font(.caption)
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+            Spacer(minLength: 4)
+            Button("この日にする") {
+                withAnimation(.easeInOut(duration: 0.2)) { dayShift = nil }
+            }
+            .font(.caption.weight(.semibold))
+            .foregroundColor(travelColor)
+        }
+        .padding(12)
+        .background(fieldBg)
+        .cornerRadius(12)
+    }
+
     /// 目的地が海外なら、現地時間・日本時間の切り替えを出す。
     /// 予定がどちらの時計で入っているかは変えない
     private func resolveDestinationTimeZone() async {
@@ -546,6 +576,7 @@ struct EditScheduleItemView: View {
 
     private func createUpdatedItem() -> ScheduleItem {
         let costs = costInput.result
+        RecentTimeZones.record(timeZone)
         let locationName = selectedLocation?.name ?? (location.isEmpty ? nil : location.trimmingCharacters(in: .whitespacesAndNewlines))
 
         return ScheduleItem(
@@ -572,7 +603,9 @@ struct EditScheduleItemView: View {
             costNote: costNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? nil : costNote.trimmingCharacters(in: .whitespacesAndNewlines),
             endTime: hasEndTime ? ScheduleItem.endTime(hourAndMinuteOf: endTime, after: time, in: timeZone) : nil,
-            address: selectedCoordinate == nil ? nil : selectedAddress
+            address: selectedCoordinate == nil ? nil : selectedAddress,
+            // 「前日 17:00」のように日をまたいで直した予定は、そのずれを保つ
+            dayShift: dayShift
         )
     }
 
