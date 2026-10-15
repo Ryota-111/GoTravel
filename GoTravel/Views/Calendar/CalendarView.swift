@@ -75,7 +75,12 @@ struct CalendarView: View {
     @State private var showsJoin = false
     /// 「カレンダーを共有できます」の案内を閉じたか（1回だけ出す）
     @AppStorage("calendarShareTipDismissed") private var shareTipDismissed = false
-    @State private var showsCalendarSettings = false
+    /// カレンダーの一覧（題名を押すと出る）と、閉じたあとに行うこと
+    @State private var showsCategoryList = false
+    @State private var pendingCategoryAction: PlanCategoryListSheet.Action?
+    /// .ics の読み込み（3.0）。メニューから選ぶか、「Travory で開く」で届く
+    @State private var showsICSImporter = false
+    @ObservedObject private var icsInbox = ICSImportInbox.shared
     @ObservedObject private var categoryManager = PlanCategoryManager.shared
     @ObservedObject private var calendarService = CalendarExportService.shared
     @State private var showAddSheet = false
@@ -200,22 +205,18 @@ struct CalendarView: View {
                     }
                 }
             }
+            .sheet(isPresented: $showsCategoryList, onDismiss: runPendingCategoryAction) {
+                PlanCategoryListSheet(selection: categorySelection,
+                                      onSelect: { categorySelectionBinding.wrappedValue = $0 },
+                                      onAction: { pendingCategoryAction = $0 })
+                    .environmentObject(authVM)
+                    .environmentObject(viewModel)
+                    .environmentObject(travelViewModel)
+            }
             .sheet(isPresented: $showsTagFilter) {
                 PlanTagFilterSheet(tags: filterTags, selectedIDs: $selectedTagIDs,
                                    categoryName: categorySelectionName)
                     .presentationDetents([.medium, .large])
-            }
-            .sheet(isPresented: $showsCalendarSettings) {
-                NavigationStack {
-                    CalendarExportSettingsView()
-                        .environmentObject(viewModel)
-                        .environmentObject(travelViewModel)
-                        .toolbar {
-                            ToolbarItem(placement: .confirmationAction) {
-                                Button("閉じる") { showsCalendarSettings = false }
-                            }
-                        }
-                }
             }
             .sheet(isPresented: $showsNewSharedCategory) {
                 PlanCategoryEditorView(editing: nil, sharesOnCreate: true) { created in
@@ -252,6 +253,21 @@ struct CalendarView: View {
                         showAuthError = true
                     }
                 }
+            }
+            .fileImporter(isPresented: $showsICSImporter, allowedContentTypes: ICSImportFile.contentTypes) { result in
+                guard case .success(let url) = result else { return }
+                icsInbox.open(url)
+            }
+            .sheet(item: $icsInbox.file) { file in
+                // 見ているカテゴリに入れ始める（「すべて」を見ているときは自分用）
+                ICSImportView(file: file, initialCategoryId: categorySelection.categoryIdForNewPlan)
+                    .environmentObject(viewModel)
+                    .environmentObject(authVM)
+            }
+            .alert("ファイルを読めませんでした", isPresented: $icsInbox.failed) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(".ics ファイルか確かめて、もう一度お試しください。")
             }
             .alert("認証が必要です", isPresented: $showAuthError) {
                 Button("OK", role: .cancel) {}
@@ -310,49 +326,12 @@ struct CalendarView: View {
         }
     }
 
-    /// 題名のカテゴリの切り替え。カテゴリの追加・編集・共有と、iPhone のカレンダーの設定もここから
+    /// 題名のカテゴリの切り替え。押すとカレンダーの一覧（`PlanCategoryListSheet`）が出て、
+    /// 切り替え・編集・共有・iPhone のカレンダー・読み込みはそこから行う
     private var categoryMenu: some View {
         let textColor = colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
-        return Menu {
-            Picker("カテゴリ", selection: categorySelectionBinding) {
-                Text("すべて").tag(PlanCategorySelection.all)
-                Text(PlanCategory.personalName).tag(PlanCategorySelection.personal)
-                ForEach(categoryManager.categories) { category in
-                    Label(category.name, systemImage: category.isShared ? "person.2.fill" : "circle.fill")
-                        .tag(PlanCategorySelection.category(category.id))
-                }
-            }
-            Divider()
-            // 共有できることが分かるよう、いつもここに置く
-            Button {
-                openSharing()
-            } label: {
-                Label("家族・友達と共有する…", systemImage: "person.2.fill")
-            }
-            Button {
-                showsJoin = true
-            } label: {
-                Label("共有コードで参加", systemImage: "person.badge.plus")
-            }
-            Divider()
-            Button {
-                showsNewCategory = true
-            } label: {
-                Label("カテゴリを追加", systemImage: "plus")
-            }
-            if case .category(let id) = categorySelection, let category = categoryManager.category(for: id) {
-                Button {
-                    editingCategory = category
-                } label: {
-                    Label("「\(category.name)」を編集・共有", systemImage: "pencil")
-                }
-            }
-            Divider()
-            Button {
-                showsCalendarSettings = true
-            } label: {
-                Label("iPhone のカレンダー", systemImage: "calendar")
-            }
+        return Button {
+            showsCategoryList = true
         } label: {
             HStack(spacing: 5) {
                 if case .category(let id) = categorySelection, let category = categoryManager.category(for: id) {
@@ -372,12 +351,15 @@ struct CalendarView: View {
         .accessibilityLabel("カテゴリ：\(categorySelectionName)")
     }
 
-    /// 共有の入口。共有していないカテゴリを見ていればその共有画面、それ以外は共有カレンダーを新しく作る
-    private func openSharing() {
-        if case .category(let id) = categorySelection, let category = categoryManager.category(for: id) {
-            editingCategory = category
-        } else {
-            showsNewSharedCategory = true
+    /// 一覧で選んだ動作を、一覧を閉じてから行う（シートの上にシートを重ねない）
+    private func runPendingCategoryAction() {
+        guard let action = pendingCategoryAction else { return }
+        pendingCategoryAction = nil
+        switch action {
+        case .newCategory: showsNewCategory = true
+        case .newSharedCategory: showsNewSharedCategory = true
+        case .join: showsJoin = true
+        case .importICS: showsICSImporter = true
         }
     }
 
