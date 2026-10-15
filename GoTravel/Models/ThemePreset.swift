@@ -783,6 +783,65 @@ extension ThemePreset {
         return Self.readableText(on: Self.composite(cardBackground2, over: ground))
     }
 
+    /// `cardBackground2` のカードの上の、控えめな文字（右に出す値・矢印）の色。
+    /// デフォルトカラーのダークモードでは明るい灰色のカードに灰色の文字となり、比 2.2 しかなかった
+    func secondaryTextOnCardBackground2(for scheme: ColorScheme) -> Color {
+        let ground = scheme == .dark ? backgroundDark : backgroundLight
+        return Self.readableTintEitherWay(secondaryText, on: Self.composite(cardBackground2, over: ground))
+    }
+
+    /// 画面の地に直接置く、控えめな文字（見出しなど）の色
+    func secondaryTextOnScreen(for scheme: ColorScheme) -> Color {
+        Self.readableTintEitherWay(secondaryText, on: scheme == .dark ? backgroundDark : backgroundLight)
+    }
+
+    /// 一覧（`List`）の行の色。システムの色（ライトは白、ダークは #1C1C1E）
+    static func listRowBackground(for scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color(white: 0.11) : .white
+    }
+
+    /// 一覧（`List`）の行に置く差し色（アイコン・チェック・操作の文字）。
+    /// accent1 はデフォルトカラーで黒なので、ダークモードの行（暗い灰色）に溶けていた（比 1.2）
+    func listTint(for scheme: ColorScheme) -> Color {
+        let row = Self.listRowBackground(for: scheme)
+        return Self.contrastRatio(accent1, row) >= 4.5 ? accent1 : Self.readableText(on: row)
+    }
+
+    /// 2つ目のテーマ色（secondary）を薄く敷いた面に、その色で文字を置くときの色。
+    /// オレンジや薄い色はそのままだと地と差が出ない（カレンダーの共有の案内・タグの絞り込みで比 1.0〜2.9）
+    func secondaryLabel(on base: Color, opacity: CGFloat) -> Color {
+        Self.readableTintEitherWay(secondary, on: Self.composite(secondary, over: base, opacity: opacity))
+    }
+
+    /// `readableTint` の、中くらいの明るさの地でも届くもの。
+    ///
+    /// `readableTint` は地の明るさで「明るくする」か「暗くする」かを1つに決めるので、
+    /// 明るくも暗くもない地（デフォルトカラーのダークモードの、明るい灰色のカードや青い画面の上）では
+    /// 反対の向きに寄せてしまい、比 3 に届かなかった。届かなければ反対にも寄せ、それでも足りなければ黒か白にする
+    static func readableTintEitherWay(_ color: Color, on background: Color, minimum: Double = 3.0) -> Color {
+        let first = readableTint(color, on: background)
+        if contrastRatio(first, background) >= minimum { return first }
+
+        var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
+        guard UIColor(color).getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha) else {
+            return readableText(on: background)
+        }
+        // readableTint と反対の向き
+        let darken = luminance(of: background) <= 0.4
+        var adjusted = color
+        for _ in 0..<15 where contrastRatio(adjusted, background) < minimum {
+            brightness = darken ? max(brightness - 0.07, 0) : min(brightness + 0.07, 1)
+            adjusted = Color(UIColor(hue: hue, saturation: saturation, brightness: brightness, alpha: alpha))
+        }
+        return contrastRatio(adjusted, background) >= minimum ? adjusted : readableText(on: background)
+    }
+
+    /// カレンダーの画面の上のほう（共有の案内・タグの絞り込みが載るあたり）の地の色。
+    /// 地はテーマ色のグラデーションを、システムの地（白か黒）に重ねたもの
+    func calendarScreenTop(for scheme: ColorScheme) -> Color {
+        scheme == .dark ? Self.composite(gradientDark, over: .black) : Self.composite(gradientLight, over: .white)
+    }
+
     /// テーマ色を薄く敷いた上に、その色で文字を置くときの色。
     ///
     /// オレンジのような明るい色はそのまま載せると読めない

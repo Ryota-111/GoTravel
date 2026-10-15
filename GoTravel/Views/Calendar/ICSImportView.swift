@@ -50,6 +50,7 @@ struct ICSImportView: View {
     @EnvironmentObject private var authVM: AuthViewModel
     @ObservedObject private var themeManager = ThemeManager.shared
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.colorScheme) private var colorScheme
 
     @State private var selected: Set<String> = []
     @State private var categoryId: String?
@@ -75,7 +76,7 @@ struct ICSImportView: View {
                 } else {
                     Section {
                         PlanCategoryPicker(categoryId: $categoryId, tagIDs: $tagIDs,
-                                           accentColor: themeManager.currentTheme.accent1)
+                                           accentColor: themeManager.currentTheme.listTint(for: colorScheme))
                             .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16))
                     } header: {
                         Text("入れるカテゴリ")
@@ -142,7 +143,7 @@ struct ICSImportView: View {
             HStack(alignment: .top, spacing: 12) {
                 Image(systemName: selected.contains(candidate.id) ? "checkmark.circle.fill" : "circle")
                     .font(.system(size: 20))
-                    .foregroundColor(selectable ? themeManager.currentTheme.accent1 : .secondary.opacity(0.4))
+                    .foregroundColor(selectable ? themeManager.currentTheme.listTint(for: colorScheme) : .secondary.opacity(0.4))
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
                         Image(systemName: candidate.plan.planType.icon)
@@ -159,7 +160,7 @@ struct ICSImportView: View {
                     if let badge = badge(status) {
                         Text(badge)
                             .font(.caption2.weight(.semibold))
-                            .foregroundColor(status == .update ? themeManager.currentTheme.accent1 : .secondary)
+                            .foregroundColor(status == .update ? themeManager.currentTheme.listTint(for: colorScheme) : .secondary)
                     }
                     ForEach(candidate.notes, id: \.self) { note in
                         Text(note)

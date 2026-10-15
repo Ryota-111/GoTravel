@@ -25,7 +25,10 @@ struct PlanCategoryListSheet: View {
     @Environment(\.dismiss) private var dismiss
     @State private var editing: PlanCategory?
 
-    private var accent: Color { themeManager.currentTheme.accent1 }
+    @Environment(\.colorScheme) private var colorScheme
+
+    /// 行の上で読める差し色（デフォルトカラーのダークモードで黒が行に溶けないように）
+    private var accent: Color { themeManager.currentTheme.listTint(for: colorScheme) }
 
     var body: some View {
         NavigationStack {

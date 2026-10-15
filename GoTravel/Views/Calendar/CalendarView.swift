@@ -369,19 +369,24 @@ struct CalendarView: View {
     }
 
     private var shareTip: some View {
-        let textColor = colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
+        let theme = themeManager.currentTheme
+        // 地はテーマ色のグラデーションに、案内の面（secondary を 8%）を重ねた色。文字の色はそこから決める
+        let ground = ThemePreset.composite(theme.secondary, over: theme.calendarScreenTop(for: colorScheme), opacity: 0.08)
+        let textColor = ThemePreset.readableText(on: ground)
+        let accent = theme.secondaryLabel(on: theme.calendarScreenTop(for: colorScheme), opacity: 0.08)
+        let subText = ThemePreset.readableTint(theme.secondaryText, on: ground)
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "person.2.fill")
                     .font(.title3)
-                    .foregroundColor(themeManager.currentTheme.secondary)
+                    .foregroundColor(accent)
                 VStack(alignment: .leading, spacing: 3) {
                     Text("カレンダーを家族や友達と共有できます")
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(textColor)
                     Text("「家族」「友達」のようにカレンダーを分けて、予定を一緒に見て書けます。")
                         .font(.caption)
-                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .foregroundColor(subText)
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 Spacer(minLength: 0)
@@ -390,7 +395,7 @@ struct CalendarView: View {
                 } label: {
                     Image(systemName: "xmark")
                         .font(.caption.weight(.bold))
-                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .foregroundColor(subText)
                 }
                 .accessibilityLabel("閉じる")
             }
@@ -402,8 +407,8 @@ struct CalendarView: View {
                         .font(.subheadline.weight(.semibold))
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 9)
-                        .background(Capsule().fill(themeManager.currentTheme.secondary))
-                        .foregroundColor(ThemePreset.readableText(on: themeManager.currentTheme.secondary))
+                        .background(Capsule().fill(accent))
+                        .foregroundColor(ThemePreset.readableText(on: accent))
                 }
                 Button {
                     showsJoin = true
@@ -412,8 +417,8 @@ struct CalendarView: View {
                         .font(.subheadline.weight(.semibold))
                         .padding(.horizontal, 14)
                         .padding(.vertical, 9)
-                        .background(Capsule().stroke(themeManager.currentTheme.secondary.opacity(0.5), lineWidth: 1))
-                        .foregroundColor(themeManager.currentTheme.secondary)
+                        .background(Capsule().stroke(accent.opacity(0.5), lineWidth: 1))
+                        .foregroundColor(accent)
                 }
             }
             .buttonStyle(.plain)
@@ -440,7 +445,8 @@ struct CalendarView: View {
             }
             .accessibilityLabel("絞り込みをやめる")
         }
-        .foregroundColor(themeManager.currentTheme.secondary)
+        .foregroundColor(themeManager.currentTheme.secondaryLabel(on: themeManager.currentTheme.calendarScreenTop(for: colorScheme),
+                                                                  opacity: 0.12))
         .padding(.horizontal, 12)
         .padding(.vertical, 6)
         .background(Capsule().fill(themeManager.currentTheme.secondary.opacity(0.12)))
