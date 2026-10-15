@@ -1090,7 +1090,8 @@ struct AddPlanView: View {
     private func applyHistory(_ entry: HistoryEntry) {
         let source = entry.plan
         let calendar = Calendar.current
-        let today = Date()
+        // カレンダーで選んだ日から開いたときは、その日に作る（今日にすると、選んだ日が変わってしまう）
+        let today = initialDate ?? Date()
 
         selectedPlanType = source.planType
         title = source.title
@@ -1101,9 +1102,13 @@ struct AddPlanView: View {
         selectedTagIDs = source.tagIDs
         selectedCategoryId = source.categoryId
 
-        // 日付は引き継がない（毎回変わるため）
+        // 日付は引き継がない（毎回変わるため）。おでかけの日数（2泊3日など）だけは保つ
+        let span = calendar.dateComponents([.day], from: calendar.startOfDay(for: source.startDate),
+                                           to: calendar.startOfDay(for: source.endDate)).day ?? 0
         startDate = today
-        endDate = today
+        endDate = source.planType == .outing
+            ? calendar.date(byAdding: .day, value: max(span, 0), to: today) ?? today
+            : today
         dailyDate = today
 
         // 時刻は時分だけ引き継ぎ、今日の日付上に組み立て直す
