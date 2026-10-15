@@ -65,10 +65,12 @@ final class SharedCategoryService {
     func stopSharing(_ category: PlanCategory, userId: String) {
         unshareLocally(categoryId: category.id)
         Task {
+            // カテゴリを先に消す。予定を先に消すと、その間に同期した友達の端末で
+            // 「誰かが予定を消した」とみなされ、友達の手元の予定まで消える
+            try? await CloudKitService.shared.deleteSharedCategory(categoryId: category.id)
             if let plans = try? await CloudKitService.shared.fetchSharedPlans(categoryId: category.id) {
                 for plan in plans { try? await CloudKitService.shared.deleteSharedPlan(planId: plan.id) }
             }
-            try? await CloudKitService.shared.deleteSharedCategory(categoryId: category.id)
         }
     }
 
@@ -129,7 +131,13 @@ final class SharedCategoryService {
 
         // 手元では共有中なのに一覧に無いカテゴリ。検索に出るのが遅れることがあるので、直接確かめてから外す
         for category in categories.categories where category.isShared && !seen.contains(category.id) {
-            let record = try? await CloudKitService.shared.fetchSharedCategory(categoryId: category.id)
+            // 確かめられなかった（通信の失敗など）ときは、共有をやめたとみなさない
+            let record: SharedCategoryRecord?
+            do {
+                record = try await CloudKitService.shared.fetchSharedCategory(categoryId: category.id)
+            } catch {
+                continue
+            }
             if let record, record.sharedWith.contains(userId) || record.ownerId == userId { continue }
             // 持ち主が共有をやめた・メンバーから外れた。カテゴリと予定は自分のものとして残す
             unshareLocally(categoryId: category.id)
@@ -192,7 +200,14 @@ final class SharedCategoryService {
                     continue
                 }
                 // 前はあったのに一覧に無い。検索に出るのが遅れることもあるので、直接確かめる
-                if let direct = try? await CloudKitService.shared.fetchSharedPlan(planId: local.id) {
+                // 確かめられなかった（通信の失敗など）ときは消さない。消えたと分かったときだけ消す
+                let direct: Plan?
+                do {
+                    direct = try await CloudKitService.shared.fetchSharedPlan(planId: local.id)
+                } catch {
+                    continue
+                }
+                if let direct {
                     await self.reconcile(remote: direct, userId: userId)
                 } else {
                     // 誰かが消した

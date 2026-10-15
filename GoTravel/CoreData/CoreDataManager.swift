@@ -17,7 +17,7 @@ class CoreDataManager {
     /// deploy 済み: `TaskEntity` と `PhotoAssetEntity`（2026年8月31日）、
     /// `PackingPresetEntity`（2026年9月5日）、`TravelPlanEntity.deletedAt`（2026年9月26日）、
     /// `TravelPlanEntity.memoText`（2026年10月4日）。
-    /// **3.0 で足したもの（未 deploy）**：`TravelPlanEntity.memosJSON`、`PlanEntity` の
+    /// 3.0 で足したもの（**2026年10月15日に deploy 済み**）：`TravelPlanEntity.memosJSON`、`PlanEntity` の
     /// categoryId・lastEditedBy・updatedAt、`PlanTagEntity.categoryId`、新しいエンティティ `PlanCategoryEntity`。
     /// 手順は `docs/設計_3.0.md` 6章。
     ///

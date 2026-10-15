@@ -10,7 +10,7 @@ import os
 //   カテゴリのタグも `tagsJSON` に入れて一緒に持つ
 // - カテゴリの予定：レコードタイプ `SharedPlan`、レコード ID は `sharedplan_<planId>`、`categoryId` で引く
 //
-// **Production への反映が要る**（`docs/設計_3.0.md` 6章）。
+// Production へは 2026年10月15日に反映済み（`docs/設計_3.0.md` 6章）。
 // - `SharedCategory` の `shareCode`・`ownerId`・`sharedWith`、`SharedPlan` の `categoryId` に QUERYABLE の索引
 // - 書き込みの権限は `SharedTravelPlan` と同じ設定にする
 extension CloudKitService {
@@ -121,7 +121,8 @@ extension CloudKitService {
         record["descriptionText"] = plan.description
         record["linkURL"] = plan.linkURL
         record["recurrence"] = plan.recurrence.rawValue
-        record["cardColorHex"] = plan.cardColorHex
+        // 予定の色（cardColorHex）は載せない。今は色を選べず使っていないうえ、
+        // Production の SharedPlan にこの項目が無い（昔の色つきの予定を送ると保存が失敗する）
         record["createdAt"] = plan.createdAt
         record["updatedAt"] = plan.updatedAt
         record["lastEditedBy"] = plan.lastEditedBy
@@ -151,7 +152,6 @@ extension CloudKitService {
             startDate: startDate,
             endDate: record["endDate"] as? Date ?? startDate,
             places: places,
-            cardColor: (record["cardColorHex"] as? String).flatMap { Color(hex: $0) },
             createdAt: record["createdAt"] as? Date ?? Date(),
             planType: PlanType(rawValue: record["planType"] as? String ?? "") ?? .outing,
             time: record["time"] as? Date,

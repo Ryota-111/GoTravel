@@ -7,7 +7,7 @@ import Foundation
 //
 // | みんなで持つ | 自分だけ |
 // |---|---|
-// | 題名・日時・終わる時刻・種類・行き先・スケジュール・説明・リンク・繰り返し・色・カテゴリ・タグ | 通知・済みの印・写真 |
+// | 題名・日時・終わる時刻・種類・行き先・スケジュール・説明・リンク・繰り返し・カテゴリ・タグ | 通知・済みの印・写真・色 |
 //
 // 済みの印は「自分は行ったが友達はまだ」があるため、通知は人によって欲しい時機が違うため、自分だけにする
 
@@ -40,6 +40,8 @@ extension Plan {
         copy.lastEditedBy = nil
         copy.updatedAt = nil
         copy.tagIDs = tagIDs.sorted()
+        // 色は共有しない（共有レコードに載せていない）
+        copy.cardColor = nil
         return copy
     }
 
@@ -55,6 +57,8 @@ extension Plan {
         copy.localImageFileName = local?.localImageFileName
         copy.reminders = local?.reminders
         copy.isCompleted = local?.isCompleted ?? false
+        // 色は共有していないので、手元のものを使う
+        copy.cardColor = local?.cardColor
         return copy
     }
 }
@@ -181,7 +185,6 @@ enum PlanShareMerge {
         merged.description = pick(\.description)
         merged.linkURL = pick(\.linkURL)
         merged.recurrence = pick(\.recurrence)
-        merged.cardColor = pick(\.cardColor)
         merged.places = SharedPlanMerge.merge(local: local.places, remote: remote.places, base: base.places,
                                               id: \.id, hasBase: true)
         merged.scheduleItems = SharedPlanMerge.merge(local: local.scheduleItems, remote: remote.scheduleItems,
