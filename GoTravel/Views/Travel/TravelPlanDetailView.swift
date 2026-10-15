@@ -63,6 +63,8 @@ struct TravelPlanDetailView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
     @State private var selectedDay: Int = 1
+    /// 旅行中に開いたとき、今日の日を選んだか（1回だけ。そのあと押して選んだ日は動かさない）
+    @State private var didSelectToday = false
     @State private var selectedTab: DetailTab = .schedule
     /// 「リスト」タブの中で見ているもの（持ち物／お土産／やりたいこと）
     @State private var selectedListKind: PackingItem.Kind = .packing
@@ -466,6 +468,15 @@ struct TravelPlanDetailView: View {
                 animateContent = true
             }
             fetchPlanWeather()
+
+            // 旅行中は今日の日（Day 2 など）から見せる。毎回 Day 1 から押し直さなくていいように。
+            // 日付は旅行先の今日で読む（海外にいるときも、現地の今日の日になる）
+            if !didSelectToday {
+                didSelectToday = true
+                if let today = (currentPlan ?? plan).dayNumber(forDate: Date()) {
+                    selectedDay = today
+                }
+            }
 
             // 終わった旅行を見返すのは、思い出が良い形で残っている場面
             if Calendar.current.startOfDay(for: plan.endDate) < Calendar.current.startOfDay(for: Date()) {
@@ -1875,7 +1886,7 @@ struct TravelPlanDetailView: View {
                 }
             } else if let note = planWeatherNote {
                 weatherNote(note.text, icon: note.icon)
-            } else if plan.dayCount == 1, let weather = planWeatherDays.first {
+            } else if plan.dayCount == 1, let weather = weather(forDay: plan.startDate) {
                 // 1日だけの旅行に「1日目」と付けても意味がないので、今までどおり1行で出す
                 weatherSummary(weather)
             } else if !planWeatherDays.isEmpty {
@@ -1903,10 +1914,15 @@ struct TravelPlanDetailView: View {
         }
     }
 
-    /// その日の予報。取れていない日は nil（10日より先など）
+    /// その日の予報。取れていない日は nil（10日より先など）。
+    ///
+    /// 予報の日付は**目的地の暦**で読む（予報の1日は目的地の 0:00 から始まるため）。
+    /// 日本の暦で読むと、日本より東（ニュージーランドなど）では1日ずれる
     private func weather(forDay date: Date) -> WeatherService.DayWeather? {
-        planWeatherDays.first {
-            Calendar.current.isDate($0.date, inSameDayAs: date)
+        let tripDay = Calendar.current.dateComponents([.year, .month, .day], from: date)
+        let destination = ScheduleClock.calendar(in: destinationTimeZone ?? .current)
+        return planWeatherDays.first {
+            destination.dateComponents([.year, .month, .day], from: $0.date) == tripDay
         }
     }
 

@@ -231,14 +231,20 @@ final class WeatherService {
             throw WeatherError.dateTooFarInPast
         }
 
-        // ローカルタイムゾーンでの日付を使用（UTC のズレを補正）
-        let normalizedStartDate = startDate.startOfDayInLocalTimezone
+        // **前後に1日ずつ広げて頼む。**
+        //
+        // 日付は端末（日本）の暦で決まるが、予報の「1日」は目的地の暦で区切られている。
+        // 日本の 10/14 0:00〜10/17 0:00 はハワイでは 10/13 5:00〜10/16 5:00 で、
+        // ハワイの 10/16 が丸ごと入らず、3日間の旅行で2日ぶんしか出なかった（ご報告から）。
+        // 広めに取り、どの日がどれかは画面の側で目的地の暦で突き合わせる
+        let normalizedStartDate = Calendar.current.date(
+            byAdding: .day, value: -1, to: startDate.startOfDayInLocalTimezone
+        ) ?? startDate.startOfDayInLocalTimezone
 
-        // 期間の終端は含まれない。最終日の0時までを頼むと最終日が落ちるので、
-        // 翌日の0時まで頼む
+        // 期間の終端は含まれない。最終日の翌日の0時に、さらに1日足して頼む
         let requestedEndDate = Calendar.current.date(
             byAdding: .day,
-            value: 1,
+            value: 2,
             to: endDate.startOfDayInLocalTimezone
         ) ?? endDate.startOfDayInLocalTimezone
         // 予報の無い日まで頼まない。範囲をはみ出すと、そのぶんが 404 になり得る。
