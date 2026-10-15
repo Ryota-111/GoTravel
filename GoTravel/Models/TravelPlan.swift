@@ -70,12 +70,21 @@ struct PackingItem: Identifiable, Codable {
         ///
         /// やりたいことは**みんなで出し合いたい**ので共有する。
         /// 持ち物は各自が自分のぶんを持つ（充電器は全員それぞれ要る）ので個人のもの。
-        /// お土産は同行者へのぶんを書くことがあり、本人に見えると台無しになる。
         var isSharedWithMembers: Bool { self == .wish }
+
+        /// 項目ごとに「みんな」か「自分だけ」かを選べるリストか（3.0）。
+        ///
+        /// お土産は、家族で旅行するときは同じリストで確かめたい。
+        /// 一方で同行者へのぶんを書くこともあり、本人に見えると台無しになるので、
+        /// 項目ごとに「自分だけ」にもできるようにする。新しい項目は「みんな」から始まる
+        var choosesVisibilityPerItem: Bool { self == .souvenir }
 
         /// 共有中の旅行で、このリストの立ち位置を一言で説明する
         var sharingNote: String {
-            isSharedWithMembers
+            if choosesVisibilityPerItem {
+                return "同行者と一緒に見て書けます。🔒を付けた項目は自分だけに見えます"
+            }
+            return isSharedWithMembers
                 ? "同行者にも見えます。みんなで書き足せます"
                 : "自分だけに見えます。同行者には共有されません"
         }
