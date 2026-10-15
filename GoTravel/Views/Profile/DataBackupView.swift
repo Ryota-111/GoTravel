@@ -71,7 +71,7 @@ struct DataBackupView: View {
             } header: {
                 Text("読み込む")
             } footer: {
-                Text("この iPhone に無いものだけを足します。すでにあるものは、そのままにします（読み込みで消えることはありません）。iCloud から読み込んでいる途中のときは、終わってから読み込んでください。")
+                Text("読み込むときに、この iPhone に無いものだけを足すか、ファイルの内容に戻すかを選べます。どちらでも、この iPhone にだけあるものは消えません。iCloud から読み込んでいる途中のときは、終わってから読み込んでください。")
             }
 
             if let snapshot = snapshotSummary {
@@ -112,12 +112,15 @@ struct DataBackupView: View {
             Task { await open(url) }
         }
         .confirmationDialog(confirmTitle, isPresented: $showsConfirm, titleVisibility: .visible) {
-            Button("読み込む") {
-                Task { await apply() }
+            Button("無いものだけ足す") {
+                Task { await apply(mode: .addMissing) }
+            }
+            Button("ファイルの内容に戻す", role: .destructive) {
+                Task { await apply(mode: .restore) }
             }
             Button("キャンセル", role: .cancel) { discardOpened() }
         } message: {
-            Text("この iPhone に無いものだけを足します。")
+            Text("「無いものだけ足す」は、すでにあるものをそのままにします。\n「ファイルの内容に戻す」は、旅行計画・予定・保存した場所をファイルの内容にします。書き出したあとに直した分は消えます。共有中の旅行やカレンダーは、同行者の画面も戻ります。")
         }
         .alert(message ?? "", isPresented: messageBinding) {
             Button("OK", role: .cancel) { message = nil }
@@ -164,17 +167,22 @@ struct DataBackupView: View {
         }
     }
 
-    private func apply() async {
+    private func apply(mode: TravoryImportRule.Mode) async {
         guard let file = opened, let userId = authVM.userId else { return }
         isWorking = true
         let result = await Task.detached(priority: .userInitiated) { () -> DataExportService.ImportResult in
             let context = CoreDataManager.shared.persistentContainer.newBackgroundContext()
             context.mergePolicy = NSMergeByPropertyObjectTrumpMergePolicy
-            return DataExportService.apply(file.export, userId: userId, context: context, imagesFolder: file.folder)
+            return DataExportService.apply(file.export, userId: userId, context: context,
+                                           imagesFolder: file.folder, mode: mode)
         }.value
         isWorking = false
         discardOpened()
         message = result.message
+        // 戻した予定を、共有したカテゴリのみんなにもとどける（旅行計画はホームに戻ったときの同期でとどく）
+        if result.replaced > 0 {
+            Task { await SharedCategoryService.shared.syncAll(userId: userId) }
+        }
     }
 
     private func discardOpened() {

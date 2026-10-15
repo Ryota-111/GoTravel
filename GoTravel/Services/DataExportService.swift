@@ -165,7 +165,7 @@ enum DataExportService {
 
         var message: String {
             var parts = ["\(added)件を足しました"]
-            if replaced > 0 { parts.append("\(replaced)件をファイルの新しい内容にしました") }
+            if replaced > 0 { parts.append("\(replaced)件をファイルの内容にしました") }
             if kept > 0 { parts.append("すでにあった\(kept)件はそのままにしました") }
             if images > 0 { parts.append("写真を\(images)枚戻しました") }
             return parts.joined(separator: "。") + "。"
@@ -176,13 +176,26 @@ enum DataExportService {
     /// 持ち主は今の人に付け替え、共有の情報は外す（`TravoryImportRule`）
     @discardableResult
     static func apply(_ export: TravoryExport, userId: String, context: NSManagedObjectContext,
-                      imagesFolder: URL? = nil) -> ImportResult {
+                      imagesFolder: URL? = nil, mode: TravoryImportRule.Mode = .addMissing,
+                      now: Date = Date()) -> ImportResult {
         var result = ImportResult()
 
         context.performAndWait {
             for record in export.travelPlans {
                 guard let id = record.plan.id else { continue }
                 let local = try? TravelPlanEntity.fetchById(id: id, context: context)
+                if mode == .restore, let local {
+                    let current = local.toTravelPlan()
+                    let restored = TravoryImportRule.restored(record.plan, over: current, userId: userId, now: now)
+                    if TravoryImportRule.isSame(restored, as: current) && local.deletedAt == record.deletedAt {
+                        result.kept += 1
+                    } else {
+                        local.update(from: restored)
+                        local.deletedAt = record.deletedAt
+                        result.replaced += 1
+                    }
+                    continue
+                }
                 let action = TravoryImportRule.travelPlanAction(
                     fileUpdatedAt: record.plan.updatedAt,
                     localUpdatedAt: local.map { $0.updatedAt ?? .distantPast },
@@ -202,7 +215,16 @@ enum DataExportService {
             }
 
             for plan in export.plans {
-                if (try? PlanEntity.fetchById(id: plan.id, context: context)) != nil { result.kept += 1; continue }
+                if let local = try? PlanEntity.fetchById(id: plan.id, context: context) {
+                    if mode == .restore,
+                       let restored = TravoryImportRule.restored(plan, over: local.toPlan(), userId: userId, now: now) {
+                        local.update(from: restored)
+                        result.replaced += 1
+                    } else {
+                        result.kept += 1
+                    }
+                    continue
+                }
                 var copy = plan
                 copy.userId = userId
                 // カテゴリはそのまま（カテゴリも一緒に戻す。共有の情報はカテゴリの側で外す）
@@ -211,8 +233,14 @@ enum DataExportService {
             }
 
             for place in export.places {
-                if let id = place.id, (try? VisitedPlaceEntity.fetchById(id: id, context: context)) != nil {
-                    result.kept += 1
+                if let id = place.id, let local = try? VisitedPlaceEntity.fetchById(id: id, context: context) {
+                    if mode == .restore,
+                       let restored = TravoryImportRule.restored(place, over: local.toVisitedPlace(), userId: userId) {
+                        local.update(from: restored)
+                        result.replaced += 1
+                    } else {
+                        result.kept += 1
+                    }
                     continue
                 }
                 var copy = place

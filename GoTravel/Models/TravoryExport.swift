@@ -125,6 +125,15 @@ struct TravoryExport: Codable {
 
 enum TravoryImportRule {
 
+    /// 読み込み方（読み込むときに選ぶ）
+    enum Mode {
+        /// 端末に無いものだけを足す。すでにある旅行計画は、ファイルのほうが新しく共有していないときだけ置き換える
+        case addMissing
+        /// ファイルの内容に戻す。中身が違えば、新しさに関係なくファイルの内容にする（書き出したあとに直した分は消える）。
+        /// 共有中の旅行計画・共有したカテゴリの予定も戻し、次の同期で同行者にもとどける
+        case restore
+    }
+
     /// 旅行計画を、ファイルの内容で置き換えるか。
     /// 端末に無ければ足す。あれば、ファイルのほうが新しく、端末の側が共有していないときだけ置き換える
     /// （共有している計画をファイルで置き換えると、同行者の計画まで書き換わるため）
@@ -151,5 +160,52 @@ enum TravoryImportRule {
         copy.ownerId = nil
         copy.lastEditedBy = nil
         return copy
+    }
+
+    /// ファイルの内容に戻した旅行計画。
+    /// 共有中なら共有の情報（コード・メンバー・名前）は手元のまま残し、自分が今直したことにする。
+    /// 同行者の側より新しくなるので、次の同期でみんなにとどく
+    static func restored(_ plan: TravelPlan, over local: TravelPlan, userId: String, now: Date) -> TravelPlan {
+        guard local.isShared else {
+            var copy = detached(plan, userId: userId)
+            copy.updatedAt = now
+            return copy
+        }
+        var copy = plan
+        copy.userId = userId
+        copy.isShared = true
+        copy.shareCode = local.shareCode
+        copy.sharedWith = local.sharedWith
+        copy.ownerId = local.ownerId
+        copy.memberNames = local.memberNames
+        copy.lastEditedBy = userId
+        copy.updatedAt = now
+        return copy
+    }
+
+    /// 旅行計画の中身が同じか（戻しても何も変わらないなら、置き換えない）
+    static func isSame(_ restored: TravelPlan, as local: TravelPlan) -> Bool {
+        restored.isContentEqual(to: local)
+    }
+
+    /// ファイルの内容に戻した予定。カテゴリは手元のまま（読み込みで共有したカテゴリから出し入れしない）。
+    /// 中身が同じなら nil（置き換えない）
+    static func restored(_ plan: Plan, over local: Plan, userId: String, now: Date) -> Plan? {
+        var copy = plan
+        copy.userId = userId
+        copy.categoryId = local.categoryId
+        copy.lastEditedBy = local.lastEditedBy
+        copy.updatedAt = local.updatedAt
+        guard copy != local else { return nil }
+        copy.lastEditedBy = userId
+        copy.updatedAt = now
+        return copy
+    }
+
+    /// ファイルの内容に戻した保存した場所。中身が同じなら nil
+    static func restored(_ place: VisitedPlace, over local: VisitedPlace, userId: String) -> VisitedPlace? {
+        var copy = place
+        copy.userId = userId
+        return copy == local ? nil : copy
     }
 }

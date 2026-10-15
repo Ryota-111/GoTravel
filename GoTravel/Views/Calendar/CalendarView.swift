@@ -277,8 +277,15 @@ struct CalendarView: View {
 
     // MARK: - カテゴリとタグ（3.0）
 
+    /// 覚えているカテゴリがこの端末に無い（消した・まだ同期で届いていない・別の環境で作った）ときは「すべて」で見る。
+    /// 無いカテゴリで絞ると、題名は「自分用」なのに予定が1つも出なくなる。
+    /// 覚えている値は書き換えない（同期で届けば、そのカテゴリに戻る）
     private var categorySelection: PlanCategorySelection {
-        PlanCategorySelection(storageKey: categorySelectionKey)
+        let stored = PlanCategorySelection(storageKey: categorySelectionKey)
+        if case .category(let id) = stored, categoryManager.category(for: id) == nil {
+            return .all
+        }
+        return stored
     }
 
     private var categorySelectionBinding: Binding<PlanCategorySelection> {

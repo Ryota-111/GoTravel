@@ -93,6 +93,70 @@ struct DataExportTests {
         #expect(try TravelPlanEntity.fetchByUser(userId: "me", context: context).count == 3)
     }
 
+    @Test("ファイルの内容に戻すと、手元のほうが新しくてもファイルの内容になる。手元にだけあるものは残る")
+    func restoreReplacesNewerLocal() throws {
+        let context = try makeContext()
+        _ = TravelPlanEntity.create(from: TravoryImportRule.detached(trip("keep", title: "あとで直した計画", updatedAt: start.addingTimeInterval(100)), userId: "me"), context: context)
+        _ = TravelPlanEntity.create(from: TravoryImportRule.detached(trip("local-only", title: "手元にだけある"), userId: "me"), context: context)
+        try context.save()
+
+        let now = start.addingTimeInterval(1_000)
+        let file = export(travelPlans: [trip("keep", title: "書き出したときの計画")])
+        let result = DataExportService.apply(file, userId: "me", context: context, mode: .restore, now: now)
+        #expect(result.replaced == 1)
+
+        let plans = try TravelPlanEntity.fetchByUser(userId: "me", context: context).map { $0.toTravelPlan() }
+        #expect(plans.first { $0.id == "keep" }?.title == "書き出したときの計画")
+        #expect(plans.first { $0.id == "keep" }?.updatedAt == now)
+        #expect(plans.contains { $0.id == "local-only" })
+
+        // 同じ中身なら置き換えない
+        let again = DataExportService.apply(file, userId: "me", context: context, mode: .restore, now: now.addingTimeInterval(10))
+        #expect(again.replaced == 0)
+        #expect(again.kept == 1)
+    }
+
+    @Test("共有中の旅行計画を戻すと、共有の情報は手元のまま、自分が今直したことになる（同行者にとどく）")
+    func restoreSharedTrip() {
+        var local = trip("s", title: "同行者が直した計画", updatedAt: start.addingTimeInterval(100), shared: true)
+        local.userId = "me"
+        local.shareCode = "TRAVEL-LOCALCOD"
+        local.sharedWith = ["old", "friend", "me"]
+        var file = trip("s", title: "書き出したときの計画")
+        file.shareCode = "TRAVEL-OLDCODE1"
+        let now = start.addingTimeInterval(1_000)
+
+        let restored = TravoryImportRule.restored(file, over: local, userId: "me", now: now)
+        #expect(restored.title == "書き出したときの計画")
+        #expect(restored.isShared)
+        #expect(restored.shareCode == "TRAVEL-LOCALCOD")
+        #expect(restored.sharedWith == ["old", "friend", "me"])
+        #expect(restored.ownerId == "old")
+        #expect(restored.lastEditedBy == "me")
+        #expect(restored.updatedAt == now)
+    }
+
+    @Test("予定を戻すと、中身はファイルの内容、カテゴリは手元のまま。同じ中身なら置き換えない")
+    func restorePlan() {
+        let now = start.addingTimeInterval(1_000)
+        var local = Plan(id: "p", title: "あとで直した予定", startDate: start, endDate: start, places: [], planType: .outing)
+            .withSharing(categoryId: "family", lastEditedBy: "friend", updatedAt: start.addingTimeInterval(100))
+        local.userId = "me"
+        let file = Plan(id: "p", title: "書き出したときの予定", startDate: start, endDate: start, places: [], planType: .outing)
+
+        let restored = TravoryImportRule.restored(file, over: local, userId: "me", now: now)
+        #expect(restored?.title == "書き出したときの予定")
+        #expect(restored?.categoryId == "family")
+        #expect(restored?.lastEditedBy == "me")
+        #expect(restored?.updatedAt == now)
+
+        var same = local
+        same.lastEditedBy = nil
+        same.updatedAt = nil
+        same.categoryId = nil
+        #expect(TravoryImportRule.restored(same, over: local, userId: "me", now: now) == nil)
+    }
+
     @Test("ゴミ箱に入っていた旅行計画は、ゴミ箱に入ったまま戻る")
     func applyKeepsTrash() throws {
         let context = try makeContext()
