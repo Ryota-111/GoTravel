@@ -31,11 +31,23 @@ struct TripDigestTests {
         ]
         let day1 = TripDigest.clips(plan: plan, sources: sources, scope: .day(1), calendar: calendar)
         #expect(day1.map(\.sourceId) == ["v1", "p3"])
-        #expect(day1.first?.timeText == "10:40")
+        #expect(day1.first?.timeText == "10:00")  // 1時間刻み
         let trip = TripDigest.clips(plan: plan, sources: sources, scope: .trip, calendar: calendar)
         #expect(trip.map(\.sourceId) == ["v1", "p3", "d2"])
         #expect(trip.last?.dayNumber == 2)
         #expect(TripDigest.duration(of: trip) == 6)
+    }
+
+    @Test("自分で選び直した写真は、その時間のコマに必ず使う")
+    func pinned() {
+        let plan = TravelBookletTests.sampleTrip()
+        let sources = [
+            TripDigest.Source(id: "video", date: at(plan, day: 1, hour: 10, minute: 5), isVideo: true, duration: 5),
+            TripDigest.Source(id: "photo", date: at(plan, day: 1, hour: 10, minute: 50), isVideo: false, duration: 0),
+        ]
+        #expect(TripDigest.clips(plan: plan, sources: sources, scope: .day(1), calendar: calendar).map(\.sourceId) == ["video"])
+        #expect(TripDigest.clips(plan: plan, sources: sources, scope: .day(1), pinned: ["photo"], calendar: calendar)
+            .map(\.sourceId) == ["photo"])
     }
 
     @Test("多すぎるときは、1日の中でまんべんなく間引く")
@@ -94,5 +106,44 @@ struct TripDigestTests {
             try UIImage(cgImage: image).pngData()?.write(to: out)
             print("DIGEST \(out.path)")
         }
+    }
+
+    @Test("文字は左下・真ん中・右上に置け、長い場所の名前も省略しない", arguments: TripDigestComposer.TextPosition.allCases)
+    func overlayPositions(position: TripDigestComposer.TextPosition) throws {
+        let clip = TripDigest.Clip(sourceId: "a", dayNumber: 2, date: Date(), timeText: "14:05",
+                                   placeName: "沖縄美ら海水族館 黒潮の海 大水槽の前のカフェ")  // 長くても1行に収める
+        let overlay = try #require(TripDigestComposer.overlayImage(for: clip, title: "沖縄旅行", subtitle: "Day 2・9月22日(火)",
+                                                                   position: position))
+        #expect(overlay.extent.size == TripDigestComposer.renderSize)
+        // 見た目を確かめるために、色の上に重ねた画像を残す
+        let base = CIImage(color: CIColor(red: 0.3, green: 0.6, blue: 0.7)).cropped(to: overlay.extent)
+        let context = CIContext()
+        let cg = try #require(context.createCGImage(overlay.composited(over: base), from: overlay.extent))
+        let url = FileManager.default.temporaryDirectory.appendingPathComponent("overlay-\(position.rawValue).png")
+        try UIImage(cgImage: cg).pngData()?.write(to: url)
+        print("OVERLAY \(url.path)")
+    }
+}
+
+/// 作った動画を残しておく（旅行と範囲ごとに最新の1本）
+struct TripDigestLibraryTests {
+    @Test("同じ旅行・同じ範囲で作り直すと置き換わり、新しい順に並ぶ")
+    func saveAndReplace() throws {
+        let planId = "test-\(UUID().uuidString)"
+        func temp(_ text: String) throws -> URL {
+            let url = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).mp4")
+            try Data(text.utf8).write(to: url)
+            return url
+        }
+        let now = Date(timeIntervalSince1970: 1_790_000_000)
+        try TripDigestLibrary.save(try temp("1"), planId: planId, scopeId: "trip", title: "旅行全体", now: now)
+        try TripDigestLibrary.save(try temp("2"), planId: planId, scopeId: "day1", title: "Day 1", now: now.addingTimeInterval(10))
+        try TripDigestLibrary.save(try temp("3"), planId: planId, scopeId: "trip", title: "旅行全体", now: now.addingTimeInterval(20))
+        let entries = TripDigestLibrary.entries(planId: planId)
+        #expect(entries.map(\.scopeId) == ["trip", "day1"])
+        let trip = try #require(TripDigestLibrary.entry(planId: planId, scopeId: "trip"))
+        #expect(try String(contentsOf: TripDigestLibrary.url(of: trip), encoding: .utf8) == "3")
+        for entry in entries { TripDigestLibrary.remove(entry) }
+        #expect(TripDigestLibrary.entries(planId: planId).isEmpty)
     }
 }

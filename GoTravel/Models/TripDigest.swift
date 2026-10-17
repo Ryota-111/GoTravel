@@ -45,7 +45,8 @@ enum TripDigest {
     /// 旅行全体の動画では、1日あたりのコマを減らす（長くなりすぎないように）
     static let maxClipsPerDayInTrip = 6
 
-    static func clips(plan: TravelPlan, sources: [Source], scope: Scope,
+    /// - Parameter pinned: 自分で選び直した写真・動画。その時間のコマには、これを必ず使う
+    static func clips(plan: TravelPlan, sources: [Source], scope: Scope, pinned: Set<String> = [],
                       calendar: Calendar = .current) -> [Clip] {
         let days: [Int]
         switch scope {
@@ -57,7 +58,7 @@ enum TripDigest {
             let dayStart = calendar.startOfDay(for: plan.date(forDay: dayNumber))
             guard let dayEnd = calendar.date(byAdding: .day, value: 1, to: dayStart) else { return [Clip]() }
             let ofDay = sources.filter { $0.date >= dayStart && $0.date < dayEnd }
-            return pickHourly(ofDay, limit: limit, calendar: calendar).map { source in
+            return pickHourly(ofDay, limit: limit, pinned: pinned, calendar: calendar).map { source in
                 Clip(sourceId: source.id, dayNumber: dayNumber, date: source.date,
                      timeText: timeText(source.date, calendar: calendar),
                      placeName: placeName(near: source, plan: plan, dayNumber: dayNumber))
@@ -65,12 +66,14 @@ enum TripDigest {
         }
     }
 
-    /// 1時間に1つ。動画があれば動画を、同じ種類なら先に撮ったほうを選ぶ。
+    /// 1時間に1つ。自分で選び直したものがあればそれを、なければ動画を、同じ種類なら先に撮ったほうを選ぶ。
     /// 多すぎるときは、1日の中でまんべんなく間引く
-    static func pickHourly(_ sources: [Source], limit: Int, calendar: Calendar) -> [Source] {
+    static func pickHourly(_ sources: [Source], limit: Int, pinned: Set<String> = [], calendar: Calendar) -> [Source] {
         let byHour = Dictionary(grouping: sources) { calendar.component(.hour, from: $0.date) }
         var picked = byHour.keys.sorted().compactMap { hour -> Source? in
             byHour[hour]?.sorted { lhs, rhs in
+                let lp = pinned.contains(lhs.id), rp = pinned.contains(rhs.id)
+                if lp != rp { return lp }
                 if lhs.isVideo != rhs.isVideo { return lhs.isVideo }
                 return lhs.date < rhs.date
             }.first
@@ -82,9 +85,14 @@ enum TripDigest {
         return picked
     }
 
+    /// 1時間刻みで出す（17:23 → 「17:00」）。1時間に1コマなので、分まで出すと細かすぎる
     static func timeText(_ date: Date, calendar: Calendar) -> String {
-        let c = calendar.dateComponents([.hour, .minute], from: date)
-        return String(format: "%d:%02d", c.hour ?? 0, c.minute ?? 0)
+        "\(calendar.component(.hour, from: date)):00"
+    }
+
+    /// 同じ日・同じ時間か（選び直しで、同じ時間の前の選び直しを外すため）
+    static func sameHour(_ a: Date, _ b: Date, calendar: Calendar = .current) -> Bool {
+        calendar.isDate(a, inSameDayAs: b) && calendar.component(.hour, from: a) == calendar.component(.hour, from: b)
     }
 
     /// 撮った場所にいちばん近い、その日の予定の名前（800m 以内のときだけ）

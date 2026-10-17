@@ -12,6 +12,31 @@ enum TripDigestComposer {
     static let renderSize = CGSize(width: 1080, height: 1920)
     static let fps: Int32 = 30
 
+    /// 時刻・場所の文字を置く位置
+    enum TextPosition: String, CaseIterable, Identifiable {
+        case bottomLeft
+        case center
+        case topRight
+
+        var id: String { rawValue }
+
+        var name: String {
+            switch self {
+            case .bottomLeft: return "左下"
+            case .center: return "真ん中"
+            case .topRight: return "右上"
+            }
+        }
+
+        var systemImage: String {
+            switch self {
+            case .bottomLeft: return "arrow.down.left.square"
+            case .center: return "square.dashed.inset.filled"
+            case .topRight: return "arrow.up.right.square"
+            }
+        }
+    }
+
     /// つなぐ素材1つ
     struct Item {
         enum Media {
@@ -111,6 +136,7 @@ enum TripDigestComposer {
     /// コマごとに直す必要があるので、1コマずつ自分で描く
     /// - Parameter title: 最初のコマに大きく出す題名（旅行名と日付）
     static func compose(_ items: [Item], title: String, subtitle: String, fileName: String,
+                        textPosition: TextPosition = .bottomLeft,
                         progress: @escaping @Sendable (Double) -> Void = { _ in }) async throws -> URL {
         guard !items.isEmpty else { throw ComposeError.empty }
         let work = FileManager.default.temporaryDirectory.appendingPathComponent("digest-\(UUID().uuidString)", isDirectory: true)
@@ -124,7 +150,8 @@ enum TripDigestComposer {
         var cursor = CMTime.zero
 
         for (index, item) in items.enumerated() {
-            let overlay = overlayImage(for: item.clip, title: index == 0 ? title : nil, subtitle: subtitle)
+            let overlay = overlayImage(for: item.clip, title: index == 0 ? title : nil, subtitle: subtitle,
+                                       position: textPosition)
             let segmentURL = work.appendingPathComponent("\(index).mov")
             var audioSource: (track: AVAssetTrack, range: CMTimeRange)?
             switch item.media {
@@ -264,42 +291,102 @@ enum TripDigestComposer {
 
     // MARK: 文字
 
-    /// 左下に「Day 2   14:05」と場所の名前。最初のコマには題名を大きく出す
-    static func overlayImage(for clip: TripDigest.Clip, title: String?, subtitle: String) -> CIImage? {
+    /// 「Day 2   14:05」と場所の名前を、選んだ位置に置く。最初のコマには題名を大きく出す。
+    /// 場所の名前は省略しない（1行に入らなければ、入るまで文字を小さくする）
+    static func overlayImage(for clip: TripDigest.Clip, title: String?, subtitle: String,
+                             position: TextPosition = .bottomLeft) -> CIImage? {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = false
+        let W = renderSize.width, H = renderSize.height
+        let margin: CGFloat = 72
         let image = UIGraphicsImageRenderer(size: renderSize, format: format).image { context in
             let cg = context.cgContext
-            // 下のほうを少し暗くして、白い文字を読めるようにする
-            let colors = [UIColor.black.withAlphaComponent(0).cgColor, UIColor.black.withAlphaComponent(0.5).cgColor] as CFArray
-            if let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(), colors: colors, locations: [0, 1]) {
-                cg.drawLinearGradient(gradient, start: CGPoint(x: 0, y: renderSize.height - 560),
-                                      end: CGPoint(x: 0, y: renderSize.height), options: [])
+            // 文字のあたりを少し暗くして、白い文字を読めるようにする
+            let dark = UIColor.black.withAlphaComponent(0.5).cgColor, clear = UIColor.black.withAlphaComponent(0).cgColor
+            let space = CGColorSpaceCreateDeviceRGB()
+            switch position {
+            case .bottomLeft:
+                if let g = CGGradient(colorsSpace: space, colors: [clear, dark] as CFArray, locations: [0, 1]) {
+                    cg.drawLinearGradient(g, start: CGPoint(x: 0, y: H - 640), end: CGPoint(x: 0, y: H), options: [])
+                }
+            case .topRight:
+                if let g = CGGradient(colorsSpace: space, colors: [dark, clear] as CFArray, locations: [0, 1]) {
+                    cg.drawLinearGradient(g, start: CGPoint(x: 0, y: 0), end: CGPoint(x: 0, y: 640), options: [])
+                }
+            case .center:
+                cg.setFillColor(UIColor.black.withAlphaComponent(0.22).cgColor)
+                cg.fill(CGRect(origin: .zero, size: renderSize))
             }
+
             let shadow = NSShadow()
             shadow.shadowColor = UIColor.black.withAlphaComponent(0.5)
             shadow.shadowBlurRadius = 10
-            func draw(_ text: String, size: CGFloat, weight: UIFont.Weight, rect: CGRect, align: NSTextAlignment = .left) {
+            func attributes(_ size: CGFloat, _ weight: UIFont.Weight, _ align: NSTextAlignment) -> [NSAttributedString.Key: Any] {
                 let style = NSMutableParagraphStyle()
                 style.alignment = align
-                style.lineBreakMode = .byTruncatingTail
-                (text as NSString).draw(in: rect, withAttributes: [
-                    .font: UIFont.systemFont(ofSize: size, weight: weight),
-                    .foregroundColor: UIColor.white, .paragraphStyle: style, .shadow: shadow
-                ])
+                style.lineBreakMode = .byWordWrapping
+                return [.font: UIFont.systemFont(ofSize: size, weight: weight), .foregroundColor: UIColor.white,
+                        .paragraphStyle: style, .shadow: shadow]
             }
-            draw("Day \(clip.dayNumber)   \(clip.timeText)", size: 44, weight: .semibold,
-                 rect: CGRect(x: 72, y: renderSize.height - 300, width: renderSize.width - 144, height: 64))
-            if let place = clip.placeName {
-                draw(place, size: 64, weight: .bold,
-                     rect: CGRect(x: 72, y: renderSize.height - 228, width: renderSize.width - 144, height: 90))
+            /// 幅に収まるよう、lines 行に入るまで文字を小さくする。描いた高さを返す
+            @discardableResult
+            func draw(_ text: String, size: CGFloat, weight: UIFont.Weight, align: NSTextAlignment,
+                      width: CGFloat, origin: CGPoint, lines: Int = 1, fromBottom: Bool = false) -> CGFloat {
+                var fontSize = size
+                var attrs = attributes(fontSize, weight, align)
+                var box = (text as NSString).boundingRect(with: CGSize(width: width, height: .greatestFiniteMagnitude),
+                                                          options: [.usesLineFragmentOrigin], attributes: attrs, context: nil)
+                while box.height > fontSize * 1.25 * CGFloat(lines) && fontSize > size * 0.3 {
+                    fontSize -= 2
+                    attrs = attributes(fontSize, weight, align)
+                    box = (text as NSString).boundingRect(with: CGSize(width: width, height: .greatestFiniteMagnitude),
+                                                          options: [.usesLineFragmentOrigin], attributes: attrs, context: nil)
+                }
+                let height = ceil(box.height)
+                let y = fromBottom ? origin.y - height : origin.y
+                (text as NSString).draw(with: CGRect(x: origin.x, y: y, width: width, height: height),
+                                        options: [.usesLineFragmentOrigin], attributes: attrs, context: nil)
+                return height
             }
+
+            let timeText = "Day \(clip.dayNumber)   \(clip.timeText)"
+            let width = W - margin * 2
+            switch position {
+            case .bottomLeft:
+                // 下から積む：場所の名前（2行まで）、その上に時刻
+                var bottom = H - 150
+                if let place = clip.placeName {
+                    bottom -= draw(place, size: 64, weight: .bold, align: .left, width: width,
+                                   origin: CGPoint(x: margin, y: bottom), fromBottom: true) + 8
+                }
+                draw(timeText, size: 44, weight: .semibold, align: .left, width: width,
+                     origin: CGPoint(x: margin, y: bottom), fromBottom: true)
+            case .topRight:
+                var top: CGFloat = 170
+                top += draw(timeText, size: 44, weight: .semibold, align: .right, width: width,
+                            origin: CGPoint(x: margin, y: top)) + 8
+                if let place = clip.placeName {
+                    draw(place, size: 64, weight: .bold, align: .right, width: width,
+                         origin: CGPoint(x: margin, y: top))
+                }
+            case .center:
+                // 最初のコマは題名の下に置く
+                var top: CGFloat = title == nil ? H * 0.44 : H * 0.56
+                top += draw(timeText, size: 44, weight: .semibold, align: .center, width: width,
+                            origin: CGPoint(x: margin, y: top)) + 8
+                if let place = clip.placeName {
+                    draw(place, size: 64, weight: .bold, align: .center, width: width,
+                         origin: CGPoint(x: margin, y: top))
+                }
+            }
+
             if let title {
-                draw(title, size: 96, weight: .heavy,
-                     rect: CGRect(x: 60, y: renderSize.height * 0.38, width: renderSize.width - 120, height: 130), align: .center)
-                draw(subtitle, size: 44, weight: .semibold,
-                     rect: CGRect(x: 60, y: renderSize.height * 0.38 + 140, width: renderSize.width - 120, height: 64), align: .center)
+                let top = H * (position == .center ? 0.34 : 0.38)
+                let used = draw(title, size: 96, weight: .heavy, align: .center, width: W - 120,
+                                origin: CGPoint(x: 60, y: top), lines: 2)
+                draw(subtitle, size: 44, weight: .semibold, align: .center, width: W - 120,
+                     origin: CGPoint(x: 60, y: top + used + 16))
             }
         }
         return image.cgImage.map { CIImage(cgImage: $0) }
