@@ -1,26 +1,24 @@
 import SwiftUI
 
 /// ホーム画面のアイコン（Travory Pro）。
-/// 今の絵の色違いを、代わりのアイコンとして入れてある（`AppIcon-*`。ビルド設定の
+/// 別の絵を、代わりのアイコンとして入れてある（`AppIcon-*`。ビルド設定の
 /// `ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES` に並べたもの）
 enum AppIconOption: String, CaseIterable, Identifiable {
     case standard = "Default"
-    case sunset = "Sunset"
-    case night = "Night"
-    case sepia = "Sepia"
-    case mono = "Mono"
-    case sakura = "Sakura"
+    case desk = "Desk"
+    case globe = "Globe"
+    case window = "Window"
+    case skySea = "SkySea"
 
     var id: String { rawValue }
 
     var name: String {
         switch self {
         case .standard: return "いつもの"
-        case .sunset: return "夕焼け"
-        case .night: return "夜"
-        case .sepia: return "セピア"
-        case .mono: return "モノクロ"
-        case .sakura: return "桜"
+        case .desk: return "旅の計画"
+        case .globe: return "空と地球"
+        case .window: return "窓の景色"
+        case .skySea: return "空と海"
         }
     }
 
