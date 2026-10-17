@@ -38,7 +38,7 @@ struct MainTabView: View {
                 .tabItem { Label("場所保存", systemImage: "mappin.and.ellipse") }
                 .tag(2)
             AlbumHomeView()
-                .tabItem { Label("アルバム", systemImage: "photo.artframe") }
+                .tabItem { Label("思い出", systemImage: "photo.stack") }
                 .tag(3)
         }
         .environmentObject(plansViewModel)

@@ -17,7 +17,10 @@ struct AlbumHomeView: View {
     @State private var selectedAlbumIds: Set<String> = []
     @State private var showDeleteConfirm = false
     /// 旅のダイジェスト動画（Travory Pro）。いちばん最近の旅行で開き、画面の上で旅行を切り替える
-    @State private var showsNoDigestTrip = false
+    /// 作った動画を見る（カードの「作成済み」から）
+    @State private var playingDigest: TripDigestLibrary.Entry?
+    /// 残した動画が変わった合図（ダイジェストの画面を閉じたら読み直す）
+    @State private var libraryVersion = 0
     @State private var digestPlan: TravelPlan?
     @State private var showsProForDigest = false
     @ObservedObject private var proStore = ProStore.shared
@@ -40,10 +43,22 @@ struct AlbumHomeView: View {
                 VStack(spacing: 0) {
                     headerBar
 
-                    if albumManager.albums.isEmpty {
-                        emptyState
-                    } else {
-                        albumGrid
+                    ScrollView(showsIndicators: false) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            // 旅のダイジェスト（選んで消しているあいだは出さない）
+                            if !isSelectionMode {
+                                digestSection
+                                    .padding(.bottom, 22)
+                            }
+                            sectionTitle("アルバム")
+                                .padding(.horizontal, 20)
+                            if albumManager.albums.isEmpty {
+                                emptyState
+                            } else {
+                                albumGrid
+                            }
+                        }
+                        .padding(.bottom, isSelectionMode ? 20 : 100)
                     }
                 }
 
@@ -72,12 +87,17 @@ struct AlbumHomeView: View {
             .navigationBarHidden(true)
         }
         .navigationViewStyle(.stack)
-        .alert("まだ始まった旅行がありません", isPresented: $showsNoDigestTrip) {
-            Button("OK", role: .cancel) {}
-        } message: {
-            Text("旅行が始まったら、撮った写真と動画からダイジェストを作れます。")
+        .sheet(item: $playingDigest) { entry in
+            NavigationStack {
+                TripDigestPlayerView(result: .init(url: TripDigestLibrary.url(of: entry), title: entry.title))
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("閉じる") { playingDigest = nil }
+                        }
+                    }
+            }
         }
-        .sheet(item: $digestPlan) { plan in
+        .sheet(item: $digestPlan, onDismiss: { libraryVersion += 1 }) { plan in
             // 上の旅行名から、ほかの旅行にも切り替えられる
             TripDigestView(plan: plan, otherPlans: digestCandidates)
         }
@@ -115,7 +135,6 @@ struct AlbumHomeView: View {
 
     // MARK: - Album Grid
     private var albumGrid: some View {
-        ScrollView(showsIndicators: false) {
             LazyVGrid(columns: [
                 GridItem(.flexible(), spacing: 14),
                 GridItem(.flexible(), spacing: 14)
@@ -133,9 +152,7 @@ struct AlbumHomeView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 16)
-            .padding(.bottom, isSelectionMode ? 20 : 100)
-        }
+            .padding(.top, 12)
     }
 
     // MARK: - Background
@@ -161,7 +178,7 @@ struct AlbumHomeView: View {
     private var headerBar: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 10) {
-                Text(isSelectionMode ? selectionTitle : "アルバム")
+                Text(isSelectionMode ? selectionTitle : "思い出")
                     .font(.system(.largeTitle, design: .rounded).weight(.bold))
                     .foregroundColor(accentColor)
                     .lineLimit(1)
@@ -197,7 +214,6 @@ struct AlbumHomeView: View {
                         statChip(icon: "photo.on.rectangle.angled", text: "\(totalPhotoCount)枚")
                     }
                 }
-                digestButton
             }
         }
         .padding(.horizontal, 20)
@@ -205,45 +221,47 @@ struct AlbumHomeView: View {
         .padding(.bottom, 14)
     }
 
-    /// 旅行中に撮った写真と動画から、2秒ずつつないだ動画を作る（Travory Pro）
-    private var digestButton: some View {
-        Button {
-            // いちばん最近の旅行で開く（ほかの旅行は、上の旅行名から切り替える）
-            if !proStore.isPurchased {
-                showsProForDigest = true
-            } else if let latest = digestCandidates.first {
-                digestPlan = latest
+    /// 旅のダイジェスト（Travory Pro）。旅行ごとのカードを横に並べる
+    private var digestSection: some View {
+        let _ = libraryVersion
+        return VStack(alignment: .leading, spacing: 10) {
+            VStack(alignment: .leading, spacing: 2) {
+                sectionTitle("旅のダイジェスト")
+                Text("旅行中に撮った写真と動画を、2秒ずつつないだ動画に")
+                    .font(.caption)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+            .padding(.horizontal, 20)
+            if digestCandidates.isEmpty {
+                Text("旅行が始まると、撮った写真と動画から作れます。")
+                    .font(.footnote)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .padding(.horizontal, 20)
             } else {
-                showsNoDigestTrip = true
-            }
-        } label: {
-            HStack(spacing: 10) {
-                Image(systemName: "film.stack")
-                    .font(.body.weight(.semibold))
-                VStack(alignment: .leading, spacing: 1) {
-                    Text("旅のダイジェスト動画")
-                        .font(.subheadline.weight(.semibold))
-                    Text("旅行中に撮った写真と動画を2秒ずつつなぎます")
-                        .font(.caption2)
-                        .opacity(0.8)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 12) {
+                        ForEach(digestCandidates.prefix(12)) { plan in
+                            DigestTripCard(plan: plan,
+                                           saved: TripDigestLibrary.entries(planId: plan.id).first,
+                                           isLocked: !proStore.isPurchased,
+                                           onOpen: {
+                                               if proStore.isPurchased { digestPlan = plan } else { showsProForDigest = true }
+                                           },
+                                           onPlay: { entry in playingDigest = entry })
+                        }
+                    }
+                    .padding(.horizontal, 20)
+                    .padding(.vertical, 4)
                 }
-                Spacer(minLength: 0)
-                if !proStore.isPurchased {
-                    Text("Pro")
-                        .font(.caption2.bold())
-                        .padding(.horizontal, 7)
-                        .padding(.vertical, 2)
-                        .background(Capsule().stroke(mainColor.opacity(0.6), lineWidth: 1))
-                }
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
             }
-            .foregroundColor(mainColor)
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(mainColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
         }
-        .buttonStyle(PlainButtonStyle())
+        .padding(.top, 4)
+    }
+
+    private func sectionTitle(_ title: String) -> some View {
+        Text(title)
+            .font(.headline)
+            .foregroundColor(accentColor)
     }
 
     /// ダイジェストを作れる旅行（もう始まっている旅行。新しい順）
@@ -362,7 +380,6 @@ struct AlbumHomeView: View {
     // MARK: - Empty State
     private var emptyState: some View {
         VStack(spacing: 20) {
-            Spacer()
 
             ZStack {
                 Circle()
@@ -399,11 +416,10 @@ struct AlbumHomeView: View {
                 )
             }
             .buttonStyle(PlainButtonStyle())
-
-            Spacer()
-            Spacer()
         }
+        .frame(maxWidth: .infinity)
         .padding(.horizontal, 40)
+        .padding(.vertical, 36)
     }
 
     // MARK: - FAB

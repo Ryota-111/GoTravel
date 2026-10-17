@@ -31,11 +31,17 @@ struct TripDigestView: View {
     @State private var assets: [String: PHAsset] = [:]
     /// 外した写真・動画（旅行ごとに覚えておく）
     @State private var excluded: Set<String> = []
+    /// 自分で選び直した写真・動画（旅行ごとに覚えておく）
+    @State private var pinned: Set<String> = []
     @State private var reviewing: TripDigest.Scope?
     @State private var selected: String? = TripDigest.Scope.trip.id
     @State private var progress: Double?
     @State private var result: DigestResult?
     @State private var errorMessage: String?
+    /// 時刻・場所の文字の位置（左下・真ん中・右上）。次に作るときも同じにする
+    @AppStorage("tripDigestTextPosition") private var textPosition = TripDigestComposer.TextPosition.bottomLeft.rawValue
+    /// 残した動画が変わった合図（作り終わったら数を進め、下の札を読み直す）
+    @State private var libraryVersion = 0
 
     struct DigestResult: Identifiable, Hashable {
         let url: URL
@@ -52,7 +58,7 @@ struct TripDigestView: View {
     }
 
     private func clips(for scope: TripDigest.Scope) -> [TripDigest.Clip] {
-        TripDigest.clips(plan: plan, sources: usable, scope: scope)
+        TripDigest.clips(plan: plan, sources: usable, scope: scope, pinned: pinned)
     }
 
     private var selectedScope: TripDigest.Scope? {
@@ -85,11 +91,14 @@ struct TripDigestView: View {
             }
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(item: $reviewing) { scope in
-                DigestReviewView(plan: plan, scope: scope, sources: sources, assets: assets, excluded: $excluded)
+                DigestReviewView(plan: plan, scope: scope, sources: sources, assets: assets,
+                                 excluded: $excluded, pinned: $pinned)
             }
             .navigationDestination(item: $result) { result in
-                DigestPlayerView(result: result)
+                TripDigestPlayerView(result: result)
             }
+            .onChange(of: result) { _, _ in libraryVersion += 1 }
+            .onChange(of: reviewing) { _, _ in libraryVersion += 1 }
             .overlay { if let progress { MakingOverlay(progress: progress) } }
             .alert(errorMessage ?? "", isPresented: Binding(get: { errorMessage != nil },
                                                             set: { if !$0 { errorMessage = nil } })) {
@@ -98,6 +107,9 @@ struct TripDigestView: View {
             .task(id: plan.id) { await load() }
             .onChange(of: excluded) { _, value in
                 TripDigestExclusions.save(value, planId: plan.id)
+            }
+            .onChange(of: pinned) { _, value in
+                TripDigestExclusions.savePinned(value, planId: plan.id)
             }
         }
     }
@@ -150,6 +162,10 @@ struct TripDigestView: View {
             .scrollPosition(id: $selected)
             .frame(maxHeight: 520)
             Spacer(minLength: 12)
+            DigestTextPositionPicker(selection: $textPosition,
+                                     sample: clips(for: selectedScope ?? .trip).first, assets: assets)
+                .padding(.horizontal, 24)
+                .padding(.bottom, 12)
             bottomBar
                 .padding(.horizontal, 24)
                 .padding(.bottom, 20)
@@ -161,22 +177,31 @@ struct TripDigestView: View {
     private var bottomBar: some View {
         let scope = selectedScope ?? .trip
         let count = clips(for: scope)
+        // 前に作った動画があれば、札を押すとそのまま見られる
+        let saved = libraryVersion >= 0 ? TripDigestLibrary.entry(planId: plan.id, scopeId: scope.id) : nil
         return HStack(spacing: 12) {
+            Button {
+                if let saved { result = DigestResult(url: TripDigestLibrary.url(of: saved), title: saved.title) }
+            } label: {
             HStack(spacing: 8) {
-                Image(systemName: "film.stack")
+                Image(systemName: saved == nil ? "film.stack" : "play.circle.fill")
                     .font(.subheadline)
                 VStack(alignment: .leading, spacing: 1) {
                     Text(scope.label(plan: plan).uppercased())
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(.secondary)
-                    Text("\(count.count)コマ・約\(Int(TripDigest.duration(of: count)))秒")
+                    Text(saved == nil ? "\(count.count)コマ・約\(Int(TripDigest.duration(of: count)))秒" : "作成済み・見る")
                         .font(.footnote.weight(.semibold))
                 }
             }
+            .foregroundColor(.primary)
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
             .background(Capsule().fill(Color(.secondarySystemGroupedBackground)))
             .overlay(Capsule().stroke(Color.primary.opacity(0.08), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .disabled(saved == nil)
             Spacer(minLength: 0)
             roundButton(systemImage: "square.grid.2x2", label: "確かめる") { reviewing = scope }
             roundButton(systemImage: "play.fill", label: "作る") {
@@ -229,6 +254,7 @@ struct TripDigestView: View {
     private func load() async {
         phase = .loading
         excluded = TripDigestExclusions.load(planId: plan.id)
+        pinned = TripDigestExclusions.loadPinned(planId: plan.id)
         guard await TripDigestComposer.requestAccess() else {
             phase = .noAccess
             return
@@ -243,8 +269,10 @@ struct TripDigestView: View {
         progress = 0
         defer { progress = nil }
         do {
-            result = try await DigestMaker.make(plan: plan, scope: scope, clips: clips(for: scope), assets: assets) { value in
-                Task { @MainActor in progress = value }
+            result = try await DigestMaker.make(plan: plan, scope: scope, clips: clips(for: scope), assets: assets,
+                                                textPosition: TripDigestComposer.TextPosition(rawValue: textPosition) ?? .bottomLeft) { value in
+                // 作り終わったあとに遅れて届いた知らせで、作成中の表示を戻さない
+                Task { @MainActor in if progress != nil { progress = value } }
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -262,6 +290,26 @@ enum TripDigestExclusions {
 
     static func save(_ ids: Set<String>, planId: String?) {
         UserDefaults.standard.set(Array(ids), forKey: key(planId))
+    }
+
+    /// 自分で選び直した写真・動画
+    private static func pinKey(_ planId: String?) -> String { "tripDigestPinned.\(planId ?? "")" }
+
+    static func loadPinned(planId: String?) -> Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: pinKey(planId)) ?? [])
+    }
+
+    static func savePinned(_ ids: Set<String>, planId: String?) {
+        UserDefaults.standard.set(Array(ids), forKey: pinKey(planId))
+    }
+
+    /// その写真・動画を、撮った時間のコマに選び直す（同じ時間の前の選び直しは外す。外していたら戻す）
+    static func choose(_ source: TripDigest.Source, among sources: [TripDigest.Source],
+                       pinned: inout Set<String>, excluded: inout Set<String>) {
+        let sameHour = sources.filter { TripDigest.sameHour($0.date, source.date) }.map(\.id)
+        pinned.subtract(sameHour)
+        pinned.insert(source.id)
+        excluded.remove(source.id)
     }
 }
 
@@ -290,6 +338,7 @@ extension TripDigest.Clip: Identifiable {
 @MainActor
 enum DigestMaker {
     static func make(plan: TravelPlan, scope: TripDigest.Scope, clips: [TripDigest.Clip], assets: [String: PHAsset],
+                     textPosition: TripDigestComposer.TextPosition,
                      progress: @escaping @Sendable (Double) -> Void) async throws -> TripDigestView.DigestResult {
         let items = await TripDigestComposer.loadItems(clips, assets: assets)
         let subtitle: String
@@ -299,9 +348,11 @@ enum DigestMaker {
         case .trip:
             subtitle = "\(TravelPlanTextExporter.dateString(plan.startDate)) 〜 \(TravelPlanTextExporter.dateString(plan.endDate))"
         }
-        let url = try await TripDigestComposer.compose(items, title: plan.title, subtitle: subtitle,
-                                                       fileName: TripDigest.fileName(plan: plan, scope: scope),
-                                                       progress: progress)
+        let temporary = try await TripDigestComposer.compose(items, title: plan.title, subtitle: subtitle,
+                                                             fileName: TripDigest.fileName(plan: plan, scope: scope),
+                                                             textPosition: textPosition, progress: progress)
+        // 作った動画は残しておく（「思い出」タブのカードから、作り直さずに見られる）
+        let url = (try? TripDigestLibrary.save(temporary, planId: plan.id, scopeId: scope.id, title: subtitle)) ?? temporary
         return TripDigestView.DigestResult(url: url, title: subtitle)
     }
 }
@@ -398,7 +449,8 @@ private struct DigestCoverCard: View {
                     if let places {
                         Label(places, systemImage: "mappin.and.ellipse")
                             .font(.footnote.weight(.semibold))
-                            .lineLimit(1)
+                            .lineLimit(2)
+                            .fixedSize(horizontal: false, vertical: true)
                     }
                     HStack(spacing: 10) {
                         Text("\(position)/\(count)")
@@ -484,15 +536,17 @@ private struct DigestReviewView: View {
     let sources: [TripDigest.Source]
     let assets: [String: PHAsset]
     @Binding var excluded: Set<String>
+    @Binding var pinned: Set<String>
 
     @State private var progress: Double?
     @State private var result: TripDigestView.DigestResult?
     @State private var errorMessage: String?
+    @AppStorage("tripDigestTextPosition") private var textPosition = TripDigestComposer.TextPosition.bottomLeft.rawValue
     /// 押して大きく見ているコマ（外すかどうかはここで決める）
     @State private var previewing: TripDigest.Clip?
 
     private var clips: [TripDigest.Clip] {
-        TripDigest.clips(plan: plan, sources: sources.filter { !excluded.contains($0.id) }, scope: scope)
+        TripDigest.clips(plan: plan, sources: sources.filter { !excluded.contains($0.id) }, scope: scope, pinned: pinned)
     }
 
     /// この動画の範囲で外した写真・動画（押すと戻せる）
@@ -521,10 +575,11 @@ private struct DigestReviewView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12, pinnedViews: [.sectionHeaders]) {
-                Text("写真を押すと大きく見られ、見せたくない写真はそこで外せます（長押しでも外せます）。")
+                Text("写真を押すと大きく見られ、外したり、その日の別の写真に選び直したりできます（長押しでも外せます）。")
                     .font(.footnote)
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 4)
+                DigestTextPositionPicker(selection: $textPosition, sample: clips.first, assets: assets)
                 ForEach(days, id: \.day) { group in
                     Section {
                         ForEach(group.clips) { clip in
@@ -552,12 +607,23 @@ private struct DigestReviewView: View {
             }
         }
         .navigationDestination(item: $result) { result in
-            DigestPlayerView(result: result)
+            TripDigestPlayerView(result: result)
         }
         .sheet(item: $previewing) { clip in
-            DigestPreviewSheet(asset: assets[clip.sourceId], clip: clip) {
-                withAnimation { _ = excluded.insert(clip.sourceId) }
-            }
+            DigestPreviewSheet(asset: assets[clip.sourceId], clip: clip,
+                               candidates: sources.filter { Calendar.current.isDate($0.date, inSameDayAs: clip.date) },
+                               assets: assets,
+                               onExclude: {
+                                   withAnimation {
+                                       _ = excluded.insert(clip.sourceId)
+                                       _ = pinned.remove(clip.sourceId)
+                                   }
+                               },
+                               onChoose: { source in
+                                   withAnimation {
+                                       TripDigestExclusions.choose(source, among: sources, pinned: &pinned, excluded: &excluded)
+                                   }
+                               })
         }
         .alert(errorMessage ?? "", isPresented: Binding(get: { errorMessage != nil },
                                                         set: { if !$0 { errorMessage = nil } })) {
@@ -671,8 +737,10 @@ private struct DigestReviewView: View {
         progress = 0
         defer { progress = nil }
         do {
-            result = try await DigestMaker.make(plan: plan, scope: scope, clips: clips, assets: assets) { value in
-                Task { @MainActor in progress = value }
+            result = try await DigestMaker.make(plan: plan, scope: scope, clips: clips, assets: assets,
+                                                textPosition: TripDigestComposer.TextPosition(rawValue: textPosition) ?? .bottomLeft) { value in
+                // 作り終わったあとに遅れて届いた知らせで、作成中の表示を戻さない
+                Task { @MainActor in if progress != nil { progress = value } }
             }
         } catch {
             errorMessage = error.localizedDescription
@@ -681,7 +749,7 @@ private struct DigestReviewView: View {
 }
 
 /// できた動画を見て、送る・保存する
-private struct DigestPlayerView: View {
+struct TripDigestPlayerView: View {
     let result: TripDigestView.DigestResult
     @State private var player: AVPlayer?
 
@@ -712,7 +780,11 @@ private struct DigestPlayerView: View {
 private struct DigestPreviewSheet: View {
     let asset: PHAsset?
     let clip: TripDigest.Clip
+    /// 選び直せる写真・動画（その日に撮ったもの）
+    let candidates: [TripDigest.Source]
+    let assets: [String: PHAsset]
     let onExclude: () -> Void
+    let onChoose: (TripDigest.Source) -> Void
     @Environment(\.dismiss) private var dismiss
     @State private var image: UIImage?
 
@@ -727,14 +799,27 @@ private struct DigestPreviewSheet: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
-                Button(role: .destructive) {
-                    onExclude()
-                    dismiss()
-                } label: {
-                    Label("このコマを外す", systemImage: "eye.slash")
-                        .frame(maxWidth: .infinity)
+                HStack(spacing: 10) {
+                    NavigationLink {
+                        DigestSwapView(candidates: candidates, current: clip.sourceId, assets: assets) { source in
+                            onChoose(source)
+                            dismiss()
+                        }
+                    } label: {
+                        Label("写真を選び直す", systemImage: "photo.on.rectangle")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.bordered)
+                    .tint(.white)
+                    Button(role: .destructive) {
+                        onExclude()
+                        dismiss()
+                    } label: {
+                        Label("外す", systemImage: "eye.slash")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
-                .buttonStyle(.borderedProminent)
                 .controlSize(.large)
                 .padding(16)
             }
@@ -757,5 +842,144 @@ private struct DigestPreviewSheet: View {
                 }
             }
         }
+    }
+}
+
+/// 時刻・場所の文字の位置を選ぶ（左下・真ん中・右上）。
+/// 選ぶボタンそのものを見本にする：1枚目の写真に、そのコマの時刻と場所を、動画と同じ部品
+/// （`TripDigestComposer.overlayImage`）で重ねて描くので、見本と動画の見た目が食い違わない
+private struct DigestTextPositionPicker: View {
+    @Binding var selection: String
+    /// 見本にするコマ（選んでいる範囲の1枚目）
+    let sample: TripDigest.Clip?
+    let assets: [String: PHAsset]
+
+    @State private var overlays: [String: UIImage] = [:]
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("文字の位置")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(.secondary)
+            HStack(spacing: 14) {
+                ForEach(TripDigestComposer.TextPosition.allCases) { position in
+                    let isSelected = selection == position.rawValue
+                    Button {
+                        withAnimation(.easeInOut(duration: 0.15)) { selection = position.rawValue }
+                    } label: {
+                        VStack(spacing: 5) {
+                            // 画面の幅いっぱいに3つ並ぶ大きさ（縦長 9:16）
+                            Color.clear
+                                .aspectRatio(9 / 16, contentMode: .fit)
+                                .frame(maxWidth: 130)
+                                .overlay {
+                                    AssetImage(asset: sample.flatMap { assets[$0.sourceId] },
+                                               target: CGSize(width: 300, height: 540))
+                                }
+                                .overlay {
+                                    if let overlay = overlays[position.rawValue] {
+                                        Image(uiImage: overlay).resizable()
+                                    }
+                                }
+                                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 9, style: .continuous)
+                                        .stroke(isSelected ? Color.accentColor : Color.primary.opacity(0.12),
+                                                lineWidth: isSelected ? 3 : 1)
+                                )
+                                .shadow(color: .black.opacity(isSelected ? 0.15 : 0.05), radius: 4, y: 2)
+                            HStack(spacing: 3) {
+                                if isSelected {
+                                    Image(systemName: "checkmark").font(.system(size: 9, weight: .bold))
+                                }
+                                Text(position.name)
+                            }
+                            .font(.caption2.weight(isSelected ? .bold : .regular))
+                            .foregroundColor(isSelected ? .accentColor : .secondary)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("文字の位置：\(position.name)")
+                    .accessibilityAddTraits(isSelected ? .isSelected : [])
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .task(id: sample?.sourceId) { renderOverlays() }
+    }
+
+    /// 3つの位置の文字を、動画と同じ部品で描く（縮めて持つ）
+    private func renderOverlays() {
+        let clip = sample ?? TripDigest.Clip(sourceId: "sample", dayNumber: 1, date: Date(), timeText: "14:05", placeName: "首里城")
+        let context = CIContext()
+        var result: [String: UIImage] = [:]
+        for position in TripDigestComposer.TextPosition.allCases {
+            guard let overlay = TripDigestComposer.overlayImage(for: clip, title: nil, subtitle: "", position: position),
+                  let cg = context.createCGImage(overlay, from: overlay.extent) else { continue }
+            result[position.rawValue] = UIImage(cgImage: cg).downscaled(maxPixel: 720)
+        }
+        overlays = result
+    }
+}
+
+/// その日に撮った写真・動画を時間ごとに並べ、コマに使うものを選び直す
+private struct DigestSwapView: View {
+    let candidates: [TripDigest.Source]
+    let current: String
+    let assets: [String: PHAsset]
+    let onChoose: (TripDigest.Source) -> Void
+
+    private let columns = [GridItem(.adaptive(minimum: 96), spacing: 4)]
+
+    private var hours: [(hour: Int, sources: [TripDigest.Source])] {
+        let calendar = Calendar.current
+        return Dictionary(grouping: candidates) { calendar.component(.hour, from: $0.date) }
+            .sorted { $0.key < $1.key }
+            .map { ($0.key, $0.value.sorted { $0.date < $1.date }) }
+    }
+
+    var body: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 14, pinnedViews: [.sectionHeaders]) {
+                ForEach(hours, id: \.hour) { group in
+                    Section {
+                        LazyVGrid(columns: columns, spacing: 4) {
+                            ForEach(group.sources, id: \.id) { source in
+                                Button { onChoose(source) } label: {
+                                    Color.clear
+                                        .aspectRatio(1, contentMode: .fit)
+                                        .overlay { AssetImage(asset: assets[source.id], target: CGSize(width: 300, height: 300)) }
+                                        .overlay(alignment: .topTrailing) {
+                                            if source.isVideo {
+                                                Image(systemName: "video.fill")
+                                                    .font(.caption2).foregroundColor(.white).padding(5)
+                                            }
+                                        }
+                                        .overlay {
+                                            if source.id == current {
+                                                RoundedRectangle(cornerRadius: 6).stroke(Color.accentColor, lineWidth: 3)
+                                            }
+                                        }
+                                        .clipShape(RoundedRectangle(cornerRadius: 6))
+                                }
+                                .buttonStyle(.plain)
+                                .accessibilityLabel(source.id == current ? "今のコマ" : "この写真にする")
+                            }
+                        }
+                    } header: {
+                        Text("\(group.hour):00")
+                            .font(.system(size: 15, weight: .bold).width(.condensed))
+                            .padding(.vertical, 6)
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color(.systemBackground))
+                    }
+                }
+            }
+            .padding(12)
+        }
+        .background(Color(.systemBackground))
+        .navigationTitle("写真を選び直す")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbarColorScheme(nil, for: .navigationBar)
     }
 }
