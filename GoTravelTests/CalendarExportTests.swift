@@ -1,4 +1,5 @@
 import Testing
+import EventKit
 import Foundation
 @testable import GoTravel
 
@@ -212,5 +213,15 @@ struct CalendarExportTests {
         let events = [holiday("a", calendar: "Gmail"), holiday("b", calendar: "Subscribed"),
                       holiday("c", calendar: "Gmail", title: "会議")]
         #expect(CalendarExportService.removingDuplicates(events).map(\.id) == ["a", "c"])
+    }
+
+    @Test("アカウントの呼び名：Google はメールアドレスではなく「Google」と出す")
+    func sourceNames() {
+        #expect(CalendarExportService.displayName(title: "someone@gmail.com", type: .calDAV) == "Google")
+        #expect(CalendarExportService.displayName(title: "iCloud", type: .calDAV) == "iCloud")
+        #expect(CalendarExportService.displayName(title: "会社", type: .exchange) == "Outlook")
+        #expect(CalendarExportService.displayName(title: "照会済みのカレンダー", type: .subscribed) == "購読")
+        #expect(CalendarExportService.displayName(title: "その他", type: .birthdays) == "誕生日")
+        #expect(CalendarExportService.displayName(title: "My Server", type: .calDAV) == "My Server")
     }
 }

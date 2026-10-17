@@ -75,6 +75,8 @@ struct CalendarView: View {
     @State private var showsJoin = false
     /// 「カレンダーを共有できます」の案内を閉じたか（1回だけ出す）
     @AppStorage("calendarShareTipDismissed") private var shareTipDismissed = false
+    /// Travory の予定（予定と旅行計画）を出すか。カレンダーの上の出どころのボタンで切り替える
+    @AppStorage("calendarShowsTravory") private var showsTravory = true
     /// カレンダーの一覧（題名を押すと出る）と、閉じたあとに行うこと
     @State private var showsCategoryList = false
     @State private var pendingCategoryAction: PlanCategoryListSheet.Action?
@@ -113,6 +115,9 @@ struct CalendarView: View {
                 // Calendar content
                 VStack(spacing: 0) {
                     monthNavigationHeader
+
+                    // 予定の出どころ（Travory・iCloud・Google…）。押して出す・出さない
+                    sourceChips
 
                     // カレンダーを共有できることを、1回だけ知らせる（3.0）
                     if showsShareTip {
@@ -463,7 +468,8 @@ struct CalendarView: View {
 
     /// カテゴリとタグで絞った予定
     private var visiblePlans: [Plan] {
-        viewModel.plans.filter { plan in
+        guard showsTravory else { return [] }
+        return viewModel.plans.filter { plan in
             categorySelection.includes(categoryId: plan.categoryId)
                 && (selectedTagIDs.isEmpty || !selectedTagIDs.isDisjoint(with: plan.tagIDs))
         }
@@ -475,11 +481,67 @@ struct CalendarView: View {
     }
 
     private var visibleTravelPlans: [TravelPlan] {
-        showsUncategorized ? travelViewModel.travelPlans : []
+        showsTravory && showsUncategorized ? travelViewModel.travelPlans : []
     }
 
+    /// iPhone のカレンダーの予定は、出どころのボタンで出し分ける（どのカテゴリを見ていても出せる）。
+    /// タグで絞っているときは出さない（タグは Travory の予定にしか付かない）
     private var visibleExternalEvents: [ExternalCalendarEvent] {
-        showsUncategorized ? externalEvents : []
+        selectedTagIDs.isEmpty ? externalEvents : []
+    }
+
+    // MARK: 予定の出どころ（Travory・iCloud・Google…）
+
+    /// 月の下に1段だけ並べる。押すたびに出す・出さないを切り替える。
+    /// iPhone のカレンダーを読めないときは、Travory だけなので出さない
+    @ViewBuilder
+    private var sourceChips: some View {
+        let sources = calendarService.hasAccess ? calendarService.externalSources() : []
+        if !sources.isEmpty {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 8) {
+                    sourceChip(name: "Travory", color: themeManager.currentTheme.actionFill, isOn: showsTravory) {
+                        withAnimation(.easeInOut(duration: 0.2)) { showsTravory.toggle() }
+                    }
+                    ForEach(sources) { source in
+                        let isOn = calendarService.isShown(source)
+                        sourceChip(name: source.name, color: source.color.map { Color(cgColor: $0) } ?? .gray, isOn: isOn) {
+                            withAnimation(.easeInOut(duration: 0.2)) { calendarService.setShown(!isOn, source: source) }
+                        }
+                    }
+                }
+                .padding(.horizontal, 16)
+            }
+            .padding(.bottom, 10)
+        }
+    }
+
+    private func sourceChip(name: String, color: Color, isOn: Bool, action: @escaping () -> Void) -> some View {
+        let theme = themeManager.currentTheme
+        let ground = theme.calendarScreenTop(for: colorScheme)
+        let label = isOn ? theme.secondaryLabel(on: ground, opacity: 0.12) : ThemePreset.readableTintEitherWay(theme.secondaryText, on: ground)
+        return Button(action: action) {
+            HStack(spacing: 6) {
+                Circle()
+                    .fill(color.opacity(isOn ? 1 : 0.35))
+                    .frame(width: 8, height: 8)
+                Text(name)
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                if isOn {
+                    Image(systemName: "checkmark")
+                        .font(.system(size: 10, weight: .bold))
+                }
+            }
+            .foregroundColor(label)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 6)
+            .background(Capsule().fill(theme.secondary.opacity(isOn ? 0.12 : 0.04)))
+            .overlay(Capsule().stroke(label.opacity(isOn ? 0 : 0.35), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("\(name)の予定")
+        .accessibilityValue(isOn ? "表示中" : "非表示")
     }
 
     // MARK: - Computed Properties

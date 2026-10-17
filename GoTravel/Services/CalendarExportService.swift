@@ -177,6 +177,72 @@ final class CalendarExportService: ObservableObject {
         }
     }
 
+    // MARK: アカウントごと（カレンダー画面の出どころのボタン）
+
+    /// iPhone のカレンダーのアカウント（iCloud・Google など）と、その中のカレンダー
+    struct ExternalSource: Identifiable, Equatable {
+        let id: String
+        let name: String
+        let calendarIds: [String]
+        let color: CGColor?
+
+        static func == (lhs: ExternalSource, rhs: ExternalSource) -> Bool {
+            lhs.id == rhs.id && lhs.name == rhs.name && lhs.calendarIds == rhs.calendarIds
+        }
+    }
+
+    /// 並べられるカレンダーを、アカウントごとにまとめる
+    func externalSources() -> [ExternalSource] {
+        let grouped = Dictionary(grouping: readableCalendars()) { $0.source.sourceIdentifier }
+        return grouped.compactMap { id, calendars -> ExternalSource? in
+            guard let source = calendars.first?.source else { return nil }
+            return ExternalSource(id: id, name: Self.displayName(of: source),
+                                  calendarIds: calendars.map(\.calendarIdentifier),
+                                  color: calendars.first?.cgColor)
+        }
+        .sorted { (Self.order(of: $0.name), $0.name) < (Self.order(of: $1.name), $1.name) }
+    }
+
+    /// アカウントの名前を、見て分かる呼び名にする（Google はメールアドレスが名前になっているため）
+    nonisolated static func displayName(of source: EKSource) -> String {
+        displayName(title: source.title, type: source.sourceType)
+    }
+
+    nonisolated static func displayName(title: String, type: EKSourceType) -> String {
+        let lower = title.lowercased()
+        switch type {
+        case .subscribed: return "購読"
+        case .birthdays: return "誕生日"
+        case .local: return "iPhone"
+        case .exchange: return "Outlook"
+        default:
+            if lower.contains("gmail") || lower.contains("google") { return "Google" }
+            if lower.contains("icloud") { return "iCloud" }
+            if lower.contains("outlook") || lower.contains("hotmail") || lower.contains("live.") { return "Outlook" }
+            if lower.contains("yahoo") { return "Yahoo!" }
+            return title
+        }
+    }
+
+    private nonisolated static func order(of name: String) -> Int {
+        ["iCloud", "Google", "Outlook", "Yahoo!", "iPhone"].firstIndex(of: name) ?? 9
+    }
+
+    /// そのアカウントの予定が出ているか（中のカレンダーが1つでも出ていれば出ている）
+    func isShown(_ source: ExternalSource) -> Bool {
+        showsExternalEvents && source.calendarIds.contains { !hiddenCalendarIds.contains($0) }
+    }
+
+    /// そのアカウントのカレンダーを、まとめて出す・出さない
+    func setShown(_ shown: Bool, source: ExternalSource) {
+        if shown {
+            showsExternalEvents = true
+            hiddenCalendarIds.subtract(source.calendarIds)
+        } else {
+            hiddenCalendarIds.formUnion(source.calendarIds)
+        }
+    }
+
     /// その期間の、iPhone のカレンダーの予定。
     /// Travory から入れた予定は、Travory の予定として出ているので除く（2重にしない）
     func externalEvents(from start: Date, to end: Date) -> [ExternalCalendarEvent] {
