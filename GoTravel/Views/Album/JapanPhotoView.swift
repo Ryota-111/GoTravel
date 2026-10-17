@@ -46,9 +46,11 @@ struct JapanPhotoView: View {
                 animateCards = true
             }
         }
-        // 県を押したら、その県の写真の一覧を開く（1つの県に複数枚置けるようにした）
-        .sheet(item: $selectedPrefecture) { prefecture in
-            PrefectureGalleryView(albumId: albumId, prefecture: prefecture)
+        // 県を押したら、まず写真をスライドで見返す（編集は右上から）。
+        // 前は編集の一覧が開き、1枚ずつ開いて見直す必要があった。ご要望をいただいて変えた。
+        // 写真がまだ無い県は、足せるように編集の一覧を開く
+        .fullScreenCover(item: $selectedPrefecture) { prefecture in
+            PrefectureSlideView(albumId: albumId, prefecture: prefecture)
         }
     }
 
@@ -707,6 +709,104 @@ struct PrefectureGalleryView: View {
         }
         .buttonStyle(.plain)
         .disabled(remaining == 0)
+    }
+}
+
+/// 県の写真を、横にスライドして見返す。右上の「編集」で、追加・代表・削除の一覧を開く
+struct PrefectureSlideView: View {
+    let albumId: String
+    let prefecture: Prefecture
+
+    @ObservedObject private var albumManager = AlbumManager.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var page = 0
+    @State private var showsEditor = false
+
+    private var fileNames: [String] {
+        PhotoMapFiles.photos(of: prefecture,
+                             in: albumManager.albums.first { $0.id == albumId }?.photoFileNames ?? [])
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                if fileNames.isEmpty {
+                    VStack(spacing: 14) {
+                        Image(systemName: "photo.badge.plus")
+                            .font(.system(size: 40))
+                            .foregroundColor(.white.opacity(0.7))
+                        Text("\(prefecture.name)の写真はまだありません")
+                            .foregroundColor(.white.opacity(0.8))
+                        Button("写真を追加") { showsEditor = true }
+                            .buttonStyle(.borderedProminent)
+                    }
+                } else {
+                    TabView(selection: $page) {
+                        ForEach(Array(fileNames.enumerated()), id: \.element) { index, fileName in
+                            SlidePhoto(fileName: fileName)
+                                .tag(index)
+                        }
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: fileNames.count > 1 ? .always : .never))
+                    .ignoresSafeArea(edges: .bottom)
+                }
+            }
+            .navigationTitle(fileNames.isEmpty ? prefecture.name
+                             : "\(prefecture.name)  \(min(page, fileNames.count - 1) + 1) / \(fileNames.count)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarBackground(Color.black.opacity(0.6), for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("閉じる") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("編集") { showsEditor = true }
+                }
+            }
+        }
+        .sheet(isPresented: $showsEditor) {
+            PrefectureGalleryView(albumId: albumId, prefecture: prefecture)
+        }
+        .onAppear {
+            // 写真が無い県は、足すための一覧をすぐ開く
+            if fileNames.isEmpty { showsEditor = true }
+        }
+        .onChange(of: fileNames.count) { _, count in
+            if page >= count { page = max(count - 1, 0) }
+        }
+    }
+
+    /// 1枚。押し広げて拡大できる
+    private struct SlidePhoto: View {
+        let fileName: String
+        @State private var image: UIImage?
+        @State private var scale: CGFloat = 1
+
+        var body: some View {
+            ZStack {
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .scaleEffect(scale)
+                        .gesture(
+                            MagnifyGesture()
+                                .onChanged { scale = max(1, min($0.magnification, 4)) }
+                                .onEnded { _ in withAnimation(.spring) { scale = 1 } }
+                        )
+                } else {
+                    ProgressView().tint(.white)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .task(id: fileName) {
+                image = JapanPhotoManager.shared.thumbnail(fileName)
+                if let full = JapanPhotoManager.shared.loadImage(fileName) { image = full }
+            }
+        }
     }
 }
 
