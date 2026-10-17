@@ -16,9 +16,8 @@ struct AlbumHomeView: View {
     @State private var isSelectionMode = false
     @State private var selectedAlbumIds: Set<String> = []
     @State private var showDeleteConfirm = false
-    /// 旅のダイジェスト動画（Travory Pro）。旅行を選んでから作る
-    @State private var showsDigestTripPicker = false
-    @State private var pickedDigestPlan: TravelPlan?
+    /// 旅のダイジェスト動画（Travory Pro）。いちばん最近の旅行で開き、画面の上で旅行を切り替える
+    @State private var showsNoDigestTrip = false
     @State private var digestPlan: TravelPlan?
     @State private var showsProForDigest = false
     @ObservedObject private var proStore = ProStore.shared
@@ -73,44 +72,14 @@ struct AlbumHomeView: View {
             .navigationBarHidden(true)
         }
         .navigationViewStyle(.stack)
-        .sheet(isPresented: $showsDigestTripPicker, onDismiss: {
-            // 選んだ旅行は、一覧を閉じてから開く（シートを重ねない）
-            if let plan = pickedDigestPlan {
-                pickedDigestPlan = nil
-                digestPlan = plan
-            }
-        }) {
-            NavigationStack {
-                List {
-                    if digestCandidates.isEmpty {
-                        Text("まだ始まった旅行がありません。旅行が始まったら作れます。")
-                            .foregroundColor(.secondary)
-                    }
-                    ForEach(digestCandidates) { plan in
-                        Button {
-                            pickedDigestPlan = plan
-                            showsDigestTripPicker = false
-                        } label: {
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(plan.title).foregroundColor(.primary)
-                                Text("\(TravelPlanTextExporter.dateString(plan.startDate)) 〜 \(TravelPlanTextExporter.dateString(plan.endDate))")
-                                    .font(.caption)
-                                    .foregroundColor(.secondary)
-                            }
-                        }
-                    }
-                }
-                .navigationTitle("どの旅行で作りますか")
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("閉じる") { showsDigestTripPicker = false }
-                    }
-                }
-            }
+        .alert("まだ始まった旅行がありません", isPresented: $showsNoDigestTrip) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("旅行が始まったら、撮った写真と動画からダイジェストを作れます。")
         }
         .sheet(item: $digestPlan) { plan in
-            TripDigestView(plan: plan)
+            // 上の旅行名から、ほかの旅行にも切り替えられる
+            TripDigestView(plan: plan, otherPlans: digestCandidates)
         }
         .sheet(isPresented: $showsProForDigest) {
             NavigationStack {
@@ -239,7 +208,14 @@ struct AlbumHomeView: View {
     /// 旅行中に撮った写真と動画から、2秒ずつつないだ動画を作る（Travory Pro）
     private var digestButton: some View {
         Button {
-            if proStore.isPurchased { showsDigestTripPicker = true } else { showsProForDigest = true }
+            // いちばん最近の旅行で開く（ほかの旅行は、上の旅行名から切り替える）
+            if !proStore.isPurchased {
+                showsProForDigest = true
+            } else if let latest = digestCandidates.first {
+                digestPlan = latest
+            } else {
+                showsNoDigestTrip = true
+            }
         } label: {
             HStack(spacing: 10) {
                 Image(systemName: "film.stack")

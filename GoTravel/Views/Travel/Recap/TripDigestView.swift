@@ -2,9 +2,20 @@ import SwiftUI
 import AVKit
 import Photos
 
-/// 旅のダイジェスト動画を作る画面（Travory Pro）
+/// 旅のダイジェスト動画を作る画面（Travory Pro）。
+///
+/// 縦長の写真カードを横にめくって「旅行全体」か「Day ごと」を選ぶ。各カードはその日の1枚目の写真が表紙で、
+/// 大きな日付を重ねる。下の丸いボタンで「確かめる」（コマを並べた一覧へ）か「作る」
 struct TripDigestView: View {
-    let plan: TravelPlan
+    /// 切り替えられるほかの旅行（アルバムから開いたとき）。空なら切り替えを出さない
+    var otherPlans: [TravelPlan] = []
+
+    @State private var plan: TravelPlan
+
+    init(plan: TravelPlan, otherPlans: [TravelPlan] = []) {
+        _plan = State(initialValue: plan)
+        self.otherPlans = otherPlans
+    }
 
     @Environment(\.dismiss) private var dismiss
     @Environment(\.openURL) private var openURL
@@ -21,6 +32,10 @@ struct TripDigestView: View {
     /// 外した写真・動画（旅行ごとに覚えておく）
     @State private var excluded: Set<String> = []
     @State private var reviewing: TripDigest.Scope?
+    @State private var selected: String? = TripDigest.Scope.trip.id
+    @State private var progress: Double?
+    @State private var result: DigestResult?
+    @State private var errorMessage: String?
 
     struct DigestResult: Identifiable, Hashable {
         let url: URL
@@ -29,6 +44,20 @@ struct TripDigestView: View {
     }
 
     private var usable: [TripDigest.Source] { sources.filter { !excluded.contains($0.id) } }
+
+    /// カードに並べる範囲（コマが1つも無い日は出さない）
+    private var scopes: [TripDigest.Scope] {
+        let days = (1...max(plan.dayCount, 1)).map { TripDigest.Scope.day($0) }
+        return ([.trip] + days).filter { !clips(for: $0).isEmpty }
+    }
+
+    private func clips(for scope: TripDigest.Scope) -> [TripDigest.Clip] {
+        TripDigest.clips(plan: plan, sources: usable, scope: scope)
+    }
+
+    private var selectedScope: TripDigest.Scope? {
+        scopes.first { $0.id == selected } ?? scopes.first
+    }
 
     var body: some View {
         NavigationStack {
@@ -39,61 +68,146 @@ struct TripDigestView: View {
                 case .noAccess:
                     noAccessView
                 case .ready:
-                    list
+                    if scopes.isEmpty {
+                        emptyView
+                    } else {
+                        carousel
+                    }
                 }
             }
-            .navigationTitle("旅のダイジェスト")
-            .navigationBarTitleDisplayMode(.inline)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("閉じる") { dismiss() }
                 }
+                ToolbarItem(placement: .principal) { titleMenu }
             }
+            .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(item: $reviewing) { scope in
                 DigestReviewView(plan: plan, scope: scope, sources: sources, assets: assets, excluded: $excluded)
             }
-            .task { await load() }
+            .navigationDestination(item: $result) { result in
+                DigestPlayerView(result: result)
+            }
+            .overlay { if let progress { MakingOverlay(progress: progress) } }
+            .alert(errorMessage ?? "", isPresented: Binding(get: { errorMessage != nil },
+                                                            set: { if !$0 { errorMessage = nil } })) {
+                Button("OK", role: .cancel) {}
+            }
+            .task(id: plan.id) { await load() }
             .onChange(of: excluded) { _, value in
                 TripDigestExclusions.save(value, planId: plan.id)
             }
         }
     }
 
-    private var list: some View {
-        List {
-            Section {
-                row(title: "旅行全体", scope: .trip)
-                ForEach(1...max(plan.dayCount, 1), id: \.self) { day in
-                    row(title: "Day \(day)　\(TravelPlanTextExporter.dateString(plan.date(forDay: day)))",
-                        scope: .day(day))
+    // MARK: 上：旅行の名前（押すとほかの旅行へ）
+
+    @ViewBuilder
+    private var titleMenu: some View {
+        if otherPlans.count > 1 {
+            Menu {
+                ForEach(otherPlans) { other in
+                    Button {
+                        plan = other
+                        selected = TripDigest.Scope.trip.id
+                    } label: {
+                        if other.id == plan.id { Label(other.title, systemImage: "checkmark") } else { Text(other.title) }
+                    }
                 }
-            } footer: {
-                Text("旅行の期間に撮った写真と動画から、1時間に1つずつ選んで2秒ずつつなぎます。作る前に、選ばれた写真を確かめて外せます。動画は iPhone の中だけで作ります。")
+            } label: {
+                HStack(spacing: 4) {
+                    Text(plan.title).font(.headline).lineLimit(1)
+                    Image(systemName: "chevron.down").font(.caption.weight(.semibold))
+                }
+                .foregroundColor(.primary)
+            }
+        } else {
+            Text(plan.title).font(.headline).lineLimit(1)
+        }
+    }
+
+    // MARK: 真ん中：縦長の写真カードを横にめくる
+
+    private var carousel: some View {
+        VStack(spacing: 0) {
+            Spacer(minLength: 12)
+            ScrollView(.horizontal, showsIndicators: false) {
+                LazyHStack(spacing: 16) {
+                    ForEach(Array(scopes.enumerated()), id: \.element.id) { index, scope in
+                        DigestCoverCard(plan: plan, scope: scope, clips: clips(for: scope), assets: assets,
+                                        position: index + 1, count: scopes.count)
+                            .containerRelativeFrame(.horizontal) { width, _ in width * 0.72 }
+                            .onTapGesture { reviewing = scope }
+                            .id(scope.id)
+                    }
+                }
+                .scrollTargetLayout()
+            }
+            .contentMargins(.horizontal, 28, for: .scrollContent)
+            .scrollTargetBehavior(.viewAligned)
+            .scrollPosition(id: $selected)
+            .frame(maxHeight: 520)
+            Spacer(minLength: 12)
+            bottomBar
+                .padding(.horizontal, 24)
+                .padding(.bottom, 20)
+        }
+    }
+
+    // MARK: 下：選んでいるカードの札と、丸いボタン
+
+    private var bottomBar: some View {
+        let scope = selectedScope ?? .trip
+        let count = clips(for: scope)
+        return HStack(spacing: 12) {
+            HStack(spacing: 8) {
+                Image(systemName: "film.stack")
+                    .font(.subheadline)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(scope.label(plan: plan).uppercased())
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(.secondary)
+                    Text("\(count.count)コマ・約\(Int(TripDigest.duration(of: count)))秒")
+                        .font(.footnote.weight(.semibold))
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.vertical, 10)
+            .background(Capsule().fill(Color(.secondarySystemGroupedBackground)))
+            .overlay(Capsule().stroke(Color.primary.opacity(0.08), lineWidth: 1))
+            Spacer(minLength: 0)
+            roundButton(systemImage: "square.grid.2x2", label: "確かめる") { reviewing = scope }
+            roundButton(systemImage: "play.fill", label: "作る") {
+                Task { await make(scope: scope) }
             }
         }
     }
 
-    private func row(title: String, scope: TripDigest.Scope) -> some View {
-        let clips = TripDigest.clips(plan: plan, sources: usable, scope: scope)
-        return Button {
-            reviewing = scope
-        } label: {
-            HStack {
-                VStack(alignment: .leading, spacing: 3) {
-                    Text(title)
-                        .foregroundColor(.primary)
-                    Text(clips.isEmpty ? "写真・動画がありません"
-                         : "\(clips.count)コマ・約\(Int(TripDigest.duration(of: clips)))秒")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(.secondary)
-            }
+    private func roundButton(systemImage: String, label: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            Image(systemName: systemImage)
+                .font(.system(size: 17, weight: .semibold))
+                .foregroundColor(Color(.systemBackground))
+                .frame(width: 52, height: 52)
+                .background(Circle().fill(Color.primary.opacity(0.88)))
+                .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
         }
-        .disabled(clips.isEmpty)
+        .accessibilityLabel(label)
+        .disabled(progress != nil)
+    }
+
+    private var emptyView: some View {
+        VStack(spacing: 12) {
+            Image(systemName: "photo.on.rectangle.angled")
+                .font(.system(size: 44))
+                .foregroundColor(.secondary)
+            Text("この旅行の期間に撮った写真や動画が見つかりませんでした。")
+                .multilineTextAlignment(.center)
+                .foregroundColor(.secondary)
+        }
+        .padding(32)
     }
 
     private var noAccessView: some View {
@@ -113,6 +227,7 @@ struct TripDigestView: View {
     }
 
     private func load() async {
+        phase = .loading
         excluded = TripDigestExclusions.load(planId: plan.id)
         guard await TripDigestComposer.requestAccess() else {
             phase = .noAccess
@@ -122,6 +237,18 @@ struct TripDigestView: View {
         sources = found.sources
         assets = found.assets
         phase = .ready
+    }
+
+    private func make(scope: TripDigest.Scope) async {
+        progress = 0
+        defer { progress = nil }
+        do {
+            result = try await DigestMaker.make(plan: plan, scope: scope, clips: clips(for: scope), assets: assets) { value in
+                Task { @MainActor in progress = value }
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 }
 
@@ -145,9 +272,212 @@ extension TripDigest.Scope: Identifiable {
         case .day(let n): return "day\(n)"
         }
     }
+
+    /// 「旅行全体」「Day 2・9月22日(火)」
+    func label(plan: TravelPlan) -> String {
+        switch self {
+        case .trip: return "旅行全体"
+        case .day(let n): return "Day \(n)・\(TravelPlanTextExporter.dateString(plan.date(forDay: n)))"
+        }
+    }
 }
 
-/// 作る前に、選ばれたコマを確かめる。押すと外れ、同じ時間の別の写真が代わりに入る
+extension TripDigest.Clip: Identifiable {
+    var id: String { sourceId }
+}
+
+/// 動画を作る（最初の画面と確かめる画面の両方から使う）
+@MainActor
+enum DigestMaker {
+    static func make(plan: TravelPlan, scope: TripDigest.Scope, clips: [TripDigest.Clip], assets: [String: PHAsset],
+                     progress: @escaping @Sendable (Double) -> Void) async throws -> TripDigestView.DigestResult {
+        let items = await TripDigestComposer.loadItems(clips, assets: assets)
+        let subtitle: String
+        switch scope {
+        case .day(let n):
+            subtitle = "Day \(n)・\(TravelPlanTextExporter.dateString(plan.date(forDay: n)))"
+        case .trip:
+            subtitle = "\(TravelPlanTextExporter.dateString(plan.startDate)) 〜 \(TravelPlanTextExporter.dateString(plan.endDate))"
+        }
+        let url = try await TripDigestComposer.compose(items, title: plan.title, subtitle: subtitle,
+                                                       fileName: TripDigest.fileName(plan: plan, scope: scope),
+                                                       progress: progress)
+        return TripDigestView.DigestResult(url: url, title: subtitle)
+    }
+}
+
+/// 日付の見せ方（大きな数字・英字の月と曜日・日曜はピンク、土曜は青）
+enum DigestDateStyle {
+    private static let english: DateFormatter = {
+        let f = DateFormatter()
+        f.locale = Locale(identifier: "en_US_POSIX")
+        return f
+    }()
+
+    static func day(_ date: Date) -> String { "\(Calendar.current.component(.day, from: date))" }
+
+    static func month(_ date: Date) -> String {
+        english.dateFormat = "MMM"
+        return english.string(from: date).uppercased()
+    }
+
+    static func weekday(_ date: Date) -> String {
+        english.dateFormat = "EEE"
+        return english.string(from: date).uppercased()
+    }
+
+    static func color(_ date: Date, default base: Color) -> Color {
+        switch Calendar.current.component(.weekday, from: date) {
+        case 1: return Color(red: 0.91, green: 0.3, blue: 0.5)
+        case 7: return Color(red: 0.25, green: 0.45, blue: 0.85)
+        default: return base
+        }
+    }
+}
+
+/// 写真を読み込む小さな部品（縮小した写真を1枚）
+private struct AssetImage: View {
+    let asset: PHAsset?
+    var target = CGSize(width: 600, height: 900)
+    @State private var image: UIImage?
+
+    var body: some View {
+        Color(.tertiarySystemFill)
+            .overlay {
+                if let image {
+                    Image(uiImage: image).resizable().scaledToFill()
+                }
+            }
+            .clipped()
+            .task(id: asset?.localIdentifier) {
+                guard let asset else { return }
+                let options = PHImageRequestOptions()
+                options.deliveryMode = .opportunistic
+                options.isNetworkAccessAllowed = true
+                PHImageManager.default().requestImage(for: asset, targetSize: target, contentMode: .aspectFill,
+                                                      options: options) { result, _ in
+                    if let result { image = result }
+                }
+            }
+    }
+}
+
+/// 縦長の表紙カード（旅行全体・Day ごと）
+private struct DigestCoverCard: View {
+    let plan: TravelPlan
+    let scope: TripDigest.Scope
+    let clips: [TripDigest.Clip]
+    let assets: [String: PHAsset]
+    let position: Int
+    let count: Int
+
+    private var date: Date {
+        if case .day(let n) = scope { return plan.date(forDay: n) }
+        return plan.startDate
+    }
+
+    /// 行った場所（重ならないように2つまで）
+    private var places: String? {
+        var seen: [String] = []
+        for name in clips.compactMap(\.placeName) where !seen.contains(name) { seen.append(name) }
+        guard !seen.isEmpty else { return nil }
+        return seen.prefix(2).joined(separator: "・") + (seen.count > 2 ? " ほか" : "")
+    }
+
+    var body: some View {
+        Color.clear
+            .aspectRatio(3 / 4.6, contentMode: .fit)
+            .overlay { AssetImage(asset: clips.first.flatMap { assets[$0.sourceId] }) }
+            .overlay {
+                LinearGradient(colors: [.black.opacity(0.35), .clear, .clear, .black.opacity(0.55)],
+                               startPoint: .top, endPoint: .bottom)
+            }
+            .overlay(alignment: .topLeading) { dateMark.padding(20) }
+            .overlay(alignment: .bottomLeading) {
+                VStack(alignment: .leading, spacing: 8) {
+                    if let places {
+                        Label(places, systemImage: "mappin.and.ellipse")
+                            .font(.footnote.weight(.semibold))
+                            .lineLimit(1)
+                    }
+                    HStack(spacing: 10) {
+                        Text("\(position)/\(count)")
+                            .font(.caption2.monospacedDigit())
+                        GeometryReader { geo in
+                            ZStack(alignment: .leading) {
+                                Capsule().fill(.white.opacity(0.35))
+                                Capsule().fill(.white)
+                                    .frame(width: geo.size.width * CGFloat(position) / CGFloat(max(count, 1)))
+                            }
+                        }
+                        .frame(height: 2)
+                    }
+                }
+                .foregroundColor(.white)
+                .padding(20)
+            }
+            .overlay(alignment: .topTrailing) {
+                if clips.contains(where: { assets[$0.sourceId]?.mediaType == .video }) {
+                    Image(systemName: "video.fill")
+                        .font(.caption)
+                        .foregroundColor(.white)
+                        .padding(18)
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .shadow(color: .black.opacity(0.18), radius: 14, y: 8)
+            .contentShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+            .accessibilityElement(children: .combine)
+            .accessibilityLabel("\(scope.label(plan: plan))、\(clips.count)コマ")
+            .accessibilityHint("押すとコマを確かめられます")
+    }
+
+    @ViewBuilder
+    private var dateMark: some View {
+        switch scope {
+        case .trip:
+            VStack(alignment: .leading, spacing: 2) {
+                Text("ALL")
+                    .font(.system(size: 52, weight: .thin).width(.condensed))
+                Text("\(plan.dayCount) DAYS")
+                    .font(.system(size: 15, weight: .medium).width(.expanded))
+            }
+            .foregroundColor(.white)
+        case .day(let n):
+            VStack(alignment: .leading, spacing: 0) {
+                Text(DigestDateStyle.day(date))
+                    .font(.system(size: 64, weight: .thin).width(.condensed))
+                Text(DigestDateStyle.month(date))
+                    .font(.system(size: 17, weight: .medium).width(.expanded))
+                Text("DAY \(n) · \(DigestDateStyle.weekday(date))")
+                    .font(.system(size: 11, weight: .semibold))
+                    .opacity(0.85)
+                    .padding(.top, 4)
+            }
+            .foregroundColor(.white)
+        }
+    }
+}
+
+/// 作っている間に重ねる
+private struct MakingOverlay: View {
+    let progress: Double
+
+    var body: some View {
+        ZStack {
+            Color.black.opacity(0.2).ignoresSafeArea()
+            VStack(spacing: 12) {
+                ProgressView(value: progress).frame(maxWidth: 220)
+                Text("動画を作っています…").font(.subheadline).foregroundColor(.secondary)
+            }
+            .padding(28)
+            .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
+        }
+    }
+}
+
+/// 作る前に、選ばれたコマを確かめる。左に大きな時刻、右に写真の行で並べる。
+/// 写真を押すと大きく見られ、そこで外せる（外すと同じ時間の別の写真が代わりに入る）
 private struct DigestReviewView: View {
     let plan: TravelPlan
     let scope: TripDigest.Scope
@@ -158,49 +488,60 @@ private struct DigestReviewView: View {
     @State private var progress: Double?
     @State private var result: TripDigestView.DigestResult?
     @State private var errorMessage: String?
+    /// 押して大きく見ているコマ（外すかどうかはここで決める）
+    @State private var previewing: TripDigest.Clip?
 
     private var clips: [TripDigest.Clip] {
         TripDigest.clips(plan: plan, sources: sources.filter { !excluded.contains($0.id) }, scope: scope)
     }
 
-    private let columns = [GridItem(.adaptive(minimum: 100), spacing: 6)]
+    /// この動画の範囲で外した写真・動画（押すと戻せる）
+    private var excludedClips: [TripDigest.Clip] {
+        let days: [Int]
+        switch scope {
+        case .day(let n): days = [n]
+        case .trip: days = Array(1...max(plan.dayCount, 1))
+        }
+        let calendar = Calendar.current
+        return sources.filter { excluded.contains($0.id) }.compactMap { source in
+            guard let day = days.first(where: { calendar.isDate(source.date, inSameDayAs: plan.date(forDay: $0)) })
+            else { return nil }
+            return TripDigest.Clip(sourceId: source.id, dayNumber: day, date: source.date,
+                                   timeText: TripDigest.timeText(source.date, calendar: calendar),
+                                   placeName: TripDigest.placeName(near: source, plan: plan, dayNumber: day))
+        }
+        .sorted { $0.date < $1.date }
+    }
+
+    /// 日ごとのまとまり
+    private var days: [(day: Int, clips: [TripDigest.Clip])] {
+        Dictionary(grouping: clips, by: \.dayNumber).sorted { $0.key < $1.key }.map { ($0.key, $0.value) }
+    }
 
     var body: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 12) {
-                Text("見せたくない写真は押して外してください。外すと、同じ時間に撮った別の写真が代わりに入ります。外した写真は、この旅行では次からも使いません。")
+            LazyVStack(alignment: .leading, spacing: 12, pinnedViews: [.sectionHeaders]) {
+                Text("写真を押すと大きく見られ、見せたくない写真はそこで外せます（長押しでも外せます）。")
                     .font(.footnote)
                     .foregroundColor(.secondary)
-                LazyVGrid(columns: columns, spacing: 6) {
-                    ForEach(clips, id: \.sourceId) { clip in
-                        Button {
-                            withAnimation { _ = excluded.insert(clip.sourceId) }
-                        } label: {
-                            DigestThumbnail(asset: assets[clip.sourceId], clip: clip)
+                    .padding(.horizontal, 4)
+                ForEach(days, id: \.day) { group in
+                    Section {
+                        ForEach(group.clips) { clip in
+                            row(clip)
                         }
-                        .buttonStyle(.plain)
-                        .accessibilityLabel("\(clip.timeText)\(clip.placeName.map { "・\($0)" } ?? "")を外す")
+                    } header: {
+                        dayHeader(group.day, count: group.clips.count)
                     }
                 }
-                if !excluded.isEmpty {
-                    Button("外した写真をすべて戻す（\(excluded.count)）") {
-                        withAnimation { excluded.removeAll() }
-                    }
-                    .font(.footnote)
+                if !excludedClips.isEmpty {
+                    excludedSection
                 }
             }
             .padding(16)
         }
-        .overlay {
-            if let progress {
-                VStack(spacing: 12) {
-                    ProgressView(value: progress).frame(maxWidth: 220)
-                    Text("動画を作っています…").font(.subheadline).foregroundColor(.secondary)
-                }
-                .padding(28)
-                .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
-            }
-        }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+        .overlay { if let progress { MakingOverlay(progress: progress) } }
         .navigationTitle("\(clips.count)コマ・約\(Int(TripDigest.duration(of: clips)))秒")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -213,80 +554,128 @@ private struct DigestReviewView: View {
         .navigationDestination(item: $result) { result in
             DigestPlayerView(result: result)
         }
+        .sheet(item: $previewing) { clip in
+            DigestPreviewSheet(asset: assets[clip.sourceId], clip: clip) {
+                withAnimation { _ = excluded.insert(clip.sourceId) }
+            }
+        }
         .alert(errorMessage ?? "", isPresented: Binding(get: { errorMessage != nil },
                                                         set: { if !$0 { errorMessage = nil } })) {
             Button("OK", role: .cancel) {}
         }
     }
 
+    private func dayHeader(_ day: Int, count: Int) -> some View {
+        let date = plan.date(forDay: day)
+        return HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("DAY \(day)")
+                .font(.system(size: 13, weight: .bold).width(.expanded))
+            Text(TravelPlanTextExporter.dateString(date))
+                .font(.footnote)
+                .foregroundColor(DigestDateStyle.color(date, default: .secondary))
+            Spacer()
+            Text("\(count)コマ").font(.caption).foregroundColor(.secondary)
+        }
+        .padding(.vertical, 8)
+        .padding(.horizontal, 4)
+        .background(Color(.systemGroupedBackground))
+    }
+
+    /// 1コマ：左に大きな時刻、右に写真
+    private func row(_ clip: TripDigest.Clip, excludedStyle: Bool = false) -> some View {
+        let parts = clip.timeText.split(separator: ":")
+        let tint = DigestDateStyle.color(clip.date, default: .primary)
+        return HStack(spacing: 0) {
+            VStack(spacing: 2) {
+                Text(parts.first.map(String.init) ?? "")
+                    .font(.system(size: 34, weight: .bold).width(.condensed))
+                    .foregroundColor(tint)
+                Text(":\(parts.dropFirst().first.map(String.init) ?? "00")")
+                    .font(.system(size: 12, weight: .semibold).width(.expanded))
+                    .foregroundColor(tint.opacity(0.8))
+                Image(systemName: assets[clip.sourceId]?.mediaType == .video ? "video" : "camera")
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+                    .padding(.top, 6)
+            }
+            .frame(width: 78)
+            AssetImage(asset: assets[clip.sourceId], target: CGSize(width: 700, height: 420))
+                .frame(height: 128)
+                .overlay(alignment: .bottomLeading) {
+                    if let place = clip.placeName {
+                        Label(place, systemImage: "mappin")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(Capsule().fill(.black.opacity(0.45)))
+                            .padding(8)
+                    }
+                }
+                .overlay {
+                    if excludedStyle {
+                        ZStack {
+                            Color.black.opacity(0.5)
+                            Label("戻す", systemImage: "arrow.uturn.backward")
+                                .font(.subheadline.weight(.semibold))
+                                .foregroundColor(.white)
+                        }
+                    }
+                }
+        }
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .shadow(color: .black.opacity(0.06), radius: 6, y: 3)
+        .contentShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .onTapGesture {
+            if excludedStyle {
+                withAnimation { _ = excluded.remove(clip.sourceId) }
+            } else {
+                previewing = clip
+            }
+        }
+        .contextMenu {
+            if !excludedStyle {
+                Button("このコマを外す", systemImage: "eye.slash") {
+                    withAnimation { _ = excluded.insert(clip.sourceId) }
+                }
+            }
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(clip.timeText)\(clip.placeName.map { "・\($0)" } ?? "")")
+        .accessibilityHint(excludedStyle ? "押すと戻します" : "押すと大きく表示します")
+    }
+
+    private var excludedSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Text("外した写真（\(excludedClips.count)）")
+                    .font(.subheadline.weight(.semibold))
+                Spacer()
+                Button("すべて戻す") {
+                    withAnimation { excluded.subtract(excludedClips.map(\.sourceId)) }
+                }
+                .font(.footnote)
+            }
+            Text("押すと戻せます。外した写真は、この旅行では次からも使いません。")
+                .font(.caption)
+                .foregroundColor(.secondary)
+            ForEach(excludedClips) { clip in
+                row(clip, excludedStyle: true)
+            }
+        }
+        .padding(.top, 16)
+    }
+
     private func make() async {
         progress = 0
         defer { progress = nil }
-        let items = await TripDigestComposer.loadItems(clips, assets: assets)
-        let subtitle: String
-        switch scope {
-        case .day(let n):
-            subtitle = "Day \(n)・\(TravelPlanTextExporter.dateString(plan.date(forDay: n)))"
-        case .trip:
-            subtitle = "\(TravelPlanTextExporter.dateString(plan.startDate)) 〜 \(TravelPlanTextExporter.dateString(plan.endDate))"
-        }
         do {
-            let url = try await TripDigestComposer.compose(items, title: plan.title, subtitle: subtitle,
-                                                           fileName: TripDigest.fileName(plan: plan, scope: scope)) { value in
+            result = try await DigestMaker.make(plan: plan, scope: scope, clips: clips, assets: assets) { value in
                 Task { @MainActor in progress = value }
             }
-            result = TripDigestView.DigestResult(url: url, title: subtitle)
         } catch {
             errorMessage = error.localizedDescription
-        }
-    }
-}
-
-/// コマの見本（写真の縮小と、時刻・場所・動画の印）
-private struct DigestThumbnail: View {
-    let asset: PHAsset?
-    let clip: TripDigest.Clip
-    @State private var image: UIImage?
-
-    var body: some View {
-        ZStack(alignment: .bottomLeading) {
-            Color(.secondarySystemBackground)
-            if let image {
-                Image(uiImage: image).resizable().scaledToFill()
-            }
-            LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .center, endPoint: .bottom)
-            VStack(alignment: .leading, spacing: 1) {
-                if let place = clip.placeName {
-                    Text(place).font(.caption2.weight(.semibold)).lineLimit(1)
-                }
-                Text("Day \(clip.dayNumber) \(clip.timeText)").font(.caption2)
-            }
-            .foregroundColor(.white)
-            .padding(5)
-            if asset?.mediaType == .video {
-                Image(systemName: "video.fill")
-                    .font(.caption2)
-                    .foregroundColor(.white)
-                    .padding(5)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topTrailing)
-            }
-            Image(systemName: "minus.circle.fill")
-                .symbolRenderingMode(.palette)
-                .foregroundStyle(.white, .black.opacity(0.5))
-                .padding(5)
-                .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-        }
-        .aspectRatio(9 / 16, contentMode: .fit)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
-        .task(id: asset?.localIdentifier) {
-            guard let asset else { return }
-            let options = PHImageRequestOptions()
-            options.deliveryMode = .opportunistic
-            options.isNetworkAccessAllowed = true
-            PHImageManager.default().requestImage(for: asset, targetSize: CGSize(width: 240, height: 420),
-                                                  contentMode: .aspectFill, options: options) { result, _ in
-                if let result { image = result }
-            }
         }
     }
 }
@@ -299,6 +688,7 @@ private struct DigestPlayerView: View {
     var body: some View {
         VideoPlayer(player: player)
             .aspectRatio(9 / 16, contentMode: .fit)
+            .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
             .padding()
             .navigationTitle(result.title)
             .navigationBarTitleDisplayMode(.inline)
@@ -315,5 +705,57 @@ private struct DigestPlayerView: View {
                 player.play()
             }
             .onDisappear { player?.pause() }
+    }
+}
+
+/// コマを大きく見る。ここで外すかを決める
+private struct DigestPreviewSheet: View {
+    let asset: PHAsset?
+    let clip: TripDigest.Clip
+    let onExclude: () -> Void
+    @Environment(\.dismiss) private var dismiss
+    @State private var image: UIImage?
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                if let image {
+                    Image(uiImage: image).resizable().scaledToFit()
+                } else {
+                    ProgressView().tint(.white)
+                }
+            }
+            .safeAreaInset(edge: .bottom) {
+                Button(role: .destructive) {
+                    onExclude()
+                    dismiss()
+                } label: {
+                    Label("このコマを外す", systemImage: "eye.slash")
+                        .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.large)
+                .padding(16)
+            }
+            .navigationTitle("Day \(clip.dayNumber) \(clip.timeText)\(clip.placeName.map { "・\($0)" } ?? "")")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("閉じる") { dismiss() }
+                }
+            }
+            .task(id: asset?.localIdentifier) {
+                guard let asset else { return }
+                let options = PHImageRequestOptions()
+                options.deliveryMode = .opportunistic
+                options.isNetworkAccessAllowed = true
+                PHImageManager.default().requestImage(for: asset, targetSize: CGSize(width: 1200, height: 1200),
+                                                      contentMode: .aspectFit, options: options) { result, _ in
+                    if let result { image = result }
+                }
+            }
+        }
     }
 }
