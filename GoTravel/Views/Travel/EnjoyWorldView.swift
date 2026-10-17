@@ -37,6 +37,10 @@ struct EnjoyWorldView: View {
     /// 知らせを閉じた、0 件になった時刻（同じ知らせを二度出さない）
     @AppStorage("dismissedPlanDropAt") private var dismissedPlanDropAt: Double = 0
     @State private var showAddPlan = false
+    /// 旅行が終わったあとの振り返りの案内（Travory Pro）
+    @State private var recapDismissed = TripRecapPrompt.loadDismissed()
+    @State private var recapPlan: TravelPlan?
+    @ObservedObject private var proStore = ProStore.shared
     @State private var showJoinPlan = false
     @State private var planToDelete: TravelPlan?
     @State private var showDeleteConfirmation = false
@@ -241,6 +245,20 @@ struct EnjoyWorldView: View {
                             .padding(.horizontal, 20)
                             .padding(.top, 6)
                     }
+                    // Pro の人にだけ出す（使えない機能の案内は出さない）
+                    if proStore.isPurchased,
+                       let plan = TripRecapPrompt.plan(in: travelPlanViewModel.travelPlans, dismissed: recapDismissed) {
+                        TripRecapBanner(plan: plan, onOpen: {
+                            recapPlan = plan
+                        }, onDismiss: {
+                            if let id = plan.id {
+                                TripRecapPrompt.dismiss(planId: id)
+                                withAnimation { recapDismissed.insert(id) }
+                            }
+                        })
+                        .padding(.horizontal, 20)
+                        .padding(.top, 10)
+                    }
                     travelEventsTitleSection
                     tabSelectionSection
                     travelPlansSection
@@ -270,6 +288,9 @@ struct EnjoyWorldView: View {
                         travelPlanViewModel.add(newPlan, userId: userId)
                     }
                 }
+            }
+            .sheet(item: $recapPlan) { plan in
+                TripDigestView(plan: plan)
             }
             .sheet(isPresented: $showAddPlan) {
                 AddPlanView(historyPlans: plansViewModel.plans) { newPlan in

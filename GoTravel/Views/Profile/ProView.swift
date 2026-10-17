@@ -46,8 +46,10 @@ struct ProView: View {
 
                 // 予約メールの取り込みを先頭に置く（Pro の目玉）
                 featureReservationEmail
+                featureBooklet
                 featureThemes
                 featurePhotoSync
+                featureRecap
                 onceOnlyCard
 
                 if !store.isPurchased {
@@ -168,6 +170,41 @@ struct ProView: View {
 
             bullet("季節のテーマ（桜・瀬戸内・紅葉・雪国）は、旬のあいだ購入なしでもお試しいただけます。ご購入いただくと一年中お使いいただけます。")
             bullet("これから増えるテーマも、追加のお支払いなしで使えます。")
+            bullet("ホーム画面のアイコンも、夕焼け・夜・セピア・モノクロ・桜から選べます。")
+        }
+        .padding(16)
+        .themedCard()
+    }
+
+    // MARK: - 入っているもの：旅のしおり（PDF）
+
+    private var featureBooklet: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            featureHeading(
+                icon: "book.closed.fill",
+                title: "旅のしおりを、冊子で作れます",
+                detail: "表紙・日ごとの日程と地図・持ち物とお土産・費用・メモを、A5 の冊子（PDF）にまとめます。"
+                      + "印刷して持って行ったり、アプリを入れていない家族に LINE で送ったりできます。"
+            )
+            bullet("デザインは「シンプル」「かわいい」「和風」の3つから選べます。")
+            bullet("入れるページは選べます。自分だけのお土産やメモ、予約番号は入りません。")
+        }
+        .padding(16)
+        .themedCard()
+    }
+
+    // MARK: - 入っているもの：旅の振り返り
+
+    private var featureRecap: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            featureHeading(
+                icon: "film.stack",
+                title: "旅のダイジェスト動画",
+                detail: "旅行中に撮った写真と動画から、1時間に1つずつ選んで2秒ずつつなぎ、1日ごと・旅行全体の短い動画にします。"
+                      + "時刻と、日程の場所の名前も入ります。"
+            )
+            bullet("撮り直しは要りません。カメラロールから自動で選びます。")
+            bullet("動画は iPhone の中だけで作り、どこにも送りません。")
         }
         .padding(16)
         .themedCard()

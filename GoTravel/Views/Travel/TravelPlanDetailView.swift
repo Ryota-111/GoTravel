@@ -100,6 +100,12 @@ struct TravelPlanDetailView: View {
     @State private var showAddScheduleItem = false
     @State private var showBasicInfoEditor = false
     @State private var showDuplicateSheet = false
+    /// 旅のしおり（PDF）。Pro でなければ Pro の案内を出す
+    @State private var showsBooklet = false
+    @State private var showsProForBooklet = false
+    /// 旅の振り返り（Travory Pro）
+    @State private var showsRecap = false
+    @ObservedObject private var proStore = ProStore.shared
     @State private var showExportOptions = false
     @State private var exportFormat: ExportOptionsView.Format = .image
     /// 選択シートが閉じるまで書き出したものを持っておく置き場
@@ -428,6 +434,23 @@ struct TravelPlanDetailView: View {
         }) {
             ExportOptionsView(plan: plan, format: exportFormat, accentColor: scheduleAccentColor) { items in
                 pendingExportItems = items
+            }
+        }
+        .sheet(isPresented: $showsRecap) {
+            TripDigestView(plan: plan)
+        }
+        .sheet(isPresented: $showsBooklet) {
+            TravelBookletView(plan: plan)
+                .environmentObject(authVM)
+        }
+        .sheet(isPresented: $showsProForBooklet) {
+            NavigationStack {
+                ProView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("閉じる") { showsProForBooklet = false }
+                        }
+                    }
             }
         }
         .sheet(isPresented: $showDuplicateSheet) {
@@ -1190,6 +1213,21 @@ struct TravelPlanDetailView: View {
                             showExportOptions = true
                         } label: {
                             Label("画像で送る", systemImage: "photo")
+                        }
+
+                        // 表紙つきの冊子（PDF）。印刷やアプリを持っていない家族向け（Travory Pro）
+                        Button {
+                            if proStore.isPurchased { showsBooklet = true } else { showsProForBooklet = true }
+                        } label: {
+                            Label(proStore.isPurchased ? "旅のしおり（PDF）" : "旅のしおり（PDF）・Pro",
+                                  systemImage: "book.closed")
+                        }
+
+                        // 撮った写真と動画を2秒ずつつないだ動画（Travory Pro）
+                        Button {
+                            if proStore.isPurchased { showsRecap = true } else { showsProForBooklet = true }
+                        } label: {
+                            Label(proStore.isPurchased ? "旅のダイジェスト動画" : "旅のダイジェスト動画・Pro", systemImage: "film")
                         }
 
                         // iPhone のカレンダー（Google カレンダーも）に入れる。ご要望から（3.0）

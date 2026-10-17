@@ -16,6 +16,12 @@ struct AlbumHomeView: View {
     @State private var isSelectionMode = false
     @State private var selectedAlbumIds: Set<String> = []
     @State private var showDeleteConfirm = false
+    /// 旅のダイジェスト動画（Travory Pro）。旅行を選んでから作る
+    @State private var showsDigestTripPicker = false
+    @State private var pickedDigestPlan: TravelPlan?
+    @State private var digestPlan: TravelPlan?
+    @State private var showsProForDigest = false
+    @ObservedObject private var proStore = ProStore.shared
 
     /// 既定アルバム（日本全国フォトマップ）は削除できないので選択対象から外す
     private var deletableAlbums: [Album] {
@@ -67,6 +73,55 @@ struct AlbumHomeView: View {
             .navigationBarHidden(true)
         }
         .navigationViewStyle(.stack)
+        .sheet(isPresented: $showsDigestTripPicker, onDismiss: {
+            // 選んだ旅行は、一覧を閉じてから開く（シートを重ねない）
+            if let plan = pickedDigestPlan {
+                pickedDigestPlan = nil
+                digestPlan = plan
+            }
+        }) {
+            NavigationStack {
+                List {
+                    if digestCandidates.isEmpty {
+                        Text("まだ始まった旅行がありません。旅行が始まったら作れます。")
+                            .foregroundColor(.secondary)
+                    }
+                    ForEach(digestCandidates) { plan in
+                        Button {
+                            pickedDigestPlan = plan
+                            showsDigestTripPicker = false
+                        } label: {
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(plan.title).foregroundColor(.primary)
+                                Text("\(TravelPlanTextExporter.dateString(plan.startDate)) 〜 \(TravelPlanTextExporter.dateString(plan.endDate))")
+                                    .font(.caption)
+                                    .foregroundColor(.secondary)
+                            }
+                        }
+                    }
+                }
+                .navigationTitle("どの旅行で作りますか")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("閉じる") { showsDigestTripPicker = false }
+                    }
+                }
+            }
+        }
+        .sheet(item: $digestPlan) { plan in
+            TripDigestView(plan: plan)
+        }
+        .sheet(isPresented: $showsProForDigest) {
+            NavigationStack {
+                ProView()
+                    .toolbar {
+                        ToolbarItem(placement: .cancellationAction) {
+                            Button("閉じる") { showsProForDigest = false }
+                        }
+                    }
+            }
+        }
         .sheet(isPresented: $showCreateAlbum) {
             CreateAlbumView(travelPlans: travelPlanViewModel.travelPlans)
         }
@@ -166,16 +221,61 @@ struct AlbumHomeView: View {
                         .background(mainColor.opacity(0.12), in: Capsule())
                 }
                 .buttonStyle(PlainButtonStyle())
-            } else if !albumManager.albums.isEmpty {
-                HStack(spacing: 8) {
-                    statChip(icon: "rectangle.stack.fill", text: "\(albumManager.albums.count)個のアルバム")
-                    statChip(icon: "photo.on.rectangle.angled", text: "\(totalPhotoCount)枚")
+            } else {
+                if !albumManager.albums.isEmpty {
+                    HStack(spacing: 8) {
+                        statChip(icon: "rectangle.stack.fill", text: "\(albumManager.albums.count)個のアルバム")
+                        statChip(icon: "photo.on.rectangle.angled", text: "\(totalPhotoCount)枚")
+                    }
                 }
+                digestButton
             }
         }
         .padding(.horizontal, 20)
         .padding(.top, 12)
         .padding(.bottom, 14)
+    }
+
+    /// 旅行中に撮った写真と動画から、2秒ずつつないだ動画を作る（Travory Pro）
+    private var digestButton: some View {
+        Button {
+            if proStore.isPurchased { showsDigestTripPicker = true } else { showsProForDigest = true }
+        } label: {
+            HStack(spacing: 10) {
+                Image(systemName: "film.stack")
+                    .font(.body.weight(.semibold))
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("旅のダイジェスト動画")
+                        .font(.subheadline.weight(.semibold))
+                    Text("旅行中に撮った写真と動画を2秒ずつつなぎます")
+                        .font(.caption2)
+                        .opacity(0.8)
+                }
+                Spacer(minLength: 0)
+                if !proStore.isPurchased {
+                    Text("Pro")
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 7)
+                        .padding(.vertical, 2)
+                        .background(Capsule().stroke(mainColor.opacity(0.6), lineWidth: 1))
+                }
+                Image(systemName: "chevron.right")
+                    .font(.caption.weight(.semibold))
+            }
+            .foregroundColor(mainColor)
+            .padding(.horizontal, 14)
+            .padding(.vertical, 10)
+            .background(mainColor.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
+        }
+        .buttonStyle(PlainButtonStyle())
+    }
+
+    /// ダイジェストを作れる旅行（もう始まっている旅行。新しい順）
+    private var digestCandidates: [TravelPlan] {
+        let today = Calendar.current.startOfDay(for: Date())
+        return travelPlanViewModel.travelPlans
+            .filter { Calendar.current.startOfDay(for: $0.startDate) <= today }
+            .sorted { $0.startDate > $1.startDate }
     }
 
     private func statChip(icon: String, text: String) -> some View {
