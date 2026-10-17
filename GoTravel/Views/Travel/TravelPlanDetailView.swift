@@ -1223,11 +1223,11 @@ struct TravelPlanDetailView: View {
                                   systemImage: "book.closed")
                         }
 
-                        // 撮った写真と動画を2秒ずつつないだ動画（Travory Pro）
+                        // 撮った写真と動画を2秒ずつつないだ動画（作るのは無料。印なしは Pro）
                         Button {
-                            if proStore.isPurchased { showsRecap = true } else { showsProForBooklet = true }
+                            showsRecap = true
                         } label: {
-                            Label(proStore.isPurchased ? "旅のダイジェスト動画" : "旅のダイジェスト動画・Pro", systemImage: "film")
+                            Label("旅のダイジェスト動画", systemImage: "film")
                         }
 
                         // iPhone のカレンダー（Google カレンダーも）に入れる。ご要望から（3.0）

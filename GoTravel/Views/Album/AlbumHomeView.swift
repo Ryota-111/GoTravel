@@ -22,8 +22,6 @@ struct AlbumHomeView: View {
     /// 残した動画が変わった合図（ダイジェストの画面を閉じたら読み直す）
     @State private var libraryVersion = 0
     @State private var digestPlan: TravelPlan?
-    @State private var showsProForDigest = false
-    @ObservedObject private var proStore = ProStore.shared
 
     /// 既定アルバム（日本全国フォトマップ）は削除できないので選択対象から外す
     private var deletableAlbums: [Album] {
@@ -100,16 +98,6 @@ struct AlbumHomeView: View {
         .sheet(item: $digestPlan, onDismiss: { libraryVersion += 1 }) { plan in
             // 上の旅行名から、ほかの旅行にも切り替えられる
             TripDigestView(plan: plan, otherPlans: digestCandidates)
-        }
-        .sheet(isPresented: $showsProForDigest) {
-            NavigationStack {
-                ProView()
-                    .toolbar {
-                        ToolbarItem(placement: .cancellationAction) {
-                            Button("閉じる") { showsProForDigest = false }
-                        }
-                    }
-            }
         }
         .sheet(isPresented: $showCreateAlbum) {
             CreateAlbumView(travelPlans: travelPlanViewModel.travelPlans)
@@ -221,7 +209,7 @@ struct AlbumHomeView: View {
         .padding(.bottom, 14)
     }
 
-    /// 旅のダイジェスト（Travory Pro）。旅行ごとのカードを横に並べる
+    /// 旅のダイジェスト。旅行ごとのカードを横に並べる（作るのは無料。印なしは Pro）
     private var digestSection: some View {
         let _ = libraryVersion
         return VStack(alignment: .leading, spacing: 10) {
@@ -243,10 +231,7 @@ struct AlbumHomeView: View {
                         ForEach(digestCandidates.prefix(12)) { plan in
                             DigestTripCard(plan: plan,
                                            saved: TripDigestLibrary.entries(planId: plan.id).first,
-                                           isLocked: !proStore.isPurchased,
-                                           onOpen: {
-                                               if proStore.isPurchased { digestPlan = plan } else { showsProForDigest = true }
-                                           },
+                                           onOpen: { digestPlan = plan },
                                            onPlay: { entry in playingDigest = entry })
                         }
                     }

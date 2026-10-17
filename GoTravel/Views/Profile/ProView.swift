@@ -199,12 +199,12 @@ struct ProView: View {
         VStack(alignment: .leading, spacing: 12) {
             featureHeading(
                 icon: "film.stack",
-                title: "旅のダイジェスト動画",
+                title: "旅のダイジェスト動画を、印なしで",
                 detail: "旅行中に撮った写真と動画から、1時間に1つずつ選んで2秒ずつつなぎ、1日ごと・旅行全体の短い動画にします。"
                       + "時刻と、日程の場所の名前も入ります。"
             )
-            bullet("撮り直しは要りません。カメラロールから自動で選びます。")
-            bullet("動画は iPhone の中だけで作り、どこにも送りません。")
+            bullet("動画を作るのは無料です。Pro なら最後の「Travory」の印が入らず、時刻と場所の文字の位置（左下・真ん中・右上）も選べます。")
+            bullet("撮り直しは要りません。カメラロールから自動で選び、自分で選び直すこともできます。動画は iPhone の中だけで作ります。")
         }
         .padding(16)
         .themedCard()

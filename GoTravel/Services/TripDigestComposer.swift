@@ -137,6 +137,7 @@ enum TripDigestComposer {
     /// - Parameter title: 最初のコマに大きく出す題名（旅行名と日付）
     static func compose(_ items: [Item], title: String, subtitle: String, fileName: String,
                         textPosition: TextPosition = .bottomLeft,
+                        endCard: Bool = false,
                         progress: @escaping @Sendable (Double) -> Void = { _ in }) async throws -> URL {
         guard !items.isEmpty else { throw ComposeError.empty }
         let work = FileManager.default.temporaryDirectory.appendingPathComponent("digest-\(UUID().uuidString)", isDirectory: true)
@@ -196,6 +197,18 @@ enum TripDigestComposer {
             progress(Double(index + 1) / Double(items.count) * 0.85)
         }
         guard cursor > .zero else { throw ComposeError.failed }
+
+        // 無料のときは、最後に1秒「Travory」の印を入れる（Pro は印なし）
+        if endCard, let card = endCardImage() {
+            let url = work.appendingPathComponent("end.mov")
+            try await writeSegment(to: url, seconds: 1) { _, _ in card }
+            let segment = AVURLAsset(url: url)
+            if let track = try await segment.loadTracks(withMediaType: .video).first {
+                let duration = try await segment.load(.duration)
+                try videoTrack.insertTimeRange(CMTimeRange(start: .zero, duration: duration), of: track, at: cursor)
+                cursor = CMTimeAdd(cursor, duration)
+            }
+        }
 
         let output = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
         try? FileManager.default.removeItem(at: output)
@@ -388,6 +401,30 @@ enum TripDigestComposer {
                 draw(subtitle, size: 44, weight: .semibold, align: .center, width: W - 120,
                      origin: CGPoint(x: 60, y: top + used + 16))
             }
+        }
+        return image.cgImage.map { CIImage(cgImage: $0) }
+    }
+}
+
+extension TripDigestComposer {
+    /// 最後の印（暗い地に「Travory」）
+    static func endCardImage() -> CIImage? {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = true
+        let image = UIGraphicsImageRenderer(size: renderSize, format: format).image { context in
+            UIColor(white: 0.08, alpha: 1).setFill()
+            context.fill(CGRect(origin: .zero, size: renderSize))
+            let style = NSMutableParagraphStyle()
+            style.alignment = .center
+            func draw(_ text: String, font: UIFont, color: UIColor, y: CGFloat) {
+                (text as NSString).draw(in: CGRect(x: 0, y: y, width: renderSize.width, height: font.lineHeight * 1.3),
+                                        withAttributes: [.font: font, .foregroundColor: color, .paragraphStyle: style])
+            }
+            let titleFont = UIFont.systemFont(ofSize: 110, weight: .bold)
+            draw("Travory", font: titleFont, color: .white, y: renderSize.height * 0.42)
+            draw("旅のしおりと旅行記録", font: .systemFont(ofSize: 44, weight: .medium),
+                 color: UIColor(white: 1, alpha: 0.7), y: renderSize.height * 0.42 + titleFont.lineHeight * 1.3 + 10)
         }
         return image.cgImage.map { CIImage(cgImage: $0) }
     }

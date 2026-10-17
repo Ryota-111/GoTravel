@@ -93,6 +93,10 @@ struct TripDigestTests {
         let asset = AVURLAsset(url: url)
         let duration = try await asset.load(.duration).seconds
         #expect(abs(duration - 6) < 0.2)
+        // 無料のときは、最後に1秒の印が入る
+        let withMark = try await TripDigestComposer.compose(items, title: "沖縄旅行", subtitle: "Day 1",
+                                                            fileName: "digest-test-mark.mp4", endCard: true)
+        #expect(abs(try await AVURLAsset(url: withMark).load(.duration).seconds - 7) < 0.2)
         let track = try #require(try await asset.loadTracks(withMediaType: .video).first)
         let size = try await track.load(.naturalSize)
         #expect(size == TripDigestComposer.renderSize)

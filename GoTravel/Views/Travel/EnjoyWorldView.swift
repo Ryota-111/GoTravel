@@ -40,7 +40,6 @@ struct EnjoyWorldView: View {
     /// 旅行が終わったあとの振り返りの案内（Travory Pro）
     @State private var recapDismissed = TripRecapPrompt.loadDismissed()
     @State private var recapPlan: TravelPlan?
-    @ObservedObject private var proStore = ProStore.shared
     @State private var showJoinPlan = false
     @State private var planToDelete: TravelPlan?
     @State private var showDeleteConfirmation = false
@@ -245,9 +244,8 @@ struct EnjoyWorldView: View {
                             .padding(.horizontal, 20)
                             .padding(.top, 6)
                     }
-                    // Pro の人にだけ出す（使えない機能の案内は出さない）
-                    if proStore.isPurchased,
-                       let plan = TripRecapPrompt.plan(in: travelPlanViewModel.travelPlans, dismissed: recapDismissed) {
+                    // 旅行が終わったら、ダイジェストを作れることを1回だけ知らせる（作るのは無料）
+                    if let plan = TripRecapPrompt.plan(in: travelPlanViewModel.travelPlans, dismissed: recapDismissed) {
                         TripRecapBanner(plan: plan, onOpen: {
                             recapPlan = plan
                         }, onDismiss: {

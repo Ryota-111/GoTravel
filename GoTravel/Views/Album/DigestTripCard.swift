@@ -1,14 +1,13 @@
 import SwiftUI
 import Photos
 
-/// 「思い出」タブの、旅行ごとのダイジェストのカード（Travory Pro）。
+/// 「思い出」タブの、旅行ごとのダイジェストのカード。
 ///
 /// 表紙は旅行のヘッダー写真。無ければ、写真へのアクセスがもう許可されているときだけ、旅行中に撮った最初の写真
 /// （タブを開いただけで許可を求めない）。作った動画があれば「作成済み」を出し、押すとすぐ見られる
 struct DigestTripCard: View {
     let plan: TravelPlan
     let saved: TripDigestLibrary.Entry?
-    let isLocked: Bool
     let onOpen: () -> Void
     let onPlay: (TripDigestLibrary.Entry) -> Void
 
@@ -43,17 +42,6 @@ struct DigestTripCard: View {
                     }
                     .foregroundColor(.white)
                     .padding(12)
-                }
-                .overlay(alignment: .topTrailing) {
-                    if isLocked {
-                        Text("Pro")
-                            .font(.caption2.bold())
-                            .foregroundColor(.white)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 2)
-                            .background(Capsule().fill(.black.opacity(0.4)))
-                            .padding(10)
-                    }
                 }
                 .overlay(alignment: .bottomLeading) {
                     VStack(alignment: .leading, spacing: 6) {
