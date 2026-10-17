@@ -46,6 +46,7 @@ struct PlanCategoryListSheet: View {
                         }
                     }
                     .onMove { manager.move(fromOffsets: $0, toOffset: $1) }
+                    actionRow("カレンダーを追加", systemImage: "plus", action: .newCategory)
                 } header: {
                     Text("カレンダー")
                 } footer: {
@@ -57,7 +58,8 @@ struct PlanCategoryListSheet: View {
                 Section {
                     actionRow("家族・友達と共有するカレンダーを作る", systemImage: "person.2.fill", action: .newSharedCategory)
                     actionRow("共有コードで参加", systemImage: "person.badge.plus", action: .join)
-                    actionRow("カレンダーを追加", systemImage: "plus", action: .newCategory)
+                } header: {
+                    Text("共有")
                 }
 
                 Section {
