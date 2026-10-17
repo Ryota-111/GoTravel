@@ -1202,6 +1202,13 @@ struct AppSettingView: View {
                         .offset(y: animateCards ? 0 : 20)
                         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.15), value: animateCards)
 
+                    // ホーム画面のアイコン（Travory Pro）
+                    AppIconPicker()
+                        .padding(.horizontal)
+                        .opacity(animateCards ? 1 : 0)
+                        .offset(y: animateCards ? 0 : 20)
+                        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.18), value: animateCards)
+
                     // Theme Selection
                     VStack(alignment: .leading, spacing: 16) {
                         Text("テーマを選択")

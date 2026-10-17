@@ -605,6 +605,7 @@
 		6C713E622E80F8270072D26B /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIcon-Sunset AppIcon-Night AppIcon-Sepia AppIcon-Mono AppIcon-Sakura";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = GoTravel/GoTravel.entitlements;
@@ -619,7 +620,8 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.travel";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "旅行計画や予定をカレンダーに入れ、旅行計画を直したときにカレンダーの予定も直すために使用します。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "現在地を地図に表示し、近くの場所を探すために使用します。位置情報を継続的に記録することはありません。";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "訪問した場所の写真を保存・表示するためにフォトライブラリへのアクセスが必要です。";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "作った旅のダイジェスト動画を写真に保存するために使います。";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "訪問した場所の写真を保存・表示したり、旅行中に撮った写真と動画から旅のダイジェスト動画を作ったりするために使います。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -647,6 +649,7 @@
 		6C713E632E80F8270072D26B /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				ASSETCATALOG_COMPILER_ALTERNATE_APPICON_NAMES = "AppIcon-Sunset AppIcon-Night AppIcon-Sepia AppIcon-Mono AppIcon-Sakura";
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = GoTravel/GoTravel.entitlements;
@@ -661,7 +664,8 @@
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.travel";
 				INFOPLIST_KEY_NSCalendarsFullAccessUsageDescription = "旅行計画や予定をカレンダーに入れ、旅行計画を直したときにカレンダーの予定も直すために使用します。";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "現在地を地図に表示し、近くの場所を探すために使用します。位置情報を継続的に記録することはありません。";
-				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "訪問した場所の写真を保存・表示するためにフォトライブラリへのアクセスが必要です。";
+				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "作った旅のダイジェスト動画を写真に保存するために使います。";
+				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "訪問した場所の写真を保存・表示したり、旅行中に撮った写真と動画から旅のダイジェスト動画を作ったりするために使います。";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
