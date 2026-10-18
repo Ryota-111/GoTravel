@@ -33,14 +33,18 @@ struct TripDigestView: View {
     @State private var excluded: Set<String> = []
     /// 自分で選び直した写真・動画（旅行ごとに覚えておく）
     @State private var pinned: Set<String> = []
+    /// 自分で入れた文字（写真・動画ごと。Pro）
+    @State private var captions: [String: String] = [:]
+    @ObservedObject private var proStore = ProStore.shared
     @State private var reviewing: TripDigest.Scope?
     @State private var selected: String? = TripDigest.Scope.trip.id
     @State private var progress: Double?
+    /// 作っている途中の仕事（「やめる」で止める）
+    @State private var making: Task<Void, Never>?
     @State private var result: DigestResult?
     @State private var errorMessage: String?
     /// 時刻・場所の文字の位置（左下・真ん中・右上）。次に作るときも同じにする
     @AppStorage("tripDigestTextPosition") private var textPosition = TripDigestComposer.TextPosition.bottomLeft.rawValue
-    @State private var showsPro = false
     /// 残した動画が変わった合図（作り終わったら数を進め、下の札を読み直す）
     @State private var libraryVersion = 0
 
@@ -59,7 +63,8 @@ struct TripDigestView: View {
     }
 
     private func clips(for scope: TripDigest.Scope) -> [TripDigest.Clip] {
-        TripDigest.clips(plan: plan, sources: usable, scope: scope, pinned: pinned)
+        TripDigest.clips(plan: plan, sources: usable, scope: scope, pinned: pinned,
+                         captions: proStore.isPurchased ? captions : [:])
     }
 
     private var selectedScope: TripDigest.Scope? {
@@ -93,28 +98,28 @@ struct TripDigestView: View {
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(item: $reviewing) { scope in
                 DigestReviewView(plan: plan, scope: scope, sources: sources, assets: assets,
-                                 excluded: $excluded, pinned: $pinned)
+                                 excluded: $excluded, pinned: $pinned, captions: $captions)
             }
             .navigationDestination(item: $result) { result in
                 TripDigestPlayerView(result: result)
             }
             .onChange(of: result) { _, _ in libraryVersion += 1 }
             .onChange(of: reviewing) { _, _ in libraryVersion += 1 }
-            .overlay { if let progress { MakingOverlay(progress: progress) } }
+            .overlay {
+                if let progress { MakingOverlay(progress: progress, onCancel: { making?.cancel() }) }
+            }
             .alert(errorMessage ?? "", isPresented: Binding(get: { errorMessage != nil },
                                                             set: { if !$0 { errorMessage = nil } })) {
                 Button("OK", role: .cancel) {}
             }
             .task(id: plan.id) { await load() }
-            .sheet(isPresented: $showsPro) { DigestProSheet(isPresented: $showsPro) }
-            .onChange(of: excluded) { _, value in
-                TripDigestExclusions.save(value, planId: plan.id)
-            }
-            .onChange(of: pinned) { _, value in
-                TripDigestExclusions.savePinned(value, planId: plan.id)
-            }
+            .modifier(savesChoices)
         }
     }
+
+    /// 外した・選び直した写真と、入れた文字を、旅行ごとに覚えておく
+    private var savesChoices: some ViewModifier { SaveDigestChoices(planId: plan.id, excluded: excluded, pinned: pinned,
+                                                                     captions: captions) }
 
     // MARK: 上：旅行の名前（押すとほかの旅行へ）
 
@@ -165,8 +170,7 @@ struct TripDigestView: View {
             .frame(maxHeight: 520)
             Spacer(minLength: 12)
             DigestTextPositionPicker(selection: $textPosition,
-                                     sample: clips(for: selectedScope ?? .trip).first, assets: assets,
-                                     onLocked: { showsPro = true })
+                                     sample: clips(for: selectedScope ?? .trip).first, assets: assets)
                 .padding(.horizontal, 24)
                 .padding(.bottom, 12)
             bottomBar
@@ -208,7 +212,7 @@ struct TripDigestView: View {
             Spacer(minLength: 0)
             roundButton(systemImage: "square.grid.2x2", label: "確かめる") { reviewing = scope }
             roundButton(systemImage: "play.fill", label: "作る") {
-                Task { await make(scope: scope) }
+                making = Task { await make(scope: scope) }
             }
         }
     }
@@ -258,6 +262,7 @@ struct TripDigestView: View {
         phase = .loading
         excluded = TripDigestExclusions.load(planId: plan.id)
         pinned = TripDigestExclusions.loadPinned(planId: plan.id)
+        captions = TripDigestExclusions.loadCaptions(planId: plan.id)
         guard await TripDigestComposer.requestAccess() else {
             phase = .noAccess
             return
@@ -270,16 +275,35 @@ struct TripDigestView: View {
 
     private func make(scope: TripDigest.Scope) async {
         progress = 0
-        defer { progress = nil }
+        defer {
+            progress = nil
+            making = nil
+        }
         do {
             result = try await DigestMaker.make(plan: plan, scope: scope, clips: clips(for: scope), assets: assets,
                                                 textPosition: TripDigestComposer.TextPosition(rawValue: textPosition) ?? .bottomLeft) { value in
                 // 作り終わったあとに遅れて届いた知らせで、作成中の表示を戻さない
                 Task { @MainActor in if progress != nil { progress = value } }
             }
+        } catch is CancellationError {
+            // 「やめる」を押した
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+}
+
+private struct SaveDigestChoices: ViewModifier {
+    let planId: String?
+    let excluded: Set<String>
+    let pinned: Set<String>
+    let captions: [String: String]
+
+    func body(content: Content) -> some View {
+        content
+            .onChange(of: excluded) { _, value in TripDigestExclusions.save(value, planId: planId) }
+            .onChange(of: pinned) { _, value in TripDigestExclusions.savePinned(value, planId: planId) }
+            .onChange(of: captions) { _, value in TripDigestExclusions.saveCaptions(value, planId: planId) }
     }
 }
 
@@ -304,6 +328,17 @@ enum TripDigestExclusions {
 
     static func savePinned(_ ids: Set<String>, planId: String?) {
         UserDefaults.standard.set(Array(ids), forKey: pinKey(planId))
+    }
+
+    /// 自分で入れた文字（写真・動画の id → 文字。空なら文字なし）
+    private static func captionKey(_ planId: String?) -> String { "tripDigestCaptions.\(planId ?? "")" }
+
+    static func loadCaptions(planId: String?) -> [String: String] {
+        UserDefaults.standard.dictionary(forKey: captionKey(planId)) as? [String: String] ?? [:]
+    }
+
+    static func saveCaptions(_ captions: [String: String], planId: String?) {
+        UserDefaults.standard.set(captions, forKey: captionKey(planId))
     }
 
     /// その写真・動画を、撮った時間のコマに選び直す（同じ時間の前の選び直しは外す。外していたら戻す）
@@ -343,9 +378,10 @@ enum DigestMaker {
     static func make(plan: TravelPlan, scope: TripDigest.Scope, clips: [TripDigest.Clip], assets: [String: PHAsset],
                      textPosition: TripDigestComposer.TextPosition,
                      progress: @escaping @Sendable (Double) -> Void) async throws -> TripDigestView.DigestResult {
-        // 無料でも作れる。Pro でなければ最後に「Travory」の印を入れ、文字は左下にする
+        // 無料でも作れる。Pro でなければ右下と最後に「Travory」の印を入れる（文字の位置は誰でも選べる）
         let isPro = ProStore.shared.isPurchased
         let items = await TripDigestComposer.loadItems(clips, assets: assets)
+        try Task.checkCancellation()
         let subtitle: String
         switch scope {
         case .day(let n):
@@ -355,8 +391,8 @@ enum DigestMaker {
         }
         let temporary = try await TripDigestComposer.compose(items, title: plan.title, subtitle: subtitle,
                                                              fileName: TripDigest.fileName(plan: plan, scope: scope),
-                                                             textPosition: isPro ? textPosition : .bottomLeft,
-                                                             endCard: !isPro, progress: progress)
+                                                             textPosition: textPosition,
+                                                             watermark: !isPro, endCard: !isPro, progress: progress)
         // 作った動画は残しておく（「思い出」タブのカードから、作り直さずに見られる）
         let url = (try? TripDigestLibrary.save(temporary, planId: plan.id, scopeId: scope.id, title: subtitle)) ?? temporary
         return TripDigestView.DigestResult(url: url, title: subtitle)
@@ -520,13 +556,23 @@ private struct DigestCoverCard: View {
 /// 作っている間に重ねる
 private struct MakingOverlay: View {
     let progress: Double
+    /// 「やめる」を押したとき
+    let onCancel: () -> Void
+    @State private var cancelling = false
 
     var body: some View {
         ZStack {
             Color.black.opacity(0.2).ignoresSafeArea()
             VStack(spacing: 12) {
                 ProgressView(value: progress).frame(maxWidth: 220)
-                Text("動画を作っています…").font(.subheadline).foregroundColor(.secondary)
+                Text(cancelling ? "やめています…" : "動画を作っています…")
+                    .font(.subheadline).foregroundColor(.secondary)
+                Button("やめる", role: .cancel) {
+                    cancelling = true
+                    onCancel()
+                }
+                .buttonStyle(.bordered)
+                .disabled(cancelling)
             }
             .padding(28)
             .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 16))
@@ -543,17 +589,20 @@ private struct DigestReviewView: View {
     let assets: [String: PHAsset]
     @Binding var excluded: Set<String>
     @Binding var pinned: Set<String>
+    @Binding var captions: [String: String]
 
+    @ObservedObject private var proStore = ProStore.shared
     @State private var progress: Double?
+    @State private var making: Task<Void, Never>?
     @State private var result: TripDigestView.DigestResult?
     @State private var errorMessage: String?
     @AppStorage("tripDigestTextPosition") private var textPosition = TripDigestComposer.TextPosition.bottomLeft.rawValue
-    @State private var showsPro = false
     /// 押して大きく見ているコマ（外すかどうかはここで決める）
     @State private var previewing: TripDigest.Clip?
 
     private var clips: [TripDigest.Clip] {
-        TripDigest.clips(plan: plan, sources: sources.filter { !excluded.contains($0.id) }, scope: scope, pinned: pinned)
+        TripDigest.clips(plan: plan, sources: sources.filter { !excluded.contains($0.id) }, scope: scope, pinned: pinned,
+                         captions: proStore.isPurchased ? captions : [:])
     }
 
     /// この動画の範囲で外した写真・動画（押すと戻せる）
@@ -582,12 +631,11 @@ private struct DigestReviewView: View {
     var body: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 12, pinnedViews: [.sectionHeaders]) {
-                Text("写真を押すと大きく見られ、外したり、その日の別の写真に選び直したりできます（長押しでも外せます）。")
+                Text("写真を押すと大きく見られ、外したり、その日の別の写真に選び直したり、出す文字を変えたりできます（長押しでも外せます）。")
                     .font(.footnote)
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 4)
-                DigestTextPositionPicker(selection: $textPosition, sample: clips.first, assets: assets,
-                                         onLocked: { showsPro = true })
+                DigestTextPositionPicker(selection: $textPosition, sample: clips.first, assets: assets)
                 ForEach(days, id: \.day) { group in
                     Section {
                         ForEach(group.clips) { clip in
@@ -604,12 +652,14 @@ private struct DigestReviewView: View {
             .padding(16)
         }
         .background(Color(.systemGroupedBackground).ignoresSafeArea())
-        .overlay { if let progress { MakingOverlay(progress: progress) } }
+        .overlay {
+            if let progress { MakingOverlay(progress: progress, onCancel: { making?.cancel() }) }
+        }
         .navigationTitle("\(clips.count)コマ・約\(Int(TripDigest.duration(of: clips)))秒")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("作る") { Task { await make() } }
+                Button("作る") { making = Task { await make() } }
                     .fontWeight(.semibold)
                     .disabled(clips.isEmpty || progress != nil)
             }
@@ -617,8 +667,12 @@ private struct DigestReviewView: View {
         .navigationDestination(item: $result) { result in
             TripDigestPlayerView(result: result)
         }
-        .sheet(item: $previewing) { clip in
+        .sheet(item: $previewing) { shown in
+            // 文字を変えたら、開いたままの画面にもすぐ出す
+            let clip = clips.first { $0.id == shown.id } ?? shown
             DigestPreviewSheet(asset: assets[clip.sourceId], clip: clip,
+                               placeName: sources.first { $0.id == clip.sourceId }
+                                   .flatMap { TripDigest.placeName(near: $0, plan: plan, dayNumber: clip.dayNumber) },
                                candidates: sources.filter { Calendar.current.isDate($0.date, inSameDayAs: clip.date) },
                                assets: assets,
                                onExclude: {
@@ -631,13 +685,15 @@ private struct DigestReviewView: View {
                                    withAnimation {
                                        TripDigestExclusions.choose(source, among: sources, pinned: &pinned, excluded: &excluded)
                                    }
+                               },
+                               onCaption: { text in
+                                   if let text { captions[clip.sourceId] = text } else { captions[clip.sourceId] = nil }
                                })
         }
         .alert(errorMessage ?? "", isPresented: Binding(get: { errorMessage != nil },
                                                         set: { if !$0 { errorMessage = nil } })) {
             Button("OK", role: .cancel) {}
         }
-        .sheet(isPresented: $showsPro) { DigestProSheet(isPresented: $showsPro) }
     }
 
     private func dayHeader(_ day: Int, count: Int) -> some View {
@@ -744,13 +800,18 @@ private struct DigestReviewView: View {
 
     private func make() async {
         progress = 0
-        defer { progress = nil }
+        defer {
+            progress = nil
+            making = nil
+        }
         do {
             result = try await DigestMaker.make(plan: plan, scope: scope, clips: clips, assets: assets,
                                                 textPosition: TripDigestComposer.TextPosition(rawValue: textPosition) ?? .bottomLeft) { value in
                 // 作り終わったあとに遅れて届いた知らせで、作成中の表示を戻さない
                 Task { @MainActor in if progress != nil { progress = value } }
             }
+        } catch is CancellationError {
+            // 「やめる」を押した
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -785,17 +846,25 @@ struct TripDigestPlayerView: View {
     }
 }
 
-/// コマを大きく見る。ここで外すかを決める
+/// コマを大きく見る。ここで外すか・選び直すか・出す文字を決める
 private struct DigestPreviewSheet: View {
     let asset: PHAsset?
     let clip: TripDigest.Clip
+    /// 日程から見つけた場所の名前（自分で文字を入れていなければ、これを出す）
+    let placeName: String?
     /// 選び直せる写真・動画（その日に撮ったもの）
     let candidates: [TripDigest.Source]
     let assets: [String: PHAsset]
     let onExclude: () -> Void
     let onChoose: (TripDigest.Source) -> Void
+    /// 出す文字を決めた（nil なら場所の名前に戻す）
+    let onCaption: (String?) -> Void
     @Environment(\.dismiss) private var dismiss
+    @ObservedObject private var proStore = ProStore.shared
     @State private var image: UIImage?
+    @State private var editsCaption = false
+    @State private var draft = ""
+    @State private var showsPro = false
 
     var body: some View {
         NavigationStack {
@@ -808,6 +877,8 @@ private struct DigestPreviewSheet: View {
                 }
             }
             .safeAreaInset(edge: .bottom) {
+                VStack(spacing: 10) {
+                captionButton
                 HStack(spacing: 10) {
                     NavigationLink {
                         DigestSwapView(candidates: candidates, current: clip.sourceId, assets: assets) { source in
@@ -829,9 +900,21 @@ private struct DigestPreviewSheet: View {
                     }
                     .buttonStyle(.borderedProminent)
                 }
+                }
                 .controlSize(.large)
                 .padding(16)
             }
+            .alert("このコマに出す文字", isPresented: $editsCaption) {
+                TextField("場所の名前やひとことなど", text: $draft)
+                Button("決定") { onCaption(draft) }
+                if placeName != nil {
+                    Button("場所の名前に戻す") { onCaption(nil) }
+                }
+                Button("キャンセル", role: .cancel) {}
+            } message: {
+                Text("空のまま決定すると、文字を出しません。")
+            }
+            .sheet(isPresented: $showsPro) { DigestProSheet(isPresented: $showsPro) }
             .navigationTitle("Day \(clip.dayNumber) \(clip.timeText)\(clip.placeName.map { "・\($0)" } ?? "")")
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
@@ -852,6 +935,39 @@ private struct DigestPreviewSheet: View {
             }
         }
     }
+
+    /// 出す文字を変える（Pro）。無料のときは、日程の場所の名前だけ
+    private var captionButton: some View {
+        Button {
+            if proStore.isPurchased {
+                draft = clip.placeName ?? ""
+                editsCaption = true
+            } else {
+                showsPro = true
+            }
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "character.cursor.ibeam")
+                Text(clip.placeName ?? "文字なし")
+                    .lineLimit(1)
+                    .foregroundColor(clip.placeName == nil ? .white.opacity(0.6) : .white)
+                Spacer(minLength: 4)
+                if proStore.isPurchased {
+                    Text("文字を変える").font(.footnote)
+                } else {
+                    Text("Pro")
+                        .font(.caption2.bold())
+                        .padding(.horizontal, 6)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(.white.opacity(0.25)))
+                }
+            }
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.bordered)
+        .tint(.white)
+        .accessibilityLabel(proStore.isPurchased ? "出す文字を変える" : "出す文字を変える（Pro）")
+    }
 }
 
 /// 時刻・場所の文字の位置を選ぶ（左下・真ん中・右上）。
@@ -862,19 +978,8 @@ private struct DigestTextPositionPicker: View {
     /// 見本にするコマ（選んでいる範囲の1枚目）
     let sample: TripDigest.Clip?
     let assets: [String: PHAsset]
-    /// 左下のほかを選ぼうとしたとき（Pro でない人）
-    var onLocked: () -> Void = {}
 
     @ObservedObject private var proStore = ProStore.shared
-
-    private func isLocked(_ position: TripDigestComposer.TextPosition) -> Bool {
-        !proStore.isPurchased && position != .bottomLeft
-    }
-
-    /// 実際に使う位置（Pro でなければ左下）
-    private var effective: String {
-        proStore.isPurchased ? selection : TripDigestComposer.TextPosition.bottomLeft.rawValue
-    }
 
     @State private var overlays: [String: UIImage] = [:]
 
@@ -885,13 +990,9 @@ private struct DigestTextPositionPicker: View {
                 .foregroundColor(.secondary)
             HStack(spacing: 14) {
                 ForEach(TripDigestComposer.TextPosition.allCases) { position in
-                    let isSelected = effective == position.rawValue
+                    let isSelected = selection == position.rawValue
                     Button {
-                        if isLocked(position) {
-                            onLocked()
-                        } else {
-                            withAnimation(.easeInOut(duration: 0.15)) { selection = position.rawValue }
-                        }
+                        withAnimation(.easeInOut(duration: 0.15)) { selection = position.rawValue }
                     } label: {
                         VStack(spacing: 5) {
                             // 画面の幅いっぱいに3つ並ぶ大きさ（縦長 9:16）
@@ -913,17 +1014,6 @@ private struct DigestTextPositionPicker: View {
                                         .stroke(isSelected ? Color.accentColor : Color.primary.opacity(0.12),
                                                 lineWidth: isSelected ? 3 : 1)
                                 )
-                                .overlay(alignment: .topTrailing) {
-                                    if isLocked(position) {
-                                        Text("Pro")
-                                            .font(.caption2.bold())
-                                            .foregroundColor(.white)
-                                            .padding(.horizontal, 6)
-                                            .padding(.vertical, 2)
-                                            .background(Capsule().fill(.black.opacity(0.5)))
-                                            .padding(5)
-                                    }
-                                }
                                 .shadow(color: .black.opacity(isSelected ? 0.15 : 0.05), radius: 4, y: 2)
                             HStack(spacing: 3) {
                                 if isSelected {
@@ -942,13 +1032,13 @@ private struct DigestTextPositionPicker: View {
             }
             .frame(maxWidth: .infinity)
             if !proStore.isPurchased {
-                Text("動画の最後に1秒「Travory」の印が入ります。Pro なら印なしで、文字の位置も選べます。")
+                Text("右下に小さく「Travory」の文字が、最後に1秒「Travory」の印が入ります。Pro なら印なしで、場所の名前の代わりに好きな文字も入れられます。")
                     .font(.caption2)
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .task(id: sample?.sourceId) { renderOverlays() }
+        .task(id: "\(sample?.sourceId ?? "")|\(sample?.placeName ?? "")|\(proStore.isPurchased)") { renderOverlays() }
     }
 
     /// 3つの位置の文字を、動画と同じ部品で描く（縮めて持つ）
@@ -957,7 +1047,8 @@ private struct DigestTextPositionPicker: View {
         let context = CIContext()
         var result: [String: UIImage] = [:]
         for position in TripDigestComposer.TextPosition.allCases {
-            guard let overlay = TripDigestComposer.overlayImage(for: clip, title: nil, subtitle: "", position: position),
+            guard let overlay = TripDigestComposer.overlayImage(for: clip, title: nil, subtitle: "", position: position,
+                                                                watermark: !proStore.isPurchased),
                   let cg = context.createCGImage(overlay, from: overlay.extent) else { continue }
             result[position.rawValue] = UIImage(cgImage: cg).downscaled(maxPixel: 720)
         }
@@ -1027,7 +1118,7 @@ private struct DigestSwapView: View {
     }
 }
 
-/// 文字の位置を変えようとしたとき（Pro でない人）
+/// Pro の案内（好きな文字を入れようとしたとき。Pro でない人）
 private struct DigestProSheet: View {
     @Binding var isPresented: Bool
 

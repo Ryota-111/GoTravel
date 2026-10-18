@@ -95,6 +95,7 @@ enum TripDigestComposer {
     static func loadItems(_ clips: [TripDigest.Clip], assets: [String: PHAsset]) async -> [Item] {
         var items: [Item] = []
         for clip in clips {
+            if Task.isCancelled { break }
             guard let asset = assets[clip.sourceId] else { continue }
             if asset.mediaType == .video, let video = await requestVideo(asset) {
                 items.append(Item(media: .video(video), clip: clip))
@@ -134,9 +135,14 @@ enum TripDigestComposer {
     /// 1コマずつ、縦長の2秒の動画に作り直して（文字もここで焼き込む）、最後に順につなぐ。
     /// 文字を Core Animation で重ねるやり方はシミュレーターで落ちるうえ、縦に撮った動画の向きも
     /// コマごとに直す必要があるので、1コマずつ自分で描く
-    /// - Parameter title: 最初のコマに大きく出す題名（旅行名と日付）
+    /// 途中でやめられる（呼んだ Task を cancel すると `CancellationError` を投げる）
+    /// - Parameters:
+    ///   - title: 最初のコマに大きく出す題名（旅行名と日付）
+    ///   - watermark: 右下に小さく「Travory」を入れる（無料のとき）
+    ///   - endCard: 最後に1秒「Travory」の印を入れる（無料のとき）
     static func compose(_ items: [Item], title: String, subtitle: String, fileName: String,
                         textPosition: TextPosition = .bottomLeft,
+                        watermark: Bool = false,
                         endCard: Bool = false,
                         progress: @escaping @Sendable (Double) -> Void = { _ in }) async throws -> URL {
         guard !items.isEmpty else { throw ComposeError.empty }
@@ -151,8 +157,9 @@ enum TripDigestComposer {
         var cursor = CMTime.zero
 
         for (index, item) in items.enumerated() {
+            try Task.checkCancellation()
             let overlay = overlayImage(for: item.clip, title: index == 0 ? title : nil, subtitle: subtitle,
-                                       position: textPosition)
+                                       position: textPosition, watermark: watermark)
             let segmentURL = work.appendingPathComponent("\(index).mov")
             var audioSource: (track: AVAssetTrack, range: CMTimeRange)?
             switch item.media {
@@ -198,7 +205,7 @@ enum TripDigestComposer {
         }
         guard cursor > .zero else { throw ComposeError.failed }
 
-        // 無料のときは、最後に1秒「Travory」の印を入れる（Pro は印なし）
+        // 無料のときは、最後に1秒「Travory」の印を入れる（右下の小さな文字とあわせて。Pro は印なし）
         if endCard, let card = endCardImage() {
             let url = work.appendingPathComponent("end.mov")
             try await writeSegment(to: url, seconds: 1) { _, _ in card }
@@ -210,6 +217,7 @@ enum TripDigestComposer {
             }
         }
 
+        try Task.checkCancellation()
         let output = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
         try? FileManager.default.removeItem(at: output)
         guard let session = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)
@@ -288,6 +296,10 @@ enum TripDigestComposer {
 
         let frames = max(Int(seconds * Double(fps)), 1)
         for frame in 0..<frames {
+            if Task.isCancelled {
+                writer.cancelWriting()
+                throw CancellationError()
+            }
             while !input.isReadyForMoreMediaData { try await Task.sleep(nanoseconds: 2_000_000) }
             guard let image = draw(frame, frames), let pool = adaptor.pixelBufferPool else { throw ComposeError.failed }
             var buffer: CVPixelBuffer?
@@ -305,9 +317,10 @@ enum TripDigestComposer {
     // MARK: 文字
 
     /// 「Day 2   14:05」と場所の名前を、選んだ位置に置く。最初のコマには題名を大きく出す。
-    /// 場所の名前は省略しない（1行に入らなければ、入るまで文字を小さくする）
+    /// 場所の名前は省略しない（1行に入らなければ、入るまで文字を小さくする）。
+    /// watermark なら右下に小さく「Travory」を入れる（左下の文字より下に置くので重ならない）
     static func overlayImage(for clip: TripDigest.Clip, title: String?, subtitle: String,
-                             position: TextPosition = .bottomLeft) -> CIImage? {
+                             position: TextPosition = .bottomLeft, watermark: Bool = false) -> CIImage? {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = false
@@ -392,6 +405,11 @@ enum TripDigestComposer {
                     draw(place, size: 64, weight: .bold, align: .center, width: width,
                          origin: CGPoint(x: margin, y: top))
                 }
+            }
+
+            if watermark {
+                draw("Travory", size: 34, weight: .semibold, align: .right, width: width,
+                     origin: CGPoint(x: margin, y: H - 72), fromBottom: true)
             }
 
             if let title {

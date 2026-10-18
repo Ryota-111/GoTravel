@@ -45,9 +45,11 @@ enum TripDigest {
     /// 旅行全体の動画では、1日あたりのコマを減らす（長くなりすぎないように）
     static let maxClipsPerDayInTrip = 6
 
-    /// - Parameter pinned: 自分で選び直した写真・動画。その時間のコマには、これを必ず使う
+    /// - Parameters:
+    ///   - pinned: 自分で選び直した写真・動画。その時間のコマには、これを必ず使う
+    ///   - captions: 自分で入れた文字（写真・動画ごと。Pro）。場所の名前の代わりに出す。空なら何も出さない
     static func clips(plan: TravelPlan, sources: [Source], scope: Scope, pinned: Set<String> = [],
-                      calendar: Calendar = .current) -> [Clip] {
+                      captions: [String: String] = [:], calendar: Calendar = .current) -> [Clip] {
         let days: [Int]
         switch scope {
         case .day(let n): days = [n]
@@ -61,7 +63,7 @@ enum TripDigest {
             return pickHourly(ofDay, limit: limit, pinned: pinned, calendar: calendar).map { source in
                 Clip(sourceId: source.id, dayNumber: dayNumber, date: source.date,
                      timeText: timeText(source.date, calendar: calendar),
-                     placeName: placeName(near: source, plan: plan, dayNumber: dayNumber))
+                     placeName: caption(captions[source.id]) ?? placeName(near: source, plan: plan, dayNumber: dayNumber))
             }
         }
     }
@@ -93,6 +95,13 @@ enum TripDigest {
     /// 同じ日・同じ時間か（選び直しで、同じ時間の前の選び直しを外すため）
     static func sameHour(_ a: Date, _ b: Date, calendar: Calendar = .current) -> Bool {
         calendar.isDate(a, inSameDayAs: b) && calendar.component(.hour, from: a) == calendar.component(.hour, from: b)
+    }
+
+    /// 自分で入れた文字。入れていなければ nil（場所の名前を使う）、空にしたなら文字なし
+    private static func caption(_ text: String?) -> String?? {
+        guard let text else { return nil }
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        return .some(trimmed.isEmpty ? nil : trimmed)
     }
 
     /// 撮った場所にいちばん近い、その日の予定の名前（800m 以内のときだけ）

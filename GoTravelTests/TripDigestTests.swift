@@ -50,6 +50,21 @@ struct TripDigestTests {
             .map(\.sourceId) == ["photo"])
     }
 
+    @Test("自分で入れた文字は場所の名前の代わりに出し、空なら文字を出さない")
+    func captions() {
+        let plan = TravelBookletTests.sampleTrip()
+        let nearShuri = TripDigest.Source(id: "a", date: at(plan, day: 1, hour: 14), isVideo: false, duration: 0,
+                                          latitude: 26.2175, longitude: 127.7195)
+        let original = TripDigest.clips(plan: plan, sources: [nearShuri], scope: .day(1), calendar: calendar)
+        #expect(original.first?.placeName != nil)
+        let custom = TripDigest.clips(plan: plan, sources: [nearShuri], scope: .day(1),
+                                      captions: ["a": " みんなで乾杯 "], calendar: calendar)
+        #expect(custom.first?.placeName == "みんなで乾杯")
+        let hidden = TripDigest.clips(plan: plan, sources: [nearShuri], scope: .day(1),
+                                      captions: ["a": ""], calendar: calendar)
+        #expect(hidden.first?.placeName == nil)
+    }
+
     @Test("多すぎるときは、1日の中でまんべんなく間引く")
     func thinning() {
         let plan = TravelBookletTests.sampleTrip()
