@@ -89,6 +89,64 @@ struct TripDigestTests {
         #expect(TripDigest.placeName(near: noLocation, plan: plan, dayNumber: 1) == nil)
     }
 
+    @Test("足した写真は、1時間に1つの決まりや上限に関係なく、決めた時刻に入る。旅行全体にも入る")
+    func added() {
+        let plan = TravelBookletTests.sampleTrip()
+        let sources = [
+            TripDigest.Source(id: "p1", date: at(plan, day: 1, hour: 10), isVideo: false, duration: 0),
+            TripDigest.Source(id: "p2", date: at(plan, day: 1, hour: 10, minute: 30), isVideo: false, duration: 0),
+        ]
+        // 同じ10時に、旅行の外で保存した写真を足す（p2 も時刻を変えて足したもの）
+        let added = [
+            TripDigest.Added(sourceId: "line", date: at(plan, day: 1, hour: 10, minute: 0).addingTimeInterval(1)),
+            TripDigest.Added(sourceId: "p2", date: at(plan, day: 1, hour: 15)),
+        ]
+        let day = TripDigest.clips(plan: plan, sources: sources, scope: .day(1), added: added, calendar: calendar)
+        #expect(day.map(\.sourceId) == ["p1", "line", "p2"])
+        #expect(day.map(\.isAdded) == [false, true, true])
+        #expect(day.last?.timeText == "15:00")
+        let trip = TripDigest.clips(plan: plan, sources: sources, scope: .trip, added: added, calendar: calendar)
+        #expect(trip.map(\.sourceId) == ["p1", "line", "p2"])
+    }
+
+    @Test("外した時間は、同じ時間の別の写真が代わりに入らず、まるごと無くなる。足した写真は入る")
+    func excludedHours() {
+        let plan = TravelBookletTests.sampleTrip()
+        let sources = [
+            TripDigest.Source(id: "a", date: at(plan, day: 1, hour: 10), isVideo: false, duration: 0),
+            TripDigest.Source(id: "b", date: at(plan, day: 1, hour: 10, minute: 40), isVideo: false, duration: 0),
+            TripDigest.Source(id: "c", date: at(plan, day: 1, hour: 11), isVideo: false, duration: 0),
+        ]
+        let key = TripDigest.hourKey(at(plan, day: 1, hour: 10, minute: 15), calendar: calendar)
+        #expect(TripDigest.hourKey(at(plan, day: 1, hour: 10), calendar: calendar) == key)
+        let clips = TripDigest.clips(plan: plan, sources: sources, scope: .day(1), excludedHours: [key], calendar: calendar)
+        #expect(clips.map(\.sourceId) == ["c"])
+        let withAdded = TripDigest.clips(plan: plan, sources: sources, scope: .day(1),
+                                         added: [TripDigest.Added(sourceId: "x", date: at(plan, day: 1, hour: 10, minute: 5))],
+                                         excludedHours: [key], calendar: calendar)
+        #expect(withAdded.map(\.sourceId) == ["x", "c"])
+    }
+
+    @Test("足した写真の時刻：撮った日時がその日なら、その時刻。違えば近くの予定の時刻。どちらも無ければ決めない")
+    func addedDate() {
+        let plan = TravelBookletTests.sampleTrip()
+        let sameDay = TripDigest.Source(id: "a", date: at(plan, day: 1, hour: 13, minute: 20), isVideo: false, duration: 0)
+        #expect(TripDigest.addedDate(for: sameDay, plan: plan, dayNumber: 1, calendar: calendar) == sameDay.date)
+
+        // 保存した日（旅行のあと）になっているが、首里城の近くで撮った写真
+        let later = Date(timeIntervalSince1970: 1_800_000_000)
+        let nearShuri = TripDigest.Source(id: "b", date: later, isVideo: false, duration: 0,
+                                          latitude: 26.2175, longitude: 127.7195)
+        let shuri = plan.daySchedules[0].scheduleItems.first { $0.title == "首里城" }!
+        let expected = calendar.date(bySettingHour: calendar.component(.hour, from: shuri.time),
+                                     minute: calendar.component(.minute, from: shuri.time), second: 0,
+                                     of: calendar.startOfDay(for: plan.date(forDay: 1)))
+        #expect(TripDigest.addedDate(for: nearShuri, plan: plan, dayNumber: 1, calendar: calendar) == expected)
+
+        let unknown = TripDigest.Source(id: "c", date: later, isVideo: false, duration: 0)
+        #expect(TripDigest.addedDate(for: unknown, plan: plan, dayNumber: 1, calendar: calendar) == nil)
+    }
+
     @Test("写真を2秒ずつつないで、縦長の動画ができる")
     func compose() async throws {
         let colors: [UIColor] = [.systemTeal, .systemOrange, .systemPink]
