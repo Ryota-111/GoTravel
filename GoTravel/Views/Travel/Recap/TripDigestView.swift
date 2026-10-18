@@ -244,7 +244,8 @@ struct TripDigestView: View {
 
     private func load() async {
         phase = .loading
-        excluded = TripDigestExclusions.load(planId: plan.id)
+        // 1枚ずつ外す仕組みはやめた（外すのは時間ごと）。前に外した写真が見えないまま残らないように空にする
+        excluded = []
         pinned = TripDigestExclusions.loadPinned(planId: plan.id)
         captions = TripDigestExclusions.loadCaptions(planId: plan.id)
         added = TripDigestExclusions.loadAdded(planId: plan.id)
@@ -648,24 +649,6 @@ private struct DigestReviewView: View {
         return sources.filter { !addedIds.contains($0.id) } + added.map(\.source)
     }
 
-    /// この動画の範囲で外した写真・動画（押すと戻せる）
-    private var excludedClips: [TripDigest.Clip] {
-        let days: [Int]
-        switch scope {
-        case .day(let n): days = [n]
-        case .trip: days = Array(1...max(plan.dayCount, 1))
-        }
-        let calendar = Calendar.current
-        return sources.filter { excluded.contains($0.id) }.compactMap { source in
-            guard let day = days.first(where: { calendar.isDate(source.date, inSameDayAs: plan.date(forDay: $0)) })
-            else { return nil }
-            return TripDigest.Clip(sourceId: source.id, dayNumber: day, date: source.date,
-                                   timeText: TripDigest.timeText(source.date, calendar: calendar),
-                                   placeName: TripDigest.placeName(near: source, plan: plan, dayNumber: day))
-        }
-        .sorted { $0.date < $1.date }
-    }
-
     /// 日ごとのまとまり
     private var days: [(day: Int, clips: [TripDigest.Clip])] {
         Dictionary(grouping: clips, by: \.dayNumber).sorted { $0.key < $1.key }.map { ($0.key, $0.value) }
@@ -690,9 +673,6 @@ private struct DigestReviewView: View {
                 }
                 if !excludedHourEntries.isEmpty {
                     excludedHoursSection
-                }
-                if !excludedClips.isEmpty {
-                    excludedSection
                 }
             }
             .padding(16)
@@ -854,27 +834,6 @@ private struct DigestReviewView: View {
         .accessibilityHint(excludedStyle ? "押すと戻します" : "押すと大きく表示します")
     }
 
-    private var excludedSection: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            HStack {
-                Text("入れ替えた写真（\(excludedClips.count)）")
-                    .font(.subheadline.weight(.semibold))
-                Spacer()
-                Button("すべて戻す") {
-                    withAnimation { excluded.subtract(excludedClips.map(\.sourceId)) }
-                }
-                .font(.footnote)
-            }
-            Text("ほかの写真に入れ替えて外した写真です。押すと、撮った時間のコマの候補に戻せます。")
-                .font(.caption)
-                .foregroundColor(.secondary)
-            ForEach(excludedClips) { clip in
-                row(clip, excludedStyle: true)
-            }
-        }
-        .padding(.top, 16)
-    }
-
     // MARK: 足す・外す・時刻
 
     struct PendingAdd: Identifiable {
@@ -993,7 +952,7 @@ private struct DigestReviewView: View {
     }
 
     /// コマの写真を、カメラロールの写真に入れ替える（時刻はそのまま）。
-    /// 撮った時間のコマは、もとの写真を外し、選んだ写真を同じ時刻に足す
+    /// 撮った時間のコマは、その時間を外し、選んだ写真を同じ時刻に足す
     private func replace(_ clip: TripDigest.Clip, with id: String) -> Bool {
         guard let asset = PHAsset.fetchAssets(withLocalIdentifiers: [id], options: nil).firstObject else { return false }
         assets[id] = asset
@@ -1003,7 +962,8 @@ private struct DigestReviewView: View {
                 added.remove(at: index)
                 insertAdded(id, date: date)
             } else {
-                excluded.insert(clip.sourceId)
+                // その時間を外し、選んだ写真を同じ時刻に足す（「外した時間」から戻せば、もとのコマも戻る）
+                excludedHours.insert(TripDigest.hourKey(clip.date))
                 pinned.remove(clip.sourceId)
                 insertAdded(id, date: clip.date)
             }
