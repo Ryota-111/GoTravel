@@ -1,5 +1,10 @@
 import SwiftUI
 
+/// 旅行の費用（費用のタブ）。
+///
+/// 3.1 で家計簿のような作りにした。色のグラデーションや影のカード、見出しごとのアイコンをやめ、
+/// 1枚の紙に「合計 → 精算 → 日ごとの明細」を細い線で区切って並べる。主役は数字で、
+/// 誰が払ったか・誰と割り勘するかは金額の下に小さく添えるだけにする（`docs/設計_割り勘.md`）
 struct BudgetSummaryView: View {
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.colorScheme) var colorScheme
@@ -11,434 +16,579 @@ struct BudgetSummaryView: View {
     /// タブに埋め込むときは true。独自のヘッダーを出さない
     var isEmbedded: Bool = false
 
-    /// 明細を閉じている日。
-    /// 開いた状態から始める（何に使ったかは開かなくても見えていてほしい）
+    /// 明細を閉じている日
     @State private var collapsedDays: Set<Int> = []
+    /// 払った人・割り勘する人を直している費用（支出なら中身ごと直す）
+    @State private var editing: CostEditTarget?
+    @State private var showsCompanionPrompt = false
+    @State private var companionName = ""
+    @State private var renamingCompanion: TripCompanion?
 
-    /// ViewModelから最新のプランを見る。人数を変えた結果を即座に反映するため
+    /// ViewModelから最新のプランを見る。直した結果を即座に反映するため
     private var currentPlan: TravelPlan {
         travelPlanViewModel.travelPlans.first(where: { $0.id == plan.id }) ?? plan
     }
 
-    private var allItems: [ScheduleItem] {
-        currentPlan.daySchedulesInRange.flatMap { $0.scheduleItems }
+    private var myUserId: String? { authVM.userId }
+
+    // MARK: - 色（1枚の紙の上に置く）
+
+    private var paper: Color {
+        colorScheme == .dark
+            ? themeManager.currentTheme.secondaryBackgroundDark
+            : themeManager.currentTheme.secondaryBackgroundLight
+    }
+    private var ink: Color { ThemePreset.readableText(on: paper) }
+    private var faint: Color { ink.opacity(0.58) }
+    private var rule: Color { ink.opacity(0.1) }
+    /// 押せる文字（「済みにする」「＋ 支出を足す」など）
+    private var tint: Color {
+        ThemePreset.readableTintEitherWay(themeManager.currentTheme.primary, on: paper, minimum: 4.0)
+    }
+    private var warning: Color { ThemePreset.readableTint(themeManager.currentTheme.error, on: paper) }
+
+    // MARK: - 金額
+
+    private var allItems: [ScheduleItem] { currentPlan.daySchedulesInRange.flatMap(\.scheduleItems) }
+
+    /// 行程に出ていない予約の費用（宿の予約番号と金額だけ控えた人の分も入れる）
+    private var outsideReservations: [Reservation] {
+        currentPlan.reservations.filter { (($0.cost ?? 0) > 0 || $0.foreignCost != nil)
+            && !currentPlan.hasScheduleItems(forReservation: $0.id) }
     }
 
-    // MARK: - Computed Properties
-    private var totalCost: Double {
-        allItems.compactMap { $0.cost }.reduce(0, +)
-            + reservationCosts.compactMap(\.budget).reduce(0, +)
+    /// 予定に使わない支出（精算の受け渡しは除く）
+    private var expenses: [TripExpense] { currentPlan.split.expenses.filter { !$0.settles } }
+    private var settlements: [TripExpense] { currentPlan.split.expenses.filter(\.settles) }
+
+    private var plannedTotal: Double {
+        allItems.compactMap(\.cost).reduce(0, +) + outsideReservations.compactMap(\.cost).reduce(0, +)
     }
 
-    /// 行程に出ていない予約の費用。
-    /// 宿の予約番号と金額だけ控えた人の分も、予算に入れる。
-    /// 行程に出ている予約は予定の金額として日ごとに数えるので、ここには入れない
-    private var reservationCosts: [ItemCost] {
-        currentPlan.reservations
-            .filter { (($0.cost ?? 0) > 0 || $0.foreignCost != nil)
-                && !currentPlan.hasScheduleItems(forReservation: $0.id) }
-            .map {
-                ItemCost(id: $0.id,
-                         title: $0.title.isEmpty ? $0.kind.label : $0.title,
-                         budget: $0.cost,
-                         actual: nil,
-                         foreignText: Self.foreignText($0.foreignCost),
-                         missingRate: $0.foreignCost != nil && $0.foreignCost?.rate == nil)
-            }
+    /// 実際に使った金額。支出は使ったものなので、ここに入れる
+    private var actualTotal: Double {
+        allItems.compactMap(\.actualCost).reduce(0, +) + expenses.map(\.amount).reduce(0, +)
     }
 
-    /// 実際に使った金額の合計。未入力の項目は集計しない
-    private var totalActualCost: Double {
-        allItems.compactMap { $0.actualCost }.reduce(0, +)
+    private var hasActual: Bool { allItems.contains { $0.actualCost != nil } || !expenses.isEmpty }
+
+    private var hasAnyCost: Bool { plannedTotal > 0 || hasActual }
+
+    // MARK: - 割り勘
+
+    private var memberNames: [String: String] { travelPlanViewModel.memberNames(for: currentPlan.id) }
+    private var members: [String] { TripSplitLedger.members(of: currentPlan, myUserId: myUserId) }
+    private var entries: [TripSplitLedger.Entry] { TripSplitLedger.entries(of: currentPlan, myUserId: myUserId) }
+
+    private func name(_ id: String) -> String {
+        currentPlan.splitMemberName(id, names: memberNames, myUserId: myUserId)
     }
-
-    private var hasActualCost: Bool {
-        allItems.contains { $0.actualCost != nil }
-    }
-
-    /// 実績 - 予算。プラスなら予算オーバー
-    private var costDifference: Double {
-        totalActualCost - totalCost
-    }
-
-    private var memberCount: Int {
-        currentPlan.splitCount
-    }
-
-    /// 折半の対象になる金額。実績が入っていればそちらを優先する
-    private var splitBaseCost: Double {
-        hasActualCost ? totalActualCost : totalCost
-    }
-
-    private var costPerPerson: Double {
-        guard memberCount > 0 else { return 0 }
-        return splitBaseCost / Double(memberCount)
-    }
-
-    /// 日ごとの金額。
-    ///
-    /// 予算と実績の両方を持たせる。以前は予算しか見ていなかったため、
-    /// 実績だけ入れた項目が日別にも内訳にも出ず、合計と食い違って見えていた
-    private var costByDay: [DayCost] {
-        currentPlan.daySchedulesInRange.compactMap { day in
-            let items = day.scheduleItems
-                .filter { ($0.cost ?? 0) > 0 || ($0.actualCost ?? 0) > 0 || $0.foreignCost != nil }
-                .map { ItemCost(id: $0.id, title: $0.title, budget: $0.cost, actual: $0.actualCost,
-                                foreignText: Self.foreignText($0.foreignCost),
-                                missingRate: $0.foreignCost != nil && $0.foreignCost?.rate == nil,
-                                note: $0.costNote) }
-            guard !items.isEmpty else { return nil }
-
-            return DayCost(
-                dayNumber: day.dayNumber,
-                date: currentPlan.date(forDay: day.dayNumber),
-                budget: items.compactMap(\.budget).reduce(0, +),
-                actual: items.compactMap(\.actual).reduce(0, +),
-                hasActual: items.contains { $0.actual != nil },
-                items: items
-            )
-        }
-    }
-
-    struct DayCost: Identifiable {
-        let dayNumber: Int
-        let date: Date
-        let budget: Double
-        let actual: Double
-        let hasActual: Bool
-        let items: [ItemCost]
-        var id: Int { dayNumber }
-    }
-
-    struct ItemCost: Identifiable {
-        let id: String
-        let title: String
-        let budget: Double?
-        let actual: Double?
-        /// 外貨で入れた元の金額（"$120"）。円で入れたものは nil
-        var foreignText: String? = nil
-        /// 外貨で入れたがレートがまだ無く、円の金額に入っていない
-        var missingRate = false
-        /// 費用のメモ（「2人分」など）
-        var note: String? = nil
-    }
-
-    /// 外貨の元の金額の書き方。実績があれば実績、無ければ予算
-    private static func foreignText(_ foreign: ForeignCost?) -> String? {
-        guard let foreign, let amount = foreign.actualAmount ?? foreign.amount else { return nil }
-        return CurrencyCatalog.format(amount, code: foreign.currencyCode)
-    }
-
 
     private var tripDays: Int {
         Calendar.current.dayDifference(from: currentPlan.startDate, to: currentPlan.endDate) + 1
     }
 
-    // MARK: - Theme Colors
-    private var accentColor: Color {
-        colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
-    }
-
-    private var budgetColor: Color {
-        switch themeManager.currentTheme.type {
-        case .whiteBlack: return Color.black
-        default: return themeManager.currentTheme.primary
-        }
-    }
-
-    /// 白黒テーマで背景に溶けないよう、どのカードにも引く薄い枠
-    private var cardStroke: Color {
-        ThemePreset.readableText(on: cardBg).opacity(0.12)
-    }
-
-    private var cardBg: Color {
-        colorScheme == .dark
-            ? themeManager.currentTheme.secondaryBackgroundDark
-            : themeManager.currentTheme.secondaryBackgroundLight
-    }
-
-    private var bgGradient: some View {
-        let colors: [Color]
-        switch themeManager.currentTheme.type {
-        case .whiteBlack:
-            colors = [Color(white: 0.96), Color(white: 0.91)]
-        default:
-            colors = colorScheme == .dark
-                ? [themeManager.currentTheme.backgroundDark, themeManager.currentTheme.secondaryBackgroundDark]
-                : [themeManager.currentTheme.backgroundLight, themeManager.currentTheme.secondaryBackgroundLight]
-        }
-        return LinearGradient(gradient: Gradient(colors: colors), startPoint: .top, endPoint: .bottom)
-            .ignoresSafeArea()
-    }
-
     // MARK: - Body
+
     var body: some View {
-        if isEmbedded {
-            // 親がスクロールを持つので、ここでは入れ子にしない
-            cards
-                .padding(.horizontal, 16)
-                .padding(.top, 16)
-                .padding(.bottom, 30)
-        } else {
-            ZStack {
-                bgGradient
-
+        Group {
+            if isEmbedded {
+                // 親がスクロールを持つので、ここでは入れ子にしない
+                content
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    .padding(.bottom, 30)
+            } else {
                 VStack(spacing: 0) {
-                    headerView
-
+                    header
                     ScrollView(showsIndicators: false) {
-                        cards
+                        content
                             .padding(.horizontal, 20)
-                            .padding(.top, 20)
+                            .padding(.top, 16)
                             .padding(.bottom, 40)
                     }
                 }
+                .background(Color(.systemGroupedBackground).ignoresSafeArea())
+                .navigationBarHidden(true)
             }
-            .navigationBarHidden(true)
+        }
+        .sheet(item: $editing) { target in
+            CostSplitEditor(target: target, plan: currentPlan, members: members, myUserId: myUserId, name: name,
+                            onSave: save, onDelete: delete)
+        }
+        .alert("一緒に行く人", isPresented: $showsCompanionPrompt) {
+            TextField("名前（父・さくら など）", text: $companionName)
+            Button("足す") { addCompanion() }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("アプリを使っていない人も、名前だけで割り勘に入れられます。")
+        }
+        .alert("名前を変える", isPresented: Binding(get: { renamingCompanion != nil },
+                                                set: { if !$0 { renamingCompanion = nil } })) {
+            TextField("名前", text: $companionName)
+            Button("変える") { renameCompanion() }
+            Button("キャンセル", role: .cancel) {}
         }
     }
 
-    private var cards: some View {
-        // カードは3枚まで。以前は5枚あり、予算と実績を見比べるのに
-        // スクロールが要り、日別と内訳も同じことを2度書いていた
-        VStack(spacing: 16) {
-            summaryCard
-
-            // 共有していなくても同行者と割り勘したい場面があるため常に出す
-            if splitBaseCost > 0 {
-                costSplitCard
-            }
-
-            if !foreignRates.isEmpty {
-                exchangeRateCard
-            }
-
-            if !costByDay.isEmpty || !reservationCosts.isEmpty {
-                dailyCard
-            }
-
-            if totalCost == 0 && !hasActualCost {
-                emptyStateView
-            }
-        }
-    }
-
-    // MARK: - Header
-    private var headerView: some View {
+    private var header: some View {
         HStack {
-            Button(action: { presentationMode.wrappedValue.dismiss() }) {
-                Image(systemName: "xmark")
-                    .foregroundColor(accentColor)
-                    .imageScale(.medium)
-                    .padding(8)
-                    .background(accentColor.opacity(0.1))
-                    .clipShape(Circle())
+            Button { presentationMode.wrappedValue.dismiss() } label: {
+                Image(systemName: "xmark").font(.body.weight(.semibold)).foregroundColor(.primary)
+                    .frame(width: 36, height: 36)
             }
-
             Spacer()
-
-            VStack(spacing: 2) {
-                Text("予算サマリー")
-                    .font(.headline)
-                    .foregroundColor(accentColor)
-                Text(currentPlan.title)
-                    .font(.caption)
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-                    .lineLimit(1)
+            VStack(spacing: 1) {
+                Text("費用").font(.headline)
+                Text(currentPlan.title).font(.caption).foregroundColor(.secondary).lineLimit(1)
             }
-
             Spacer()
-
             Color.clear.frame(width: 36, height: 36)
         }
-        .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .background(budgetColor.opacity(0.12))
+        .padding(.horizontal, 12)
+        .padding(.vertical, 8)
     }
 
-    // MARK: - 1枚目：使った金額と予算
+    private var content: some View {
+        VStack(spacing: 14) {
+            VStack(alignment: .leading, spacing: 0) {
+                totalSection
+                splitSection
+                if hasAnyCost || !currentPlan.split.expenses.isEmpty {
+                    ledgerSection
+                }
+                if !foreignRates.isEmpty {
+                    exchangeRateSection
+                }
+            }
+            .padding(.horizontal, 18)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(paper))
+            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(rule, lineWidth: 1))
 
-    /// 実績を主役にし、予算はバーの背景と残額で見せる。
-    /// 「予算に対して今いくらか」が一番知りたい情報なので、
-    /// 予算と実績を別のカードに分けない
-    private var summaryCard: some View {
-        ZStack(alignment: .bottomLeading) {
-            LinearGradient(
-                gradient: Gradient(colors: [budgetColor.opacity(0.85), budgetColor.opacity(0.5)]),
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            )
-            .cornerRadius(20)
+            Button { editing = .newExpense } label: {
+                Label("支出を足す", systemImage: "plus")
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(tint)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 12)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(rule, lineWidth: 1))
+            }
+            .buttonStyle(.plain)
 
-            // 目的地は上の写真に出ているので、ここでは繰り返さない
-            VStack(alignment: .leading, spacing: 6) {
+            if !hasAnyCost {
+                Text("予定や予約に金額を入れるか、「支出を足す」から入れると、ここに出ます。")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .multilineTextAlignment(.center)
+                    .frame(maxWidth: .infinity)
+            }
+        }
+    }
+
+    // MARK: - 合計
+
+    private var totalSection: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(alignment: .firstTextBaseline) {
+                Text(hasActual ? "使った金額" : "予算")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(faint)
+                Spacer()
+                Text("\(tripDays)日間").font(.footnote).foregroundColor(faint)
+            }
+            Text(yen(hasActual ? actualTotal : plannedTotal))
+                .font(.system(size: 36, weight: .semibold))
+                .monospacedDigit()
+                .foregroundColor(ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            if hasActual && plannedTotal > 0 {
+                budgetLine
                 HStack {
-                    HStack(spacing: 5) {
-                        Image(systemName: "yensign.circle.fill")
-                            .font(.system(size: 13))
-                        Text(hasActualCost ? "使った金額" : "合計予算")
-                            .font(.caption.weight(.medium))
-                    }
-                    .foregroundColor(.white.opacity(0.85))
-
+                    Text("予算 \(yen(plannedTotal))")
                     Spacer()
-
-                    Text("\(tripDays)日間")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundColor(.white.opacity(0.85))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 3)
-                        .background(.white.opacity(0.2))
-                        .clipShape(Capsule())
+                    Text(remainingText)
+                        .foregroundColor(actualTotal > plannedTotal ? warning : faint)
                 }
-
-                Text(formatCurrency(hasActualCost ? totalActualCost : totalCost))
-                    .font(.system(size: 30, weight: .bold, design: .rounded))
-                    .foregroundColor(.white)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.6)
-
-                if hasActualCost && totalCost > 0 {
-                    budgetBar
-                    HStack {
-                        Text("予算 \(formatCurrency(totalCost))")
-                        Spacer()
-                        Text(remainingText)
-                            .fontWeight(.semibold)
-                    }
-                    .font(.caption2)
-                    .foregroundColor(.white.opacity(0.9))
-                } else if !hasActualCost && totalCost > 0 {
-                    // 実績を記録できること自体が知られていないので、ここで伝える
-                    Text("予定をタップして「実際に使った金額」を入れると、差額が分かります")
-                        .font(.caption2)
-                        .foregroundColor(.white.opacity(0.8))
-                        .fixedSize(horizontal: false, vertical: true)
-                }
+                .font(.caption)
+                .monospacedDigit()
+                .foregroundColor(faint)
+            } else if !hasActual && plannedTotal > 0 {
+                Text("予定を押して「実際に使った金額」を入れると、予算との差が分かります。")
+                    .font(.caption)
+                    .foregroundColor(faint)
+                    .fixedSize(horizontal: false, vertical: true)
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 14)
         }
-        .shadow(color: budgetColor.opacity(0.25), radius: 8, x: 0, y: 4)
+        .padding(.vertical, 18)
     }
 
-    /// 予算に対して実績がどこまで来たか。超えた分は色を変える
-    private var budgetBar: some View {
+    /// 予算に対してどこまで使ったか（細い線1本）
+    private var budgetLine: some View {
         GeometryReader { geo in
-            let ratio = min(totalActualCost / max(totalCost, 1), 1)
+            let ratio = min(actualTotal / max(plannedTotal, 1), 1)
             ZStack(alignment: .leading) {
-                Capsule()
-                    .fill(.white.opacity(0.25))
-                Capsule()
-                    .fill(costDifference > 0 ? Color.white : Color.white.opacity(0.9))
-                    .frame(width: max(geo.size.width * CGFloat(ratio), 4))
+                Capsule().fill(rule)
+                Capsule().fill(actualTotal > plannedTotal ? warning : ink.opacity(0.75))
+                    .frame(width: max(geo.size.width * CGFloat(ratio), 3))
             }
         }
-        .frame(height: 6)
-        .padding(.top, 2)
+        .frame(height: 3)
     }
 
     private var remainingText: String {
-        if costDifference > 0 {
-            return "\(formatCurrency(costDifference)) 超過"
-        } else if costDifference < 0 {
-            return "あと \(formatCurrency(abs(costDifference)))"
-        }
+        let difference = actualTotal - plannedTotal
+        if difference > 0 { return "\(yen(difference)) 超えています" }
+        if difference < 0 { return "あと \(yen(-difference))" }
         return "予算どおり"
     }
 
-    // MARK: - Cost Split Card
-    private var costSplitCard: some View {
-        VStack(alignment: .leading, spacing: 14) {
-            HStack(spacing: 6) {
-                Image(systemName: "person.2.fill")
-                    .foregroundColor(budgetColor)
-                    .font(.subheadline)
-                Text("金額折半")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(accentColor)
+    // MARK: - 精算
 
+    @ViewBuilder
+    private var splitSection: some View {
+        thinRule
+        if members.count < 2 {
+            VStack(alignment: .leading, spacing: 8) {
+                sectionTitle("割り勘")
+                Text("一緒に行く人を足すと、誰が誰にいくら払えばよいかを出します。")
+                    .font(.caption)
+                    .foregroundColor(faint)
+                    .fixedSize(horizontal: false, vertical: true)
+                addCompanionButton
+            }
+            .padding(.vertical, 16)
+        } else {
+            settlementBody
+        }
+    }
+
+    private var settlementBody: some View {
+        let balances = TripSplitLedger.balances(entries: entries, settlements: settlements, members: members)
+        let transfers = TripSplitLedger.transfers(from: balances)
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                sectionTitle("精算")
                 Spacer()
-
-                // 共有していない同行者がいるため、人数は共有人数と一致しない
-                if currentPlan.customSplitCount != nil {
-                    Button("自動に戻す") { updateSplitCount(nil) }
-                        .font(.caption)
-                        .foregroundColor(budgetColor)
+                if !transfers.isEmpty {
+                    Text("\(transfers.count)回").font(.footnote).foregroundColor(faint)
                 }
             }
+            if transfers.isEmpty {
+                Text(entries.isEmpty ? "費用を入れると、ここに受け渡しが出ます。" : "精算はいりません。")
+                    .font(.subheadline)
+                    .foregroundColor(faint)
+            } else {
+                VStack(spacing: 10) {
+                    ForEach(transfers) { transfer in transferRow(transfer) }
+                }
+            }
+            if !settlements.isEmpty { settledList }
+            perPerson(balances)
+            membersRow
+        }
+        .padding(.vertical, 16)
+    }
 
-            HStack(spacing: 12) {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text("割る人数")
-                        .font(.caption)
-                        .foregroundColor(themeManager.currentTheme.secondaryText)
+    private func transferRow(_ transfer: TripSplitLedger.Transfer) -> some View {
+        HStack(spacing: 8) {
+            Text(name(transfer.from)).lineLimit(1)
+            Image(systemName: "arrow.right").font(.caption.weight(.semibold)).foregroundColor(faint)
+            Text(name(transfer.to)).lineLimit(1)
+            Spacer(minLength: 8)
+            Text(yen(transfer.amount)).fontWeight(.semibold).monospacedDigit()
+            Button("済み") { settle(transfer) }
+                .font(.caption.weight(.semibold))
+                .foregroundColor(tint)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .overlay(Capsule().stroke(tint.opacity(0.5), lineWidth: 1))
+                .buttonStyle(.plain)
+                .accessibilityLabel("\(name(transfer.from))から\(name(transfer.to))への\(yen(transfer.amount))を済みにする")
+        }
+        .font(.subheadline)
+        .foregroundColor(ink)
+    }
 
-                    HStack(spacing: 10) {
-                        splitStepButton(systemName: "minus", enabled: memberCount > 1) {
-                            updateSplitCount(memberCount - 1)
-                        }
+    /// 済ませた受け渡し。「取り消す」で、まだ済んでいないことに戻す
+    private var settledList: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text("済み").font(.caption.weight(.semibold)).foregroundColor(faint)
+            ForEach(settlements) { settlement in
+                HStack(spacing: 6) {
+                    Image(systemName: "checkmark").font(.caption2.weight(.bold))
+                    Text("\(name(settlement.paidBy ?? "")) → \(name(settlement.splitWith?.first ?? ""))")
+                    Spacer()
+                    Text(yen(settlement.amount)).monospacedDigit()
+                    Button("取り消す") {
+                        withAnimation { delete(expenseId: settlement.id) }
+                    }
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(tint)
+                    .padding(.leading, 6)
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("\(name(settlement.paidBy ?? ""))から\(name(settlement.splitWith?.first ?? ""))への精算の「済み」を取り消す")
+                }
+                .font(.caption)
+                .foregroundColor(faint)
+            }
+        }
+        .padding(.top, 2)
+    }
 
-                        Text("\(memberCount)人")
-                            .font(.title3.weight(.bold))
-                            .foregroundColor(accentColor)
-                            .frame(minWidth: 52)
+    /// ひとりずつ：払った額と、その人が負担する額
+    private func perPerson(_ balances: [TripSplitLedger.Balance]) -> some View {
+        VStack(spacing: 6) {
+            HStack {
+                Text("ひとりずつ")
+                Spacer()
+                Text("払った").frame(width: 84, alignment: .trailing)
+                Text("負担する額").frame(width: 84, alignment: .trailing)
+            }
+            .font(.caption2.weight(.semibold))
+            .foregroundColor(faint)
+            ForEach(balances, id: \.member) { balance in
+                HStack {
+                    Text(name(balance.member)).lineLimit(1)
+                    Spacer()
+                    Text(yen(balance.paid)).frame(width: 84, alignment: .trailing)
+                    Text(yen(balance.share)).frame(width: 84, alignment: .trailing)
+                }
+                .font(.caption)
+                .monospacedDigit()
+                .foregroundColor(ink)
+            }
+        }
+        .padding(.top, 6)
+    }
 
-                        splitStepButton(systemName: "plus", enabled: memberCount < 99) {
-                            updateSplitCount(memberCount + 1)
+    /// 割り勘に入る人。同行者は長押しで名前を変えたり外したりできる
+    private var membersRow: some View {
+        ChipFlowLayout(spacing: 6) {
+            ForEach(members, id: \.self) { member in
+                let companion = currentPlan.split.companions.first { $0.id == member }
+                Text(name(member))
+                    .font(.caption)
+                    .foregroundColor(ink)
+                    .padding(.horizontal, 10)
+                    .padding(.vertical, 5)
+                    .background(Capsule().fill(rule))
+                    .contextMenu {
+                        if let companion {
+                            Button("名前を変える", systemImage: "pencil") {
+                                companionName = companion.name
+                                renamingCompanion = companion
+                            }
+                            Button("割り勘から外す", systemImage: "person.badge.minus", role: .destructive) {
+                                removeCompanion(companion)
+                            }
                         }
                     }
+            }
+            addCompanionButton
+        }
+        .padding(.top, 4)
+    }
+
+    private var addCompanionButton: some View {
+        Button {
+            companionName = ""
+            showsCompanionPrompt = true
+        } label: {
+            Label("一緒に行く人", systemImage: "plus")
+                .font(.caption.weight(.semibold))
+                .foregroundColor(tint)
+                .padding(.horizontal, 10)
+                .padding(.vertical, 5)
+                .overlay(Capsule().stroke(tint.opacity(0.5), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
+    }
+
+    // MARK: - 明細（日ごと）
+
+    private struct LedgerRow: Identifiable {
+        var id: String
+        var target: CostEditTarget
+        var title: String
+        var amount: Double?
+        var isActual: Bool
+        /// 予算と実際の額が違うときの予算
+        var budget: Double?
+        var foreignText: String?
+        var missingRate: Bool
+        var note: String?
+        var paidBy: String?
+        var splitWith: [String]?
+    }
+
+    private struct LedgerGroup: Identifiable {
+        var id: String
+        var title: String
+        var subtitle: String?
+        var dayNumber: Int?
+        var rows: [LedgerRow]
+        var total: Double { rows.compactMap(\.amount).reduce(0, +) }
+    }
+
+    private var ledgerGroups: [LedgerGroup] {
+        let fallback = TripSplitLedger.defaultPayer(of: currentPlan, myUserId: myUserId)
+        var groups: [LedgerGroup] = currentPlan.daySchedulesInRange.compactMap { day in
+            var rows = day.scheduleItems
+                .filter { ($0.cost ?? 0) > 0 || ($0.actualCost ?? 0) > 0 || $0.foreignCost != nil }
+                .map { item in
+                    LedgerRow(id: item.id, target: .scheduleItem(item.id), title: item.title,
+                              amount: item.actualCost ?? item.cost, isActual: item.actualCost != nil,
+                              budget: item.actualCost != nil && item.cost != item.actualCost ? item.cost : nil,
+                              foreignText: Self.foreignText(item.foreignCost),
+                              missingRate: item.foreignCost != nil && item.foreignCost?.rate == nil,
+                              note: item.costNote, paidBy: item.paidBy ?? fallback, splitWith: item.splitWith)
                 }
+            rows += expenses.filter { currentPlan.dayNumber(of: $0.date) == day.dayNumber }.map(expenseRow)
+            guard !rows.isEmpty else { return nil }
+            return LedgerGroup(id: "day\(day.dayNumber)", title: formatDate(currentPlan.date(forDay: day.dayNumber)),
+                               subtitle: "Day \(day.dayNumber)", dayNumber: day.dayNumber, rows: rows)
+        }
+        let reservations = outsideReservations.map { reservation in
+            LedgerRow(id: reservation.id, target: .reservation(reservation.id),
+                      title: reservation.title.isEmpty ? reservation.kind.label : reservation.title,
+                      amount: reservation.cost, isActual: false, budget: nil,
+                      foreignText: Self.foreignText(reservation.foreignCost),
+                      missingRate: reservation.foreignCost != nil && reservation.foreignCost?.rate == nil,
+                      note: nil, paidBy: reservation.paidBy ?? fallback, splitWith: reservation.splitWith)
+        }
+        if !reservations.isEmpty {
+            groups.append(LedgerGroup(id: "reservations", title: "予約", subtitle: "行程に無いもの",
+                                      dayNumber: nil, rows: reservations))
+        }
+        let others = expenses.filter { currentPlan.dayNumber(of: $0.date) == nil }.map(expenseRow)
+        if !others.isEmpty {
+            groups.append(LedgerGroup(id: "others", title: "旅行の前後", subtitle: nil, dayNumber: nil, rows: others))
+        }
+        return groups
+    }
 
-                Spacer()
+    private func expenseRow(_ expense: TripExpense) -> LedgerRow {
+        LedgerRow(id: expense.id, target: .expense(expense), title: expense.title.isEmpty ? "支出" : expense.title,
+                  amount: expense.amount, isActual: true, budget: nil, foreignText: nil, missingRate: false,
+                  note: nil,
+                  paidBy: expense.paidBy ?? TripSplitLedger.defaultPayer(of: currentPlan, myUserId: myUserId),
+                  splitWith: expense.splitWith)
+    }
 
-                VStack(alignment: .trailing, spacing: 4) {
-                    Text("1人あたり")
-                        .font(.caption)
-                        .foregroundColor(themeManager.currentTheme.secondaryText)
-                    Text(formatCurrency(costPerPerson))
-                        .font(.title3.weight(.bold))
-                        .foregroundColor(budgetColor)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
+    private var ledgerSection: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            if members.count >= 2 {
+                thinRule
+                Label("費用を押すと、払った人と割り勘する人を変えられます", systemImage: "hand.tap")
+                    .font(.caption)
+                    .foregroundColor(faint)
+                    .padding(.vertical, 10)
+            }
+            ForEach(ledgerGroups) { group in
+                thinRule
+                groupHeader(group)
+                if !(group.dayNumber.map(collapsedDays.contains) ?? false) {
+                    VStack(spacing: 0) {
+                        ForEach(group.rows) { row in ledgerRow(row) }
+                    }
+                    .padding(.bottom, 8)
                 }
             }
-            .padding(14)
-            .background(budgetColor.opacity(0.06))
-            .cornerRadius(12)
-
-            Text("\(hasActualCost ? "実績" : "合計") \(formatCurrency(splitBaseCost)) ÷ \(memberCount)人")
-                .font(.caption)
-                .foregroundColor(themeManager.currentTheme.secondaryText)
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(cardBg)
-                // 白黒テーマは背景(0.96)とカード(0.95)がほぼ同じ明るさで、
-                // 塗りだけだと境界が見えない。どのテーマでも薄い枠を引く
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(cardStroke, lineWidth: 1))
-                .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
-        )
     }
 
-    private func splitStepButton(systemName: String, enabled: Bool, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemName)
-                .font(.system(size: 14, weight: .bold))
-                .foregroundColor(enabled ? budgetColor : themeManager.currentTheme.secondaryText.opacity(0.4))
-                .frame(width: 32, height: 32)
-                .background(Circle().fill(budgetColor.opacity(enabled ? 0.12 : 0.05)))
+    private func groupHeader(_ group: LedgerGroup) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(group.title).font(.subheadline.weight(.semibold)).foregroundColor(ink)
+            if let subtitle = group.subtitle {
+                Text(subtitle).font(.caption).foregroundColor(faint)
+            }
+            Spacer(minLength: 4)
+            Text(yen(group.total)).font(.subheadline.weight(.semibold)).monospacedDigit().foregroundColor(ink)
+            if let day = group.dayNumber {
+                Image(systemName: collapsedDays.contains(day) ? "chevron.right" : "chevron.down")
+                    .font(.system(size: 10, weight: .semibold))
+                    .foregroundColor(faint)
+                    .frame(width: 12)
+            }
         }
-        .disabled(!enabled)
+        .padding(.top, 14)
+        .padding(.bottom, 6)
+        // Button にすると横スワイプでも反応してしまうため onTapGesture を使う
+        .contentShape(Rectangle())
+        .onTapGesture {
+            guard let day = group.dayNumber else { return }
+            withAnimation(.easeInOut(duration: 0.2)) {
+                if collapsedDays.contains(day) { collapsedDays.remove(day) } else { collapsedDays.insert(day) }
+            }
+        }
     }
 
-    /// 割り勘の人数を保存する。nil を渡すと自動（共有人数）に戻る
-    private func updateSplitCount(_ count: Int?) {
-        guard let userId = authVM.userId else { return }
-        var updated = currentPlan
-        updated.customSplitCount = count
-        travelPlanViewModel.update(updated, userId: userId)
+    private func ledgerRow(_ row: LedgerRow) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(row.title).font(.subheadline).foregroundColor(ink).lineLimit(1)
+                if let detail = detailText(row) {
+                    Text(detail).font(.caption).foregroundColor(faint).lineLimit(2)
+                }
+                if row.missingRate {
+                    Text("レートが入っていないので、合計に入っていません")
+                        .font(.caption2.weight(.semibold))
+                        .foregroundColor(warning)
+                }
+            }
+            Spacer(minLength: 8)
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(row.amount.map(yen) ?? "－")
+                    .font(.subheadline)
+                    .monospacedDigit()
+                    .foregroundColor(row.isActual ? ink : faint)
+                if let budget = row.budget {
+                    Text("予算 \(yen(budget))").font(.caption2).monospacedDigit().foregroundColor(faint)
+                } else if !row.isActual, row.amount != nil, hasActual {
+                    Text("予定").font(.caption2).foregroundColor(faint)
+                }
+            }
+            Image(systemName: "chevron.right")
+                .font(.system(size: 11, weight: .semibold))
+                .foregroundColor(faint.opacity(0.7))
+        }
+        .padding(.vertical, 7)
+        .contentShape(Rectangle())
+        .onTapGesture { editing = row.target }
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("押すと、払った人と割り勘する人を選べます")
+    }
+
+    /// 「自分払い・父をのぞく ・ 2人分 ・ $120」
+    private func detailText(_ row: LedgerRow) -> String? {
+        var parts: [String] = []
+        if members.count >= 2 {
+            parts.append(splitText(paidBy: row.paidBy, splitWith: row.splitWith))
+        }
+        if let note = row.note, !note.isEmpty { parts.append(note) }
+        if let foreign = row.foreignText { parts.append(foreign) }
+        return parts.isEmpty ? nil : parts.joined(separator: " ・ ")
+    }
+
+    private func splitText(paidBy: String?, splitWith: [String]?) -> String {
+        let payer = paidBy.flatMap { members.contains($0) ? "\(name($0))払い" : nil } ?? "払った人が未定"
+        let sharers = TripSplitLedger.sharers(of: splitWith, members: members)
+        if sharers.count == members.count { return "\(payer)・全員" }
+        let excluded = members.filter { !sharers.contains($0) }
+        if excluded.count < sharers.count {
+            return "\(payer)・\(excluded.map(name).joined(separator: "・"))をのぞく"
+        }
+        return "\(payer)・\(sharers.map(name).joined(separator: "・"))で割り勘"
+    }
+
+    private var thinRule: some View {
+        Rectangle().fill(rule).frame(height: 1)
+    }
+
+    private func sectionTitle(_ text: String) -> some View {
+        Text(text).font(.footnote.weight(.semibold)).foregroundColor(faint)
     }
 
     // MARK: - 外貨のレート
@@ -452,259 +602,109 @@ struct BudgetSummaryView: View {
     }
 
     /// 旅行ごとのレート。ここで直すと、その通貨の費用がすべて円に直し直される
-    private var exchangeRateCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                Image(systemName: "arrow.left.arrow.right.circle")
-                    .foregroundColor(budgetColor)
-                    .font(.subheadline)
-                Text("為替レート")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(accentColor)
-            }
-
+    private var exchangeRateSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            thinRule
+            sectionTitle("為替レート").padding(.top, 14)
             ForEach(foreignRates, id: \.code) { entry in
-                ExchangeRateRow(code: entry.code, rate: entry.rate,
-                                textColor: ThemePreset.readableText(on: cardBg),
-                                secondaryText: themeManager.currentTheme.secondaryText,
-                                errorColor: themeManager.currentTheme.error) { newRate in
-                    updateExchangeRate(newRate, for: entry.code)
+                ExchangeRateRow(code: entry.code, rate: entry.rate, textColor: ink, secondaryText: faint,
+                                errorColor: warning) { newRate in
+                    updatePlan { $0.setExchangeRate(newRate, for: entry.code) }
                 }
             }
-
-            Text("両替したときのレートを入れてください。この旅行のその通貨の費用は、すべてこのレートで円に直して合計します。")
+            Text("両替したときのレートを入れてください。その通貨の費用は、すべてこのレートで円に直して合計します。")
                 .font(.caption2)
-                .foregroundColor(themeManager.currentTheme.secondaryText)
+                .foregroundColor(faint)
                 .fixedSize(horizontal: false, vertical: true)
+                .padding(.bottom, 16)
         }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(cardBg)
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(cardStroke, lineWidth: 1))
-                .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
-        )
     }
 
-    private func updateExchangeRate(_ rate: Double?, for code: String) {
-        guard let userId = authVM.userId else { return }
+    // MARK: - 保存
+
+    private func updatePlan(_ change: (inout TravelPlan) -> Void) {
+        guard let userId = myUserId else { return }
         var updated = currentPlan
-        updated.setExchangeRate(rate, for: code)
+        change(&updated)
         travelPlanViewModel.update(updated, userId: userId)
     }
 
-    // MARK: - 3枚目：日ごと
-
-    /// 日別の合計と、その日の明細を1枚にまとめる。
-    /// 以前は「日別の支出」と「支出の内訳」の2枚に分かれていて、
-    /// 同じことを違う見せ方で2度書いていた
-    private var dailyCard: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                Image(systemName: "calendar.badge.clock")
-                    .foregroundColor(budgetColor)
-                    .font(.subheadline)
-                Text("日ごと")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(accentColor)
-
-                Spacer()
-
-                Text("実績 / 予算")
-                    .font(.caption2)
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-            }
-
-            VStack(spacing: 0) {
-                ForEach(costByDay) { day in
-                    dayRow(day)
-
-                    if !collapsedDays.contains(day.dayNumber) {
-                        VStack(spacing: 0) {
-                            ForEach(day.items) { item in
-                                itemRow(item)
-                            }
+    private func save(_ result: CostSplitEditor.Result) {
+        updatePlan { plan in
+            switch result {
+            case .assignment(let target, let paidBy, let splitWith):
+                switch target {
+                case .scheduleItem(let id):
+                    for d in plan.daySchedules.indices {
+                        if let i = plan.daySchedules[d].scheduleItems.firstIndex(where: { $0.id == id }) {
+                            plan.daySchedules[d].scheduleItems[i].paidBy = paidBy
+                            plan.daySchedules[d].scheduleItems[i].splitWith = splitWith
                         }
-                        .padding(.leading, 8)
-                        .padding(.bottom, 6)
                     }
-
-                    if day.dayNumber != costByDay.last?.dayNumber {
-                        Divider()
+                case .reservation(let id):
+                    if let i = plan.reservations.firstIndex(where: { $0.id == id }) {
+                        plan.reservations[i].paidBy = paidBy
+                        plan.reservations[i].splitWith = splitWith
                     }
+                case .expense, .newExpense:
+                    break
                 }
-
-                if !reservationCosts.isEmpty {
-                    if !costByDay.isEmpty { Divider() }
-                    reservationCostSection
-                }
-            }
-        }
-        .padding(16)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(cardBg)
-                // 白黒テーマは背景(0.96)とカード(0.95)がほぼ同じ明るさで、
-                // 塗りだけだと境界が見えない。どのテーマでも薄い枠を引く
-                .overlay(RoundedRectangle(cornerRadius: 16).stroke(cardStroke, lineWidth: 1))
-                .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
-        )
-    }
-
-    /// 行程に出ていない予約の費用。日が決まらないので、日ごとの後ろにまとめる
-    private var reservationCostSection: some View {
-        VStack(spacing: 0) {
-            HStack(spacing: 8) {
-                Text("予約")
-                    .font(.caption.weight(.bold))
-                    .foregroundColor(accentColor)
-                Text("行程に無いもの")
-                    .font(.caption)
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-                Spacer(minLength: 4)
-                Text(formatCurrency(reservationCosts.compactMap(\.budget).reduce(0, +)))
-                    .font(.caption)
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-            }
-            .padding(.vertical, 10)
-
-            VStack(spacing: 0) {
-                ForEach(reservationCosts) { item in
-                    itemRow(item)
-                }
-            }
-            .padding(.leading, 8)
-            .padding(.bottom, 6)
-        }
-    }
-
-    private func dayRow(_ day: DayCost) -> some View {
-        HStack(spacing: 8) {
-            Text("Day \(day.dayNumber)")
-                .font(.caption.weight(.bold))
-                .foregroundColor(accentColor)
-
-            Text(formatDate(day.date))
-                .font(.caption)
-                .foregroundColor(themeManager.currentTheme.secondaryText)
-
-            Spacer(minLength: 4)
-
-            Text(day.hasActual ? formatCurrency(day.actual) : "－")
-                .font(.subheadline.weight(.semibold))
-                .foregroundColor(day.hasActual ? budgetColor : themeManager.currentTheme.secondaryText)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-
-            Text("/ \(formatCurrency(day.budget))")
-                .font(.caption)
-                .foregroundColor(themeManager.currentTheme.secondaryText)
-                .lineLimit(1)
-                .minimumScaleFactor(0.7)
-
-            Image(systemName: collapsedDays.contains(day.dayNumber) ? "chevron.right" : "chevron.down")
-                .font(.system(size: 11, weight: .semibold))
-                .foregroundColor(themeManager.currentTheme.secondaryText)
-        }
-        .padding(.vertical, 10)
-        // Button にすると横スワイプでも反応してしまうため onTapGesture を使う
-        .contentShape(Rectangle())
-        .onTapGesture {
-            withAnimation(.easeInOut(duration: 0.2)) {
-                if collapsedDays.contains(day.dayNumber) {
-                    collapsedDays.remove(day.dayNumber)
+            case .expense(let expense):
+                if let i = plan.split.expenses.firstIndex(where: { $0.id == expense.id }) {
+                    plan.split.expenses[i] = expense
                 } else {
-                    collapsedDays.insert(day.dayNumber)
+                    plan.split.expenses.append(expense)
                 }
             }
         }
     }
 
-    private func itemRow(_ item: ItemCost) -> some View {
-        HStack(spacing: 8) {
-            VStack(alignment: .leading, spacing: 1) {
-                Text("・\(item.title)")
-                    .font(.caption)
-                    .foregroundColor(accentColor)
-                    .lineLimit(1)
-                if let note = item.note {
-                    Text(note)
-                        .font(.caption2)
-                        .foregroundColor(themeManager.currentTheme.secondaryText)
-                        .padding(.leading, 10)
-                }
-            }
-
-            Spacer(minLength: 4)
-
-            if let foreignText = item.foreignText {
-                Text(foreignText)
-                    .font(.caption2)
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-            }
-            if item.missingRate {
-                Text("レート未入力")
-                    .font(.caption2.weight(.semibold))
-                    .foregroundColor(ThemePreset.readableTint(themeManager.currentTheme.error, on: cardBg))
-            }
-
-            // 実績が入っていればそれを出し、予算しか無ければ予算を出す
-            if let actual = item.actual {
-                Text(formatCurrency(actual))
-                    .font(.caption.weight(.medium))
-                    .foregroundColor(budgetColor)
-                if let budget = item.budget, budget != actual {
-                    Text("/ \(formatCurrency(budget))")
-                        .font(.caption2)
-                        .foregroundColor(themeManager.currentTheme.secondaryText)
-                }
-            } else if let budget = item.budget {
-                Text(formatCurrency(budget))
-                    .font(.caption.weight(.medium))
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-            }
-        }
-        .padding(.vertical, 6)
-        .padding(.horizontal, 10)
+    private func delete(expenseId: String) {
+        updatePlan { $0.split.expenses.removeAll { $0.id == expenseId } }
     }
 
-    // MARK: - Empty State
-    private var emptyStateView: some View {
-        VStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(budgetColor.opacity(0.08))
-                    .frame(width: 80, height: 80)
-                Image(systemName: "yensign.circle")
-                    .font(.system(size: 36))
-                    .foregroundColor(budgetColor.opacity(0.4))
-            }
-            Text("まだ金額が登録されていません")
-                .font(.subheadline.weight(.medium))
-                .foregroundColor(accentColor)
-            Text("スケジュールや予約に金額を追加すると\nここに表示されます")
-                .font(.caption)
-                .foregroundColor(themeManager.currentTheme.secondaryText)
-                .multilineTextAlignment(.center)
+    private func settle(_ transfer: TripSplitLedger.Transfer) {
+        updatePlan {
+            $0.split.expenses.append(.settlement(from: transfer.from, to: transfer.to, amount: transfer.amount,
+                                                 date: Date()))
         }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 50)
-        .background(
-            RoundedRectangle(cornerRadius: 20)
-                .fill(budgetColor.opacity(0.04))
-                .overlay(
-                    RoundedRectangle(cornerRadius: 20)
-                        .stroke(budgetColor.opacity(0.15), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
-                )
-        )
+    }
+
+    private func addCompanion() {
+        let trimmed = companionName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmed.isEmpty else { return }
+        updatePlan { $0.split.companions.append(TripCompanion(name: trimmed)) }
+    }
+
+    private func renameCompanion() {
+        let trimmed = companionName.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard let companion = renamingCompanion, !trimmed.isEmpty else { return }
+        updatePlan { plan in
+            if let i = plan.split.companions.firstIndex(where: { $0.id == companion.id }) {
+                plan.split.companions[i].name = trimmed
+            }
+        }
+        renamingCompanion = nil
+    }
+
+    /// 同行者を外す。その人が払った費用は「払った人が未定」に、その人が負担していた分は残りの人で分ける
+    private func removeCompanion(_ companion: TripCompanion) {
+        updatePlan { $0.split.companions.removeAll { $0.id == companion.id } }
     }
 
     // MARK: - Helpers
-    private func formatCurrency(_ amount: Double) -> String {
+
+    /// 外貨の元の金額の書き方。実績があれば実績、無ければ予算
+    private static func foreignText(_ foreign: ForeignCost?) -> String? {
+        guard let foreign, let amount = foreign.actualAmount ?? foreign.amount else { return nil }
+        return CurrencyCatalog.format(amount, code: foreign.currencyCode)
+    }
+
+    private func yen(_ amount: Double) -> String {
         let formatter = NumberFormatter()
         formatter.numberStyle = .decimal
         formatter.maximumFractionDigits = 0
-        return "¥\(formatter.string(from: NSNumber(value: amount)) ?? "0")"
+        return "¥\(formatter.string(from: NSNumber(value: amount.rounded())) ?? "0")"
     }
 
     private func formatDate(_ date: Date) -> String {
@@ -714,6 +714,278 @@ struct BudgetSummaryView: View {
     }
 }
 
+// MARK: - 直す費用
+
+/// 費用の画面で押したもの
+enum CostEditTarget: Identifiable, Hashable {
+    case scheduleItem(String)
+    case reservation(String)
+    case expense(TripExpense)
+    case newExpense
+
+    var id: String {
+        switch self {
+        case .scheduleItem(let id): return "item-\(id)"
+        case .reservation(let id): return "reservation-\(id)"
+        case .expense(let expense): return "expense-\(expense.id)"
+        case .newExpense: return "new-expense"
+        }
+    }
+}
+
+extension TripExpense: Hashable {
+    func hash(into hasher: inout Hasher) { hasher.combine(id) }
+}
+
+/// 払った人と割り勘する人を選ぶ。支出なら、何に・いくら・いつも直せる
+private struct CostSplitEditor: View {
+    enum Result {
+        case assignment(CostEditTarget, paidBy: String?, splitWith: [String]?)
+        case expense(TripExpense)
+    }
+
+    let target: CostEditTarget
+    let plan: TravelPlan
+    let members: [String]
+    let myUserId: String?
+    let name: (String) -> String
+    let onSave: (Result) -> Void
+    let onDelete: (String) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var title = ""
+    @State private var amountText = ""
+    @State private var date = Date()
+    @State private var payer: String?
+    @State private var sharers: Set<String> = []
+    @FocusState private var amountFocused: Bool
+
+    private var isExpense: Bool {
+        switch target {
+        case .expense, .newExpense: return true
+        default: return false
+        }
+    }
+
+    private var existingExpense: TripExpense? {
+        if case .expense(let expense) = target { return expense }
+        return nil
+    }
+
+    /// 選んでいる費用の名前と金額（予定・予約のとき）
+    private var summary: (title: String, amount: Double?) {
+        switch target {
+        case .scheduleItem(let id):
+            let item = plan.daySchedules.flatMap(\.scheduleItems).first { $0.id == id }
+            return (item?.title ?? "", item.flatMap { $0.actualCost ?? $0.cost })
+        case .reservation(let id):
+            let reservation = plan.reservations.first { $0.id == id }
+            return (reservation?.title ?? "", reservation?.cost)
+        default:
+            return ("", nil)
+        }
+    }
+
+    private var amount: Double? { CurrencyCatalog.parse(amountText).flatMap { $0 > 0 ? $0 : nil } }
+
+    private var canSave: Bool { !isExpense || amount != nil }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if isExpense {
+                    Section {
+                        TextField("何に（水・お土産 など）", text: $title)
+                        HStack {
+                            Text("¥").foregroundColor(.secondary)
+                            TextField("金額", text: $amountText)
+                                .keyboardType(.numberPad)
+                                .focused($amountFocused)
+                        }
+                        DatePicker("日", selection: $date, displayedComponents: .date)
+                    } footer: {
+                        Text("予定にしない買い物や立て替えを入れます。日程には出ません。")
+                    }
+                } else {
+                    Section {
+                        HStack {
+                            Text(summary.title).lineLimit(1)
+                            Spacer()
+                            if let amount = summary.amount {
+                                Text(TravelPlanTextExporter.currency(amount)).monospacedDigit().foregroundColor(.secondary)
+                            }
+                        }
+                    } footer: {
+                        Text("金額は、実際に使った金額があればそれを、無ければ予定の金額を使います。")
+                    }
+                }
+
+                if members.count >= 2 {
+                    Section {
+                        ForEach(members, id: \.self) { member in
+                            // もう一度押すと選択を外す
+                            choiceRow(name(member), isOn: payer == member) { payer = payer == member ? nil : member }
+                        }
+                    } header: {
+                        Text("払った人")
+                    } footer: {
+                        if payer == nil {
+                            Text(plan.isShared ? "選ばなければ、精算には入りません。" : "選ばなければ、自分が払ったことにします。")
+                        }
+                    }
+                    Section {
+                        ForEach(members, id: \.self) { member in
+                            choiceRow(name(member), isOn: chosenSharers.contains(member)) { toggleSharer(member) }
+                        }
+                    } header: {
+                        Text("割り勘する人")
+                    } footer: {
+                        Text("チェックの付いた人で同じ額ずつ分けます。押すと外したり戻したりできます（運転した人を外す、など）。")
+                    }
+                }
+
+                if members.count >= 2, payer != nil || !sharers.isEmpty {
+                    Section {
+                        Button("選択を外して、はじめの状態に戻す") {
+                            payer = nil
+                            sharers = []
+                        }
+                    } footer: {
+                        Text("払った人を選ばず、全員で割り勘する状態に戻します。")
+                    }
+                }
+
+                if let existingExpense {
+                    Section {
+                        Button("この支出を削除", role: .destructive) {
+                            onDelete(existingExpense.id)
+                            dismiss()
+                        }
+                    }
+                }
+            }
+            .navigationTitle(isExpense ? (existingExpense == nil ? "支出を足す" : "支出") : "割り勘")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("保存") { save() }.fontWeight(.semibold).disabled(!canSave)
+                }
+            }
+            .onAppear(perform: load)
+        }
+        .presentationDetents(isExpense ? [.large] : [.medium, .large])
+    }
+
+    private func choiceRow(_ label: String, isOn: Bool, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Text(label).foregroundColor(.primary)
+                Spacer()
+                if isOn { Image(systemName: "checkmark").foregroundColor(.accentColor).fontWeight(.semibold) }
+            }
+        }
+    }
+
+    /// 今チェックが付いている人（何も選んでいなければ全員）
+    private var chosenSharers: Set<String> { sharers.isEmpty ? Set(members) : sharers }
+
+    /// 押した人を外す・戻す。全員に付いたら「全員」として持つ。最後の1人は外せない
+    private func toggleSharer(_ member: String) {
+        var chosen = chosenSharers
+        if chosen.contains(member) {
+            guard chosen.count > 1 else { return }
+            chosen.remove(member)
+        } else {
+            chosen.insert(member)
+        }
+        sharers = chosen.count == members.count ? [] : chosen
+    }
+
+    /// 保存してある選択をそのまま出す（選んでいなければ何も付けない）
+    private func load() {
+        switch target {
+        case .scheduleItem(let id):
+            let item = plan.daySchedules.flatMap(\.scheduleItems).first { $0.id == id }
+            payer = item?.paidBy
+            sharers = Set(item?.splitWith ?? [])
+        case .reservation(let id):
+            let reservation = plan.reservations.first { $0.id == id }
+            payer = reservation?.paidBy
+            sharers = Set(reservation?.splitWith ?? [])
+        case .expense(let expense):
+            title = expense.title
+            amountText = CurrencyCatalog.editingText(expense.amount)
+            date = expense.date
+            payer = expense.paidBy
+            sharers = Set(expense.splitWith ?? [])
+        case .newExpense:
+            // 旅行中なら今日、そうでなければ旅行の初日
+            let today = Date()
+            date = plan.dayNumber(of: today) != nil ? today : plan.startDate
+            payer = members.first { $0 == myUserId } ?? members.first
+            amountFocused = true
+        }
+    }
+
+    private func save() {
+        let splitWith = SharedMembers.normalizedParticipants(sharers, members: members)
+        switch target {
+        case .scheduleItem, .reservation:
+            onSave(.assignment(target, paidBy: payer, splitWith: splitWith))
+        case .expense(let expense):
+            var updated = expense
+            updated.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+            updated.amount = amount ?? expense.amount
+            updated.date = date
+            updated.paidBy = payer
+            updated.splitWith = splitWith
+            onSave(.expense(updated))
+        case .newExpense:
+            guard let amount else { return }
+            onSave(.expense(TripExpense(title: title.trimmingCharacters(in: .whitespacesAndNewlines),
+                                        amount: amount, date: date, paidBy: payer, splitWith: splitWith)))
+        }
+        dismiss()
+    }
+}
+
+/// 名前の札を、幅に合わせて折り返して並べる
+private struct ChipFlowLayout: Layout {
+    var spacing: CGFloat = 6
+
+    func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
+        let width = proposal.width ?? .infinity
+        var x: CGFloat = 0, y: CGFloat = 0, rowHeight: CGFloat = 0, maxX: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > 0, x + size.width > width {
+                x = 0
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            x += size.width + spacing
+            maxX = max(maxX, x - spacing)
+            rowHeight = max(rowHeight, size.height)
+        }
+        return CGSize(width: proposal.width ?? maxX, height: y + rowHeight)
+    }
+
+    func placeSubviews(in bounds: CGRect, proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) {
+        var x = bounds.minX, y = bounds.minY, rowHeight: CGFloat = 0
+        for subview in subviews {
+            let size = subview.sizeThatFits(.unspecified)
+            if x > bounds.minX, x + size.width > bounds.maxX {
+                x = bounds.minX
+                y += rowHeight + spacing
+                rowHeight = 0
+            }
+            subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+            x += size.width + spacing
+            rowHeight = max(rowHeight, size.height)
+        }
+    }
+}
 
 /// 為替レートの1行。打ち終わったとき（確定・フォーカスが外れたとき）だけ保存する。
 /// 1文字ごとに保存すると、そのたびに旅行全体を書き直して共有にも送ってしまう
@@ -738,6 +1010,7 @@ private struct ExchangeRateRow: View {
                 .multilineTextAlignment(.trailing)
                 .focused($isFocused)
                 .font(.subheadline.weight(.semibold))
+                .monospacedDigit()
                 .foregroundColor(textColor)
                 .frame(maxWidth: 100)
             Text("円")

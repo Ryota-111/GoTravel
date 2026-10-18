@@ -194,6 +194,10 @@ struct TravelPlan: Identifiable, Codable {
     /// 共有した旅行では、メモごとに「みんなで見る」か「自分だけ」を選べる
     var memos: [TripMemo] = []
 
+    /// 割り勘（3.1）：アプリを使っていない同行者・予定にしない支出・済ませた精算（`TripSplit`）。
+    /// Core Data と共有レコードの `splitJSON` に入る（**Production への反映が要る**）
+    var split = TripSplit()
+
     /// 2.9 までの1枚のメモ帳。**3.0 からは `memos` が正で、これは1枚目の共有メモの本文。**
     /// 2.9 以前のアプリ（`memoText`）と行き来するためだけに残す（`TripMemoLegacy`）
     var memo: String? {
@@ -223,6 +227,7 @@ struct TravelPlan: Identifiable, Codable {
         case isShared, shareCode, sharedWith, ownerId, lastEditedBy, updatedAt, customSplitCount
         case memo
         case memos
+        case split
     }
 
     /// 実際に割り勘に使う人数。
@@ -232,7 +237,7 @@ struct TravelPlan: Identifiable, Codable {
         if let customSplitCount, customSplitCount > 0 {
             return customSplitCount
         }
-        return isShared ? max(sharedWith.count, 1) : 1
+        return (isShared ? max(sharedWith.count, 1) : 1) + split.companions.count
     }
 
     var cardColorHex: String? {
@@ -265,7 +270,8 @@ struct TravelPlan: Identifiable, Codable {
          updatedAt: Date = Date(),
          customSplitCount: Int? = nil,
          memo: String? = nil,
-         memos: [TripMemo] = []) {
+         memos: [TripMemo] = [],
+         split: TripSplit = TripSplit()) {
         self.id = id
         self.title = title
         self.startDate = startDate
@@ -288,6 +294,7 @@ struct TravelPlan: Identifiable, Codable {
         self.updatedAt = updatedAt
         self.customSplitCount = customSplitCount
         self.memos = TripMemoLegacy.reconcile(memos: memos, legacy: memo)
+        self.split = split
     }
 
     init(from decoder: Decoder) throws {
@@ -316,6 +323,7 @@ struct TravelPlan: Identifiable, Codable {
         let decodedMemos = try container.decodeIfPresent([TripMemo].self, forKey: .memos) ?? []
         memos = TripMemoLegacy.reconcile(memos: decodedMemos,
                                          legacy: try container.decodeIfPresent(String.self, forKey: .memo))
+        split = try container.decodeIfPresent(TripSplit.self, forKey: .split) ?? TripSplit()
 
         if let hex = try container.decodeIfPresent(String.self, forKey: .cardColorHex) {
             cardColor = Color(hex: hex)
@@ -349,6 +357,7 @@ struct TravelPlan: Identifiable, Codable {
         try container.encodeIfPresent(customSplitCount, forKey: .customSplitCount)
         try container.encodeIfPresent(memo, forKey: .memo)
         try container.encode(memos, forKey: .memos)
+        if !split.isEmpty { try container.encode(split, forKey: .split) }
     }
 
     // Helper methods
@@ -402,6 +411,7 @@ struct TravelPlan: Identifiable, Codable {
             && cardColorHex == other.cardColorHex
             && customSplitCount == other.customSplitCount
             && memos == other.memos
+            && split == other.split
             && isShared == other.isShared
             && shareCode == other.shareCode
             && sharedWith == other.sharedWith

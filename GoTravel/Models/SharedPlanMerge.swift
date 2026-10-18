@@ -144,6 +144,12 @@ enum SharedPlanMerge {
             return merged
         }
 
+        // 割り勘（3.1）：同行者と支出（済ませた精算を含む）は、1つずつ書き換えたほうを採る
+        merged.split.companions = merge(local: local.split.companions, remote: remote.split.companions,
+                                        base: base.split.companions, id: \.id, hasBase: true)
+        merged.split.expenses = merge(local: local.split.expenses, remote: remote.split.expenses,
+                                      base: base.split.expenses, id: \.id, hasBase: true)
+
         merged.reservations = merge(
             local: local.reservations,
             remote: remote.reservations,

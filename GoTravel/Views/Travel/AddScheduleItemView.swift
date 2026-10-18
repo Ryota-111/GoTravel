@@ -470,7 +470,9 @@ struct AddScheduleItemView: View {
             costNote: costNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? nil : costNote.trimmingCharacters(in: .whitespacesAndNewlines),
             endTime: hasEndTime ? ScheduleItem.endTime(hourAndMinuteOf: endTime, after: time, in: timeZone) : nil,
-            address: selectedLocation == nil ? nil : selectedAddress
+            address: selectedLocation == nil ? nil : selectedAddress,
+            // 割り勘（3.1）：共有した旅行で金額を入れたら、入れた人が払ったことにする（費用の画面で直せる）
+            paidBy: basePlan.isShared && (costs.cost ?? 0) > 0 ? userId : nil
         )
 
         var updatedPlan = basePlan

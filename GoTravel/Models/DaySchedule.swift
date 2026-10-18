@@ -101,8 +101,15 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
     /// その日に残したまま「前日 17:00」と出す（3.0、`docs/設計_3.0.md`）
     var dayShift: Int?
 
+    /// 割り勘（3.1）：この費用を払った人（ユーザーID か同行者の id）。
+    /// 無ければ、共有していない旅行では自分、共有している旅行では決まっていない（`TripSplitLedger`）
+    var paidBy: String?
+    /// 割り勘（3.1）：割り勘する人。**空（nil）なら全員。** 「運転した人は払わない」ときに外す
+    var splitWith: [String]?
+
     enum CodingKeys: String, CodingKey {
         case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId, timeZoneIdentifier, isPinned, participantIds, foreignCost, reservationPart, costNote, endTime, address, dayShift
+        case paidBy, splitWith
     }
 
     /// 書き出しや共有カードに出す金額。
@@ -140,7 +147,9 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
          costNote: String? = nil,
          endTime: Date? = nil,
          address: String? = nil,
-         dayShift: Int? = nil) {
+         dayShift: Int? = nil,
+         paidBy: String? = nil,
+         splitWith: [String]? = nil) {
         self.id = id
         self.time = time
         self.title = title
@@ -162,5 +171,7 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
         self.endTime = endTime
         self.address = address
         self.dayShift = dayShift
+        self.paidBy = paidBy
+        self.splitWith = splitWith
     }
 }

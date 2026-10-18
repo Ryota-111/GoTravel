@@ -723,6 +723,12 @@ final class CloudKitService {
         if sharedMemosJSON != nil || record["memosJSON"] != nil {
             record["memosJSON"] = sharedMemosJSON
         }
+        // 割り勘（3.1）。**Production に splitJSON を反映してからリリースすること。**
+        // メモと同じく、割り勘を使った計画（か、前に載せていた計画）でだけ値を入れる
+        let splitJSON = TripSplit.encode(plan.split)
+        if splitJSON != nil || record["splitJSON"] != nil {
+            record["splitJSON"] = splitJSON
+        }
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -1094,7 +1100,8 @@ final class CloudKitService {
                 ?? record["customSplitCount"] as? Int,
             // 2.9 以前の人が memoText だけを書き換えていたら、1枚目の共有メモに反映する
             memo: record["memoText"] as? String,
-            memos: TripMemoLegacy.decode(record["memosJSON"] as? String)
+            memos: TripMemoLegacy.decode(record["memosJSON"] as? String),
+            split: TripSplit.decode(record["splitJSON"] as? String)
         )
     }
 }

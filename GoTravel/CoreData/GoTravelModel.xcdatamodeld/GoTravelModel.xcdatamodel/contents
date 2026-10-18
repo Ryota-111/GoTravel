@@ -25,6 +25,7 @@
         <attribute name="memoText" optional="YES" attributeType="String"/>
         <attribute name="deletedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="memosJSON" optional="YES" attributeType="String"/>
+        <attribute name="splitJSON" optional="YES" attributeType="String"/>
     </entity>
     <entity name="PlanEntity" representedClassName="PlanEntity" syncable="YES">
         <attribute name="cardColorHex" optional="YES" attributeType="String"/>

@@ -179,6 +179,11 @@ struct Reservation: Identifiable, Codable, Equatable {
     /// 飛行機・新幹線の到着地の位置。名前は `arrivalPlace`
     var arrivalLocation: ReservationLocation?
 
+    /// 割り勘（3.1）：払った人と割り勘する人（`ScheduleItem.paidBy` と同じ）。
+    /// 行程に出ている予約では、予定の側のものを使う
+    var paidBy: String?
+    var splitWith: [String]?
+
     /// 保存のときの項目名。**項目を足したら、ここにも必ず足すこと**（足さないと保存されない）。
     /// `storedKind` は "kind" として書く（駐車場以外は今までと同じ形）
     enum CodingKeys: String, CodingKey {
@@ -189,6 +194,7 @@ struct Reservation: Identifiable, Codable, Equatable {
         case transportNumber, departurePlace, arrivalPlace, arrivalDate, seat, terminal
         case timeZoneIdentifier, arrivalTimeZoneIdentifier, endDate, pinsDuringPeriod
         case cost, foreignCost, location, departureLocation, arrivalLocation
+        case paidBy, splitWith
     }
 
     /// 経路を表示するかどうか。
