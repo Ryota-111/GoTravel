@@ -5,7 +5,7 @@ import Photos
 /// 旅のダイジェスト動画を作る画面（Travory Pro）。
 ///
 /// 縦長の写真カードを横にめくって「旅行全体」か「Day ごと」を選ぶ。各カードはその日の1枚目の写真が表紙で、
-/// 大きな日付を重ねる。下の丸いボタンで「確かめる」（コマを並べた一覧へ）か「作る」
+/// 大きな日付を重ねる。下で文字の位置を選び、カードを押すと、コマを並べた一覧（使う写真を確かめて「作る」）へ
 struct TripDigestView: View {
     /// 切り替えられるほかの旅行（アルバムから開いたとき）。空なら切り替えを出さない
     var otherPlans: [TravelPlan] = []
@@ -38,11 +38,7 @@ struct TripDigestView: View {
     @ObservedObject private var proStore = ProStore.shared
     @State private var reviewing: TripDigest.Scope?
     @State private var selected: String? = TripDigest.Scope.trip.id
-    @State private var progress: Double?
-    /// 作っている途中の仕事（「やめる」で止める）
-    @State private var making: Task<Void, Never>?
     @State private var result: DigestResult?
-    @State private var errorMessage: String?
     /// 時刻・場所の文字の位置（左下・真ん中・右上）。次に作るときも同じにする
     @AppStorage("tripDigestTextPosition") private var textPosition = TripDigestComposer.TextPosition.bottomLeft.rawValue
     /// 残した動画が変わった合図（作り終わったら数を進め、下の札を読み直す）
@@ -105,13 +101,6 @@ struct TripDigestView: View {
             }
             .onChange(of: result) { _, _ in libraryVersion += 1 }
             .onChange(of: reviewing) { _, _ in libraryVersion += 1 }
-            .overlay {
-                if let progress { MakingOverlay(progress: progress, onCancel: { making?.cancel() }) }
-            }
-            .alert(errorMessage ?? "", isPresented: Binding(get: { errorMessage != nil },
-                                                            set: { if !$0 { errorMessage = nil } })) {
-                Button("OK", role: .cancel) {}
-            }
             .task(id: plan.id) { await load() }
             .modifier(savesChoices)
         }
@@ -168,6 +157,11 @@ struct TripDigestView: View {
             .scrollTargetBehavior(.viewAligned)
             .scrollPosition(id: $selected)
             .frame(maxHeight: 520)
+            // 作るのはカードを押した先（使う写真を確かめてから）。文字の位置はここでも選べる
+            Text("カードを押すと、使う写真を確かめて動画を作れます")
+                .font(.footnote)
+                .foregroundColor(.secondary)
+                .padding(.top, 14)
             Spacer(minLength: 12)
             DigestTextPositionPicker(selection: $textPosition,
                                      sample: clips(for: selectedScope ?? .trip).first, assets: assets)
@@ -179,7 +173,7 @@ struct TripDigestView: View {
         }
     }
 
-    // MARK: 下：選んでいるカードの札と、丸いボタン
+    // MARK: 下：選んでいるカードの札（作った動画があれば、押すとすぐ見られる）
 
     private var bottomBar: some View {
         let scope = selectedScope ?? .trip
@@ -209,25 +203,8 @@ struct TripDigestView: View {
             }
             .buttonStyle(.plain)
             .disabled(saved == nil)
-            Spacer(minLength: 0)
-            roundButton(systemImage: "square.grid.2x2", label: "確かめる") { reviewing = scope }
-            roundButton(systemImage: "play.fill", label: "作る") {
-                making = Task { await make(scope: scope) }
-            }
         }
-    }
-
-    private func roundButton(systemImage: String, label: String, action: @escaping () -> Void) -> some View {
-        Button(action: action) {
-            Image(systemName: systemImage)
-                .font(.system(size: 17, weight: .semibold))
-                .foregroundColor(Color(.systemBackground))
-                .frame(width: 52, height: 52)
-                .background(Circle().fill(Color.primary.opacity(0.88)))
-                .shadow(color: .black.opacity(0.18), radius: 8, y: 4)
-        }
-        .accessibilityLabel(label)
-        .disabled(progress != nil)
+        .frame(maxWidth: .infinity)
     }
 
     private var emptyView: some View {
@@ -271,25 +248,6 @@ struct TripDigestView: View {
         sources = found.sources
         assets = found.assets
         phase = .ready
-    }
-
-    private func make(scope: TripDigest.Scope) async {
-        progress = 0
-        defer {
-            progress = nil
-            making = nil
-        }
-        do {
-            result = try await DigestMaker.make(plan: plan, scope: scope, clips: clips(for: scope), assets: assets,
-                                                textPosition: TripDigestComposer.TextPosition(rawValue: textPosition) ?? .bottomLeft) { value in
-                // 作り終わったあとに遅れて届いた知らせで、作成中の表示を戻さない
-                Task { @MainActor in if progress != nil { progress = value } }
-            }
-        } catch is CancellationError {
-            // 「やめる」を押した
-        } catch {
-            errorMessage = error.localizedDescription
-        }
     }
 }
 
