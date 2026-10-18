@@ -382,13 +382,7 @@ enum DigestMaker {
         let isPro = ProStore.shared.isPurchased
         let items = await TripDigestComposer.loadItems(clips, assets: assets)
         try Task.checkCancellation()
-        let subtitle: String
-        switch scope {
-        case .day(let n):
-            subtitle = "Day \(n)・\(TravelPlanTextExporter.dateString(plan.date(forDay: n)))"
-        case .trip:
-            subtitle = "\(TravelPlanTextExporter.dateString(plan.startDate)) 〜 \(TravelPlanTextExporter.dateString(plan.endDate))"
-        }
+        let subtitle = Self.subtitle(plan: plan, scope: scope)
         let temporary = try await TripDigestComposer.compose(items, title: plan.title, subtitle: subtitle,
                                                              fileName: TripDigest.fileName(plan: plan, scope: scope),
                                                              textPosition: textPosition,
@@ -396,6 +390,18 @@ enum DigestMaker {
         // 作った動画は残しておく（「思い出」タブのカードから、作り直さずに見られる）
         let url = (try? TripDigestLibrary.save(temporary, planId: plan.id, scopeId: scope.id, title: subtitle)) ?? temporary
         return TripDigestView.DigestResult(url: url, title: subtitle)
+    }
+}
+
+extension DigestMaker {
+    /// 最初のコマに題名と一緒に出す日付（「Day 2・9月22日(火)」「9月21日(月) 〜 9月23日(水)」）
+    nonisolated static func subtitle(plan: TravelPlan, scope: TripDigest.Scope) -> String {
+        switch scope {
+        case .day(let n):
+            return "Day \(n)・\(TravelPlanTextExporter.dateString(plan.date(forDay: n)))"
+        case .trip:
+            return "\(TravelPlanTextExporter.dateString(plan.startDate)) 〜 \(TravelPlanTextExporter.dateString(plan.endDate))"
+        }
     }
 }
 
@@ -668,14 +674,10 @@ private struct DigestReviewView: View {
             TripDigestPlayerView(result: result)
         }
         .sheet(item: $previewing) { shown in
-            // 文字を変えたら、開いたままの画面にもすぐ出す
-            let clip = clips.first { $0.id == shown.id } ?? shown
-            DigestPreviewSheet(asset: assets[clip.sourceId], clip: clip,
-                               placeName: sources.first { $0.id == clip.sourceId }
-                                   .flatMap { TripDigest.placeName(near: $0, plan: plan, dayNumber: clip.dayNumber) },
-                               candidates: sources.filter { Calendar.current.isDate($0.date, inSameDayAs: clip.date) },
+            // 外す・選び直す・文字を変えると、ここで作り直したコマの並びがそのまま開いた画面に届く
+            DigestPreviewSheet(plan: plan, scope: scope, clips: clips, startId: shown.id, sources: sources,
                                assets: assets,
-                               onExclude: {
+                               onExclude: { clip in
                                    withAnimation {
                                        _ = excluded.insert(clip.sourceId)
                                        _ = pinned.remove(clip.sourceId)
@@ -686,9 +688,7 @@ private struct DigestReviewView: View {
                                        TripDigestExclusions.choose(source, among: sources, pinned: &pinned, excluded: &excluded)
                                    }
                                },
-                               onCaption: { text in
-                                   if let text { captions[clip.sourceId] = text } else { captions[clip.sourceId] = nil }
-                               })
+                               onCaption: { clip, text in captions[clip.sourceId] = text })
         }
         .alert(errorMessage ?? "", isPresented: Binding(get: { errorMessage != nil },
                                                         set: { if !$0 { errorMessage = nil } })) {
@@ -846,127 +846,401 @@ struct TripDigestPlayerView: View {
     }
 }
 
-/// コマを大きく見る。ここで外すか・選び直すか・出す文字を決める
+/// コマを大きく見る。動画と同じ 9:16 の切り取りに、時刻・場所の文字（無料なら右下の Travory も）を
+/// 実際の見た目で重ねる。左右にめくって前後のコマへ移り、そのまま外す・選び直す・文字を変えるができる
 private struct DigestPreviewSheet: View {
-    let asset: PHAsset?
-    let clip: TripDigest.Clip
-    /// 日程から見つけた場所の名前（自分で文字を入れていなければ、これを出す）
-    let placeName: String?
-    /// 選び直せる写真・動画（その日に撮ったもの）
-    let candidates: [TripDigest.Source]
+    let plan: TravelPlan
+    let scope: TripDigest.Scope
+    /// 今のコマの並び（外す・選び直すと、作り直したものが届く）
+    let clips: [TripDigest.Clip]
+    /// 開いたときに出すコマ
+    let startId: String
+    let sources: [TripDigest.Source]
     let assets: [String: PHAsset]
-    let onExclude: () -> Void
+    let onExclude: (TripDigest.Clip) -> Void
     let onChoose: (TripDigest.Source) -> Void
     /// 出す文字を決めた（nil なら場所の名前に戻す）
-    let onCaption: (String?) -> Void
+    let onCaption: (TripDigest.Clip, String?) -> Void
+
     @Environment(\.dismiss) private var dismiss
     @ObservedObject private var proStore = ProStore.shared
-    @State private var image: UIImage?
+    @AppStorage("tripDigestTextPosition") private var textPosition = TripDigestComposer.TextPosition.bottomLeft.rawValue
+    @State private var index = 0
+    @State private var didStart = false
     @State private var editsCaption = false
     @State private var draft = ""
     @State private var showsPro = false
+    @State private var swapping = false
+
+    private var current: TripDigest.Clip? {
+        clips.indices.contains(index) ? clips[index] : clips.last
+    }
+
+    private var position: TripDigestComposer.TextPosition {
+        TripDigestComposer.TextPosition(rawValue: textPosition) ?? .bottomLeft
+    }
+
+    /// 日程から見つけた場所の名前（自分で文字を入れていなければ、これが出る）
+    private func originalPlace(of clip: TripDigest.Clip) -> String? {
+        sources.first { $0.id == clip.sourceId }
+            .flatMap { TripDigest.placeName(near: $0, plan: plan, dayNumber: clip.dayNumber) }
+    }
 
     var body: some View {
         NavigationStack {
             ZStack {
+                // 書いている間に写真のまわりを押すと決まる
                 Color.black.ignoresSafeArea()
-                if let image {
-                    Image(uiImage: image).resizable().scaledToFit()
-                } else {
-                    ProgressView().tint(.white)
-                }
-            }
-            .safeAreaInset(edge: .bottom) {
-                VStack(spacing: 10) {
-                captionButton
-                HStack(spacing: 10) {
-                    NavigationLink {
-                        DigestSwapView(candidates: candidates, current: clip.sourceId, assets: assets) { source in
-                            onChoose(source)
-                            dismiss()
-                        }
-                    } label: {
-                        Label("写真を選び直す", systemImage: "photo.on.rectangle")
-                            .frame(maxWidth: .infinity)
+                    .onTapGesture { commitCaption() }
+                TabView(selection: $index) {
+                    ForEach(Array(clips.enumerated()), id: \.element.id) { offset, clip in
+                        DigestFramePreview(clip: clip, asset: assets[clip.sourceId],
+                                           title: offset == 0 ? plan.title : nil,
+                                           subtitle: DigestMaker.subtitle(plan: plan, scope: scope),
+                                           position: position, watermark: !proStore.isPurchased,
+                                           isActive: offset == index,
+                                           editing: offset == index && editsCaption ? $draft : nil,
+                                           onCommit: commitCaption)
+                            .padding(.horizontal, 28)
+                            .padding(.vertical, 8)
+                            // 写真を押すと、重ねた文字をその場で書き換えられる。
+                            // 書いている間は写真を押しても何もしない（文字の中を押してカーソルを動かせるように）
+                            .onTapGesture { if !editsCaption { editCaption() } }
+                            .tag(offset)
                     }
-                    .buttonStyle(.bordered)
-                    .tint(.white)
-                    Button(role: .destructive) {
-                        onExclude()
-                        dismiss()
-                    } label: {
-                        Label("外す", systemImage: "eye.slash")
-                            .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
                 }
-                }
-                .controlSize(.large)
-                .padding(16)
+                .tabViewStyle(.page(indexDisplayMode: .never))
             }
-            .alert("このコマに出す文字", isPresented: $editsCaption) {
-                TextField("場所の名前やひとことなど", text: $draft)
-                Button("決定") { onCaption(draft) }
-                if placeName != nil {
-                    Button("場所の名前に戻す") { onCaption(nil) }
-                }
-                Button("キャンセル", role: .cancel) {}
-            } message: {
-                Text("空のまま決定すると、文字を出しません。")
-            }
-            .sheet(isPresented: $showsPro) { DigestProSheet(isPresented: $showsPro) }
-            .navigationTitle("Day \(clip.dayNumber) \(clip.timeText)\(clip.placeName.map { "・\($0)" } ?? "")")
+            .safeAreaInset(edge: .bottom) { actionBar }
+            // キーボードが出ても、写真の大きさや並びは変えない（文字が隠れるときだけ、写真のほうで少し上げる）
+            .ignoresSafeArea(.keyboard, edges: .bottom)
             .navigationBarTitleDisplayMode(.inline)
             .toolbarColorScheme(.dark, for: .navigationBar)
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("閉じる") { dismiss() }
+                ToolbarItem(placement: .principal) {
+                    VStack(spacing: 1) {
+                        Text(current.map { "Day \($0.dayNumber)  \($0.timeText)" } ?? "")
+                            .font(.headline)
+                        Text("\(min(index + 1, clips.count)) / \(clips.count)")
+                            .font(.caption2.monospacedDigit())
+                            .foregroundColor(.white.opacity(0.65))
+                    }
+                    .foregroundColor(.white)
+                }
+                // 外す・選び直す・文字はその場で保存しているので、閉じるのではなく「完了」にする
+                // （書いている途中なら、そこまでを決めてから閉じる）
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完了") {
+                        commitCaption()
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
                 }
             }
-            .task(id: asset?.localIdentifier) {
-                guard let asset else { return }
-                let options = PHImageRequestOptions()
-                options.deliveryMode = .opportunistic
-                options.isNetworkAccessAllowed = true
-                PHImageManager.default().requestImage(for: asset, targetSize: CGSize(width: 1200, height: 1200),
-                                                      contentMode: .aspectFit, options: options) { result, _ in
-                    if let result { image = result }
+            .navigationDestination(isPresented: $swapping) {
+                if let current {
+                    DigestSwapView(candidates: sources.filter { Calendar.current.isDate($0.date, inSameDayAs: current.date) },
+                                   current: current.sourceId, assets: assets) { source in
+                        onChoose(source)
+                        swapping = false
+                    }
                 }
+            }
+            .sheet(isPresented: $showsPro) { DigestProSheet(isPresented: $showsPro) }
+            .toolbar {
+                ToolbarItemGroup(placement: .keyboard) {
+                    if let current, originalPlace(of: current) != nil {
+                        Button("場所の名前に戻す") {
+                            onCaption(current, nil)
+                            editsCaption = false
+                        }
+                    }
+                    Spacer()
+                    Button("完了", action: commitCaption).fontWeight(.semibold)
+                }
+            }
+            // 書いている途中でめくったら、そこまでを決める
+            .onChange(of: index) { _, _ in if editsCaption { commitCaption() } }
+            .onAppear {
+                guard !didStart else { return }
+                didStart = true
+                index = clips.firstIndex { $0.id == startId } ?? 0
+            }
+            // 外して数が減ったら、同じ位置（最後なら1つ前）のコマを出す。全部外したら閉じる
+            .onChange(of: clips.count) { _, count in
+                if count == 0 { dismiss() } else { index = min(index, count - 1) }
             }
         }
     }
 
-    /// 出す文字を変える（Pro）。無料のときは、日程の場所の名前だけ
-    private var captionButton: some View {
-        Button {
-            if proStore.isPurchased {
-                draft = clip.placeName ?? ""
-                editsCaption = true
-            } else {
-                showsPro = true
-            }
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "character.cursor.ibeam")
-                Text(clip.placeName ?? "文字なし")
-                    .lineLimit(1)
-                    .foregroundColor(clip.placeName == nil ? .white.opacity(0.6) : .white)
-                Spacer(minLength: 4)
-                if proStore.isPurchased {
-                    Text("文字を変える").font(.footnote)
-                } else {
-                    Text("Pro")
-                        .font(.caption2.bold())
-                        .padding(.horizontal, 6)
-                        .padding(.vertical, 2)
-                        .background(Capsule().fill(.white.opacity(0.25)))
+    /// 3つの操作は同じ大きさ・同じ色にする（外しても戻せるので、外すだけを目立たせない）
+    private var actionBar: some View {
+        VStack(spacing: 10) {
+            Text("左右にめくると、前後のコマを見られます")
+                .font(.caption2)
+                .foregroundColor(.white.opacity(0.5))
+            HStack(spacing: 10) {
+                actionButton("文字", systemImage: "textformat", badge: proStore.isPurchased ? nil : "Pro") {
+                    editCaption()
+                }
+                actionButton("選び直す", systemImage: "photo.on.rectangle") { swapping = true }
+                actionButton("外す", systemImage: "eye.slash") {
+                    if let current { onExclude(current) }
                 }
             }
-            .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.bordered)
-        .tint(.white)
-        .accessibilityLabel(proStore.isPurchased ? "出す文字を変える" : "出す文字を変える（Pro）")
+        .padding(.horizontal, 16)
+        .padding(.bottom, 12)
+    }
+
+    private func actionButton(_ title: String, systemImage: String, badge: String? = nil,
+                              action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            VStack(spacing: 6) {
+                Image(systemName: systemImage).font(.system(size: 20, weight: .medium))
+                Text(title).font(.caption.weight(.semibold))
+            }
+            .foregroundColor(.white)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(.white.opacity(0.12)))
+            .overlay(alignment: .topTrailing) {
+                if let badge {
+                    Text(badge)
+                        .font(.system(size: 9, weight: .bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 5)
+                        .padding(.vertical, 2)
+                        .background(Capsule().fill(.white.opacity(0.25)))
+                        .padding(6)
+                }
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(current == nil)
+        .accessibilityLabel(badge == nil ? title : "\(title)（\(badge!)）")
+    }
+
+    /// 書いた文字を決める。変えていなければ何もしない（場所の名前を、自分で入れた文字にしてしまわない）
+    private func commitCaption() {
+        guard editsCaption else { return }
+        editsCaption = false
+        guard let current else { return }
+        let trimmed = draft.trimmingCharacters(in: .whitespacesAndNewlines)
+        if trimmed != (current.placeName ?? "") { onCaption(current, trimmed) }
+    }
+
+    /// 出す文字を変える（Pro）。無料のときは、日程の場所の名前だけ
+    private func editCaption() {
+        guard let current else { return }
+        if proStore.isPurchased {
+            draft = current.placeName ?? ""
+            editsCaption = true
+        } else {
+            showsPro = true
+        }
+    }
+}
+
+/// 動画の1コマの見本。動画と同じ部品（`TripDigestComposer.overlayImage`）で文字を描いて重ねる。
+/// 動画のコマは、動画で使う真ん中の2秒をくり返し流す（めくって見ているときだけ）
+private struct DigestFramePreview: View {
+    let clip: TripDigest.Clip
+    let asset: PHAsset?
+    /// 最初のコマに大きく出す題名
+    let title: String?
+    let subtitle: String
+    let position: TripDigestComposer.TextPosition
+    let watermark: Bool
+    let isActive: Bool
+    /// 書き換えている文字。nil なら書き換えていない
+    var editing: Binding<String>? = nil
+    var onCommit: () -> Void = {}
+
+    @State private var image: UIImage?
+    @State private var overlay: UIImage?
+    /// 書きはじめる前の、画面の中の位置（キーボードで隠れるかを決める）
+    @State private var restingFrame: CGRect = .zero
+    @State private var keyboardTop: CGFloat?
+    @FocusState private var focused: Bool
+
+    private static let context = CIContext()
+
+    private var isEditing: Bool { editing != nil }
+
+    // MARK: 書き換える文字の位置（動画の 1080 × 1920 の座標。`TripDigestComposer.overlayImage` と合わせる）
+
+    private static let placeFontSize: CGFloat = 64
+    /// 場所の名前の1行の高さ（太字 64 の行の高さ）
+    private static let placeLineHeight: CGFloat = 76
+
+    /// 場所の名前の行の、上下の真ん中
+    private var placeCenterY: CGFloat {
+        let H = TripDigestComposer.renderSize.height
+        let timeLine: CGFloat = 53 + 8
+        switch position {
+        case .bottomLeft: return H - 150 - Self.placeLineHeight / 2
+        case .topRight: return 170 + timeLine + Self.placeLineHeight / 2
+        case .center: return (title == nil ? H * 0.44 : H * 0.56) + timeLine + Self.placeLineHeight / 2
+        }
+    }
+
+    private var placeAlignment: TextAlignment {
+        switch position {
+        case .bottomLeft: return .leading
+        case .center: return .center
+        case .topRight: return .trailing
+        }
+    }
+
+    /// キーボードで文字が隠れるときだけ、隠れない分だけ写真を上げる（大きさは変えない）
+    private var lift: CGFloat {
+        guard isEditing, let keyboardTop, restingFrame.width > 0 else { return 0 }
+        let k = restingFrame.width / TripDigestComposer.renderSize.width
+        let lineBottom = restingFrame.minY + (placeCenterY + Self.placeLineHeight / 2) * k
+        return max(0, lineBottom - (keyboardTop - 12))
+    }
+
+    var body: some View {
+        Color(white: 0.12)
+            .aspectRatio(9 / 16, contentMode: .fit)
+            .overlay {
+                if let image {
+                    Image(uiImage: image).resizable().scaledToFill()
+                } else {
+                    ProgressView().tint(.white)
+                }
+            }
+            .overlay {
+                if isActive, let asset, asset.mediaType == .video {
+                    DigestLoopingVideo(asset: asset)
+                }
+            }
+            .overlay {
+                if let overlay { Image(uiImage: overlay).resizable() }
+            }
+            .overlay {
+                if let editing {
+                    GeometryReader { geo in placeField(editing, in: geo.size) }
+                }
+            }
+            .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .onGeometryChange(for: CGRect.self) { $0.frame(in: .global) } action: { frame in
+                if !isEditing { restingFrame = frame }
+            }
+            .offset(y: -lift)
+            .animation(.easeOut(duration: 0.25), value: lift)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .task(id: clip.sourceId) { loadImage() }
+            .task(id: "\(clip.sourceId)|\(clip.placeName ?? "")|\(position.rawValue)|\(watermark)|\(title ?? "")|\(isEditing)") {
+                renderOverlay()
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { note in
+                keyboardTop = (note.userInfo?[UIResponder.keyboardFrameEndUserInfoKey] as? CGRect)?.minY
+            }
+            .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillHideNotification)) { _ in
+                keyboardTop = nil
+            }
+            .accessibilityElement(children: .ignore)
+            .accessibilityLabel("Day \(clip.dayNumber) \(clip.timeText)\(clip.placeName.map { "、\($0)" } ?? "")")
+            .accessibilityHint("押すと、出す文字を変えられます")
+    }
+
+    private func loadImage() {
+        guard let asset else { return }
+        let options = PHImageRequestOptions()
+        options.deliveryMode = .opportunistic
+        options.isNetworkAccessAllowed = true
+        PHImageManager.default().requestImage(for: asset, targetSize: CGSize(width: 900, height: 1600),
+                                              contentMode: .aspectFill, options: options) { result, _ in
+            if let result { image = result }
+        }
+    }
+
+    /// 場所の名前があったところに、同じ大きさ・同じ見た目の入力欄を置く
+    private func placeField(_ text: Binding<String>, in size: CGSize) -> some View {
+        let k = size.width / TripDigestComposer.renderSize.width
+        let margin: CGFloat = 72
+        return TextField("", text: text, prompt: Text("文字を入れる").foregroundColor(.white.opacity(0.5)))
+            .font(.system(size: Self.placeFontSize * k, weight: .bold))
+            .foregroundColor(.white)
+            .tint(.white)
+            .multilineTextAlignment(placeAlignment)
+            .shadow(color: .black.opacity(0.5), radius: 5 * k)
+            .focused($focused)
+            .submitLabel(.done)
+            .onSubmit(onCommit)
+            .frame(width: size.width - margin * 2 * k, height: Self.placeLineHeight * k)
+            .position(x: size.width / 2, y: placeCenterY * k)
+            .onAppear { focused = true }
+    }
+
+    private func renderOverlay() {
+        // 書き換えている間は、場所の名前を描かない（入力欄が代わりに出る）。
+        // 空白を1つ入れておき、時刻の行の位置は変えない
+        var clip = clip
+        if isEditing { clip.placeName = " " }
+        guard let ci = TripDigestComposer.overlayImage(for: clip, title: title, subtitle: subtitle,
+                                                       position: position, watermark: watermark),
+              let cg = Self.context.createCGImage(ci, from: ci.extent) else { return }
+        overlay = UIImage(cgImage: cg).downscaled(maxPixel: 1200)
+    }
+}
+
+/// 動画のコマの見本：真ん中の2秒を、音を消してくり返し流す（動画で使うのと同じ範囲）
+private struct DigestLoopingVideo: UIViewRepresentable {
+    let asset: PHAsset
+
+    func makeUIView(context: Context) -> PlayerView {
+        let view = PlayerView()
+        view.load(asset)
+        return view
+    }
+
+    func updateUIView(_ uiView: PlayerView, context: Context) {}
+
+    static func dismantleUIView(_ uiView: PlayerView, coordinator: ()) {
+        uiView.stop()
+    }
+
+    final class PlayerView: UIView {
+        override class var layerClass: AnyClass { AVPlayerLayer.self }
+        private var playerLayer: AVPlayerLayer { layer as! AVPlayerLayer }
+        private var looper: AVPlayerLooper?
+        private var requestID: PHImageRequestID?
+        private var stopped = false
+
+        func load(_ asset: PHAsset) {
+            playerLayer.videoGravity = .resizeAspectFill
+            let options = PHVideoRequestOptions()
+            options.isNetworkAccessAllowed = true
+            options.deliveryMode = .mediumQualityFormat
+            let duration = asset.duration
+            requestID = PHImageManager.default().requestPlayerItem(forVideo: asset, options: options) { [weak self] item, _ in
+                guard let item else { return }
+                DispatchQueue.main.async { self?.start(item, duration: duration) }
+            }
+        }
+
+        private func start(_ item: AVPlayerItem, duration: TimeInterval) {
+            guard !stopped else { return }
+            let player = AVQueuePlayer()
+            player.isMuted = true
+            let length = min(TripDigest.clipSeconds, max(duration, 0.1))
+            let start = max(0, (duration - length) / 2)
+            let range = CMTimeRange(start: CMTime(seconds: start, preferredTimescale: 600),
+                                    duration: CMTime(seconds: length, preferredTimescale: 600))
+            looper = AVPlayerLooper(player: player, templateItem: item, timeRange: range)
+            playerLayer.player = player
+            player.play()
+        }
+
+        func stop() {
+            stopped = true
+            playerLayer.player?.pause()
+            looper?.disableLooping()
+            if let requestID { PHImageManager.default().cancelImageRequest(requestID) }
+        }
     }
 }
 
