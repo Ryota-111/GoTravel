@@ -1,11 +1,11 @@
 import SwiftUI
 import Charts
 
-/// 旅の記録（3.1・無料）。「思い出」タブの上から開く。
+/// 旅の記録（3.1・無料）。「思い出」タブの見出しの「記録」から開く。
 ///
-/// 旅行の回数・のべ日数・行った都道府県と国・使った金額などを、年ごとか「これまで全部」で数える（`TripStats`）。
-/// 費用の画面と同じく、色のグラデーションや影は使わず、数字を主役に細い線で区切る。
-/// 最後に「今年の旅」を縦長のカードにして送れる
+/// 雑誌の特集ページのように組む：いちばん最近の旅の写真を大きく、数字は大きく細い書体で、
+/// ラベルは小さな英字。枠や影は使わず、細い線と余白で区切る（`TripStats` で数える）。
+/// 送るときは、ストーリーのように1ページずつの縦長のカード（`TripStatsStoryCard`）にする
 struct TripStatsView: View {
     @EnvironmentObject private var travelPlanViewModel: TravelPlanViewModel
     @EnvironmentObject private var plansViewModel: PlansViewModel
@@ -13,11 +13,13 @@ struct TripStatsView: View {
     @StateObject private var placesVM = PlacesViewModel()
     @ObservedObject private var resolver = TripRegionResolver.shared
     @ObservedObject private var albumManager = AlbumManager.shared
+    @ObservedObject private var themeManager = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
 
     @State private var period: TripStats.Period = .all
     @State private var metric: Metric = .trips
-    @State private var shareCard: ShareCard?
+    @State private var sharing = false
 
     enum Metric: String, CaseIterable, Identifiable {
         case trips, days, spend
@@ -29,12 +31,6 @@ struct TripStatsView: View {
             case .spend: return "金額"
             }
         }
-    }
-
-    struct ShareCard: Identifiable {
-        let image: UIImage
-        let title: String
-        var id: String { title }
     }
 
     private var now: Date { Date() }
@@ -56,36 +52,74 @@ struct TripStatsView: View {
     private var periodTitle: String {
         switch period {
         case .all: return "これまで全部"
-        case .year(let year): return "\(year)年"
+        case .year(let year): return "\(String(year))年"
         }
     }
 
+    /// 見出しに大きく出す英字（「2026」「ALL TIME」）
+    private var periodMark: String {
+        switch period {
+        case .all: return "ALL TIME"
+        case .year(let year): return String(year)
+        }
+    }
+
+    // MARK: 色（テーマに合わせ、文字は読める濃さにする）
+
+    private var ground: Color {
+        colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight
+    }
+    private var ink: Color { ThemePreset.readableText(on: ground) }
+    private var faint: Color { ink.opacity(0.55) }
+    private var rule: Color { ink.opacity(0.12) }
+    private var accent: Color {
+        ThemePreset.readableTintEitherWay(themeManager.currentTheme.primary, on: ground, minimum: 3.0)
+    }
+
+    private func plan(_ id: String?) -> TravelPlan? {
+        guard let id else { return nil }
+        return plans.first { $0.id == id }
+    }
+
     var body: some View {
-        NavigationStack {
+        let summary = summary
+        return NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 14) {
-                    let summary = summary
+                VStack(alignment: .leading, spacing: 0) {
+                    hero(summary)
                     if summary.tripCount == 0 && summary.placeCount == 0 && summary.prefectures.isEmpty {
                         emptyState
                     } else {
-                        totals(summary)
-                        mapSection(summary)
-                        if period == .all { yearsSection }
-                        bestSection(summary)
-                        shareButton(summary)
+                        Group {
+                            numbers(summary)
+                            hairline
+                            mapSection(summary)
+                            if period == .all { yearsSection }
+                            bestSection(summary)
+                            filmStrip(summary)
+                            shareButton
+                        }
+                        .padding(.horizontal, 24)
                     }
                 }
-                .padding(16)
-                .padding(.bottom, 24)
+                .padding(.bottom, 40)
             }
-            .background(Color(.systemGroupedBackground).ignoresSafeArea())
-            .navigationTitle("旅の記録")
-            .navigationBarTitleDisplayMode(.inline)
+            .ignoresSafeArea(edges: .top)
+            .background(ground.ignoresSafeArea())
             .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("閉じる") { dismiss() } }
+                ToolbarItem(placement: .cancellationAction) {
+                    Button { dismiss() } label: {
+                        Image(systemName: "xmark").font(.subheadline.weight(.semibold))
+                    }
+                    .accessibilityLabel("閉じる")
+                }
                 ToolbarItem(placement: .topBarTrailing) { periodMenu }
             }
-            .sheet(item: $shareCard) { card in ShareCardSheet(card: card) }
+            .toolbarBackground(.hidden, for: .navigationBar)
+            .sheet(isPresented: $sharing) {
+                TripStatsShareSheet(summary: summary, periodMark: periodMark, periodTitle: periodTitle,
+                                    heroPlan: plan(summary.tripIds.first), longestPlan: plan(summary.longestPlanId))
+            }
             .task {
                 if let userId = authVM.userId { placesVM.setupFetchedResultsController(userId: userId) }
             }
@@ -112,96 +146,144 @@ struct TripStatsView: View {
         }
     }
 
+    // MARK: - 表紙：いちばん最近の旅の写真
+
+    private func hero(_ s: TripStats.Summary) -> some View {
+        let cover = plan(s.tripIds.first).flatMap(TravelBookletRenderer.coverImage(for:))
+        return ZStack(alignment: .bottomLeading) {
+            Group {
+                if let cover {
+                    Image(uiImage: cover).resizable().scaledToFill()
+                } else {
+                    LinearGradient(colors: [accent.opacity(0.85), accent.opacity(0.45)],
+                                   startPoint: .topLeading, endPoint: .bottomTrailing)
+                }
+            }
+            .frame(height: 360)
+            .frame(maxWidth: .infinity)
+            .clipped()
+            LinearGradient(colors: [.clear, .black.opacity(0.55)], startPoint: .center, endPoint: .bottom)
+            VStack(alignment: .leading, spacing: 4) {
+                Text(periodMark)
+                    .font(.system(size: 54, weight: .thin).width(.condensed))
+                Text("YOUR TRAVELS  ·  旅の記録")
+                    .font(.system(size: 12, weight: .semibold).width(.expanded))
+                    .opacity(0.85)
+            }
+            .foregroundColor(.white)
+            .padding(24)
+        }
+        .frame(height: 360)
+    }
+
     // MARK: - 数字
 
-    private func totals(_ s: TripStats.Summary) -> some View {
-        paper {
-            VStack(alignment: .leading, spacing: 16) {
-                HStack(alignment: .firstTextBaseline, spacing: 18) {
-                    bigNumber("\(s.tripCount)", unit: "回", label: "旅行")
-                    bigNumber("\(s.dayCount)", unit: "日", label: "のべ")
-                    Spacer(minLength: 0)
-                }
-                HStack(alignment: .firstTextBaseline, spacing: 18) {
-                    bigNumber("\(s.prefectures.count)", unit: "都道府県", label: "行った")
-                    bigNumber("\(s.countries.count)", unit: "か国", label: "国")
-                    Spacer(minLength: 0)
-                }
-                Rectangle().fill(Color.primary.opacity(0.08)).frame(height: 1)
-                line("使った金額", value: TravelPlanTextExporter.currency(s.spend.rounded()))
-                line("保存した場所", value: "\(s.placeCount)か所")
-                line("おでかけ", value: "\(s.outingCount)回")
+    private func numbers(_ s: TripStats.Summary) -> some View {
+        VStack(alignment: .leading, spacing: 22) {
+            HStack(alignment: .top, spacing: 0) {
+                figure("\(s.tripCount)", "TRIPS", "旅行")
+                figure("\(s.dayCount)", "DAYS", "のべ日数")
+                figure("\(s.prefectures.count)", "PREFECTURES", "都道府県")
+            }
+            VStack(spacing: 10) {
+                if s.countries.count > 1 { detail("国と地域", "\(s.countries.count)") }
+                detail("使った金額", TravelPlanTextExporter.currency(s.spend.rounded()))
+                detail("保存した場所", "\(s.placeCount)か所")
+                detail("おでかけ", "\(s.outingCount)回")
             }
         }
+        .padding(.top, 28)
+        .padding(.bottom, 24)
     }
 
-    private func bigNumber(_ value: String, unit: String, label: String) -> some View {
+    private func figure(_ value: String, _ label: String, _ japanese: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(label).font(.caption).foregroundColor(.secondary)
-            HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(value).font(.system(size: 34, weight: .semibold)).monospacedDigit()
-                Text(unit).font(.subheadline).foregroundColor(.secondary)
-            }
+            Text(value)
+                .font(.system(size: 52, weight: .thin).width(.condensed))
+                .monospacedDigit()
+                .foregroundColor(ink)
+                .lineLimit(1)
+                .minimumScaleFactor(0.6)
+            Text(label)
+                .font(.system(size: 10, weight: .semibold).width(.expanded))
+                .foregroundColor(accent)
+            Text(japanese).font(.caption2).foregroundColor(faint)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
+    private func detail(_ title: String, _ value: String) -> some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title).font(.footnote).foregroundColor(faint)
+            Rectangle().fill(rule).frame(height: 1).padding(.horizontal, 8).offset(y: -3)
+            Text(value).font(.subheadline.weight(.medium)).monospacedDigit().foregroundColor(ink)
         }
     }
 
-    private func line(_ title: String, value: String) -> some View {
-        HStack {
-            Text(title).font(.subheadline).foregroundColor(.secondary)
-            Spacer()
-            Text(value).font(.subheadline.weight(.semibold)).monospacedDigit()
+    private var hairline: some View { Rectangle().fill(rule).frame(height: 1) }
+
+    private func sectionMark(_ english: String, _ japanese: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(english).font(.system(size: 11, weight: .semibold).width(.expanded)).foregroundColor(accent)
+            Text(japanese).font(.caption).foregroundColor(faint)
         }
     }
 
     // MARK: - 地図
 
     private func mapSection(_ s: TripStats.Summary) -> some View {
-        paper {
-            VStack(alignment: .leading, spacing: 10) {
-                HStack(alignment: .firstTextBaseline) {
-                    sectionTitle("行った都道府県")
-                    Spacer()
-                    Text("\(s.prefectures.count) / 47").font(.subheadline.weight(.semibold)).monospacedDigit()
-                }
-                VisitedPrefectureMap(visited: s.prefectures)
-                    .frame(height: 300)
-                if resolver.remaining > 0 {
-                    Label("場所から県を調べています（あと\(resolver.remaining)か所）", systemImage: "hourglass")
-                        .font(.caption)
-                        .foregroundColor(.secondary)
-                }
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                sectionMark("JAPAN", "行った都道府県")
+                Spacer()
+                Text("\(s.prefectures.count)")
+                    .font(.system(size: 28, weight: .thin).width(.condensed))
+                    .foregroundColor(ink)
+                Text("/ 47").font(.caption).foregroundColor(faint)
+            }
+            VisitedPrefectureMap(visited: s.prefectures, visitedColor: accent, otherColor: ink.opacity(0.08))
+                .frame(height: 320)
+            if resolver.remaining > 0 {
+                Text("場所から県を調べています（あと\(resolver.remaining)か所）")
+                    .font(.caption2)
+                    .foregroundColor(faint)
             }
         }
+        .padding(.vertical, 24)
     }
 
     // MARK: - 年ごと
 
+    @ViewBuilder
     private var yearsSection: some View {
         let rows = TripStats.yearRows(plans: plans, now: now)
-        return Group {
-            if rows.count >= 1 {
-                paper {
-                    VStack(alignment: .leading, spacing: 12) {
-                        HStack {
-                            sectionTitle("年ごと")
-                            Spacer()
-                            Picker("", selection: $metric) {
-                                ForEach(Metric.allCases) { Text($0.label).tag($0) }
-                            }
-                            .pickerStyle(.segmented)
-                            .frame(width: 180)
-                        }
-                        Chart(rows) { row in
-                            BarMark(x: .value("年", String(row.year)), y: .value(metric.label, value(of: row)))
-                                .foregroundStyle(Color.accentColor.gradient)
-                                .annotation(position: .top) {
-                                    Text(valueText(of: row)).font(.caption2).foregroundColor(.secondary)
-                                }
-                        }
-                        .chartYAxis(.hidden)
-                        .frame(height: 160)
+        if !rows.isEmpty {
+            VStack(alignment: .leading, spacing: 14) {
+                hairline
+                HStack {
+                    sectionMark("BY YEAR", "年ごと")
+                    Spacer()
+                    Picker("", selection: $metric) {
+                        ForEach(Metric.allCases) { Text($0.label).tag($0) }
                     }
+                    .pickerStyle(.segmented)
+                    .frame(width: 168)
                 }
+                .padding(.top, 24)
+                Chart(rows) { row in
+                    BarMark(x: .value("年", String(row.year)), y: .value(metric.label, value(of: row)), width: 18)
+                        .foregroundStyle(accent)
+                        .clipShape(Capsule())
+                        .annotation(position: .top) {
+                            Text(valueText(of: row)).font(.caption2).foregroundColor(faint)
+                        }
+                }
+                .chartYAxis(.hidden)
+                .chartXAxis {
+                    AxisMarks { _ in AxisValueLabel().foregroundStyle(faint) }
+                }
+                .frame(height: 150)
+                .padding(.bottom, 24)
             }
         }
     }
@@ -227,70 +309,115 @@ struct TripStatsView: View {
     @ViewBuilder
     private func bestSection(_ s: TripStats.Summary) -> some View {
         if s.longest != nil || s.mostSpent != nil || s.topPrefecture != nil || !s.busyMonths.isEmpty {
-            paper {
-                VStack(alignment: .leading, spacing: 12) {
-                    sectionTitle("いちばん")
-                    if let longest = s.longest {
-                        line("長い旅", value: "\(longest.title)  \(longest.days)日")
-                    }
-                    if let most = s.mostSpent {
-                        line("使った旅", value: "\(most.title)  \(TravelPlanTextExporter.currency(most.amount.rounded()))")
-                    }
-                    if let top = s.topPrefecture {
-                        line("よく行く県", value: "\(top.prefecture.name)  \(top.trips)回")
-                    }
-                    if !s.busyMonths.isEmpty {
-                        line("よく出かける月", value: s.busyMonths.map { "\($0)月" }.joined(separator: "・"))
-                    }
+            VStack(alignment: .leading, spacing: 16) {
+                hairline
+                sectionMark("HIGHLIGHTS", "いちばん").padding(.top, 24)
+                if let longest = s.longest {
+                    best("いちばん長い旅", longest.title, "\(longest.days) DAYS", photo: plan(s.longestPlanId))
                 }
+                if let most = s.mostSpent {
+                    best("いちばん使った旅", most.title, TravelPlanTextExporter.currency(most.amount.rounded()),
+                         photo: plan(s.mostSpentPlanId))
+                }
+                if let top = s.topPrefecture {
+                    best("よく行く県", top.prefecture.name, "\(top.trips) TRIPS", photo: nil)
+                }
+                if !s.busyMonths.isEmpty {
+                    best("よく出かける月", s.busyMonths.map { "\($0)月" }.joined(separator: "・"), nil, photo: nil)
+                }
+            }
+            .padding(.bottom, 24)
+        }
+    }
+
+    private func best(_ caption: String, _ title: String, _ value: String?, photo: TravelPlan?) -> some View {
+        HStack(spacing: 14) {
+            Group {
+                if let image = photo.flatMap(TravelBookletRenderer.coverImage(for:)) {
+                    Image(uiImage: image).resizable().scaledToFill()
+                } else {
+                    accent.opacity(0.15)
+                        .overlay(Image(systemName: "sparkle").font(.footnote).foregroundColor(accent))
+                }
+            }
+            .frame(width: 44, height: 44)
+            .clipShape(Circle())
+            VStack(alignment: .leading, spacing: 2) {
+                Text(caption).font(.caption2).foregroundColor(faint)
+                Text(title).font(.subheadline.weight(.semibold)).foregroundColor(ink).lineLimit(1)
+            }
+            Spacer(minLength: 8)
+            if let value {
+                Text(value)
+                    .font(.system(size: 13, weight: .semibold).width(.expanded))
+                    .monospacedDigit()
+                    .foregroundColor(ink)
             }
         }
     }
 
-    // MARK: - カード
+    // MARK: - 写真の帯
 
-    private func shareButton(_ s: TripStats.Summary) -> some View {
-        Button {
-            let title = period == .all ? "これまでの旅" : "\(periodTitle)の旅"
-            let renderer = ImageRenderer(content: TripStatsCard(title: title, summary: s))
-            renderer.scale = 1
-            if let image = renderer.uiImage { shareCard = ShareCard(image: image, title: title) }
-        } label: {
-            Label(period == .all ? "これまでの旅をカードにして送る" : "\(periodTitle)の旅をカードにして送る",
-                  systemImage: "square.and.arrow.up")
-                .font(.subheadline.weight(.semibold))
-                .frame(maxWidth: .infinity)
-                .padding(.vertical, 14)
-                .background(RoundedRectangle(cornerRadius: 14, style: .continuous)
-                    .stroke(Color.accentColor.opacity(0.5), lineWidth: 1))
+    @ViewBuilder
+    private func filmStrip(_ s: TripStats.Summary) -> some View {
+        let trips = s.tripIds.compactMap(plan)
+        let withPhotos = trips.compactMap { trip in TravelBookletRenderer.coverImage(for: trip).map { (trip, $0) } }
+        if !withPhotos.isEmpty {
+            VStack(alignment: .leading, spacing: 14) {
+                hairline
+                sectionMark("JOURNAL", "旅の写真").padding(.top, 24)
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(withPhotos.prefix(20), id: \.0.id) { trip, image in
+                            VStack(alignment: .leading, spacing: 6) {
+                                Image(uiImage: image).resizable().scaledToFill()
+                                    .frame(width: 120, height: 160)
+                                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                Text(trip.title).font(.caption.weight(.semibold)).foregroundColor(ink).lineLimit(1)
+                                Text(DigestDateStyle.month(trip.startDate) + " " + String(Calendar.current.component(.year, from: trip.startDate)))
+                                    .font(.system(size: 9, weight: .semibold).width(.expanded))
+                                    .foregroundColor(faint)
+                            }
+                            .frame(width: 120)
+                        }
+                    }
+                }
+                .scrollClipDisabled()
+            }
+            .padding(.bottom, 28)
+        }
+    }
+
+    // MARK: - 送る
+
+    private var shareButton: some View {
+        Button { sharing = true } label: {
+            HStack {
+                Text(period == .all ? "これまでの旅をカードにして送る" : "\(periodTitle)の旅をカードにして送る")
+                Spacer()
+                Image(systemName: "arrow.up.right")
+            }
+            .font(.subheadline.weight(.semibold))
+            .foregroundColor(ThemePreset.readableText(on: ink))
+            .padding(.horizontal, 20)
+            .padding(.vertical, 16)
+            .background(Capsule().fill(ink))
         }
         .buttonStyle(.plain)
-        .foregroundColor(.accentColor)
+        .padding(.top, 8)
     }
 
     private var emptyState: some View {
         VStack(spacing: 10) {
-            Image(systemName: "airplane.departure").font(.system(size: 40)).foregroundColor(.secondary)
-            Text("終わった旅行がまだありません").font(.headline)
+            Text("終わった旅行がまだありません").font(.headline).foregroundColor(ink)
             Text("旅行計画の日付が過ぎると、ここに回数や行った都道府県が出ます。")
                 .font(.footnote)
-                .foregroundColor(.secondary)
+                .foregroundColor(faint)
                 .multilineTextAlignment(.center)
         }
         .frame(maxWidth: .infinity)
         .padding(.vertical, 60)
-    }
-
-    private func sectionTitle(_ text: String) -> some View {
-        Text(text).font(.footnote.weight(.semibold)).foregroundColor(.secondary)
-    }
-
-    private func paper<Content: View>(@ViewBuilder _ content: () -> Content) -> some View {
-        content()
-            .padding(18)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color(.secondarySystemGroupedBackground)))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(Color.primary.opacity(0.06), lineWidth: 1))
+        .padding(.horizontal, 24)
     }
 }
 
@@ -347,78 +474,158 @@ struct VisitedPrefectureMap: View {
     }
 }
 
-/// SNS に載せやすい縦長のカード（1080 × 1350）
-struct TripStatsCard: View {
-    let title: String
-    let summary: TripStats.Summary
+// MARK: - 送るカード（ストーリーのように1ページずつ）
 
-    var body: some View {
-        VStack(alignment: .leading, spacing: 0) {
-            Text(title)
-                .font(.system(size: 64, weight: .bold))
-            Text("Travory").font(.system(size: 30, weight: .semibold)).opacity(0.55).padding(.top, 6)
-            Spacer(minLength: 40)
-            HStack(alignment: .top, spacing: 60) {
-                VStack(alignment: .leading, spacing: 40) {
-                    stat("\(summary.tripCount)", "回", "旅行")
-                    stat("\(summary.dayCount)", "日", "のべ")
-                    stat("\(summary.prefectures.count)", "都道府県", "行った")
-                    if summary.countries.count > 1 { stat("\(summary.countries.count)", "か国", "国") }
-                }
-                VisitedPrefectureMap(visited: summary.prefectures, visitedColor: .white,
-                                     otherColor: .white.opacity(0.18))
-                    .frame(width: 420, height: 640)
-            }
-            Spacer(minLength: 40)
-            if let longest = summary.longest {
-                Text("いちばん長い旅　\(longest.title) \(longest.days)日")
-                    .font(.system(size: 34, weight: .medium))
-                    .opacity(0.85)
-            }
-        }
-        .foregroundColor(.white)
-        .padding(80)
-        .frame(width: 1080, height: 1350, alignment: .topLeading)
-        .background(LinearGradient(colors: [Color(red: 0.12, green: 0.36, blue: 0.62), Color(red: 0.05, green: 0.16, blue: 0.32)],
-                                   startPoint: .topLeading, endPoint: .bottomTrailing))
+/// 縦長（1080 × 1920）のカード。3ページ：数字・地図・いちばん長い旅
+struct TripStatsStoryCard: View {
+    enum Page: Int, CaseIterable, Identifiable {
+        case numbers, map, longest
+        var id: Int { rawValue }
     }
 
-    private func stat(_ value: String, _ unit: String, _ label: String) -> some View {
-        VStack(alignment: .leading, spacing: 4) {
-            Text(label).font(.system(size: 30, weight: .medium)).opacity(0.7)
-            HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(value).font(.system(size: 96, weight: .bold)).monospacedDigit()
-                Text(unit).font(.system(size: 34, weight: .semibold)).opacity(0.8)
+    let page: Page
+    let summary: TripStats.Summary
+    let periodMark: String
+    let heroImage: UIImage?
+    let longestImage: UIImage?
+
+    var body: some View {
+        ZStack {
+            background
+            VStack(alignment: .leading, spacing: 0) {
+                Text(periodMark)
+                    .font(.system(size: 120, weight: .thin).width(.condensed))
+                Text("YOUR TRAVELS")
+                    .font(.system(size: 30, weight: .semibold).width(.expanded))
+                    .opacity(0.8)
+                Spacer()
+                content
+                Spacer()
+                Text("Travory")
+                    .font(.system(size: 34, weight: .semibold))
+                    .opacity(0.6)
             }
+            .foregroundColor(.white)
+            .padding(90)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        }
+        .frame(width: 1080, height: 1920)
+    }
+
+    @ViewBuilder
+    private var background: some View {
+        let image = page == .longest ? (longestImage ?? heroImage) : heroImage
+        if let image, page != .map {
+            Image(uiImage: image).resizable().scaledToFill().frame(width: 1080, height: 1920).clipped()
+            // 白い文字が写真に負けないよう、全体を暗くし、上下はさらに暗くする
+            Color.black.opacity(0.35)
+            LinearGradient(colors: [.black.opacity(0.4), .clear, .black.opacity(0.6)],
+                           startPoint: .top, endPoint: .bottom)
+        } else {
+            Color(red: 0.11, green: 0.10, blue: 0.09)
+        }
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        switch page {
+        case .numbers:
+            VStack(alignment: .leading, spacing: 64) {
+                figure("\(summary.tripCount)", "TRIPS")
+                figure("\(summary.dayCount)", "DAYS")
+                figure("\(summary.prefectures.count)", "PREFECTURES")
+            }
+        case .map:
+            VStack(alignment: .leading, spacing: 30) {
+                HStack(alignment: .firstTextBaseline, spacing: 16) {
+                    Text("\(summary.prefectures.count)").font(.system(size: 160, weight: .thin).width(.condensed))
+                    Text("/ 47").font(.system(size: 50, weight: .light)).opacity(0.7)
+                }
+                VisitedPrefectureMap(visited: summary.prefectures, visitedColor: Color(red: 0.84, green: 0.68, blue: 0.52),
+                                     otherColor: .white.opacity(0.14))
+                    .frame(width: 900, height: 900)
+            }
+        case .longest:
+            VStack(alignment: .leading, spacing: 20) {
+                Text("いちばん長い旅").font(.system(size: 44, weight: .medium)).opacity(0.85)
+                Text(summary.longest?.title ?? "").font(.system(size: 100, weight: .bold)).lineLimit(2)
+                    .minimumScaleFactor(0.5)
+                Text("\(summary.longest?.days ?? 0) DAYS")
+                    .font(.system(size: 60, weight: .semibold).width(.expanded))
+            }
+        }
+    }
+
+    private func figure(_ value: String, _ label: String) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(value).font(.system(size: 190, weight: .thin).width(.condensed)).monospacedDigit()
+                .fixedSize()
+            Text(label).font(.system(size: 34, weight: .semibold).width(.expanded)).opacity(0.85)
         }
     }
 }
 
-/// できたカードを見て、送る・保存する
-private struct ShareCardSheet: View {
-    let card: TripStatsView.ShareCard
+/// カードを1ページずつめくって見て、そのページを送る・保存する
+private struct TripStatsShareSheet: View {
+    let summary: TripStats.Summary
+    let periodMark: String
+    let periodTitle: String
+    let heroPlan: TravelPlan?
+    let longestPlan: TravelPlan?
+
     @Environment(\.dismiss) private var dismiss
+    @State private var page: TripStatsStoryCard.Page = .numbers
+    @State private var images: [TripStatsStoryCard.Page: UIImage] = [:]
+
+    private var pages: [TripStatsStoryCard.Page] {
+        TripStatsStoryCard.Page.allCases.filter { $0 != .longest || summary.longest != nil }
+    }
 
     var body: some View {
         NavigationStack {
-            Image(uiImage: card.image)
-                .resizable()
-                .scaledToFit()
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .padding(24)
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
-                .background(Color(.systemGroupedBackground).ignoresSafeArea())
-                .navigationTitle(card.title)
-                .navigationBarTitleDisplayMode(.inline)
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) { Button("閉じる") { dismiss() } }
-                    ToolbarItem(placement: .confirmationAction) {
-                        ShareLink(item: Image(uiImage: card.image),
-                                  preview: SharePreview(card.title, image: Image(uiImage: card.image))) {
+            TabView(selection: $page) {
+                ForEach(pages) { page in
+                    Group {
+                        if let image = images[page] {
+                            Image(uiImage: image).resizable().scaledToFit()
+                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                        } else {
+                            ProgressView()
+                        }
+                    }
+                    .padding(.horizontal, 32)
+                    .padding(.bottom, 40)
+                    .tag(page)
+                }
+            }
+            .tabViewStyle(.page(indexDisplayMode: .always))
+            .indexViewStyle(.page(backgroundDisplayMode: .always))
+            .background(Color(.systemGroupedBackground).ignoresSafeArea())
+            .navigationTitle("\(periodTitle)の旅")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) { Button("閉じる") { dismiss() } }
+                ToolbarItem(placement: .confirmationAction) {
+                    if let image = images[page] {
+                        ShareLink(item: Image(uiImage: image),
+                                  preview: SharePreview("\(periodTitle)の旅", image: Image(uiImage: image))) {
                             Label("送る・保存", systemImage: "square.and.arrow.up")
                         }
                     }
                 }
+            }
+            .task { render() }
+        }
+    }
+
+    private func render() {
+        let hero = heroPlan.flatMap(TravelBookletRenderer.coverImage(for:))?.downscaled(maxPixel: 1920)
+        let longest = longestPlan.flatMap(TravelBookletRenderer.coverImage(for:))?.downscaled(maxPixel: 1920)
+        for page in pages {
+            let renderer = ImageRenderer(content: TripStatsStoryCard(page: page, summary: summary, periodMark: periodMark,
+                                                                     heroImage: hero, longestImage: longest))
+            renderer.scale = 1
+            images[page] = renderer.uiImage
         }
     }
 }

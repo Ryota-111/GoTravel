@@ -47,6 +47,11 @@ enum TripStats {
         var busyMonths: [Int] = []
         var longest: (title: String, days: Int)?
         var mostSpent: (title: String, amount: Double)?
+        /// いちばん長い旅・使った旅の id（写真を出すため）
+        var longestPlanId: String?
+        var mostSpentPlanId: String?
+        /// 数えた旅行の id（新しい順。写真の帯に使う）
+        var tripIds: [String] = []
         var topPrefecture: (prefecture: Prefecture, trips: Int)?
 
         static func == (lhs: Summary, rhs: Summary) -> Bool {
@@ -104,6 +109,7 @@ enum TripStats {
 
         let trips = finishedTrips(plans, now: now, calendar: calendar).filter { inPeriod($0.startDate) }
         var summary = Summary()
+        summary.tripIds = trips.sorted { $0.startDate > $1.startDate }.compactMap(\.id)
         summary.tripCount = trips.count
         summary.dayCount = trips.map(\.dayCount).reduce(0, +)
 
@@ -114,9 +120,11 @@ enum TripStats {
             summary.spend += amount
             if summary.longest.map({ trip.dayCount > $0.days }) ?? true {
                 summary.longest = (trip.title, trip.dayCount)
+                summary.longestPlanId = trip.id
             }
             if amount > 0, summary.mostSpent.map({ amount > $0.amount }) ?? true {
                 summary.mostSpent = (trip.title, amount)
+                summary.mostSpentPlanId = trip.id
             }
             monthCounts[calendar.component(.month, from: trip.startDate), default: 0] += 1
 
