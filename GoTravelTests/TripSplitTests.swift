@@ -35,6 +35,30 @@ struct TripSplitTests {
         #expect(TripSplitLedger.transfers(from: balances) == [.init(from: "c-dad", to: "me", amount: 3_000)])
     }
 
+    @Test("人ごとに金額を決めると、決めた人はその額、空欄の人は残りを同じ額ずつ")
+    func shares() {
+        let members = ["me", "a", "b"]
+        // 9,000円のうち自分が 5,000円、残り 4,000円を a と b で 2,000円ずつ
+        let s = TripSplitLedger.shares(of: 9_000, splitWith: nil, splitAmounts: ["me": 5_000], members: members)
+        #expect(s == ["me": 5_000, "a": 2_000, "b": 2_000])
+        // 割り勘する人から外れた人の額は使わない
+        let t = TripSplitLedger.shares(of: 6_000, splitWith: ["me", "a"], splitAmounts: ["b": 1_000], members: members)
+        #expect(t == ["me": 3_000, "a": 3_000])
+        // 全員決めて合計が合わなければ、差を全員で同じ額ずつ（合計は費用と同じ）
+        let u = TripSplitLedger.shares(of: 3_000, splitWith: nil, splitAmounts: ["me": 1_000, "a": 1_000, "b": 700],
+                                       members: members)
+        #expect(u.values.reduce(0, +) == 3_000)
+
+        let p = plan(items: [ScheduleItem(time: start, title: "夕食", cost: 9_000, paidBy: "me")],
+                     companions: [TripCompanion(id: "a", name: "A"), TripCompanion(id: "b", name: "B")])
+        var q = p
+        q.daySchedules[0].scheduleItems[0].splitAmounts = ["me": 5_000]
+        let balances = TripSplitLedger.balances(entries: TripSplitLedger.entries(of: q, myUserId: "me"),
+                                                settlements: [], members: members)
+        #expect(TripSplitLedger.transfers(from: balances) == [.init(from: "a", to: "me", amount: 2_000),
+                                                              .init(from: "b", to: "me", amount: 2_000)])
+    }
+
     @Test("実際に使った金額を優先する")
     func prefersActual() {
         let p = plan(items: [ScheduleItem(time: start, title: "夕食", cost: 10_000, actualCost: 8_000)],

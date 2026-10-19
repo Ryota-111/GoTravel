@@ -106,10 +106,12 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
     var paidBy: String?
     /// 割り勘（3.1）：割り勘する人。**空（nil）なら全員。** 「運転した人は払わない」ときに外す
     var splitWith: [String]?
+    /// 割り勘（3.1）：人ごとに決めた金額（円）。決めていない人は、残りを同じ額ずつ分ける。nil なら均等
+    var splitAmounts: [String: Double]?
 
     enum CodingKeys: String, CodingKey {
         case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId, timeZoneIdentifier, isPinned, participantIds, foreignCost, reservationPart, costNote, endTime, address, dayShift
-        case paidBy, splitWith
+        case paidBy, splitWith, splitAmounts
     }
 
     /// 書き出しや共有カードに出す金額。

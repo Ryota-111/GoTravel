@@ -53,6 +53,8 @@ struct TripExpense: Codable, Equatable, Identifiable {
     var paidBy: String?
     /// 割り勘する人。nil なら全員
     var splitWith: [String]?
+    /// 人ごとに決めた金額。決めていない人は、残りを同じ額ずつ分ける。nil なら均等
+    var splitAmounts: [String: Double]?
     /// 精算の受け渡し（`paidBy` が `splitWith` の1人に払った）。費用の合計には入れない
     var isSettlement: Bool?
 
@@ -84,6 +86,7 @@ enum TripSplitLedger {
         var dayNumber: Int?
         var paidBy: String?
         var splitWith: [String]?
+        var splitAmounts: [String: Double]? = nil
     }
 
     /// 1人ぶん
@@ -136,7 +139,7 @@ enum TripSplitLedger {
                 guard let amount = item.actualCost ?? item.cost, amount > 0 else { continue }
                 result.append(Entry(id: item.id, source: .scheduleItem, title: item.title, amount: amount,
                                     dayNumber: day.dayNumber, paidBy: item.paidBy ?? fallback,
-                                    splitWith: item.splitWith))
+                                    splitWith: item.splitWith, splitAmounts: item.splitAmounts))
             }
         }
         for reservation in plan.reservationsWithCostOutsideItinerary {
@@ -144,12 +147,12 @@ enum TripSplitLedger {
             result.append(Entry(id: reservation.id, source: .reservation,
                                 title: reservation.title.isEmpty ? reservation.kind.label : reservation.title,
                                 amount: amount, dayNumber: nil, paidBy: reservation.paidBy ?? fallback,
-                                splitWith: reservation.splitWith))
+                                splitWith: reservation.splitWith, splitAmounts: reservation.splitAmounts))
         }
         for expense in plan.split.expenses where !expense.settles {
             result.append(Entry(id: expense.id, source: .expense, title: expense.title, amount: expense.amount,
                                 dayNumber: plan.dayNumber(of: expense.date), paidBy: expense.paidBy ?? fallback,
-                                splitWith: expense.splitWith))
+                                splitWith: expense.splitWith, splitAmounts: expense.splitAmounts))
         }
         return result
     }
@@ -158,6 +161,24 @@ enum TripSplitLedger {
     static func sharers(of splitWith: [String]?, members: [String]) -> [String] {
         let chosen = (splitWith ?? []).filter(members.contains)
         return chosen.isEmpty ? members : chosen
+    }
+
+    /// 1つの費用を、人ごとにいくらずつ持つか。
+    /// 金額を決めた人はその額、決めていない人は残りを同じ額ずつ。
+    /// 全員の額を決めていて合計が合わなければ、差を全員で同じ額ずつ足し引きする（合計は必ず費用と同じ）
+    static func shares(of amount: Double, splitWith: [String]?, splitAmounts: [String: Double]?,
+                       members: [String]) -> [String: Double] {
+        let sharers = sharers(of: splitWith, members: members)
+        let fixed = (splitAmounts ?? [:]).filter { sharers.contains($0.key) }
+        let rest = sharers.filter { fixed[$0] == nil }
+        let remainder = amount - fixed.values.reduce(0, +)
+        var result = fixed
+        if rest.isEmpty {
+            for member in sharers { result[member, default: 0] += remainder / Double(sharers.count) }
+        } else {
+            for member in rest { result[member] = max(remainder, 0) / Double(rest.count) }
+        }
+        return result
     }
 
     /// 払った人が決まっていない（か、もう居ない人の）費用。精算に入らない
@@ -170,10 +191,10 @@ enum TripSplitLedger {
         var share: [String: Double] = [:]
         for entry in entries {
             guard let payer = entry.paidBy, members.contains(payer) else { continue }
-            let sharers = sharers(of: entry.splitWith, members: members)
             paid[payer, default: 0] += entry.amount
-            for member in sharers {
-                share[member, default: 0] += entry.amount / Double(sharers.count)
+            for (member, value) in shares(of: entry.amount, splitWith: entry.splitWith,
+                                          splitAmounts: entry.splitAmounts, members: members) {
+                share[member, default: 0] += value
             }
         }
         // 済ませた受け渡し：払った人は受け取る側から「借り」が減る

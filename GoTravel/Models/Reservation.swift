@@ -183,6 +183,7 @@ struct Reservation: Identifiable, Codable, Equatable {
     /// 行程に出ている予約では、予定の側のものを使う
     var paidBy: String?
     var splitWith: [String]?
+    var splitAmounts: [String: Double]?
 
     /// 保存のときの項目名。**項目を足したら、ここにも必ず足すこと**（足さないと保存されない）。
     /// `storedKind` は "kind" として書く（駐車場以外は今までと同じ形）
@@ -194,7 +195,7 @@ struct Reservation: Identifiable, Codable, Equatable {
         case transportNumber, departurePlace, arrivalPlace, arrivalDate, seat, terminal
         case timeZoneIdentifier, arrivalTimeZoneIdentifier, endDate, pinsDuringPeriod
         case cost, foreignCost, location, departureLocation, arrivalLocation
-        case paidBy, splitWith
+        case paidBy, splitWith, splitAmounts
     }
 
     /// 経路を表示するかどうか。

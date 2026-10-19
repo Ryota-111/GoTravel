@@ -273,6 +273,15 @@ struct BudgetSummaryView: View {
                 if !transfers.isEmpty {
                     Text("\(transfers.count)回").font(.footnote).foregroundColor(faint)
                 }
+                // 受け渡しを文字にして、LINE などで同行者に送る
+                if !entries.isEmpty {
+                    ShareLink(item: settlementText(transfers: transfers, balances: balances)) {
+                        Label("送る", systemImage: "square.and.arrow.up")
+                            .font(.footnote.weight(.semibold))
+                            .foregroundColor(tint)
+                    }
+                    .padding(.leading, 8)
+                }
             }
             if transfers.isEmpty {
                 Text(entries.isEmpty ? "費用を入れると、ここに受け渡しが出ます。" : "精算はいりません。")
@@ -308,6 +317,27 @@ struct BudgetSummaryView: View {
         }
         .font(.subheadline)
         .foregroundColor(ink)
+    }
+
+    /// 送る精算の文：
+    /// 「沖縄（9月21日(月)〜9月23日(水)）の精算」、受け渡し、ひとりずつの払った額と負担する額
+    private func settlementText(transfers: [TripSplitLedger.Transfer], balances: [TripSplitLedger.Balance]) -> String {
+        var lines = ["\(currentPlan.title)（\(TravelPlanTextExporter.dateString(currentPlan.startDate))〜\(TravelPlanTextExporter.dateString(currentPlan.endDate))）の精算", ""]
+        if transfers.isEmpty {
+            lines.append("精算はいりません。")
+        } else {
+            lines += transfers.map { "\(name($0.from)) → \(name($0.to))　\(yen($0.amount))" }
+        }
+        if !settlements.isEmpty {
+            lines += ["", "済み"]
+            lines += settlements.map {
+                "\(name($0.paidBy ?? "")) → \(name($0.splitWith?.first ?? ""))　\(yen($0.amount))"
+            }
+        }
+        lines += ["", "ひとりずつ（払った額／負担する額）"]
+        lines += balances.map { "\(name($0.member))　\(yen($0.paid))／\(yen($0.share))" }
+        lines += ["", "割り勘した金額の合計 \(yen(entries.map(\.amount).reduce(0, +)))"]
+        return lines.joined(separator: "\n")
     }
 
     /// 済ませた受け渡し。「取り消す」で、まだ済んでいないことに戻す
@@ -420,6 +450,7 @@ struct BudgetSummaryView: View {
         var note: String?
         var paidBy: String?
         var splitWith: [String]?
+        var splitAmounts: [String: Double]? = nil
     }
 
     private struct LedgerGroup: Identifiable {
@@ -442,7 +473,8 @@ struct BudgetSummaryView: View {
                               budget: item.actualCost != nil && item.cost != item.actualCost ? item.cost : nil,
                               foreignText: Self.foreignText(item.foreignCost),
                               missingRate: item.foreignCost != nil && item.foreignCost?.rate == nil,
-                              note: item.costNote, paidBy: item.paidBy ?? fallback, splitWith: item.splitWith)
+                              note: item.costNote, paidBy: item.paidBy ?? fallback, splitWith: item.splitWith,
+                              splitAmounts: item.splitAmounts)
                 }
             rows += expenses.filter { currentPlan.dayNumber(of: $0.date) == day.dayNumber }.map(expenseRow)
             guard !rows.isEmpty else { return nil }
@@ -455,7 +487,8 @@ struct BudgetSummaryView: View {
                       amount: reservation.cost, isActual: false, budget: nil,
                       foreignText: Self.foreignText(reservation.foreignCost),
                       missingRate: reservation.foreignCost != nil && reservation.foreignCost?.rate == nil,
-                      note: nil, paidBy: reservation.paidBy ?? fallback, splitWith: reservation.splitWith)
+                      note: nil, paidBy: reservation.paidBy ?? fallback, splitWith: reservation.splitWith,
+                      splitAmounts: reservation.splitAmounts)
         }
         if !reservations.isEmpty {
             groups.append(LedgerGroup(id: "reservations", title: "予約", subtitle: "行程に無いもの",
@@ -473,7 +506,7 @@ struct BudgetSummaryView: View {
                   amount: expense.amount, isActual: true, budget: nil, foreignText: nil, missingRate: false,
                   note: nil,
                   paidBy: expense.paidBy ?? TripSplitLedger.defaultPayer(of: currentPlan, myUserId: myUserId),
-                  splitWith: expense.splitWith)
+                  splitWith: expense.splitWith, splitAmounts: expense.splitAmounts)
     }
 
     private var ledgerSection: some View {
@@ -565,15 +598,16 @@ struct BudgetSummaryView: View {
     private func detailText(_ row: LedgerRow) -> String? {
         var parts: [String] = []
         if members.count >= 2 {
-            parts.append(splitText(paidBy: row.paidBy, splitWith: row.splitWith))
+            parts.append(splitText(paidBy: row.paidBy, splitWith: row.splitWith, splitAmounts: row.splitAmounts))
         }
         if let note = row.note, !note.isEmpty { parts.append(note) }
         if let foreign = row.foreignText { parts.append(foreign) }
         return parts.isEmpty ? nil : parts.joined(separator: " ・ ")
     }
 
-    private func splitText(paidBy: String?, splitWith: [String]?) -> String {
+    private func splitText(paidBy: String?, splitWith: [String]?, splitAmounts: [String: Double]? = nil) -> String {
         let payer = paidBy.flatMap { members.contains($0) ? "\(name($0))払い" : nil } ?? "払った人が未定"
+        if let splitAmounts, !splitAmounts.isEmpty { return "\(payer)・金額を決めて割り勘" }
         let sharers = TripSplitLedger.sharers(of: splitWith, members: members)
         if sharers.count == members.count { return "\(payer)・全員" }
         let excluded = members.filter { !sharers.contains($0) }
@@ -632,19 +666,21 @@ struct BudgetSummaryView: View {
     private func save(_ result: CostSplitEditor.Result) {
         updatePlan { plan in
             switch result {
-            case .assignment(let target, let paidBy, let splitWith):
+            case .assignment(let target, let paidBy, let splitWith, let splitAmounts):
                 switch target {
                 case .scheduleItem(let id):
                     for d in plan.daySchedules.indices {
                         if let i = plan.daySchedules[d].scheduleItems.firstIndex(where: { $0.id == id }) {
                             plan.daySchedules[d].scheduleItems[i].paidBy = paidBy
                             plan.daySchedules[d].scheduleItems[i].splitWith = splitWith
+                            plan.daySchedules[d].scheduleItems[i].splitAmounts = splitAmounts
                         }
                     }
                 case .reservation(let id):
                     if let i = plan.reservations.firstIndex(where: { $0.id == id }) {
                         plan.reservations[i].paidBy = paidBy
                         plan.reservations[i].splitWith = splitWith
+                        plan.reservations[i].splitAmounts = splitAmounts
                     }
                 case .expense, .newExpense:
                     break
@@ -740,7 +776,7 @@ extension TripExpense: Hashable {
 /// 払った人と割り勘する人を選ぶ。支出なら、何に・いくら・いつも直せる
 private struct CostSplitEditor: View {
     enum Result {
-        case assignment(CostEditTarget, paidBy: String?, splitWith: [String]?)
+        case assignment(CostEditTarget, paidBy: String?, splitWith: [String]?, splitAmounts: [String: Double]?)
         case expense(TripExpense)
     }
 
@@ -758,6 +794,10 @@ private struct CostSplitEditor: View {
     @State private var date = Date()
     @State private var payer: String?
     @State private var sharers: Set<String> = []
+    /// 人ごとに金額を決めるか（決めなければ均等）
+    @State private var byAmount = false
+    /// 人ごとの金額の入力（空なら、残りを同じ額ずつ）
+    @State private var amountTexts: [String: String] = [:]
     @FocusState private var amountFocused: Bool
 
     private var isExpense: Bool {
@@ -788,7 +828,40 @@ private struct CostSplitEditor: View {
 
     private var amount: Double? { CurrencyCatalog.parse(amountText).flatMap { $0 > 0 ? $0 : nil } }
 
-    private var canSave: Bool { !isExpense || amount != nil }
+    /// 分ける元の金額
+    private var total: Double? { isExpense ? amount : summary.amount }
+
+    /// 金額を決めた人の額（チェックの付いた人だけ）
+    private var fixedAmounts: [String: Double] {
+        var result: [String: Double] = [:]
+        for member in chosenSharers {
+            if let value = amountTexts[member].flatMap(CurrencyCatalog.parse) { result[member] = value }
+        }
+        return result
+    }
+
+    /// 金額を決めていない人の、1人あたり
+    private var restShare: Double? {
+        guard let total else { return nil }
+        let rest = chosenSharers.filter { fixedAmounts[$0] == nil }
+        guard !rest.isEmpty else { return nil }
+        return max(total - fixedAmounts.values.reduce(0, +), 0) / Double(rest.count)
+    }
+
+    /// 決めた額が合っていない理由（合っていれば nil）
+    private var amountProblem: String? {
+        guard byAmount, let total else { return nil }
+        let fixedTotal = fixedAmounts.values.reduce(0, +)
+        if fixedTotal > total + 0.5 {
+            return "決めた額が \(TravelPlanTextExporter.currency(fixedTotal - total)) 多すぎます"
+        }
+        if fixedAmounts.count == chosenSharers.count, abs(fixedTotal - total) >= 0.5 {
+            return "全員の額の合計が \(TravelPlanTextExporter.currency(total - fixedTotal)) 足りません"
+        }
+        return nil
+    }
+
+    private var canSave: Bool { (!isExpense || amount != nil) && amountProblem == nil }
 
     var body: some View {
         NavigationStack {
@@ -834,21 +907,37 @@ private struct CostSplitEditor: View {
                         }
                     }
                     Section {
+                        Picker("分け方", selection: $byAmount) {
+                            Text("均等に分ける").tag(false)
+                            Text("金額を決める").tag(true)
+                        }
+                        .pickerStyle(.segmented)
                         ForEach(members, id: \.self) { member in
-                            choiceRow(name(member), isOn: chosenSharers.contains(member)) { toggleSharer(member) }
+                            sharerRow(member)
                         }
                     } header: {
                         Text("割り勘する人")
                     } footer: {
-                        Text("チェックの付いた人で同じ額ずつ分けます。押すと外したり戻したりできます（運転した人を外す、など）。")
+                        if byAmount {
+                            VStack(alignment: .leading, spacing: 4) {
+                                if let amountProblem {
+                                    Text(amountProblem).foregroundColor(.red)
+                                }
+                                Text("空欄の人は、残りを同じ額ずつ分けます。チェックを外すと、その人は払いません。")
+                            }
+                        } else {
+                            Text("チェックの付いた人で同じ額ずつ分けます。押すと外したり戻したりできます（運転した人を外す、など）。")
+                        }
                     }
                 }
 
-                if members.count >= 2, payer != nil || !sharers.isEmpty {
+                if members.count >= 2, payer != nil || !sharers.isEmpty || byAmount {
                     Section {
                         Button("選択を外して、はじめの状態に戻す") {
                             payer = nil
                             sharers = []
+                            byAmount = false
+                            amountTexts = [:]
                         }
                     } footer: {
                         Text("払った人を選ばず、全員で割り勘する状態に戻します。")
@@ -887,6 +976,37 @@ private struct CostSplitEditor: View {
         }
     }
 
+    /// 割り勘する人の1行。金額を決めるときは、右に金額の欄を出す（空欄なら残りの等分を薄く出す）
+    @ViewBuilder
+    private func sharerRow(_ member: String) -> some View {
+        let isOn = chosenSharers.contains(member)
+        if byAmount {
+            HStack {
+                Button { toggleSharer(member) } label: {
+                    HStack(spacing: 10) {
+                        Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
+                            .foregroundColor(isOn ? .accentColor : .secondary)
+                        Text(name(member)).foregroundColor(.primary)
+                    }
+                }
+                .buttonStyle(.borderless)
+                Spacer()
+                if isOn {
+                    Text("¥").foregroundColor(.secondary)
+                    TextField(restShare.map { CurrencyCatalog.editingText($0.rounded()) } ?? "0",
+                              text: Binding(get: { amountTexts[member] ?? "" },
+                                            set: { amountTexts[member] = $0 }))
+                        .keyboardType(.numberPad)
+                        .multilineTextAlignment(.trailing)
+                        .monospacedDigit()
+                        .frame(maxWidth: 110)
+                }
+            }
+        } else {
+            choiceRow(name(member), isOn: isOn) { toggleSharer(member) }
+        }
+    }
+
     /// 今チェックが付いている人（何も選んでいなければ全員）
     private var chosenSharers: Set<String> { sharers.isEmpty ? Set(members) : sharers }
 
@@ -909,16 +1029,19 @@ private struct CostSplitEditor: View {
             let item = plan.daySchedules.flatMap(\.scheduleItems).first { $0.id == id }
             payer = item?.paidBy
             sharers = Set(item?.splitWith ?? [])
+            loadAmounts(item?.splitAmounts)
         case .reservation(let id):
             let reservation = plan.reservations.first { $0.id == id }
             payer = reservation?.paidBy
             sharers = Set(reservation?.splitWith ?? [])
+            loadAmounts(reservation?.splitAmounts)
         case .expense(let expense):
             title = expense.title
             amountText = CurrencyCatalog.editingText(expense.amount)
             date = expense.date
             payer = expense.paidBy
             sharers = Set(expense.splitWith ?? [])
+            loadAmounts(expense.splitAmounts)
         case .newExpense:
             // 旅行中なら今日、そうでなければ旅行の初日
             let today = Date()
@@ -928,11 +1051,19 @@ private struct CostSplitEditor: View {
         }
     }
 
+    private func loadAmounts(_ amounts: [String: Double]?) {
+        guard let amounts, !amounts.isEmpty else { return }
+        byAmount = true
+        amountTexts = amounts.mapValues { CurrencyCatalog.editingText($0) }
+    }
+
     private func save() {
         let splitWith = SharedMembers.normalizedParticipants(sharers, members: members)
+        // 均等なら持たない。金額を決めた人がいなければ均等と同じ
+        let splitAmounts: [String: Double]? = byAmount && !fixedAmounts.isEmpty ? fixedAmounts : nil
         switch target {
         case .scheduleItem, .reservation:
-            onSave(.assignment(target, paidBy: payer, splitWith: splitWith))
+            onSave(.assignment(target, paidBy: payer, splitWith: splitWith, splitAmounts: splitAmounts))
         case .expense(let expense):
             var updated = expense
             updated.title = title.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -940,11 +1071,13 @@ private struct CostSplitEditor: View {
             updated.date = date
             updated.paidBy = payer
             updated.splitWith = splitWith
+            updated.splitAmounts = splitAmounts
             onSave(.expense(updated))
         case .newExpense:
             guard let amount else { return }
             onSave(.expense(TripExpense(title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-                                        amount: amount, date: date, paidBy: payer, splitWith: splitWith)))
+                                        amount: amount, date: date, paidBy: payer, splitWith: splitWith,
+                                        splitAmounts: splitAmounts)))
         }
         dismiss()
     }
