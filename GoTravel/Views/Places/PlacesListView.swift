@@ -226,32 +226,36 @@ struct PlacesListView: View {
             : themeManager.currentTheme.backgroundLight
 
         return NavigationLink(destination: PlaceDetailView(place: place)) {
+            // 写真を主役にした行（3.1）。名前の下は、印つきの訪問日と住所の2行だけにし、
+            // カテゴリは右上に小さな札で置く
             HStack(spacing: 12) {
                 placeThumbnail(place, category: category, accent: accent)
 
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(place.title)
-                        .font(.system(size: 16, weight: .semibold))
-                        .foregroundColor(textColor)
+                VStack(alignment: .leading, spacing: 6) {
+                    HStack(alignment: .top, spacing: 6) {
+                        Text(place.title)
+                            .font(.system(size: 16, weight: .semibold))
+                            .foregroundColor(textColor)
+                            .lineLimit(2)
+                            .multilineTextAlignment(.leading)
+                        Spacer(minLength: 4)
+                        Text(category.name)
+                            .font(.system(size: 10, weight: .bold))
+                            .foregroundColor(accent)
+                            .lineLimit(1)
+                            .padding(.horizontal, 7)
+                            .padding(.vertical, 3)
+                            .background(accent.opacity(colorScheme == .dark ? 0.24 : 0.14), in: Capsule())
+                    }
+
+                    Label(formattedDate(place), systemImage: "calendar")
+                        .font(.system(size: 12))
+                        .foregroundColor(secondaryTextColor)
                         .lineLimit(1)
 
                     // 同じ名前の店が複数あっても見分けられるように住所を出す
                     if let address = place.address, !address.isEmpty {
-                        Text(address)
-                            .font(.system(size: 12))
-                            .foregroundColor(secondaryTextColor)
-                            .lineLimit(1)
-                    }
-
-                    HStack(spacing: 7) {
-                        Text(category.name)
-                            .font(.system(size: 10, weight: .bold))
-                            .foregroundColor(accent)
-                            .padding(.horizontal, 7)
-                            .padding(.vertical, 2)
-                            .background(accent.opacity(colorScheme == .dark ? 0.24 : 0.14), in: RoundedRectangle(cornerRadius: 6))
-
-                        Text(formattedDate(place))
+                        Label(address, systemImage: "mappin.and.ellipse")
                             .font(.system(size: 12))
                             .foregroundColor(secondaryTextColor)
                             .lineLimit(1)
@@ -262,9 +266,9 @@ struct PlacesListView: View {
 
                 placeMenuButton(place: place)
             }
-            .padding(.leading, 9)
-            .padding(.vertical, 9)
-            .padding(.trailing, 4)
+            .padding(.leading, 10)
+            .padding(.vertical, 10)
+            .padding(.trailing, 2)
             .background(
                 RoundedRectangle(cornerRadius: 20, style: .continuous)
                     .fill(surface)
@@ -275,10 +279,10 @@ struct PlacesListView: View {
                     .strokeBorder(colorScheme == .dark ? mainColor.opacity(0.10) : .clear, lineWidth: 1)
             )
             .shadow(
-                color: colorScheme == .dark ? .clear : Color.black.opacity(0.07),
-                radius: 13,
+                color: colorScheme == .dark ? .clear : Color.black.opacity(0.05),
+                radius: 10,
                 x: 0,
-                y: 5
+                y: 3
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -289,7 +293,7 @@ struct PlacesListView: View {
     private func placeThumbnail(_ place: VisitedPlace, category: CustomPlaceCategory, accent: Color) -> some View {
         RoundedRectangle(cornerRadius: 14, style: .continuous)
             .fill(accent.opacity(colorScheme == .dark ? 0.24 : 0.14))
-            .frame(width: 56, height: 56)
+            .frame(width: 84, height: 72)
             .overlay {
                 if let fileName = place.localPhotoFileName,
                    let image = FileManager.documentsImage(named: fileName) {
@@ -298,7 +302,7 @@ struct PlacesListView: View {
                         .scaledToFill()
                 } else {
                     Image(systemName: category.icon)
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(.system(size: 24, weight: .semibold))
                         .foregroundColor(accent)
                 }
             }
