@@ -221,9 +221,7 @@ struct PlacesListView: View {
     private func placeCardView(_ place: VisitedPlace) -> some View {
         let category = categoryManager.category(for: place.categoryId)
         let accent = category.color
-        let surface: Color = colorScheme == .dark
-            ? themeManager.currentTheme.secondaryBackgroundDark
-            : themeManager.currentTheme.backgroundLight
+        let surface = themeManager.currentTheme.listCardSurface(for: colorScheme)
 
         return NavigationLink(destination: PlaceDetailView(place: place)) {
             // 写真を主役にした行（3.1）。名前の下は、印つきの訪問日と住所の2行だけにし、

@@ -825,6 +825,42 @@ extension ThemePreset {
         return Self.contrastRatio(accent1, row) >= 4.5 ? accent1 : Self.readableText(on: row)
     }
 
+    /// 一覧のカード（予定・保存した場所）の面。縁は引かず、面の色だけで地と見分ける。
+    ///
+    /// ライトでは地（`backgroundLight` から始まるグラデーション）と同じ色だったので、白いテーマでは
+    /// カードと地の差が影だけになり、影の弱いテーマではほとんど見えなかった。縁で囲むと浮いて見えたので、
+    /// - 白い地：文字の色をごく薄く敷いた灰色の面（設定画面のまとまりのように）
+    /// - 色のある地：地より少し明るい面
+    func listCardSurface(for scheme: ColorScheme) -> Color {
+        if scheme == .dark { return secondaryBackgroundDark }
+        let ground = backgroundLight
+        // 地はグラデーション（上：backgroundLight、下：secondaryBackgroundLight）。どちらの端とも見分けられること
+        let grounds = [backgroundLight, secondaryBackgroundLight]
+        func distinct(_ color: Color) -> Bool {
+            grounds.allSatisfy { Self.contrastRatio(color, $0) >= Self.listCardMinimumContrast }
+        }
+        // 1. 色のある地なら、地より明るくしてみる。
+        //    白に近い地では、白いカードを載せても地と似た色になって見えにくかったので、ここは通さない
+        if Self.luminance(of: ground) < 0.75 {
+            for opacity in stride(from: 0.6, through: 1.0, by: 0.1) {
+                let lighter = Self.composite(.white, over: ground, opacity: opacity)
+                if distinct(lighter) { return lighter }
+            }
+        }
+        // 2. 白に近い地（と、明るくしても差が出ない地）は、文字の色を薄く敷いた灰色の面にする
+        let ink = Self.readableText(on: ground)
+        var opacity = 0.04
+        var tinted = Self.composite(ink, over: ground, opacity: opacity)
+        while !distinct(tinted) && opacity < 0.2 {
+            opacity += 0.01
+            tinted = Self.composite(ink, over: ground, opacity: opacity)
+        }
+        return tinted
+    }
+
+    /// 一覧のカードと地の差の目安（コントラスト比）。縁を引かずに形が分かる最低限
+    static let listCardMinimumContrast = 1.15
+
     /// 2つ目のテーマ色（secondary）を薄く敷いた面に、その色で文字を置くときの色。
     /// オレンジや薄い色はそのままだと地と差が出ない（カレンダーの共有の案内・タグの絞り込みで比 1.0〜2.9）
     func secondaryLabel(on base: Color, opacity: CGFloat) -> Color {

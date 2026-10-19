@@ -34,9 +34,7 @@ struct PlanEventCardView: View {
     }
 
     private var surfaceColor: Color {
-        colorScheme == .dark
-            ? themeManager.currentTheme.secondaryBackgroundDark
-            : themeManager.currentTheme.backgroundLight
+        themeManager.currentTheme.listCardSurface(for: colorScheme)
     }
 
     /// 今日にかかっている予定。この1枚だけ日付タイルを塗る

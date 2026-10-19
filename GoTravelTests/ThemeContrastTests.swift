@@ -31,6 +31,16 @@ struct ThemeContrastTests {
         #expect(ThemePreset.contrastRatio(theme.actionFill, card) >= 3.0)
     }
 
+    @Test("一覧のカード（予定・保存した場所）の面が、画面の地と見分けられ、上の文字が読める", arguments: cases)
+    private func listCardSurface(_ c: Case) {
+        let theme = ThemePreset(type: c.type)
+        guard c.scheme == .light else { return }
+        let surface = theme.listCardSurface(for: .light)
+        #expect(ThemePreset.contrastRatio(surface, theme.backgroundLight) >= ThemePreset.listCardMinimumContrast)
+        #expect(ThemePreset.contrastRatio(surface, theme.secondaryBackgroundLight) >= ThemePreset.listCardMinimumContrast)
+        #expect(ThemePreset.contrastRatio(ThemePreset.readableText(on: surface), surface) >= 4.5)
+    }
+
     @Test("塗りのボタンの文字が読める", arguments: cases)
     private func filledButton(_ c: Case) {
         let theme = ThemePreset(type: c.type)
