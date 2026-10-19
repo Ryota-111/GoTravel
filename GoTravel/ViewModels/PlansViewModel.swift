@@ -9,7 +9,7 @@ final class PlansViewModel: NSObject, ObservableObject {
     @Published var isLoading: Bool = false
 
     // MARK: - Private Properties
-    private let context: NSManagedObjectContext
+    let context: NSManagedObjectContext
     private var fetchedResultsController: NSFetchedResultsController<PlanEntity>?
     private var cancellables = Set<AnyCancellable>()
 
@@ -57,7 +57,12 @@ final class PlansViewModel: NSObject, ObservableObject {
 
         plans = entities.map { $0.toPlan() }
 
-        Task { @MainActor in generateNextOccurrencesIfNeeded() }
+        let current = plans
+        Task { @MainActor in
+            generateNextOccurrencesIfNeeded()
+            // カレンダーに入れてある予定は、カレンダーの予定も直す（`CalendarExportService`）
+            CalendarExportService.shared.scheduleSync(plans: current)
+        }
     }
 
     // MARK: - 繰り返し
@@ -75,7 +80,10 @@ final class PlansViewModel: NSObject, ObservableObject {
         let today = calendar.startOfDay(for: Date())
 
         let due = plans.filter { plan in
-            plan.recurrence != .none
+            // 共有したカテゴリの予定の次の回は、カテゴリの持ち主の端末だけが作る（メンバーごとに作ると人数分に増える）
+            if let category = PlanCategoryManager.shared.category(for: plan.categoryId), category.isShared,
+               category.ownerId != plan.userId { return false }
+            return plan.recurrence != .none
                 && !plan.isCompleted
                 && calendar.startOfDay(for: plan.endDate) < today
         }
@@ -103,6 +111,9 @@ final class PlansViewModel: NSObject, ObservableObject {
             var next = plan
             next.id = UUID().uuidString
             next.isCompleted = false
+            // 次の回も同じカテゴリに入る（共有したカテゴリでは持ち主の端末だけが作る。メンバーは届いたものを受け取る）
+            next.lastEditedBy = nil
+            next.updatedAt = nil
             next.createdAt = Date()
             next.startDate = nextStart
             next.endDate = calendar.date(byAdding: .day, value: span, to: nextStart) ?? nextStart
@@ -113,6 +124,11 @@ final class PlansViewModel: NSObject, ObservableObject {
             }
 
             add(next, userId: userId)
+
+            // 繰り返しは1回ずつ別の予定として作るので、カレンダーにも次の回を入れる
+            if CalendarExportService.shared.isLinked(CalendarExportService.key(planId: plan.id)) {
+                try? CalendarExportService.shared.export(next)
+            }
         }
     }
 
@@ -124,6 +140,12 @@ final class PlansViewModel: NSObject, ObservableObject {
 
         var planToSave = plan
         planToSave.userId = userId
+        // 共有したカテゴリに作ったら、みんなの予定にする（`SharedCategoryService`）
+        planToSave.tagIDs = Self.tagIDs(planToSave.tagIDs, inCategory: planToSave.categoryId)
+        if SharedCategoryService.shared.isShared(categoryId: planToSave.categoryId) {
+            planToSave.updatedAt = Date()
+            planToSave.lastEditedBy = userId
+        }
 
         // Core Dataに保存
         context.perform {
@@ -133,6 +155,7 @@ final class PlansViewModel: NSObject, ObservableObject {
             // 通知をスケジュール
             DispatchQueue.main.async {
                 NotificationService.shared.schedulePlanNotifications(for: planToSave)
+                SharedCategoryService.shared.planDidChange(planToSave, previous: nil, userId: userId)
             }
         }
     }
@@ -143,6 +166,26 @@ final class PlansViewModel: NSObject, ObservableObject {
 
         var planToSave = plan
         planToSave.userId = userId
+
+        // 共有している予定は、みんなで持つ部分が変わったときだけ時刻を進めて送る。
+        // 済みの印やタグ（自分だけの項目）を変えただけで「新しい」ことにすると、相手の編集を取り込めなくなる
+        let previous = plans.first { $0.id == plan.id }
+        // 更新時刻は共有の処理だけが進める。予定の画面は開いたときの写しを持っているので、そのまま使わない
+        if let previous {
+            planToSave.updatedAt = previous.updatedAt
+            planToSave.lastEditedBy = previous.lastEditedBy
+        }
+        // タグはカテゴリのものだけ。カテゴリを変えたら、前のカテゴリのタグは外す
+        planToSave.tagIDs = Self.tagIDs(planToSave.tagIDs, inCategory: planToSave.categoryId)
+        let isShared = SharedCategoryService.shared.isShared(categoryId: planToSave.categoryId)
+        let sharedChanged = previous.map { !$0.isSharedContentEqual(to: planToSave) } ?? true
+        if isShared && sharedChanged {
+            planToSave.updatedAt = Date()
+            planToSave.lastEditedBy = userId
+        }
+        if let index = plans.firstIndex(where: { $0.id == plan.id }) {
+            plans[index] = planToSave
+        }
 
         // Core Dataを更新
         context.perform {
@@ -158,6 +201,18 @@ final class PlansViewModel: NSObject, ObservableObject {
                 }
             } catch {
             }
+        }
+
+        if (isShared && sharedChanged) || previous?.categoryId != planToSave.categoryId {
+            SharedCategoryService.shared.planDidChange(planToSave, previous: previous, userId: userId)
+        }
+    }
+
+    /// そのカテゴリのタグだけを残す。手元に無いタグ（届く前のもの）は残しておく
+    static func tagIDs(_ ids: [String], inCategory categoryId: String?) -> [String] {
+        ids.filter { id in
+            guard let tag = PlanTagManager.shared.tag(for: id) else { return true }
+            return tag.categoryId == categoryId
         }
     }
 
@@ -177,6 +232,9 @@ final class PlansViewModel: NSObject, ObservableObject {
 
         // 通知をキャンセル
         NotificationService.shared.cancelPlanNotifications(for: plan.id)
+        CalendarExportService.shared.unlink(CalendarExportService.key(planId: plan.id))
+        // 共有したカテゴリの予定なら、みんなの予定からも消える
+        SharedCategoryService.shared.planDidDelete(plan)
 
         // Core Dataから削除
         await context.perform {
@@ -198,6 +256,8 @@ extension PlansViewModel {
     func deletePlans(_ plans: [Plan]) async {
         for plan in plans {
             NotificationService.shared.cancelPlanNotifications(for: plan.id)
+            await CalendarExportService.shared.unlink(CalendarExportService.key(planId: plan.id))
+            await SharedCategoryService.shared.planDidDelete(plan)
         }
 
         await context.perform {

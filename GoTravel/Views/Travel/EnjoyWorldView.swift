@@ -37,6 +37,9 @@ struct EnjoyWorldView: View {
     /// 知らせを閉じた、0 件になった時刻（同じ知らせを二度出さない）
     @AppStorage("dismissedPlanDropAt") private var dismissedPlanDropAt: Double = 0
     @State private var showAddPlan = false
+    /// 旅行が終わったあとの振り返りの案内（Travory Pro）
+    @State private var recapDismissed = TripRecapPrompt.loadDismissed()
+    @State private var recapPlan: TravelPlan?
     @State private var showJoinPlan = false
     @State private var planToDelete: TravelPlan?
     @State private var showDeleteConfirmation = false
@@ -241,6 +244,19 @@ struct EnjoyWorldView: View {
                             .padding(.horizontal, 20)
                             .padding(.top, 6)
                     }
+                    // 旅行が終わったら、ダイジェストを作れることを1回だけ知らせる（作るのは無料）
+                    if let plan = TripRecapPrompt.plan(in: travelPlanViewModel.travelPlans, dismissed: recapDismissed) {
+                        TripRecapBanner(plan: plan, onOpen: {
+                            recapPlan = plan
+                        }, onDismiss: {
+                            if let id = plan.id {
+                                TripRecapPrompt.dismiss(planId: id)
+                                withAnimation { recapDismissed.insert(id) }
+                            }
+                        })
+                        .padding(.horizontal, 20)
+                        .padding(.top, 10)
+                    }
                     travelEventsTitleSection
                     tabSelectionSection
                     travelPlansSection
@@ -255,6 +271,8 @@ struct EnjoyWorldView: View {
                 .refreshable {
                     if let userId = authVM.userId {
                         await travelPlanViewModel.refreshSharedPlans(userId: userId)
+                        // 友達と共有したカテゴリの予定（3.0）
+                        await SharedCategoryService.shared.syncAll(userId: userId)
                     }
                 }
             }
@@ -268,6 +286,9 @@ struct EnjoyWorldView: View {
                         travelPlanViewModel.add(newPlan, userId: userId)
                     }
                 }
+            }
+            .sheet(item: $recapPlan) { plan in
+                TripDigestView(plan: plan)
             }
             .sheet(isPresented: $showAddPlan) {
                 AddPlanView(historyPlans: plansViewModel.plans) { newPlan in
@@ -358,10 +379,13 @@ struct EnjoyWorldView: View {
                     travelPlanViewModel.setupFetchedResultsController(userId: userId)
                     plansViewModel.setupFetchedResultsController(userId: userId)
                     hasLoadedData = true
+                    // 友達と共有したカテゴリの予定を最新にする（参加した予定が一覧に出るように。3.0）
+                    Task { await SharedCategoryService.shared.syncAll(userId: userId) }
                 } else if let userId = authVM.userId {
                     // 2回目以降の表示では共有プランの最新状態のみ同期
                     Task {
                         await travelPlanViewModel.refreshSharedPlans(userId: userId)
+                        await SharedCategoryService.shared.syncAll(userId: userId)
                     }
                 }
             }

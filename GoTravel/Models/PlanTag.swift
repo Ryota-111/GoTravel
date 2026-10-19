@@ -24,6 +24,32 @@ struct PlanTag: Identifiable, Codable, Equatable {
         return Color(hex: hex) ?? .gray
     }
 
+    /// どのカテゴリ（カレンダー）のタグか（3.0）。nil は「自分用」。
+    /// 共有したカテゴリのタグは、メンバー全員で同じものを使う（`SharedCategoryService`）
+    var categoryId: String?
+
+    init(id: String, name: String, colorHex: String? = nil, order: Int = 0, categoryId: String? = nil) {
+        self.id = id
+        self.name = name
+        self.colorHex = colorHex
+        self.order = order
+        self.categoryId = categoryId
+    }
+
+    enum CodingKeys: String, CodingKey {
+        case id, name, colorHex, order, categoryId
+    }
+
+    /// カテゴリの項目が無い前のデータも読めるようにする
+    init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        id = try c.decode(String.self, forKey: .id)
+        name = try c.decodeIfPresent(String.self, forKey: .name) ?? ""
+        colorHex = try c.decodeIfPresent(String.self, forKey: .colorHex)
+        order = try c.decodeIfPresent(Int.self, forKey: .order) ?? 0
+        categoryId = try c.decodeIfPresent(String.self, forKey: .categoryId)
+    }
+
     /// タグが1つも無い人に見せる作成候補。
     /// 何を入れる欄なのかは、空欄と説明文よりも実例のほうが早く伝わる。
     /// あくまで候補なので、押されるまでタグとしては作らない
@@ -162,14 +188,15 @@ final class PlanTagManager: NSObject, ObservableObject {
 
     /// 名前からタグを作る。すでに同じ名前があればそれを返す。
     /// 「仕事」を2つ作れてしまうと、絞り込みの軸として使えなくなるため
+    /// - Parameter categoryId: どのカテゴリのタグか（nil は「自分用」）。同じ名前の判定もカテゴリの中で行う
     @discardableResult
-    func add(name: String, colorHex: String? = nil) -> PlanTag? {
+    func add(name: String, colorHex: String? = nil, categoryId: String? = nil) -> PlanTag? {
         guard let userId = currentUserId else { return nil }
 
         let trimmed = name.trimmingCharacters(in: .whitespaces)
         guard !trimmed.isEmpty else { return nil }
 
-        if let existing = tags.first(where: { $0.name == trimmed }) {
+        if let existing = tags.first(where: { $0.name == trimmed && $0.categoryId == categoryId }) {
             return existing
         }
 
@@ -177,14 +204,25 @@ final class PlanTagManager: NSObject, ObservableObject {
             id: UUID().uuidString,
             name: trimmed,
             colorHex: colorHex ?? PlanTagPalette.hex(forIndex: tags.count),
-            order: (tags.map(\.order).max() ?? -1) + 1
+            order: (tags.map(\.order).max() ?? -1) + 1,
+            categoryId: categoryId
         )
         _ = PlanTagEntity.create(from: tag, userId: userId, context: context)
         CoreDataManager.shared.saveContext()
 
         // 画面から続けて使えるよう、監視の反映を待たずに手元も更新しておく
         updateTags()
+
+        // 共有したカテゴリのタグなら、みんなにもとどける
+        if let categoryId {
+            Task { @MainActor in SharedCategoryService.shared.categoryTagsDidChange(categoryId: categoryId) }
+        }
         return tag
+    }
+
+    /// そのカテゴリのタグ（nil は「自分用」）
+    func tags(inCategory categoryId: String?) -> [PlanTag] {
+        tags.filter { $0.categoryId == categoryId }
     }
 
     func update(_ tag: PlanTag) {
@@ -194,7 +232,27 @@ final class PlanTagManager: NSObject, ObservableObject {
         entity.update(from: tag, userId: userId)
         CoreDataManager.shared.saveContext()
         updateTags()
+
+        // 共有したカテゴリのタグなら、みんなにもとどける
+        if let categoryId = tag.categoryId {
+            Task { @MainActor in SharedCategoryService.shared.categoryTagsDidChange(categoryId: categoryId) }
+        }
     }
+
+    /// 同じ id のタグを作るか、あれば書き換える（共有したカテゴリのタグを取り込むとき。`SharedCategoryService`）
+    func upsert(_ tag: PlanTag) {
+        guard let userId = currentUserId else { return }
+        if let entity = try? PlanTagEntity.fetchById(id: tag.id, context: context) {
+            entity.update(from: tag, userId: userId)
+        } else {
+            _ = PlanTagEntity.create(from: tag, userId: userId, context: context)
+        }
+        CoreDataManager.shared.saveContext()
+        updateTags()
+    }
+
+    /// 今サインインしている人（共有の判断に使う）
+    var userId: String? { currentUserId }
 
     /// タグを消したら、予定側が持っているIDも一緒に外す。
     /// 残しておくと、名前も色も解決できないIDが予定にぶら下がったままになる
@@ -209,6 +267,21 @@ final class PlanTagManager: NSObject, ObservableObject {
         // 監視の反映を待たずに手元も更新する。
         // 追加だけ即時で削除は監視頼み、という差があると
         // 消したのに画面に残って見える
+        updateTags()
+
+        // 共有したカテゴリのタグなら、みんなからも消える
+        if let categoryId = tag.categoryId {
+            Task { @MainActor in SharedCategoryService.shared.categoryTagsDidChange(categoryId: categoryId) }
+        }
+    }
+
+    /// 共有したカテゴリで、ほかの人が消したタグを手元からも消す（送り返さない）
+    func deleteWithoutSharing(_ tag: PlanTag) {
+        guard let userId = currentUserId,
+              let entity = try? PlanTagEntity.fetchById(id: tag.id, context: context) else { return }
+        context.delete(entity)
+        removeTagIDFromPlans(tagId: tag.id, userId: userId)
+        CoreDataManager.shared.saveContext()
         updateTags()
     }
 
@@ -225,6 +298,26 @@ final class PlanTagManager: NSObject, ObservableObject {
 
             let remaining = ids.filter { $0 != tagId }
             entity.tagIDsData = remaining.isEmpty ? nil : try? encoder.encode(remaining)
+        }
+    }
+
+    /// カテゴリの中での並べ替え（3.0。タグ管理はカテゴリごとに分かれている）
+    func move(inCategory categoryId: String?, fromOffsets source: IndexSet, toOffset destination: Int) {
+        guard let userId = currentUserId else { return }
+        var reordered = tags(inCategory: categoryId)
+        reordered.move(fromOffsets: source, toOffset: destination)
+        // ほかのカテゴリのタグと順が混ざらないよう、このカテゴリが使っていた順の番号を並べ直して振る
+        let slots = tags(inCategory: categoryId).map(\.order).sorted()
+        for (index, tag) in reordered.enumerated() {
+            guard let entity = try? PlanTagEntity.fetchById(id: tag.id, context: context) else { continue }
+            var updated = tag
+            updated.order = index < slots.count ? slots[index] : index
+            entity.update(from: updated, userId: userId)
+        }
+        CoreDataManager.shared.saveContext()
+        updateTags()
+        if let categoryId {
+            Task { @MainActor in SharedCategoryService.shared.categoryTagsDidChange(categoryId: categoryId) }
         }
     }
 

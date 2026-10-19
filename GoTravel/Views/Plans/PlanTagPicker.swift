@@ -9,6 +9,8 @@ struct PlanTagPicker: View {
     @Binding var selectedIDs: [String]
     /// 画面ごとに文字色が違うので外から受け取る
     let accentColor: Color
+    /// どのカテゴリのタグから選ぶか（3.0。nil は「自分用」）。タグはカテゴリごとに持つ
+    var categoryId: String? = nil
 
     @ObservedObject var tagManager = PlanTagManager.shared
     @ObservedObject var themeManager = ThemeManager.shared
@@ -20,26 +22,37 @@ struct PlanTagPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            if tagManager.tags.isEmpty {
+            if categoryTags.isEmpty {
                 starterSuggestions
             } else {
                 LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
-                    ForEach(tagManager.tags) { tag in
+                    ForEach(categoryTags) { tag in
                         tagChip(tag)
                     }
 
                     newTagChip
                 }
             }
+            // 共有したカテゴリのタグは、メンバー全員で同じものを使う
+            if let category = PlanCategoryManager.shared.category(for: categoryId), category.isShared {
+                Label("「\(category.name)」のタグは、メンバー全員で同じものを使います", systemImage: "person.2.fill")
+                    .font(.caption)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
         }
         .sheet(isPresented: $showNewTagEditor) {
-            PlanTagEditorView(editing: nil) { created in
+            PlanTagEditorView(editing: nil, categoryId: categoryId) { created in
                 // 作った直後は付けたいはずなので、そのまま選択に入れる
                 if !selectedIDs.contains(created.id) {
                     selectedIDs.append(created.id)
                 }
             }
         }
+    }
+
+    /// このカテゴリのタグ
+    private var categoryTags: [PlanTag] {
+        tagManager.tags(inCategory: categoryId)
     }
 
     // MARK: - Chips
@@ -54,13 +67,16 @@ struct PlanTagPicker: View {
                 if isSelected {
                     selectedIDs.removeAll { $0 == tag.id }
                 } else {
+                    // 共有タグは1つまで。別の共有タグを選んだら、前の共有タグは外す（`SharedTagService`）
                     selectedIDs.append(tag.id)
                 }
             }
         } label: {
-            Text(tag.name)
-                .font(.system(size: 13, weight: .semibold))
-                .lineLimit(1)
+            HStack(spacing: 4) {
+                Text(tag.name)
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+            }
                 .foregroundColor(isSelected ? .white : tag.color)
                 .frame(maxWidth: .infinity)
                 .padding(.horizontal, 10)
@@ -110,7 +126,7 @@ struct PlanTagPicker: View {
             LazyVGrid(columns: columns, alignment: .leading, spacing: 8) {
                 ForEach(PlanTag.starterSuggestions, id: \.self) { name in
                     Button {
-                        guard let created = tagManager.add(name: name) else { return }
+                        guard let created = tagManager.add(name: name, categoryId: categoryId) else { return }
                         selectedIDs.append(created.id)
                     } label: {
                         Text("＋ \(name)")

@@ -20,6 +20,8 @@ struct PlanDetailView: View {
     @State private var showScheduleEditor = false
     @State private var showNotificationSettings = false
     @State private var showRoutePicker = false
+    /// カレンダーに入れる画面（3.0）
+    @State private var showsCalendarExport = false
     /// 編集中に写真を外したか。保存を押すまで実体は消さない（編集の取り消しで戻せるように）
     @State private var isRemovingPhoto = false
     @State private var editingScheduleItem: PlanScheduleItem?
@@ -34,6 +36,8 @@ struct PlanDetailView: View {
     @State private var editedTime: Date?
     @State private var editedEndTime: Date?
     @State private var editedTagIDs: [String] = []
+    /// 入っているカテゴリ（3.0）
+    @State private var editedCategoryId: String?
     @State private var editedRecurrence: PlanRecurrence = .none
     @State private var editedPlaces: [PlannedPlace] = []
     @State private var showAddPlaceInEdit = false
@@ -123,14 +127,24 @@ struct PlanDetailView: View {
                         .foregroundColor(editedTitle.isEmpty ? themeManager.currentTheme.secondaryText : planColor)
                     }
                 } else {
-                    Button(action: {
-                        enterEditMode()
-                    }) {
-                        HStack(spacing: 4) {
-                            Image(systemName: "pencil")
-                            Text("編集")
+                    HStack(spacing: 14) {
+                        Button {
+                            showsCalendarExport = true
+                        } label: {
+                            Image(systemName: "calendar.badge.plus")
+                                .foregroundColor(planColor)
                         }
-                        .foregroundColor(planColor)
+                        .accessibilityLabel("カレンダーに追加")
+
+                        Button(action: {
+                            enterEditMode()
+                        }) {
+                            HStack(spacing: 4) {
+                                Image(systemName: "pencil")
+                                Text("編集")
+                            }
+                            .foregroundColor(planColor)
+                        }
                     }
                 }
             }
@@ -140,6 +154,9 @@ struct PlanDetailView: View {
         }
         .sheet(isPresented: $showImagePicker) {
             ImagePicker(image: $selectedImage)
+        }
+        .sheet(isPresented: $showsCalendarExport) {
+            CalendarExportSheet(target: .plan(viewModel.plans.first { $0.id == plan.id } ?? plan), tint: planColor)
         }
         .confirmationDialog("どこへ案内しますか？", isPresented: $showRoutePicker, titleVisibility: .visible) {
             ForEach(routeDestinations) { place in
@@ -1014,9 +1031,16 @@ struct PlanDetailView: View {
                 // タグ
                 editSection {
                     VStack(alignment: .leading, spacing: 10) {
+                        // カテゴリ（カレンダー）。作っている人だけに出る（3.0）
+                        if !PlanCategoryManager.shared.categories.isEmpty {
+                            editSectionLabel("カテゴリ", icon: "calendar")
+                            PlanCategoryPicker(categoryId: $editedCategoryId, tagIDs: $editedTagIDs, accentColor: editTextColor)
+                                .padding(.bottom, 8)
+                        }
+
                         editSectionLabel("タグ", icon: "number")
 
-                        PlanTagPicker(selectedIDs: $editedTagIDs, accentColor: editTextColor)
+                        PlanTagPicker(selectedIDs: $editedTagIDs, accentColor: editTextColor, categoryId: editedCategoryId)
                     }
                 }
 
@@ -2064,6 +2088,7 @@ struct PlanDetailView: View {
         editedEndTime = plan.endTime
         editedPlaces = plan.places
         editedTagIDs = plan.tagIDs
+        editedCategoryId = (viewModel.plans.first { $0.id == plan.id } ?? plan).categoryId
         editedRecurrence = plan.recurrence
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             isEditMode = true
@@ -2122,6 +2147,7 @@ struct PlanDetailView: View {
         updatedPlan.places = editedPlaces
         updatedPlan.localImageFileName = localFileName
         updatedPlan.tagIDs = editedTagIDs
+        updatedPlan.categoryId = editedCategoryId
         // 記念日は毎年で固定。種別を変えたときに古い設定が残らないようにする
         updatedPlan.recurrence = editedPlanType == .anniversary ? .yearly : editedRecurrence
 

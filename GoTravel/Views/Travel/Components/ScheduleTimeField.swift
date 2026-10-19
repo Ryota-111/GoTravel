@@ -1,20 +1,44 @@
 import SwiftUI
+import CoreLocation
 
 /// 予定の時刻の入力欄。
 ///
-/// 海外の旅行では「現地時間」「日本時間」を切り替えられる。
-/// 切り替えても**時:分はそのまま**で、どこの時計で読むかだけが変わる
-/// （「15:00 と入れたのは現地の15:00のつもりだった」を後から直せるように）。
-/// もう一方の時計で何時になるかも添えるので、日本にいながら現地の予定を組める
+/// 海外の旅行では、時刻をどこの時計で入れるかを選べる（3.0 から、予定の場所・その日・目的地・
+/// 日本・最近使った時間帯、ほかは検索して選ぶ）。切り替えても**時:分はそのまま**で、
+/// どこの時計で読むかだけが変わる。もう一方の時計で何時になるかも添える。
+///
+/// 場所を選び直したら、その場所の時間帯に合わせる（自分で時間帯を選んだあとは変えない）
 struct ScheduleTimeField: View {
     @Binding var time: Date
     @Binding var timeZone: TimeZone
-    /// 目的地の時間帯。日本と時差が無い・分からないときは nil（切り替えを出さない）
+    /// 予定の場所。時間帯を引いて候補に入れる
+    var place: CLLocationCoordinate2D?
+    /// その日の時間帯
+    var dayZone: TimeZone?
+    /// 旅行の目的地の時間帯
     let destination: TimeZone?
     let tint: Color
     let textColor: Color
     let secondaryText: Color
     let fieldBackground: Color
+
+    @State private var placeZone: TimeZone?
+    /// 開いたときの場所。編集で開いただけで時間帯が変わらないよう、これと違うときだけ合わせる
+    @State private var initialPlaceKey: String?
+    @State private var didCaptureInitialPlace = false
+    /// 自分で時間帯を選んだか。選んだあとは場所に合わせない
+    @State private var pickedByHand = false
+    @State private var note: String?
+    @State private var showsSearch = false
+
+    private var choices: [ScheduleZoneChoice] {
+        ScheduleClock.zoneChoices(place: placeZone, day: dayZone, destination: destination,
+                                  current: .current, recents: RecentTimeZones.list(), at: time)
+    }
+
+    private var placeKey: String? {
+        place.map { String(format: "%.2f,%.2f", $0.latitude, $0.longitude) }
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -37,13 +61,176 @@ struct ScheduleTimeField: View {
             .background(fieldBackground)
             .cornerRadius(12)
 
-            if let destination {
-                LocalTimeZoneChooser(
-                    time: $time,
-                    timeZone: $timeZone,
-                    destination: destination,
-                    secondaryText: secondaryText
+            if ScheduleClock.offersZoneChoice(choices, selected: timeZone, at: time) {
+                ScheduleZoneMenu(
+                    time: time,
+                    timeZone: timeZone,
+                    choices: choices,
+                    tint: tint,
+                    textColor: textColor,
+                    secondaryText: secondaryText,
+                    fieldBackground: fieldBackground,
+                    note: note,
+                    onPick: { pick($0) },
+                    onSearch: { showsSearch = true }
                 )
+            }
+        }
+        .task(id: placeKey) { await followPlace() }
+        .sheet(isPresented: $showsSearch) {
+            TimeZoneSearchView(tint: tint) { zone in
+                pick(zone)
+            }
+        }
+    }
+
+    private func pick(_ zone: TimeZone) {
+        pickedByHand = true
+        note = nil
+        change(to: zone)
+    }
+
+    private func change(to zone: TimeZone) {
+        guard zone.identifier != timeZone.identifier else { return }
+        time = ScheduleClock.keepingWallClock(time, from: timeZone, to: zone)
+        timeZone = zone
+    }
+
+    /// 場所の時間帯を引き、場所を選び直したときはその時計にする
+    private func followPlace() async {
+        if !didCaptureInitialPlace {
+            didCaptureInitialPlace = true
+            initialPlaceKey = placeKey
+        }
+        guard let place else { placeZone = nil; return }
+        guard let zone = await DestinationTimeZoneService.shared.timeZone(
+            latitude: place.latitude, longitude: place.longitude) else { return }
+        placeZone = zone
+        guard placeKey != initialPlaceKey, !pickedByHand,
+              !ScheduleClock.showsSameTime(zone, timeZone, at: time) else { return }
+        // 国内旅行で日本の場所を選んだだけなら、何も言わずにそのまま
+        guard ScheduleClock.isForeign(zone, at: time) || ScheduleClock.isForeign(timeZone, at: time) else { return }
+        change(to: zone)
+        note = "場所に合わせて、\(ScheduleClock.cityName(of: zone))の時刻で入れます（時刻の数字はそのまま）"
+    }
+}
+
+/// 時刻の時間帯を選ぶメニューと、もう一方の時計での時刻
+struct ScheduleZoneMenu: View {
+    let time: Date
+    let timeZone: TimeZone
+    let choices: [ScheduleZoneChoice]
+    let tint: Color
+    let textColor: Color
+    let secondaryText: Color
+    let fieldBackground: Color
+    var note: String?
+    let onPick: (TimeZone) -> Void
+    let onSearch: () -> Void
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Menu {
+                ForEach(choices) { choice in
+                    Button {
+                        onPick(choice.zone)
+                    } label: {
+                        let title = ScheduleClock.choiceTitle(of: choice.zone)
+                            + (choice.sourceLabel.map { "　\($0)" } ?? "")
+                        if ScheduleClock.showsSameTime(choice.zone, timeZone, at: time) {
+                            Label(title, systemImage: "checkmark")
+                        } else {
+                            Text(title)
+                        }
+                    }
+                }
+                Divider()
+                Button {
+                    onSearch()
+                } label: {
+                    Label("ほかの時間帯を探す…", systemImage: "magnifyingglass")
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "globe")
+                        .foregroundColor(tint.opacity(0.8))
+                        .frame(width: 24)
+                    Text("時間帯")
+                        .font(.subheadline)
+                        .foregroundColor(textColor)
+                    Spacer()
+                    Text(ScheduleClock.isForeign(timeZone, at: time) ? ScheduleClock.cityName(of: timeZone) : "日本時間")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(tint)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(tint)
+                }
+                .padding(14)
+                .background(fieldBackground)
+                .cornerRadius(12)
+            }
+
+            Text(note ?? caption)
+                .font(.caption)
+                .foregroundColor(secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var caption: String {
+        let japan = ScheduleClock.legacyTimeZone
+        if ScheduleClock.isForeign(timeZone, at: time) {
+            let offset = ScheduleClock.offsetFromJapanText(timeZone, at: time).map { "・\($0)" } ?? ""
+            return "\(ScheduleClock.displayName(of: timeZone))\(offset)。日本時間では \(ScheduleClock.timeText(time, in: japan)) です"
+        }
+        // 日本時間で入れているときは、勧めの海外の時計での時刻を添える
+        if let foreign = choices.first(where: { ScheduleClock.isForeign($0.zone, at: time) })?.zone {
+            return "日本時間で入力しています。\(ScheduleClock.cityName(of: foreign))では \(ScheduleClock.timeText(time, in: foreign)) です"
+        }
+        return "日本時間で入力しています"
+    }
+}
+
+/// 時間帯を都市名で探して選ぶ
+struct TimeZoneSearchView: View {
+    let tint: Color
+    let onPick: (TimeZone) -> Void
+
+    @Environment(\.dismiss) private var dismiss
+    @State private var query = ""
+
+    var body: some View {
+        NavigationStack {
+            List(ScheduleClock.searchZones(query), id: \.identifier) { zone in
+                Button {
+                    RecentTimeZones.record(zone)
+                    onPick(zone)
+                    dismiss()
+                } label: {
+                    HStack {
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(ScheduleClock.cityName(of: zone))
+                                .foregroundColor(.primary)
+                            Text(ScheduleClock.displayName(of: zone))
+                                .font(.caption)
+                                .foregroundColor(.secondary)
+                        }
+                        Spacer()
+                        Text(ScheduleClock.offsetFromJapanText(zone, at: Date()) ?? "日本と同じ")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
+            }
+            .searchable(text: $query, placement: .navigationBarDrawer(displayMode: .always), prompt: "都市名（パリ、London など）")
+            .navigationTitle("時間帯を探す")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("キャンセル") { dismiss() }
+                        .foregroundColor(tint)
+                }
             }
         }
     }

@@ -14,6 +14,8 @@ struct JoinTravelPlanView: View {
     @State private var errorMessage: String = ""
     @State private var showSuccess: Bool = false
     @State private var joinedPlanTitle: String = ""
+    /// 参加したのが予定（おでかけ・日常）か。完了の文言を変える
+    @State private var joinedSchedulePlan = false
 
     var body: some View {
         NavigationView {
@@ -33,7 +35,7 @@ struct JoinTravelPlanView: View {
                     .padding()
                 }
             }
-            .navigationTitle("旅行計画に参加")
+            .navigationTitle("共有コードで参加")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {
@@ -52,7 +54,9 @@ struct JoinTravelPlanView: View {
                     presentationMode.wrappedValue.dismiss()
                 }
             } message: {
-                Text("「\(joinedPlanTitle)」に参加しました。旅行計画の一覧に表示されます。")
+                Text(joinedSchedulePlan
+                     ? "カテゴリ「\(joinedPlanTitle)」に参加しました。カレンダーの上で「\(joinedPlanTitle)」を選ぶと、みんなの予定が見られます。"
+                     : "「\(joinedPlanTitle)」に参加しました。旅行計画の一覧に表示されます。")
             }
         }
         .navigationViewStyle(.stack)
@@ -102,11 +106,11 @@ struct JoinTravelPlanView: View {
                 .foregroundColor(tintColor)
 
             VStack(spacing: 8) {
-                Text("旅行計画に参加")
+                Text("共有コードで参加")
                     .font(.title2.bold())
                     .foregroundColor(textColor)
 
-                Text("共有コードを入力して、他のユーザーの旅行計画に参加できます")
+                Text("共有コードを入力して、ほかの人の旅行計画や予定に参加できます")
                     .font(.subheadline)
                     .foregroundColor(subTextColor)
                     .multilineTextAlignment(.center)
@@ -122,7 +126,7 @@ struct JoinTravelPlanView: View {
                 .font(.headline)
                 .foregroundColor(textColor)
 
-            TextField("例: TRAVEL-ABCD1234", text: $shareCode)
+            TextField("例: TRAVEL-ABCD1234 / PLAN-ABCD1234", text: $shareCode)
                 .font(.system(size: 20, weight: .medium, design: .monospaced))
                 .textInputAutocapitalization(.characters)
                 .autocorrectionDisabled()
@@ -237,11 +241,23 @@ struct JoinTravelPlanView: View {
 
     /// 入力の揺れ（空白・全角ハイフン・プレフィックス省略）を吸収して正規化する
     private func normalizeShareCode(_ input: String) -> String {
+        Self.normalizeShareCode(input)
+    }
+
+    /// 旅行計画（TRAVEL-）と予定（PLAN-）の共有コード。前置きを省いた8桁は旅行計画とみなす
+    static func normalizeShareCode(_ input: String) -> String {
         var code = input
             .uppercased()
             .replacingOccurrences(of: "ー", with: "-")
             .replacingOccurrences(of: "−", with: "-")
             .filter { !$0.isWhitespace }
+
+        // 予定の共有コード。「PLAN」のあとのハイフンを省いていたら補う
+        if code.hasPrefix("PLAN") && !code.hasPrefix("PLAN-") {
+            let body = String(code.dropFirst("PLAN".count))
+            if body.count == 8 { return "PLAN-\(body)" }
+        }
+        if code.hasPrefix("PLAN-") { return code }
 
         // 「TRAVEL-」を省略して8桁のコードだけ入力された場合は補完する
         if !code.isEmpty && !code.hasPrefix("TRAVEL-") {
@@ -262,7 +278,7 @@ struct JoinTravelPlanView: View {
             return
         }
 
-        guard trimmedCode.hasPrefix("TRAVEL-") else {
+        guard trimmedCode.hasPrefix("TRAVEL-") || trimmedCode.hasPrefix("PLAN-") else {
             errorMessage = "無効な共有コードです。正しい形式で入力してください（例: TRAVEL-ABCD1234）"
             showError = true
             return
@@ -271,6 +287,29 @@ struct JoinTravelPlanView: View {
         guard let userId = authVM.userId else {
             errorMessage = "ログインが必要です。"
             showError = true
+            return
+        }
+
+        // 予定（おでかけ・日常）の共有コード
+        if trimmedCode.hasPrefix("PLAN-") {
+            isJoining = true
+            hideKeyboard()
+            Task {
+                do {
+                    // 予定の共有はカテゴリ（カレンダー）単位（`SharedCategoryService`）
+                    let category = try await SharedCategoryService.shared.join(code: trimmedCode, userId: userId)
+                    joinedPlanTitle = category.name
+                    joinedSchedulePlan = true
+                    showSuccess = true
+                } catch {
+                    errorMessage = ICloudGuidanceText.isAccountProblem(error)
+                        ? ICloudGuidanceText.sharingUnavailable
+                        : ((error as? SharedCategoryService.SharingError)?.errorDescription
+                            ?? "参加できませんでした。通信環境をご確認のうえ、もう一度お試しください。")
+                    showError = true
+                }
+                isJoining = false
+            }
             return
         }
 

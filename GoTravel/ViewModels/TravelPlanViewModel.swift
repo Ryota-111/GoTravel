@@ -99,6 +99,10 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
 
         // 端末に控えを書き出す（iCloud が外れても読めるように。`TravelPlanBackupStore`）
         scheduleBackup()
+
+        // カレンダーに入れてある旅行計画は、カレンダーの予定も直す（`CalendarExportService`）
+        let plans = travelPlans
+        Task { @MainActor in CalendarExportService.shared.scheduleSync(travelPlans: plans) }
     }
 
     /// 控えの書き出しは少し待ってまとめて行う。同期で一覧が立て続けに変わるため
@@ -111,6 +115,9 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
         let work = DispatchWorkItem {
             DispatchQueue.global(qos: .utility).async {
                 TravelPlanBackupStore.save(plans, userId: userId)
+                // 予定・場所も含めた毎日の控え（3.0。`LocalSnapshotStore`）
+                let context = CoreDataManager.shared.persistentContainer.newBackgroundContext()
+                LocalSnapshotStore.saveIfNeeded(userId: userId, context: context)
             }
         }
         backupWorkItem = work
@@ -255,6 +262,9 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
 
         // 通知をキャンセル（戻したときに入れ直す）
         NotificationService.shared.cancelTravelPlanNotifications(for: planId)
+
+        // カレンダーに入れていたら、カレンダーからも消す
+        CalendarExportService.shared.unlink(CalendarExportService.key(travelPlanId: planId))
 
         // 共有の突き合わせに使う覚え書きも片付ける。
         // 残っていても実害は無いが、同じIDで作り直したときに古い基準が効いてしまう

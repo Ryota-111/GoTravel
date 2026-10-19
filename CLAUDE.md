@@ -56,7 +56,7 @@ MVVM アーキテクチャ（SwiftUI + Core Data）:
   - 計画 — `EnjoyWorldView`（旅行計画 + おでかけ・日常予定）
   - カレンダー — `CalendarView`
   - 場所保存 — `PlacesListView`
-  - アルバム — `AlbumHomeView`
+  - 思い出 — `AlbumHomeView`（旅のダイジェスト動画＋アルバム）
 
 ### Data Layer
 

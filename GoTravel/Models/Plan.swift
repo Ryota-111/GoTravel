@@ -115,10 +115,22 @@ struct Plan: Identifiable, Codable, Equatable {
     /// 設定を足す前からある予定の通知を勝手に止めてしまう
     var reminders: [PlanReminder]?
 
+    // MARK: カテゴリ（カレンダー）（3.0。`PlanCategory`）
+    //
+    // 予定はどれか1つのカテゴリに入る。共有したカテゴリの予定は、メンバー全員で見て書ける。
+    // 通知・済みの印・写真は各自のもの
+
+    /// 入っているカテゴリ。nil は「自分用」
+    var categoryId: String?
+    var lastEditedBy: String?
+    /// 最後に中身を書き換えた日時。共有の突き合わせで、どちらが新しいかに使う
+    var updatedAt: Date?
+
     enum CodingKeys: String, CodingKey {
         case id, title, startDate, endDate, places, cardColorHex, localImageFileName, userId, createdAt
         case planType, time, endTime, description, linkURL, scheduleItems, isCompleted, tagIDs, recurrence
         case reminders
+        case categoryId, lastEditedBy, updatedAt
     }
 
     var cardColorHex: String? {
@@ -189,6 +201,9 @@ struct Plan: Identifiable, Codable, Equatable {
         tagIDs = try container.decodeIfPresent([String].self, forKey: .tagIDs) ?? []
         recurrence = try container.decodeIfPresent(PlanRecurrence.self, forKey: .recurrence) ?? .none
         reminders = try container.decodeIfPresent([PlanReminder].self, forKey: .reminders)
+        categoryId = try container.decodeIfPresent(String.self, forKey: .categoryId)
+        lastEditedBy = try container.decodeIfPresent(String.self, forKey: .lastEditedBy)
+        updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt)
         if let hex = try container.decodeIfPresent(String.self, forKey: .cardColorHex) {
             cardColor = Color(hex: hex)
         } else {
@@ -217,6 +232,9 @@ struct Plan: Identifiable, Codable, Equatable {
         try container.encode(tagIDs, forKey: .tagIDs)
         try container.encode(recurrence, forKey: .recurrence)
         try container.encodeIfPresent(reminders, forKey: .reminders)
+        try container.encodeIfPresent(categoryId, forKey: .categoryId)
+        try container.encodeIfPresent(lastEditedBy, forKey: .lastEditedBy)
+        try container.encodeIfPresent(updatedAt, forKey: .updatedAt)
     }
 }
 

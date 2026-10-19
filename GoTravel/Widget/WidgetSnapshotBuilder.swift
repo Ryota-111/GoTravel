@@ -115,12 +115,8 @@ enum WidgetSnapshotBuilder {
     /// ウィジェットは端末の時計しか知らないので、ここで組み立てて渡す。
     /// パリの 19:00 の予定は、日本にいてもパリにいても同じ瞬間になる
     private static func occursAt(_ item: ScheduleItem, on day: DateComponents) -> Date {
-        let clock = ScheduleClock.calendar(in: item.timeZone)
-        let time = clock.dateComponents([.hour, .minute], from: item.time)
-        var parts = day
-        parts.hour = time.hour
-        parts.minute = time.minute
-        return clock.date(from: parts) ?? item.time
+        // 「前日 17:00」のような予定も、実際の瞬間にする（`ScheduleItem.occurrence`）
+        item.occurrence(onDay: day)
     }
 
     /// 今日以降の予定を日付順に返す

@@ -17,6 +17,8 @@ struct PackingListView: View {
     @State private var newItemName: String = ""
     /// お土産の「誰に」。使わない種類では欄ごと出さない
     @State private var newItemNote: String = ""
+    /// お土産を「自分だけ」で足すか（共有中の旅行でだけ選べる。はじめは「みんな」）
+    @State private var newItemIsPrivate = false
     /// 「よく使う持ち物」で選択中のもの。まとめて追加するまで保持する
     @State private var selectedPresets: Set<String> = []
     @State private var showPresetEditor = false
@@ -36,9 +38,13 @@ struct PackingListView: View {
     }
 
     /// 新しく足す項目の持ち主。
-    /// やりたいことは「みんなのもの」にしたいので持ち主を付けない
+    /// やりたいことは「みんなのもの」にしたいので持ち主を付けない。
+    /// お土産は「みんな」から始まり、共有中の旅行で「自分だけ」を選んだときだけ持ち主を付ける
     private var newItemOwnerId: String? {
-        kind.isSharedWithMembers ? nil : authVM.userId
+        if kind.choosesVisibilityPerItem {
+            return currentPlan?.isShared == true && newItemIsPrivate ? authVM.userId : nil
+        }
+        return kind.isSharedWithMembers ? nil : authVM.userId
     }
 
     private var presets: [String] {
@@ -125,7 +131,7 @@ struct PackingListView: View {
 
     private var sharingBadge: some View {
         HStack(spacing: 7) {
-            Image(systemName: kind.isSharedWithMembers ? "person.2.fill" : "lock.fill")
+            Image(systemName: kind.isSharedWithMembers || kind.choosesVisibilityPerItem ? "person.2.fill" : "lock.fill")
                 .font(.system(size: 11, weight: .semibold))
 
             Text(kind.sharingNote)
@@ -191,6 +197,15 @@ struct PackingListView: View {
                             .fill(cardFill)
                             .overlay(RoundedRectangle(cornerRadius: 12).stroke(cardStroke, lineWidth: 1))
                     )
+            }
+
+            // 共有中の旅行のお土産は、足す前に「みんな」か「自分だけ」かを選べる
+            if kind.choosesVisibilityPerItem && currentPlan?.isShared == true {
+                Picker("見る人", selection: $newItemIsPrivate) {
+                    Label("みんな", systemImage: "person.2.fill").tag(false)
+                    Label("自分だけ", systemImage: "lock.fill").tag(true)
+                }
+                .pickerStyle(.segmented)
             }
         }
     }
@@ -530,10 +545,21 @@ struct PackingItemRow: View {
 
             Spacer(minLength: 0)
 
+            // 共有中の旅行の、自分だけのお土産（同行者には見えない）
+            if showsVisibilityChoice && item.ownerId != nil {
+                Image(systemName: "lock.fill")
+                    .font(.system(size: 11))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .accessibilityLabel("自分だけ")
+            }
+
             // 編集と削除は右端の「…」から。長押しの contextMenu だけだと気づけないので常に出す。
             // チェックの丸は左端なので、右端なら間違って押しにくい（予約や旅行計画のカードと同じ形）
             Menu {
                 Button("編集", systemImage: "pencil", action: startEditing)
+                if showsVisibilityChoice {
+                    visibilityButton
+                }
                 Button("削除", systemImage: "trash", role: .destructive, action: deleteItem)
             } label: {
                 Image(systemName: "ellipsis")
@@ -582,6 +608,31 @@ struct PackingItemRow: View {
             }
             Button("キャンセル", role: .cancel) {}
             Button("保存", action: saveEdit)
+        }
+    }
+
+    /// 共有中の旅行のお土産で、「みんな」と「自分だけ」を切り替えられるか
+    private var showsVisibilityChoice: Bool {
+        item.kind.choosesVisibilityPerItem && currentPlan?.isShared == true
+    }
+
+    @ViewBuilder
+    private var visibilityButton: some View {
+        if item.ownerId == nil {
+            Button("自分だけにする", systemImage: "lock.fill") { setPrivate(true) }
+        } else {
+            Button("みんなに見せる", systemImage: "person.2.fill") { setPrivate(false) }
+        }
+    }
+
+    /// 自分だけにすると、同行者のリストからは消える（共有には載らなくなる）
+    private func setPrivate(_ isPrivate: Bool) {
+        guard var updatedPlan = currentPlan,
+              let index = updatedPlan.packingItems.firstIndex(where: { $0.id == item.id }),
+              let userId = authVM.userId else { return }
+        updatedPlan.packingItems[index].ownerId = isPrivate ? userId : nil
+        withAnimation(.easeInOut(duration: 0.2)) {
+            viewModel.update(updatedPlan, userId: userId)
         }
     }
 

@@ -13,6 +13,7 @@ struct MainTabView: View {
     @State private var shownSharedImports: Set<URL> = []
     @StateObject private var plansViewModel = PlansViewModel()
     @StateObject private var travelPlanViewModel = TravelPlanViewModel()
+    @ObservedObject private var icsInbox = ICSImportInbox.shared
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
@@ -37,7 +38,7 @@ struct MainTabView: View {
                 .tabItem { Label("場所保存", systemImage: "mappin.and.ellipse") }
                 .tag(2)
             AlbumHomeView()
-                .tabItem { Label("アルバム", systemImage: "photo.artframe") }
+                .tabItem { Label("思い出", systemImage: "photo.stack") }
                 .tag(3)
         }
         .environmentObject(plansViewModel)
@@ -62,6 +63,8 @@ struct MainTabView: View {
             if let userId = authVM.userId {
                 PlaceCategoryManager.shared.setup(userId: userId)
                 PlanTagManager.shared.setup(userId: userId)
+                // 予定のカテゴリ（カレンダー）。3.0
+                PlanCategoryManager.shared.setup(userId: userId)
                 // やることリストはホームのバッジからも数を出すので、ここで用意する。
                 // 初回は UserDefaults に残っているぶんを Core Data へ移す
                 TaskManager.shared.setup(userId: userId)
@@ -107,6 +110,11 @@ struct MainTabView: View {
         // TravelPlan は Equatable ではないため配列を直接監視できないので、
         // 起動時・タブ切り替え時・バックグラウンドへ移る時に更新する
         .onAppear { updateWidgetSnapshot() }
+        // .ics を「Travory で開く」で受け取ったら、カレンダーのタブで確かめる
+        .onChange(of: icsInbox.file?.id) { _, id in
+            if id != nil { selectedTab = 1 }
+        }
+        .onAppear { if icsInbox.file != nil { selectedTab = 1 } }
         .onChange(of: scenePhase) { _, phase in
             if phase != .active { updateWidgetSnapshot() }
 
