@@ -22,6 +22,9 @@ struct AlbumHomeView: View {
     /// 残した動画が変わった合図（ダイジェストの画面を閉じたら読み直す）
     @State private var libraryVersion = 0
     @State private var digestPlan: TravelPlan?
+    /// 旅の記録（3.1）
+    @State private var showsStats = false
+    @EnvironmentObject private var plansViewModel: PlansViewModel
 
     /// 既定アルバム（日本全国フォトマップ）は削除できないので選択対象から外す
     private var deletableAlbums: [Album] {
@@ -43,8 +46,11 @@ struct AlbumHomeView: View {
 
                     ScrollView(showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 0) {
-                            // 旅のダイジェスト（選んで消しているあいだは出さない）
+                            // 旅の記録と旅のダイジェスト（選んで消しているあいだは出さない）
                             if !isSelectionMode {
+                                statsEntry
+                                    .padding(.horizontal, 20)
+                                    .padding(.bottom, 22)
                                 digestSection
                                     .padding(.bottom, 22)
                             }
@@ -98,6 +104,12 @@ struct AlbumHomeView: View {
         .sheet(item: $digestPlan, onDismiss: { libraryVersion += 1 }) { plan in
             // 上の旅行名から、ほかの旅行にも切り替えられる
             TripDigestView(plan: plan, otherPlans: digestCandidates)
+        }
+        .sheet(isPresented: $showsStats) {
+            TripStatsView()
+                .environmentObject(travelPlanViewModel)
+                .environmentObject(plansViewModel)
+                .environmentObject(authVM)
         }
         .sheet(isPresented: $showCreateAlbum) {
             CreateAlbumView(travelPlans: travelPlanViewModel.travelPlans)
@@ -241,6 +253,36 @@ struct AlbumHomeView: View {
             }
         }
         .padding(.top, 4)
+    }
+
+    /// 旅の記録の入口。終わった旅行の回数と日数を出し、押すと旅の記録を開く
+    private var statsEntry: some View {
+        let trips = TripStats.finishedTrips(travelPlanViewModel.travelPlans, now: Date())
+        let days = trips.map(\.dayCount).reduce(0, +)
+        let background = colorScheme == .dark
+            ? themeManager.currentTheme.secondaryBackgroundDark
+            : themeManager.currentTheme.secondaryBackgroundLight
+        let ink = ThemePreset.readableText(on: background)
+        return Button { showsStats = true } label: {
+            HStack(spacing: 14) {
+                Image(systemName: "chart.bar.xaxis")
+                    .font(.title3)
+                    .foregroundColor(ThemePreset.readableTintEitherWay(accentColor, on: background))
+                VStack(alignment: .leading, spacing: 2) {
+                    Text("旅の記録").font(.headline).foregroundColor(ink)
+                    Text(trips.isEmpty ? "旅行の回数や行った都道府県を数えます"
+                                       : "旅行 \(trips.count)回・のべ \(days)日・行った都道府県")
+                        .font(.caption)
+                        .foregroundColor(ink.opacity(0.6))
+                }
+                Spacer()
+                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundColor(ink.opacity(0.4))
+            }
+            .padding(16)
+            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(background))
+            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(ink.opacity(0.08), lineWidth: 1))
+        }
+        .buttonStyle(.plain)
     }
 
     private func sectionTitle(_ title: String) -> some View {
