@@ -38,6 +38,8 @@ struct ThemePreset {
 
         // 有料。やわらかく大人っぽい配色（2.9 で追加）。
         // 新しいテーマを見つけてもらえるよう、追加テーマの先頭に置く（一覧はこの順に並ぶ）
+        /// 3.1 で追加（名前と無料・有料は、作ってみてから決める。保存される値なので rawValue は変えない）
+        case mocha = "モカ"
         case milkTea = "ミルクティー"
         case dustyRose = "くすみピンク"
         case afternoonTea = "アフタヌーンティー"
@@ -102,6 +104,7 @@ struct ThemePreset {
             case .morningAirport: return "白とガラスの青。影を持たない"
             case .mountainHut: return "深緑と樹皮、地形図の紙"
             case .neonNight: return "黒地にシアンとマゼンタ。常に暗い"
+            case .mocha: return "生成りの地に、モカとチャコール。写真が映える"
             case .milkTea: return "ミルクティーとラテ、キャラメルとココア。茶色だけで"
             case .dustyRose: return "ドライフラワーのくすんだ薔薇。ピンクの濃淡で"
             case .afternoonTea: return "白い器にフランボワーズ。金の縁取り"
@@ -653,6 +656,21 @@ extension ThemePreset {
                     planOuting: hex(0x2FE0D0), planDaily: hex(0xFF4D8D), planTravel: hex(0xFFD23F),
                     album: [hex(0x2FE0D0), hex(0xFF4D8D), hex(0xFFD23F),
                             hex(0x7B5CFF), hex(0x4DFF9A), hex(0xFF7A3D)]
+                )
+
+            case .mocha:
+                // 生成り・サンド・モカ・チャコールの4色。茶色だけのミルクティーと分けるため、
+                // 文字と予定の1つはチャコールで締め、モカはボタンと印に使う
+                return Palette(
+                    bgLight: hex(0xF1ECE6), surfaceLight: hex(0xFBF8F4),
+                    bgDark: hex(0x1C1A18), surfaceDark: hex(0x272421),
+                    ink: hex(0x2A2623), ink2: hex(0x786B62), ink3: hex(0xB2A598),
+                    inkDark: hex(0xF1ECE6), inkDark2: hex(0xB2A598),
+                    accent: hex(0x8A5F43),
+                    planOuting: hex(0x2F2B28), planDaily: hex(0xA88D74), planTravel: hex(0x8A5F43),
+                    album: [hex(0x8A5F43), hex(0x2F2B28), hex(0xA88D74),
+                            hex(0x6B5446), hex(0xC4AE98), hex(0x4C4541)],
+                    rule: hex(0xDDD2C6)
                 )
 
             case .milkTea:
