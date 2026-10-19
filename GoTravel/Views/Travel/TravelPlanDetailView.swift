@@ -6,7 +6,10 @@ import MapKit
 struct TravelPlanDetailView: View {
 
     /// 写真の高さ。スクロール量の判定でも同じ値を使う
-    static let headerHeight: CGFloat = 220
+    /// 写真の高さ。3.1 で大きくした（写真を主役に、下の面が写真に少し重なる形）
+    static let headerHeight: CGFloat = 300
+    /// 写真の下に重ねる、角の丸い面の高さ（この分、写真の文字を上げる）
+    static let headerSheetLip: CGFloat = 26
 
     /// タブバーの高さ。全タブで同じ高さ・同じ位置になるよう固定する
     static let tabBarHeight: CGFloat = 46
@@ -97,6 +100,8 @@ struct TravelPlanDetailView: View {
     /// 隠れた後はスクロール中の内容がステータスバーの領域に見えてしまうので、
     /// そこを覆うかどうかの判定に使う
     @State private var isHeaderCollapsed = false
+    /// 下にスクロールした量（写真をゆっくり上げるのに使う）
+    @State private var headerScroll: CGFloat = 0
     @State private var showAddScheduleItem = false
     @State private var showBasicInfoEditor = false
     @State private var showDuplicateSheet = false
@@ -219,16 +224,24 @@ struct TravelPlanDetailView: View {
 
     // MARK: - View Components
     private func contentView(plan: TravelPlan) -> some View {
-        ZStack {
+        ZStack(alignment: .top) {
             backgroundGradient
+
+            // 写真は下の画面の奥に置く。スクロールすると、下の画面が角の丸い面ごと写真の上にかぶさっていく
+            // （写真はゆっくり上がる）。3.1：写真が主役の詳細画面の形
+            planHeaderSection(plan: plan)
+                .offset(y: -max(headerScroll, 0) * 0.4)
+                .opacity(isHeaderCollapsed ? 0 : 1)
 
             ScrollViewReader { scrollProxy in
                 ScrollView(showsIndicators: false) {
-                    // 写真は LazyVStack の外に置く。中に入れると画面外で
-                    // 破棄され、位置を測る GeometryReader ごと消えてしまう
                     VStack(spacing: 0) {
-                        planHeaderSection(plan: plan)
+                        // 写真の見える分だけあける（ここを引いてもスクロールする）
+                        Color.clear
+                            .frame(height: Self.headerHeight - Self.headerSheetLip)
+                            .contentShape(Rectangle())
 
+                        VStack(spacing: 0) {
                         // 共有の同期で困ったとき（失敗・解除）だけ出す。
                         // 平常の様子と手動の更新は、共有ボタンから開く画面にある
                         SharedPlanSyncBar(plan: plan)
@@ -263,6 +276,15 @@ struct TravelPlanDetailView: View {
                                 .background(tabBarBackground)
                             }
                         }
+                        }
+                        .padding(.top, 6)
+                        // 写真にかぶさる面。角を丸くして、写真の上に重なって見えるようにする
+                        .background(alignment: .top) {
+                            UnevenRoundedRectangle(topLeadingRadius: Self.headerSheetLip,
+                                                   topTrailingRadius: Self.headerSheetLip, style: .continuous)
+                                .fill(themeManager.currentTheme.backgroundGradient(for: colorScheme))
+                                .shadow(color: .black.opacity(0.12), radius: 10, y: -2)
+                        }
                     }
                 }
                 // スクロール量を直接受け取る。GeometryReader と PreferenceKey で
@@ -271,6 +293,7 @@ struct TravelPlanDetailView: View {
                 .onScrollGeometryChange(for: CGFloat.self) { geometry in
                     geometry.contentOffset.y + geometry.contentInsets.top
                 } action: { _, scrolled in
+                    headerScroll = scrolled
                     // 写真の残りが 72pt を切ったら貼り付いた表示に切り替える
                     let collapsed = scrolled > Self.headerHeight - 72
                     guard collapsed != isHeaderCollapsed else { return }
@@ -295,6 +318,13 @@ struct TravelPlanDetailView: View {
                         scrollProxy.scrollTo(itemID, anchor: focusedItemAnchor)
                     }
                 }
+            }
+        }
+        // 写真のボタンは、写真が見えているあいだだけ手前に出す（隠れたらタブバーに戻るボタンが出る）
+        .overlay(alignment: .top) {
+            if !isChromeCompact {
+                headerButtons(plan: plan)
+                    .transition(.opacity)
             }
         }
         // 貼り付いた帯の上（ステータスバーの領域）を、スクロール中の内容が
@@ -1095,6 +1125,109 @@ struct TravelPlanDetailView: View {
         }
     }
 
+    /// 写真の上の丸いボタン（戻る・書き出し・共有・編集）。
+    /// 写真は下の画面の奥に置いたので、押せるようにボタンだけ手前に出す
+    private func headerButtons(plan: TravelPlan) -> some View {
+        HStack {
+            // 写真が見えているあいだはここに置く。
+            // スクロールで写真が隠れたらタブバー側に出る
+            Button(action: { presentationMode.wrappedValue.dismiss() }) {
+                ZStack {
+                    Circle().fill(.ultraThinMaterial).frame(width: 40, height: 40)
+                    Image(systemName: "chevron.left")
+                        .font(.system(size: 16, weight: .semibold))
+                        .foregroundColor(.white)
+                }
+            }
+            .padding(.leading, 16)
+
+            Spacer()
+
+            HStack(spacing: 10) {
+                // アプリを持っていない相手にも旅程を渡せるようにする
+                Menu {
+                    Button {
+                        exportFormat = .text
+                        showExportOptions = true
+                    } label: {
+                        Label("テキストで送る", systemImage: "doc.plaintext")
+                    }
+
+                    Button {
+                        exportFormat = .image
+                        showExportOptions = true
+                    } label: {
+                        Label("画像で送る", systemImage: "photo")
+                    }
+
+                    // 表紙つきの冊子（PDF）。印刷やアプリを持っていない家族向け（Travory Pro）
+                    Button {
+                        if proStore.isPurchased { showsBooklet = true } else { showsProForBooklet = true }
+                    } label: {
+                        Label(proStore.isPurchased ? "旅のしおり（PDF）" : "旅のしおり（PDF）・Pro",
+                              systemImage: "book.closed")
+                    }
+
+                    // 撮った写真と動画を2秒ずつつないだ動画（作るのは無料。印なしは Pro）
+                    Button {
+                        showsRecap = true
+                    } label: {
+                        Label("旅のダイジェスト動画", systemImage: "film")
+                    }
+
+                    // iPhone のカレンダー（Google カレンダーも）に入れる。ご要望から（3.0）
+                    Button {
+                        showsCalendarExport = true
+                    } label: {
+                        Label("iPhone のカレンダーに追加", systemImage: "calendar.badge.plus")
+                    }
+
+                    Divider()
+
+                    // 前回の行程を土台に次の旅行を作りたい、という要望から
+                    Button {
+                        showDuplicateSheet = true
+                    } label: {
+                        Label("この計画を複製", systemImage: "doc.on.doc")
+                    }
+                } label: {
+                    ZStack {
+                        Circle().fill(.ultraThinMaterial).frame(width: 40, height: 40)
+                        Image(systemName: "square.and.arrow.up")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
+                }
+                .accessibilityLabel("旅程を書き出す")
+
+                Button(action: { showShareView = true }) {
+                    ZStack {
+                        Circle().fill(.ultraThinMaterial).frame(width: 40, height: 40)
+                        Image(systemName: plan.isShared ? "person.2.fill" : "person.2")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(plan.isShared ? themeManager.currentTheme.success : .white)
+                    }
+                    // 同期の様子は、写真の下の行ではなくここに小さく出す
+                    .overlay(alignment: .topTrailing) {
+                        shareSyncBadge(plan: plan)
+                    }
+                }
+                .accessibilityLabel(shareButtonAccessibilityLabel(plan: plan))
+                Button(action: { showBasicInfoEditor = true }) {
+                    ZStack {
+                        Circle().fill(.ultraThinMaterial).frame(width: 40, height: 40)
+                        Image(systemName: "pencil")
+                            .font(.system(size: 15, weight: .semibold))
+                            .foregroundColor(.white)
+                    }
+                }
+            }
+            .padding(.trailing, 16)
+        }
+        .frame(maxWidth: .infinity, alignment: .top)
+        .padding(.top, 12)
+    }
+
     private var timelineCardSurface: Color {
         colorScheme == .dark
             ? themeManager.currentTheme.secondaryBackgroundDark
@@ -1138,10 +1271,12 @@ struct TravelPlanDetailView: View {
             LinearGradient(
                 // 位置は高さに対する割合なので、写真を縮めると暗くなる位置も
                 // 上がってしまう。早めに暗くして文字の背景を確保する
+                // 写真を主役にするため、暗くするのは文字のある下のほうだけにする
                 gradient: Gradient(stops: [
                     .init(color: .clear, location: 0),
-                    .init(color: Color.black.opacity(0.35), location: 0.2),
-                    .init(color: Color.black.opacity(0.85), location: 1)
+                    .init(color: .clear, location: 0.4),
+                    .init(color: Color.black.opacity(0.35), location: 0.65),
+                    .init(color: Color.black.opacity(0.7), location: 1)
                 ]),
                 startPoint: .top,
                 endPoint: .bottom
@@ -1175,112 +1310,13 @@ struct TravelPlanDetailView: View {
             .shadow(color: .black.opacity(0.45), radius: 4, x: 0, y: 1)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomLeading)
             .padding(.horizontal, 20)
-            .padding(.bottom, 20)
+            .padding(.bottom, 20 + Self.headerSheetLip)
             // 右下の円と重ならないところで折り返す
             .padding(.trailing, tripCountdown(plan: plan) == nil ? 0 : 120)
 
             // 開くたびに「いま知りたいこと」が目に入るようにする
             countdownTicket(plan: plan)
 
-            // ナビゲーションボタン（上部）
-            HStack {
-                // 写真が見えているあいだはここに置く。
-                // スクロールで写真が隠れたらタブバー側に出る
-                Button(action: { presentationMode.wrappedValue.dismiss() }) {
-                    ZStack {
-                        Circle().fill(.ultraThinMaterial).frame(width: 40, height: 40)
-                        Image(systemName: "chevron.left")
-                            .font(.system(size: 16, weight: .semibold))
-                            .foregroundColor(.white)
-                    }
-                }
-                .padding(.leading, 16)
-
-                Spacer()
-
-                HStack(spacing: 10) {
-                    // アプリを持っていない相手にも旅程を渡せるようにする
-                    Menu {
-                        Button {
-                            exportFormat = .text
-                            showExportOptions = true
-                        } label: {
-                            Label("テキストで送る", systemImage: "doc.plaintext")
-                        }
-
-                        Button {
-                            exportFormat = .image
-                            showExportOptions = true
-                        } label: {
-                            Label("画像で送る", systemImage: "photo")
-                        }
-
-                        // 表紙つきの冊子（PDF）。印刷やアプリを持っていない家族向け（Travory Pro）
-                        Button {
-                            if proStore.isPurchased { showsBooklet = true } else { showsProForBooklet = true }
-                        } label: {
-                            Label(proStore.isPurchased ? "旅のしおり（PDF）" : "旅のしおり（PDF）・Pro",
-                                  systemImage: "book.closed")
-                        }
-
-                        // 撮った写真と動画を2秒ずつつないだ動画（作るのは無料。印なしは Pro）
-                        Button {
-                            showsRecap = true
-                        } label: {
-                            Label("旅のダイジェスト動画", systemImage: "film")
-                        }
-
-                        // iPhone のカレンダー（Google カレンダーも）に入れる。ご要望から（3.0）
-                        Button {
-                            showsCalendarExport = true
-                        } label: {
-                            Label("iPhone のカレンダーに追加", systemImage: "calendar.badge.plus")
-                        }
-
-                        Divider()
-
-                        // 前回の行程を土台に次の旅行を作りたい、という要望から
-                        Button {
-                            showDuplicateSheet = true
-                        } label: {
-                            Label("この計画を複製", systemImage: "doc.on.doc")
-                        }
-                    } label: {
-                        ZStack {
-                            Circle().fill(.ultraThinMaterial).frame(width: 40, height: 40)
-                            Image(systemName: "square.and.arrow.up")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(.white)
-                        }
-                    }
-                    .accessibilityLabel("旅程を書き出す")
-
-                    Button(action: { showShareView = true }) {
-                        ZStack {
-                            Circle().fill(.ultraThinMaterial).frame(width: 40, height: 40)
-                            Image(systemName: plan.isShared ? "person.2.fill" : "person.2")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(plan.isShared ? themeManager.currentTheme.success : .white)
-                        }
-                        // 同期の様子は、写真の下の行ではなくここに小さく出す
-                        .overlay(alignment: .topTrailing) {
-                            shareSyncBadge(plan: plan)
-                        }
-                    }
-                    .accessibilityLabel(shareButtonAccessibilityLabel(plan: plan))
-                    Button(action: { showBasicInfoEditor = true }) {
-                        ZStack {
-                            Circle().fill(.ultraThinMaterial).frame(width: 40, height: 40)
-                            Image(systemName: "pencil")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundColor(.white)
-                        }
-                    }
-                }
-                .padding(.trailing, 16)
-            }
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
-            .padding(.top, 12)
         }
         .frame(height: Self.headerHeight)
         .opacity(animateContent ? 1 : 0)
@@ -2451,7 +2487,7 @@ struct TravelPlanDetailView: View {
             .shadow(color: .black.opacity(0.4), radius: 6, x: 0, y: 2)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .bottomTrailing)
             .padding(.trailing, 20)
-            .padding(.bottom, 20)
+            .padding(.bottom, 20 + Self.headerSheetLip)
         }
     }
 
