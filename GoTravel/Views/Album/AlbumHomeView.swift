@@ -46,11 +46,8 @@ struct AlbumHomeView: View {
 
                     ScrollView(showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 0) {
-                            // 旅の記録と旅のダイジェスト（選んで消しているあいだは出さない）
+                            // 旅のダイジェスト（選んで消しているあいだは出さない）
                             if !isSelectionMode {
-                                statsEntry
-                                    .padding(.horizontal, 20)
-                                    .padding(.bottom, 22)
                                 digestSection
                                     .padding(.bottom, 22)
                             }
@@ -190,10 +187,13 @@ struct AlbumHomeView: View {
                     Button("キャンセル") { exitSelectionMode() }
                         .font(.subheadline.weight(.semibold))
                         .foregroundColor(mainColor)
-                } else if !deletableAlbums.isEmpty {
-                    Button("選択") { enterSelectionMode() }
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(mainColor)
+                } else {
+                    if !deletableAlbums.isEmpty {
+                        Button("選択") { enterSelectionMode() }
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(mainColor)
+                    }
+                    statsButton
                 }
             }
 
@@ -255,34 +255,19 @@ struct AlbumHomeView: View {
         .padding(.top, 4)
     }
 
-    /// 旅の記録の入口。終わった旅行の回数と日数を出し、押すと旅の記録を開く
-    private var statsEntry: some View {
-        let trips = TripStats.finishedTrips(travelPlanViewModel.travelPlans, now: Date())
-        let days = trips.map(\.dayCount).reduce(0, +)
-        let background = colorScheme == .dark
-            ? themeManager.currentTheme.secondaryBackgroundDark
-            : themeManager.currentTheme.secondaryBackgroundLight
-        let ink = ThemePreset.readableText(on: background)
-        return Button { showsStats = true } label: {
-            HStack(spacing: 14) {
-                Image(systemName: "chart.bar.xaxis")
-                    .font(.title3)
-                    .foregroundColor(ThemePreset.readableTintEitherWay(accentColor, on: background))
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("旅の記録").font(.headline).foregroundColor(ink)
-                    Text(trips.isEmpty ? "旅行の回数や行った都道府県を数えます"
-                                       : "旅行 \(trips.count)回・のべ \(days)日・行った都道府県")
-                        .font(.caption)
-                        .foregroundColor(ink.opacity(0.6))
-                }
-                Spacer()
-                Image(systemName: "chevron.right").font(.footnote.weight(.semibold)).foregroundColor(ink.opacity(0.4))
-            }
-            .padding(16)
-            .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(background))
-            .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(ink.opacity(0.08), lineWidth: 1))
+    /// 旅の記録の入口。見出しの右の「記録」（画面の中にカードを置くと、写真や動画より目立ってしまうため）。
+    /// 印だけだと何のボタンか分からないので、文字にする
+    private var statsButton: some View {
+        Button { showsStats = true } label: {
+            Text("記録")
+                .font(.body.weight(.semibold))
+                .foregroundColor(mainColor)
+                .padding(.horizontal, 18)
+                .padding(.vertical, 9)
+                .background(Capsule().fill(mainColor.opacity(0.12)))
         }
         .buttonStyle(.plain)
+        .accessibilityLabel("旅の記録")
     }
 
     private func sectionTitle(_ title: String) -> some View {
