@@ -100,8 +100,10 @@ struct TravelPlanDetailView: View {
     /// 隠れた後はスクロール中の内容がステータスバーの領域に見えてしまうので、
     /// そこを覆うかどうかの判定に使う
     @State private var isHeaderCollapsed = false
-    /// 下にスクロールした量（写真をゆっくり上げるのに使う）
-    @State private var headerScroll: CGFloat = 0
+    /// 下にスクロールした量（写真をゆっくり上げるのに使う）。
+    /// **この画面の body では読まないこと。** 読むとスクロールのたびに画面全体（日程の一覧など）を
+    /// 作り直し、予定の多い旅行でスクロールが引っかかった。読むのは写真の部分（`ParallaxHeader`）だけ
+    @State private var headerScroll = HeaderScrollOffset()
     @State private var showAddScheduleItem = false
     @State private var showBasicInfoEditor = false
     @State private var showDuplicateSheet = false
@@ -230,7 +232,7 @@ struct TravelPlanDetailView: View {
             // 写真は下の画面の奥に置く。スクロールすると、下の画面が角の丸い面ごと写真の上にかぶさっていく
             // （写真はゆっくり上がる）。3.1：写真が主役の詳細画面の形
             planHeaderSection(plan: plan)
-                .offset(y: -max(headerScroll, 0) * 0.4)
+                .modifier(ParallaxHeader(scroll: headerScroll))
                 .opacity(isHeaderCollapsed ? 0 : 1)
 
             ScrollViewReader { scrollProxy in
@@ -278,6 +280,10 @@ struct TravelPlanDetailView: View {
                         }
                         }
                         .padding(.top, 6)
+                        // 中身（とくに四角い背景を持つタブのバー）が丸い角からはみ出して、角が欠けて見えていた。
+                        // 面と同じ形で切り抜く（貼り付いたタブのバーは、角が画面の外に出るので四角いまま）
+                        .clipShape(UnevenRoundedRectangle(topLeadingRadius: Self.headerSheetLip,
+                                                          topTrailingRadius: Self.headerSheetLip, style: .continuous))
                         // 写真にかぶさる面。角を丸くして、写真の上に重なって見えるようにする
                         .background(alignment: .top) {
                             UnevenRoundedRectangle(topLeadingRadius: Self.headerSheetLip,
@@ -293,7 +299,7 @@ struct TravelPlanDetailView: View {
                 .onScrollGeometryChange(for: CGFloat.self) { geometry in
                     geometry.contentOffset.y + geometry.contentInsets.top
                 } action: { _, scrolled in
-                    headerScroll = scrolled
+                    headerScroll.y = scrolled
                     // 写真の残りが 72pt を切ったら貼り付いた表示に切り替える
                     let collapsed = scrolled > Self.headerHeight - 72
                     guard collapsed != isHeaderCollapsed else { return }
@@ -2811,5 +2817,21 @@ private final class SwipeExclusionZones {
 
     func contains(_ point: CGPoint) -> Bool {
         frames.values.contains { $0.contains(point) }
+    }
+}
+
+
+/// 旅行計画の詳細で、下にスクロールした量。写真の部分だけが読む（`TravelPlanDetailView.headerScroll`）
+@Observable
+final class HeaderScrollOffset {
+    var y: CGFloat = 0
+}
+
+/// 写真を、スクロールの4割の速さでゆっくり上げる。スクロールした量はここでだけ読む
+private struct ParallaxHeader: ViewModifier {
+    let scroll: HeaderScrollOffset
+
+    func body(content: Content) -> some View {
+        content.offset(y: -max(scroll.y, 0) * 0.4)
     }
 }
