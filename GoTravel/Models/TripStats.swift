@@ -157,6 +157,49 @@ enum TripStats {
         return summary
     }
 
+    /// 都道府県ごとに、何から数えたか（テスト用の内訳。「神戸旅行（目的地：神戸）」「神戸旅行（予定：北野異人館）」）。
+    /// `unresolved` は、場所はあるが県がまだ分からない（調べていない・県が返ってこない）もの
+    static func prefectureSources(plans: [TravelPlan], photoMapPrefectures: Set<Prefecture> = [],
+                                  region: (Double, Double) -> TripRegion?,
+                                  period: Period, now: Date, calendar: Calendar = .current)
+        -> (byPrefecture: [Prefecture: [String]], unresolved: [String]) {
+        func inPeriod(_ date: Date) -> Bool {
+            switch period {
+            case .all: return true
+            case .year(let year): return calendar.component(.year, from: date) == year
+            }
+        }
+        var result: [Prefecture: [String]] = [:]
+        var unresolved: [String] = []
+        func add(_ lat: Double, _ lon: Double, _ label: String) {
+            guard let found = region(lat, lon) else { unresolved.append(label); return }
+            guard let prefecture = found.prefecture else {
+                unresolved.append("\(label)・\(found.countryCode)")
+                return
+            }
+            if !(result[prefecture]?.contains(label) ?? false) { result[prefecture, default: []].append(label) }
+        }
+        for trip in finishedTrips(plans, now: now, calendar: calendar).filter({ inPeriod($0.startDate) })
+            .sorted(by: { $0.startDate < $1.startDate }) {
+            if let lat = trip.latitude, let lon = trip.longitude {
+                add(lat, lon, "\(trip.title)（目的地：\(trip.destination)）")
+            } else {
+                unresolved.append("\(trip.title)（目的地の場所が空）")
+            }
+            for item in trip.daySchedulesInRange.flatMap(\.scheduleItems) {
+                if let lat = item.latitude, let lon = item.longitude {
+                    add(lat, lon, "\(trip.title)（予定：\(item.title)）")
+                }
+            }
+        }
+        if period == .all {
+            for prefecture in photoMapPrefectures where result[prefecture] == nil {
+                result[prefecture] = ["フォトマップの写真"]
+            }
+        }
+        return (result, unresolved)
+    }
+
     /// 保存した場所を、いつ行ったことにするか。
     /// 訪れた日 → つないだ旅行の出発日 → 保存した日 の順。
     /// 旅行のあと年が明けてから保存した場所が、次の年の旅として数えられていた

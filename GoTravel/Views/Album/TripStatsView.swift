@@ -275,9 +275,46 @@ struct TripStatsView: View {
                     .font(.caption2)
                     .foregroundColor(faint)
             }
+            #if DEBUG
+            prefectureBreakdown
+            #endif
         }
         .padding(.vertical, 24)
     }
+
+    #if DEBUG
+    /// テスト用（開発版だけ）：どの旅行のどの場所で、その都道府県を数えたか
+    private var prefectureBreakdown: some View {
+        let sources = TripStats.prefectureSources(plans: plans, photoMapPrefectures: photoMapPrefectures,
+                                                  region: { resolver.region($0, $1) }, period: period, now: now)
+        return DisclosureGroup {
+            VStack(alignment: .leading, spacing: 10) {
+                ForEach(Prefecture.allCases.filter { sources.byPrefecture[$0] != nil }) { prefecture in
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(prefecture.name).font(.caption.weight(.bold)).foregroundColor(ink)
+                        ForEach(sources.byPrefecture[prefecture] ?? [], id: \.self) { label in
+                            Text("・\(label)").font(.caption2).foregroundColor(faint)
+                        }
+                    }
+                }
+                if !sources.unresolved.isEmpty {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("県が分からない場所").font(.caption.weight(.bold)).foregroundColor(.orange)
+                        ForEach(sources.unresolved, id: \.self) { label in
+                            Text("・\(label)").font(.caption2).foregroundColor(faint)
+                        }
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.top, 8)
+        } label: {
+            Text("テスト用：数えた都道府県の内訳").font(.caption.weight(.semibold)).foregroundColor(.orange)
+        }
+        .tint(.orange)
+        .padding(.top, 8)
+    }
+    #endif
 
     // MARK: - 年ごと
 

@@ -101,6 +101,22 @@ struct TripStatsTests {
         #expect(TripStats.tripsMissingDestination([kobe], now: now).count == 1)
     }
 
+    @Test("テスト用の内訳：どの旅行のどの場所で数えたか、県が分からない場所はどれか")
+    func sources() {
+        let now = date(2026, 10, 19)
+        var okinawa = trip("沖縄", date(2026, 3, 20), days: 3, lat: 26.2, lon: 127.6)
+        okinawa.daySchedules[0].scheduleItems = [ScheduleItem(time: okinawa.startDate, title: "札幌の友人宅",
+                                                              latitude: 43.0, longitude: 141.3)]
+        var empty = trip("どこか", date(2026, 4, 1), days: 1, lat: 0, lon: 0)
+        empty.latitude = nil; empty.longitude = nil
+        let result = TripStats.prefectureSources(plans: [okinawa, empty], photoMapPrefectures: [.kyoto],
+                                                 region: region, period: .all, now: now, calendar: calendar)
+        #expect(result.byPrefecture[.okinawa] == ["沖縄（目的地：沖縄）"])
+        #expect(result.byPrefecture[.hokkaido] == ["沖縄（予定：札幌の友人宅）"])
+        #expect(result.byPrefecture[.kyoto] == ["フォトマップの写真"])
+        #expect(result.unresolved == ["どこか（目的地の場所が空）"])
+    }
+
     @Test("県の名前から都道府県を引く。日本の外は県にしない")
     func regionPrefecture() {
         #expect(TripRegion(countryCode: "JP", prefectureName: "東京都").prefecture == .tokyo)
