@@ -12,6 +12,8 @@ struct JapanPhotoView: View {
     @StateObject private var viewModel: JapanPhotoViewModel
     @ObservedObject var themeManager = ThemeManager.shared
     @State private var selectedPrefecture: Prefecture?
+    /// 写真の無い県を押したとき、写真を選ぶ画面を直接開く
+    @State private var addingPrefecture: Prefecture?
     @State private var scale: CGFloat = 1.0
     @State private var lastScale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
@@ -60,6 +62,24 @@ struct JapanPhotoView: View {
         // 写真がまだ無い県は、足せるように編集の一覧を開く
         .fullScreenCover(item: $selectedPrefecture) { prefecture in
             PrefectureSlideView(albumId: albumId, prefecture: prefecture)
+        }
+        // 写真の無い県は、スライドの画面と一覧の画面を重ねて開かず、写真を選ぶ画面だけを開く
+        // （以前は黒いスライドの画面・写真の一覧・写真を選ぶ画面と、何枚も重なって開いていた）
+        .sheet(item: $addingPrefecture) { prefecture in
+            MultiPhotoPicker(selectionLimit: PhotoMapFiles.maxPhotosPerPrefecture) { images in
+                let added = AlbumManager.shared.addJapanPhotos(images, prefecture: prefecture, to: albumId)
+                // 地図が1県埋まるのは達成感のある場面
+                if added > 0 { ReviewRequestManager.shared.record(.prefectureAdded) }
+            }
+        }
+    }
+
+    /// 県を押したとき。写真があればスライドで見返し、無ければ写真を選ぶ画面を開く
+    private func open(_ prefecture: Prefecture) {
+        if viewModel.covers[prefecture] == nil {
+            addingPrefecture = prefecture
+        } else {
+            selectedPrefecture = prefecture
         }
     }
 
@@ -212,7 +232,7 @@ struct JapanPhotoView: View {
         }
         .frame(width: size.width, height: size.height)
         .contentShape(Rectangle())
-        .onTapGesture { selectedPrefecture = prefecture }
+        .onTapGesture { open(prefecture) }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(prefecture.name)\(viewModel.covers[prefecture] == nil ? "、写真なし" : "")")
         .accessibilityAddTraits(.isButton)
@@ -243,7 +263,7 @@ struct JapanPhotoView: View {
                 ForEach(region.prefectures) { prefecture in
                     PrefectureTile(prefecture: prefecture, photo: viewModel.covers[prefecture],
                                    photoCount: viewModel.photoCount(of: prefecture), ink: ink, accent: accent)
-                        .onTapGesture { selectedPrefecture = prefecture }
+                        .onTapGesture { open(prefecture) }
                 }
             }
         }
