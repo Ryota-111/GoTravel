@@ -2,10 +2,10 @@ import SwiftUI
 
 /// 旅の記録の「＋ 行った県を足す」。アプリを使う前に行った県を、地方ごとの一覧から足す（3.1）。
 ///
-/// 県を押すとチェックが付き、右の「年」から行った年を足せる（何年でも）。年は分からなくてもよい
-/// （その県は「これまで全部」にだけ入る）。旅行の回数や日数には数えない
+/// 県を押して行った年を選ぶと、その県が行った県になる（何年でも）。旅行の回数や日数には数えない
 struct VisitedPrefecturesEditor: View {
     @ObservedObject private var store = VisitedPrefectureStore.shared
+    @ObservedObject private var albumManager = AlbumManager.shared
     @Environment(\.dismiss) private var dismiss
 
     /// 地方の区切り（`Prefecture` は北から順に並んでいる）
@@ -22,7 +22,7 @@ struct VisitedPrefecturesEditor: View {
         NavigationStack {
             List {
                 Section {
-                    Text("Travory を使う前に行った県も足せます。都道府県の数と地図に入ります（旅行の回数や日数には入りません）。行った年を入れると、年ごとの記録にも入ります。")
+                    Text("Travory を使う前に行った県も足せます。県を押して行った年を選ぶと、都道府県の数と地図、その年の記録に入ります（旅行の回数や日数には入りません）。")
                         .font(.footnote)
                         .foregroundColor(.secondary)
                     // 写真に残っている場所から、行った県と年をまとめて足す（写真はフォトマップに入れない）
@@ -42,6 +42,11 @@ struct VisitedPrefecturesEditor: View {
                 }
             }
             .navigationTitle("行った県を足す")
+            // もうフォトマップに写真がある県を、年は分からない行った県として付けておく（初めの1回だけ）
+            .onAppear {
+                store.importPhotoMapOnce(Set(albumManager.albums.filter(\.isJapanPhotoMap)
+                    .flatMap(\.photoFileNames).compactMap(PhotoMapFiles.prefecture(of:))))
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
@@ -51,63 +56,49 @@ struct VisitedPrefecturesEditor: View {
         }
     }
 
+    /// 1県。押すと行った年を選ぶメニューが開き、年を選ぶとその県が行った県になる（チェックだけ付ける操作は無い）。
+    /// 年を全部外すと行った県から外れる。以前に年なしで足した県は「年は分からない」と出し、外せるようにする
     private func row(_ prefecture: Prefecture) -> some View {
         let years = store.records[prefecture]
-        let isOn = years != nil
-        return HStack(spacing: 12) {
-            Button {
-                if isOn { store.remove(prefecture) } else { store.add(prefecture) }
-            } label: {
-                HStack(spacing: 10) {
-                    Image(systemName: isOn ? "checkmark.circle.fill" : "circle")
-                        .font(.title3)
-                        .foregroundColor(isOn ? .accentColor : .secondary)
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(prefecture.name).foregroundColor(.primary)
-                        if let years {
-                            Text(years.isEmpty ? "年は分からない" : years.sorted().map { "\($0)年" }.joined(separator: "・"))
-                                .font(.caption)
-                                .foregroundColor(.secondary)
-                        }
-                    }
-                }
-            }
-            .buttonStyle(.plain)
-            Spacer()
-            if isOn {
-                yearMenu(prefecture, years: years ?? [])
-            }
-        }
-        .contentShape(Rectangle())
-        .accessibilityElement(children: .combine)
-        .accessibilityAddTraits(isOn ? .isSelected : [])
-    }
-
-    /// 行った年を足す・外す
-    private func yearMenu(_ prefecture: Prefecture, years: Set<Int>) -> some View {
-        Menu {
-            if !years.isEmpty {
+        return Menu {
+            if let years {
                 Section("外す") {
                     ForEach(years.sorted(by: >), id: \.self) { year in
                         Button("\(String(year))年を外す", systemImage: "minus.circle") {
-                            store.removeYear(year, from: prefecture)
+                            store.undo(prefecture, years: [year])
+                        }
+                    }
+                    if years.isEmpty {
+                        Button("行った県から外す", systemImage: "minus.circle", role: .destructive) {
+                            store.remove(prefecture)
                         }
                     }
                 }
             }
             Section("行った年を足す") {
-                ForEach(yearChoices.filter { !years.contains($0) }, id: \.self) { year in
+                ForEach(yearChoices.filter { !(years ?? []).contains($0) }, id: \.self) { year in
                     Button("\(String(year))年") { store.add(prefecture, years: [year]) }
                 }
             }
         } label: {
-            Label("年", systemImage: "calendar")
-                .font(.footnote.weight(.semibold))
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(Capsule().stroke(Color.accentColor.opacity(0.5), lineWidth: 1))
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(prefecture.name).foregroundColor(.primary)
+                    if let years {
+                        Text(years.isEmpty ? "年は分からない" : years.sorted().map { "\($0)年" }.joined(separator: "・"))
+                            .font(.caption)
+                            .foregroundColor(.accentColor)
+                    }
+                }
+                Spacer()
+                Image(systemName: years == nil ? "plus.circle" : "checkmark.circle.fill")
+                    .font(.title3)
+                    .foregroundColor(years == nil ? .secondary : .accentColor)
+            }
+            .contentShape(Rectangle())
         }
-        .accessibilityLabel("\(prefecture.name)の行った年")
+        .accessibilityLabel(years == nil ? "\(prefecture.name)、行った年を足す"
+                                         : "\(prefecture.name)、行った年を変える")
     }
 }
 
