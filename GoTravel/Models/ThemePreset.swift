@@ -825,6 +825,37 @@ extension ThemePreset {
         return Self.contrastRatio(accent1, row) >= 4.5 ? accent1 : Self.readableText(on: row)
     }
 
+    /// 入力や共有の画面（新しい旅行・共有）に敷く地。
+    ///
+    /// 以前はどのテーマでも「明るい面の色 → ダークモードの地の色」のグラデーションを敷き、
+    /// 文字はダークモード用の明るい色に決め打ちしていた。追加テーマでは白から濃い色へ変わる地に
+    /// 白い文字が載り、上のほうが読めなかった（藍と生成りで報告）。
+    /// デフォルトカラーは今の青い見た目を残して明暗に合わせ、ほかはふだんの画面と同じ地にする
+    func screenGradient(for scheme: ColorScheme) -> LinearGradient {
+        let colors: [Color]
+        switch type {
+        case .originalColor:
+            colors = scheme == .dark ? [gradientDark, dark] : [gradientLight, light]
+        case .whiteBlack:
+            colors = [Color(white: 0.97), Color(white: 0.84)]
+        default:
+            return backgroundGradient(for: scheme)
+        }
+        return LinearGradient(gradient: Gradient(colors: colors), startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+
+    /// `screenGradient` の、文字が載るあたり（上側）の色。文字や差し色は、この色から決める
+    func screenGround(for scheme: ColorScheme) -> Color {
+        switch type {
+        case .originalColor:
+            return Self.composite(scheme == .dark ? gradientDark : gradientLight, over: scheme == .dark ? .black : .white)
+        case .whiteBlack:
+            return Color(white: 0.97)
+        default:
+            return scheme == .dark ? backgroundDark : backgroundLight
+        }
+    }
+
     /// 一覧のカード（予定・保存した場所）の面。縁は引かず、面の色だけで地と見分ける。
     ///
     /// ライトでは地（`backgroundLight` から始まるグラデーション）と同じ色だったので、白いテーマでは

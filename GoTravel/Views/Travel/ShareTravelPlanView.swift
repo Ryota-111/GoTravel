@@ -119,20 +119,20 @@ struct ShareTravelPlanView: View {
         VStack(spacing: 15) {
             Image(systemName: "person.2.circle.fill")
                 .font(.system(size: 70))
-                .foregroundColor(themeManager.currentTheme.accent2.opacity(0.8))
+                .foregroundColor(groundText.opacity(0.8))
 
             VStack(spacing: 8) {
                 Text("この旅行計画を共有")
                     .font(.title2.bold())
-                    .foregroundColor(themeManager.currentTheme.accent2)
+                    .foregroundColor(groundText)
 
                 Text(plan.title)
                     .font(.headline)
-                    .foregroundColor(themeManager.currentTheme.accent2)
+                    .foregroundColor(groundText)
 
                 Text("共有コードを生成して、他のユーザーと一緒に旅行計画を編集できます")
                     .font(.subheadline)
-                    .foregroundColor(themeManager.currentTheme.accent2.opacity(0.7))
+                    .foregroundColor(groundText.opacity(0.7))
                     .multilineTextAlignment(.center)
                     .padding(.horizontal)
             }
@@ -374,10 +374,10 @@ struct ShareTravelPlanView: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack {
                 Image(systemName: "info.circle.fill")
-                    .foregroundColor(themeManager.currentTheme.accent2)
+                    .foregroundColor(groundText)
                 Text("共有機能について")
                     .font(.headline)
-                    .foregroundColor(themeManager.currentTheme.accent2)
+                    .foregroundColor(groundText)
             }
 
             VStack(alignment: .leading, spacing: 8) {
@@ -399,13 +399,15 @@ struct ShareTravelPlanView: View {
     }
 
     // MARK: - Background
+    // 地は `ThemePreset.screenGradient`、カードの外の文字はその地から決める（新しい旅行の画面と同じ直し）
     private var backgroundGradient: some View {
-        LinearGradient(
-            gradient: Gradient(colors: [themeManager.currentTheme.gradientDark, themeManager.currentTheme.dark]),
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        .ignoresSafeArea()
+        themeManager.currentTheme.screenGradient(for: colorScheme)
+            .ignoresSafeArea()
+    }
+
+    /// カードの外（地の上）に置く文字の色
+    private var groundText: Color {
+        ThemePreset.readableText(on: themeManager.currentTheme.screenGround(for: colorScheme))
     }
 
     // MARK: - Actions
@@ -464,7 +466,9 @@ struct InfoRow: View {
     var body: some View {
         HStack(alignment: .top, spacing: 8) {
             Image(systemName: icon)
-                .foregroundColor(themeManager.currentTheme.accent2)
+                .foregroundColor(ThemePreset.readableTintEitherWay(themeManager.currentTheme.actionFill,
+                                                                   on: themeManager.currentTheme.screenGround(for: colorScheme),
+                                                                   minimum: 3.0))
                 .font(.caption)
 
             Text(text)
