@@ -48,7 +48,11 @@ final class TripRegionResolver: ObservableObject {
 
     /// まだ調べていない場所を、1つずつ調べる。呼んだ Task を止めると止まる
     func resolve(_ points: [(latitude: Double, longitude: Double)]) async {
-        guard !isRunning else { return }
+        // 前の分がまだ動いていれば、終わるのを待ってから始める（すぐ返すと、新しく増えた場所を見落とす）
+        while isRunning {
+            if Task.isCancelled { return }
+            try? await Task.sleep(nanoseconds: 200_000_000)
+        }
         let missing = points.filter {
             let key = Self.key($0.latitude, $0.longitude)
             return cache[key] == nil && !unknown.contains(key)
@@ -61,8 +65,11 @@ final class TripRegionResolver: ObservableObject {
         }
         remaining = missing.count
         let geocoder = CLGeocoder()
-        for point in missing {
+        var retries = 0
+        var index = 0
+        while index < missing.count {
             if Task.isCancelled { return }
+            let point = missing[index]
             let key = Self.key(point.latitude, point.longitude)
             do {
                 let placemark = try await geocoder.reverseGeocodeLocation(
@@ -78,14 +85,21 @@ final class TripRegionResolver: ObservableObject {
                 save()
                 version += 1
             } catch {
-                // 通信が無い・上限に届いたときは、次に開いたときに続きから
                 if let clError = error as? CLError, clError.code == .geocodeFoundNoResult {
                     unknown.insert(key)
                     save()
+                } else if retries < 3 {
+                    // 上限に届いた・通信が切れたときは、少し待って同じ場所から続ける
+                    // （以前はそこで止まり、次に開くまで残りを調べていなかった）
+                    retries += 1
+                    try? await Task.sleep(nanoseconds: 20_000_000_000)
+                    continue
                 } else {
                     return
                 }
             }
+            retries = 0
+            index += 1
             remaining -= 1
             try? await Task.sleep(nanoseconds: Self.interval)
         }

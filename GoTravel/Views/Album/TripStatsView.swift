@@ -1,5 +1,6 @@
 import SwiftUI
 import Charts
+import CoreLocation
 
 /// 旅の記録（3.1・無料）。「思い出」タブの見出しの「記録」から開く。
 ///
@@ -124,11 +125,37 @@ struct TripStatsView: View {
                 if let userId = authVM.userId { placesVM.setupFetchedResultsController(userId: userId) }
             }
             // まだ調べていない場所の県を、少しずつ調べる（画面を閉じたら止まり、次に続きから）
-            .task(id: placesVM.places.count + plans.count) {
-                await resolver.resolve(TripStats.lookupCoordinates(plans: TripStats.finishedTrips(plans, now: now),
-                                                                   places: placesVM.places))
+            // 旅行の場所が増えたとき（目的地を引き直したときなど）にも、やり直す
+            .task(id: lookupKey) {
+                let filled = await fillMissingDestinations()
+                // 引き直した場所は、旅行のデータの更新が届くのを待たずに、そのまま県を調べる
+                await resolver.resolve(TripStats.lookupCoordinates(plans: TripStats.finishedTrips(plans, now: now)) + filled)
             }
         }
+    }
+
+    /// 県を調べ直すきっかけ。旅行・保存した場所の数と、場所の入った旅行の数
+    private var lookupKey: String {
+        let located = plans.filter { $0.latitude != nil && $0.longitude != nil }.count
+        return "\(plans.count)|\(placesVM.places.count)|\(located)"
+    }
+
+    /// 目的地の場所が空のまま保存された旅行を、目的地の文字から補う（詳細を開いたときと同じ）。
+    /// 詳細を開くまで場所が無く、その旅行の県が数えられていなかった。引き直した場所を返す
+    private func fillMissingDestinations() async -> [(latitude: Double, longitude: Double)] {
+        guard let userId = authVM.userId else { return [] }
+        var filled: [(latitude: Double, longitude: Double)] = []
+        for trip in TripStats.tripsMissingDestination(plans, now: now) {
+            if Task.isCancelled { break }
+            guard let coordinate = await DestinationGeocoder.coordinate(for: trip.destination, debounce: 0),
+                  var latest = plans.first(where: { $0.id == trip.id }),
+                  latest.latitude == nil || latest.longitude == nil else { continue }
+            latest.latitude = coordinate.latitude
+            latest.longitude = coordinate.longitude
+            travelPlanViewModel.update(latest, userId: userId)
+            filled.append((latitude: coordinate.latitude, longitude: coordinate.longitude))
+        }
+        return filled
     }
 
     private var periodMenu: some View {

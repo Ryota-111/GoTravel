@@ -135,13 +135,8 @@ enum TripStats {
             for prefecture in tripPrefectures { prefectureTrips[prefecture, default: 0] += 1 }
         }
 
-        let visited = places.filter { inPeriod($0.visitedAt ?? $0.createdAt) }
-        summary.placeCount = visited.count
-        for place in visited {
-            guard let found = region(place.latitude, place.longitude) else { continue }
-            summary.countries.insert(found.countryCode)
-            if let prefecture = found.prefecture { summary.prefectures.insert(prefecture) }
-        }
+        // 保存した場所は、行った都道府県・国には数えない（行きたい場所のメモにも使うため）。数だけ出す
+        summary.placeCount = places.filter { inPeriod(visitDate(of: $0, plans: plans)) }.count
 
         if period == .all {
             summary.prefectures.formUnion(photoMapPrefectures)
@@ -162,6 +157,25 @@ enum TripStats {
         return summary
     }
 
+    /// 保存した場所を、いつ行ったことにするか。
+    /// 訪れた日 → つないだ旅行の出発日 → 保存した日 の順。
+    /// 旅行のあと年が明けてから保存した場所が、次の年の旅として数えられていた
+    static func visitDate(of place: VisitedPlace, plans: [TravelPlan]) -> Date {
+        if let visitedAt = place.visitedAt { return visitedAt }
+        if let planId = place.travelPlanId, let trip = plans.first(where: { $0.id == planId }) {
+            return trip.startDate
+        }
+        return place.createdAt
+    }
+
+    /// 終わった旅行のうち、目的地の場所（緯度・経度）が空のもの。目的地の文字から引き直す
+    static func tripsMissingDestination(_ plans: [TravelPlan], now: Date) -> [TravelPlan] {
+        finishedTrips(plans, now: now).filter {
+            ($0.latitude == nil || $0.longitude == nil)
+                && !$0.destination.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+        }
+    }
+
     /// 年ごとの回数・日数・金額（古い順）
     static func yearRows(plans: [TravelPlan], now: Date, calendar: Calendar = .current) -> [YearRow] {
         let grouped = Dictionary(grouping: finishedTrips(plans, now: now, calendar: calendar)) {
@@ -174,11 +188,12 @@ enum TripStats {
         .sorted { $0.year < $1.year }
     }
 
-    /// 調べたい場所（旅行の目的地・予定の場所・保存した場所）。同じ場所は1つにする
-    static func lookupCoordinates(plans: [TravelPlan], places: [VisitedPlace]) -> [(latitude: Double, longitude: Double)] {
+    /// 調べたい場所（旅行の目的地・予定の場所）。同じ場所は1つにする。
+    /// 保存した場所は都道府県に数えないので、調べない
+    static func lookupCoordinates(plans: [TravelPlan]) -> [(latitude: Double, longitude: Double)] {
         var seen: Set<String> = []
         var result: [(latitude: Double, longitude: Double)] = []
-        let all = plans.flatMap(coordinates(of:)) + places.map { (latitude: $0.latitude, longitude: $0.longitude) }
+        let all = plans.flatMap(coordinates(of:))
         for point in all where !(point.latitude == 0 && point.longitude == 0) {
             let key = TripRegionResolver.key(point.latitude, point.longitude)
             if seen.insert(key).inserted { result.append(point) }

@@ -68,18 +68,37 @@ struct TripStatsTests {
         #expect(rows.last?.spend == 130_000)
     }
 
-    @Test("フォトマップの県は「これまで全部」に入れる。保存した場所の県も数える")
+    @Test("フォトマップの県は「これまで全部」に入れる。保存した場所は都道府県に数えない")
     func photoMapAndPlaces() {
         let now = date(2026, 10, 19)
         let place = VisitedPlace(title: "美ら海", latitude: 26.69, longitude: 127.87, createdAt: date(2026, 5, 1),
                                  categoryId: "sightseeing")
         let all = TripStats.summary(plans: [], places: [place], outings: [], photoMapPrefectures: [.kyoto],
                                     region: region, period: .all, now: now, calendar: calendar)
-        #expect(all.prefectures == [.okinawa, .kyoto])
+        #expect(all.prefectures == [.kyoto])
         #expect(all.placeCount == 1)
         let year = TripStats.summary(plans: [], places: [place], outings: [], photoMapPrefectures: [.kyoto],
                                      region: region, period: .year(2026), now: now, calendar: calendar)
-        #expect(year.prefectures == [.okinawa])
+        #expect(year.prefectures.isEmpty)
+    }
+
+    @Test("旅行から保存した場所は、年が明けてから保存しても、その旅行の年に数える")
+    func placeYearFollowsTrip() {
+        let now = date(2026, 10, 19)
+        var kobe = trip("神戸", date(2025, 12, 24), days: 2, lat: 0, lon: 0)
+        kobe.id = "kobe"
+        kobe.latitude = nil; kobe.longitude = nil
+        let place = VisitedPlace(title: "北野異人館", latitude: 26.2, longitude: 127.6, createdAt: date(2026, 1, 5),
+                                 travelPlanId: "kobe")
+        #expect(TripStats.visitDate(of: place, plans: [kobe]) == kobe.startDate)
+        let y2025 = TripStats.summary(plans: [kobe], places: [place], outings: [], region: region,
+                                      period: .year(2025), now: now, calendar: calendar)
+        #expect(y2025.placeCount == 1)
+        let y2026 = TripStats.summary(plans: [kobe], places: [place], outings: [], region: region,
+                                      period: .year(2026), now: now, calendar: calendar)
+        #expect(y2026.placeCount == 0)
+        // 目的地の場所が空の終わった旅行は、引き直す対象
+        #expect(TripStats.tripsMissingDestination([kobe], now: now).count == 1)
     }
 
     @Test("県の名前から都道府県を引く。日本の外は県にしない")
