@@ -4,7 +4,7 @@ import Combine
 // MARK: - 自分で足した「行った県」（3.1）
 //
 // 旅の記録は Travory で作った旅行から数えるので、アプリを使う前に行った県が入らなかった。
-// 旅の記録の「＋ 行った県を足す」と、フォトマップの「カメラロールから探す」で足した県と、行った年を持つ。
+// 旅の記録の「＋ 行った県を足す」と、フォトマップの「カメラロールから追加」で足した県と、行った年を持つ。
 // 小さなデータなので iCloud のキー・バリューの保存に置く（端末どうしで同期。CloudKit のスキーマは使わない）
 
 /// 県（`Prefecture.rawValue`）→ 行った年。年が空なら「年は分からない」（「これまで全部」にだけ入る）
@@ -81,6 +81,16 @@ final class VisitedPrefectureStore: ObservableObject {
         guard var current = records[prefecture] else { return }
         current.subtract(years)
         records[prefecture] = current.isEmpty ? nil : current
+        save()
+    }
+
+    /// フォトマップに写真がある県を、年は分からない行った県として足す（初めの1回だけ）。
+    /// 外した県が、開くたびに戻ってこないようにする
+    func importPhotoMapOnce(_ prefectures: Set<Prefecture>) {
+        let key = "visitedPrefectures.importedPhotoMap.v1"
+        guard !UserDefaults.standard.bool(forKey: key) else { return }
+        UserDefaults.standard.set(true, forKey: key)
+        for prefecture in prefectures where records[prefecture] == nil { records[prefecture] = [] }
         save()
     }
 

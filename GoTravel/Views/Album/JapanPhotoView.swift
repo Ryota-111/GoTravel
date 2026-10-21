@@ -14,8 +14,10 @@ struct JapanPhotoView: View {
     @State private var selectedPrefecture: Prefecture?
     /// 写真の無い県を押したとき、写真を選ぶ画面を直接開く
     @State private var addingPrefecture: Prefecture?
-    /// カメラロールの写真の場所から、行った県を探す
+    /// カメラロールの写真の場所から、行った県の写真を探して入れる（Travory Pro）
     @State private var scanning = false
+    @State private var showsPro = false
+    @ObservedObject private var proStore = ProStore.shared
     @State private var scale: CGFloat = 1.0
     @State private var lastScale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
@@ -68,9 +70,12 @@ struct JapanPhotoView: View {
         // 写真の無い県は、スライドの画面と一覧の画面を重ねて開かず、写真を選ぶ画面だけを開く
         // （以前は黒いスライドの画面・写真の一覧・写真を選ぶ画面と、何枚も重なって開いていた）
         .sheet(isPresented: $scanning) { PhotoMapScanView(albumId: albumId) }
+        .sheet(isPresented: $showsPro) { ProSheet(highlighted: nil) }
         .sheet(item: $addingPrefecture) { prefecture in
             MultiPhotoPicker(selectionLimit: PhotoMapFiles.maxPhotosPerPrefecture) { images in
                 let added = AlbumManager.shared.addJapanPhotos(images, prefecture: prefecture, to: albumId)
+                // 写真を入れた県は、年は分からない行った県として旅の記録にも足す（年はあとから足せる）
+                if added > 0 { VisitedPrefectureStore.shared.add(prefecture) }
                 // 地図が1県埋まるのは達成感のある場面
                 if added > 0 { ReviewRequestManager.shared.record(.prefectureAdded) }
             }
@@ -140,16 +145,29 @@ struct JapanPhotoView: View {
                     .font(.system(size: 10, weight: .semibold).width(.expanded))
                     .foregroundColor(accent)
                 Spacer()
-                // 写真に残っている場所から、行った県の写真を探して入れる
-                Button { scanning = true } label: {
-                    Label("カメラロールから探す", systemImage: "sparkle.magnifyingglass")
-                        .font(.footnote.weight(.semibold))
-                        .foregroundColor(accent)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .overlay(Capsule().stroke(accent.opacity(0.5), lineWidth: 1))
+                // 写真に残っている場所から、行った県の写真を探して入れる（Travory Pro）
+                Button {
+                    if proStore.isPurchased { scanning = true } else { showsPro = true }
+                } label: {
+                    HStack(spacing: 5) {
+                        Label("カメラロールから追加", systemImage: "sparkle.magnifyingglass")
+                        if !proStore.isPurchased {
+                            Text("Pro")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(accent))
+                        }
+                    }
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(accent)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .overlay(Capsule().stroke(accent.opacity(0.5), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
+                .accessibilityLabel(proStore.isPurchased ? "カメラロールから追加" : "カメラロールから追加（Pro）")
             }
         }
         .padding(.horizontal, 24)
@@ -445,6 +463,8 @@ struct PrefectureGalleryView: View {
             MultiPhotoPicker(selectionLimit: remaining) { images in
                 let wasEmpty = fileNames.isEmpty
                 let added = albumManager.addJapanPhotos(images, prefecture: prefecture, to: albumId)
+                // 写真を入れた県は、年は分からない行った県として旅の記録にも足す（年はあとから足せる）
+                if added > 0 { VisitedPrefectureStore.shared.add(prefecture) }
                 // 地図が1県埋まるのは達成感のある場面
                 if wasEmpty && added > 0 {
                     ReviewRequestManager.shared.record(.prefectureAdded)

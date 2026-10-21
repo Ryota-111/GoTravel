@@ -2,7 +2,7 @@ import SwiftUI
 import Photos
 import Combine
 
-// MARK: - フォトマップの「カメラロールから探す」（3.1）
+// MARK: - フォトマップの「カメラロールから追加」（3.1・Travory Pro）
 //
 // 場所の残っている写真から、行った県と年の候補を出す。県を押すとその県の写真が並び、選んでフォトマップに入れられる。
 // 写真を入れた県は、撮った年で旅の記録の行った県にも足す。写真を入れずに行った県だけ記録するのは、
@@ -134,7 +134,7 @@ struct PhotoMapScanView: View {
                     list
                 }
             }
-            .navigationTitle("カメラロールから探す")
+            .navigationTitle("カメラロールから追加")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
