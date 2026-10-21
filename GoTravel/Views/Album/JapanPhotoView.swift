@@ -963,7 +963,9 @@ enum Prefecture: String, CaseIterable, Identifiable {
         String(name.prefix(3))
     }
 
-    var mapPosition: CGPoint {
+    /// 手でそろえた位置（370 × 600 の中の割合）。**ここの数字は直さない。**
+    /// 微調整は `PrefectureMapAdjustment` の表で持ち、`mapPosition` で足す
+    var baseMapPosition: CGPoint {
         switch self {
         // 北海道
         case .hokkaido: return CGPoint(x: 1.45, y: 0.69)
@@ -1030,7 +1032,8 @@ enum Prefecture: String, CaseIterable, Identifiable {
         }
     }
 
-    var mapSize: CGSize {
+    /// 手でそろえた大きさ。**ここの数字は直さない。** 微調整は `mapSize` で掛ける
+    var baseMapSize: CGSize {
         switch self {
         case .hokkaido: return CGSize(width: 130, height: 130)
         case .aomori: return CGSize(width: 50, height: 42)
