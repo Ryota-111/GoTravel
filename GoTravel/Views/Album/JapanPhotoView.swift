@@ -14,6 +14,8 @@ struct JapanPhotoView: View {
     @State private var selectedPrefecture: Prefecture?
     /// 写真の無い県を押したとき、写真を選ぶ画面を直接開く
     @State private var addingPrefecture: Prefecture?
+    /// カメラロールの写真の場所から、行った県を探す
+    @State private var scanning = false
     @State private var scale: CGFloat = 1.0
     @State private var lastScale: CGFloat = 1.0
     @State private var offset: CGSize = .zero
@@ -65,6 +67,7 @@ struct JapanPhotoView: View {
         }
         // 写真の無い県は、スライドの画面と一覧の画面を重ねて開かず、写真を選ぶ画面だけを開く
         // （以前は黒いスライドの画面・写真の一覧・写真を選ぶ画面と、何枚も重なって開いていた）
+        .sheet(isPresented: $scanning) { PhotoMapScanView(albumId: albumId) }
         .sheet(item: $addingPrefecture) { prefecture in
             MultiPhotoPicker(selectionLimit: PhotoMapFiles.maxPhotosPerPrefecture) { images in
                 let added = AlbumManager.shared.addJapanPhotos(images, prefecture: prefecture, to: albumId)
@@ -132,9 +135,22 @@ struct JapanPhotoView: View {
                 }
             }
             .frame(height: 3)
-            Text("写真を入れた都道府県")
-                .font(.system(size: 10, weight: .semibold).width(.expanded))
-                .foregroundColor(accent)
+            HStack {
+                Text("写真を入れた都道府県")
+                    .font(.system(size: 10, weight: .semibold).width(.expanded))
+                    .foregroundColor(accent)
+                Spacer()
+                // 写真に残っている場所から、行った県の写真を探して入れる
+                Button { scanning = true } label: {
+                    Label("カメラロールから探す", systemImage: "sparkle.magnifyingglass")
+                        .font(.footnote.weight(.semibold))
+                        .foregroundColor(accent)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .overlay(Capsule().stroke(accent.opacity(0.5), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+            }
         }
         .padding(.horizontal, 24)
         .padding(.top, 8)

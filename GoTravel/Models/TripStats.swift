@@ -96,8 +96,10 @@ enum TripStats {
     /// - Parameters:
     ///   - region: 緯度・経度から国と都道府県を引く（まだ調べていなければ nil）
     ///   - photoMapPrefectures: フォトマップに写真のある県（日付が無いので「これまで全部」のときだけ入れる）
+    ///   - visitedPrefectures: 自分で足した行った県と年（年が空なら「これまで全部」にだけ入る）
     static func summary(plans: [TravelPlan], places: [VisitedPlace], outings: [Plan],
                         photoMapPrefectures: Set<Prefecture> = [],
+                        visitedPrefectures: [Prefecture: Set<Int>] = [:],
                         region: (Double, Double) -> TripRegion?,
                         period: Period, now: Date, calendar: Calendar = .current) -> Summary {
         func inPeriod(_ date: Date) -> Bool {
@@ -142,6 +144,12 @@ enum TripStats {
             summary.prefectures.formUnion(photoMapPrefectures)
             if !photoMapPrefectures.isEmpty { summary.countries.insert("JP") }
         }
+        let added = visitedPrefectures.filter { _, years in
+            if case .year(let year) = period { return years.contains(year) }
+            return true
+        }
+        summary.prefectures.formUnion(added.keys)
+        if !added.isEmpty { summary.countries.insert("JP") }
 
         summary.outingCount = outings.filter { $0.planType == .outing && $0.startDate < now && inPeriod($0.startDate) }.count
 
@@ -160,6 +168,7 @@ enum TripStats {
     /// 都道府県ごとに、何から数えたか（テスト用の内訳。「神戸旅行（目的地：神戸）」「神戸旅行（予定：北野異人館）」）。
     /// `unresolved` は、場所はあるが県がまだ分からない（調べていない・県が返ってこない）もの
     static func prefectureSources(plans: [TravelPlan], photoMapPrefectures: Set<Prefecture> = [],
+                                  visitedPrefectures: [Prefecture: Set<Int>] = [:],
                                   region: (Double, Double) -> TripRegion?,
                                   period: Period, now: Date, calendar: Calendar = .current)
         -> (byPrefecture: [Prefecture: [String]], unresolved: [String]) {
@@ -196,6 +205,11 @@ enum TripStats {
             for prefecture in photoMapPrefectures where result[prefecture] == nil {
                 result[prefecture] = ["フォトマップの写真"]
             }
+        }
+        for (prefecture, years) in visitedPrefectures {
+            if case .year(let year) = period, !years.contains(year) { continue }
+            let when = years.isEmpty ? "年は分からない" : years.sorted().map { "\($0)年" }.joined(separator: "・")
+            result[prefecture, default: []].append("自分で足した（\(when)）")
         }
         return (result, unresolved)
     }

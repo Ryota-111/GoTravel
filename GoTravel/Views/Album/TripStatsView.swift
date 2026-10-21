@@ -15,6 +15,8 @@ struct TripStatsView: View {
     @ObservedObject private var resolver = TripRegionResolver.shared
     @ObservedObject private var albumManager = AlbumManager.shared
     @ObservedObject private var themeManager = ThemeManager.shared
+    @ObservedObject private var visitedStore = VisitedPrefectureStore.shared
+    @State private var addingPrefectures = false
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dismiss) private var dismiss
 
@@ -45,10 +47,15 @@ struct TripStatsView: View {
         _ = resolver.version
         return TripStats.summary(plans: plans, places: placesVM.places, outings: plansViewModel.plans,
                                  photoMapPrefectures: photoMapPrefectures,
+                                 visitedPrefectures: visitedStore.records,
                                  region: { resolver.region($0, $1) }, period: period, now: now)
     }
 
-    private var years: [Int] { TripStats.years(of: plans, now: now) }
+    /// 期間の選択肢。旅行を出発した年に、自分で足した行った県の年も加える
+    /// （以前は旅行の年だけで、写真や「行った県を足す」で入れた年を選べなかった）
+    private var years: [Int] {
+        Set(TripStats.years(of: plans, now: now) + visitedStore.records.values.flatMap { $0 }).sorted(by: >)
+    }
 
     private var periodTitle: String {
         switch period {
@@ -117,6 +124,7 @@ struct TripStatsView: View {
                 ToolbarItem(placement: .topBarTrailing) { periodMenu }
             }
             .toolbarBackground(.hidden, for: .navigationBar)
+            .sheet(isPresented: $addingPrefectures) { VisitedPrefecturesEditor() }
             .sheet(isPresented: $sharing) {
                 TripStatsShareSheet(summary: summary, periodMark: periodMark, periodTitle: periodTitle,
                                     heroPlan: plan(summary.tripIds.first), longestPlan: plan(summary.longestPlanId))
@@ -275,6 +283,17 @@ struct TripStatsView: View {
                     .font(.caption2)
                     .foregroundColor(faint)
             }
+            // アプリを使う前に行った県も足せる
+            Button { addingPrefectures = true } label: {
+                Label("行った県を足す", systemImage: "plus")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(accent)
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
+                    .overlay(Capsule().stroke(accent.opacity(0.5), lineWidth: 1))
+            }
+            .buttonStyle(.plain)
+            .padding(.top, 4)
             #if DEBUG
             prefectureBreakdown
             #endif
@@ -286,6 +305,7 @@ struct TripStatsView: View {
     /// テスト用（開発版だけ）：どの旅行のどの場所で、その都道府県を数えたか
     private var prefectureBreakdown: some View {
         let sources = TripStats.prefectureSources(plans: plans, photoMapPrefectures: photoMapPrefectures,
+                                                  visitedPrefectures: visitedStore.records,
                                                   region: { resolver.region($0, $1) }, period: period, now: now)
         return DisclosureGroup {
             VStack(alignment: .leading, spacing: 10) {

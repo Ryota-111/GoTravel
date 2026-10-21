@@ -117,6 +117,44 @@ struct TripStatsTests {
         #expect(result.unresolved == ["どこか（目的地の場所が空）"])
     }
 
+    @Test("自分で足した行った県：年があればその年に、年が分からなければ「これまで全部」にだけ入る")
+    func visitedPrefectures() {
+        let now = date(2026, 10, 19)
+        let added: [Prefecture: Set<Int>] = [.kyoto: [2019, 2023], .aomori: []]
+        let all = TripStats.summary(plans: [], places: [], outings: [], visitedPrefectures: added,
+                                    region: region, period: .all, now: now, calendar: calendar)
+        #expect(all.prefectures == [.kyoto, .aomori])
+        #expect(all.countries == ["JP"])
+        let y2019 = TripStats.summary(plans: [], places: [], outings: [], visitedPrefectures: added,
+                                      region: region, period: .year(2019), now: now, calendar: calendar)
+        #expect(y2019.prefectures == [.kyoto])
+        let y2020 = TripStats.summary(plans: [], places: [], outings: [], visitedPrefectures: added,
+                                      region: region, period: .year(2020), now: now, calendar: calendar)
+        #expect(y2020.prefectures.isEmpty)
+        let sources = TripStats.prefectureSources(plans: [], visitedPrefectures: added, region: region,
+                                                  period: .all, now: now, calendar: calendar)
+        #expect(sources.byPrefecture[.kyoto] == ["自分で足した（2019年・2023年）"])
+        #expect(sources.byPrefecture[.aomori] == ["自分で足した（年は分からない）"])
+    }
+
+    @Test("カメラロールから探す：写真を約10km 四方でまとめて県を調べ、県ごとに写真の多い順・撮った年を出す")
+    func photoScan() {
+        let photos = [
+            PhotoPrefectureScan.Photo(id: "a", date: date(2019, 4, 1), latitude: 26.21, longitude: 127.68),
+            PhotoPrefectureScan.Photo(id: "b", date: date(2023, 8, 1), latitude: 26.22, longitude: 127.69),
+            PhotoPrefectureScan.Photo(id: "c", date: date(2021, 1, 1), latitude: 43.06, longitude: 141.35),
+            PhotoPrefectureScan.Photo(id: "x", date: date(2021, 1, 1), latitude: 35.0, longitude: 135.0),  // 県が分からない
+        ]
+        // 那覇の2枚は同じまとまり
+        #expect(PhotoPrefectureScan.cells(of: photos).count == 3)
+        let candidates = PhotoPrefectureScan.candidates(of: photos, region: region, calendar: calendar)
+        #expect(candidates.map(\.prefecture) == [.okinawa, .hokkaido])
+        #expect(candidates.first?.photos.map(\.id) == ["b", "a"])
+        #expect(candidates.first?.years == [2019, 2023])
+        #expect(PhotoPrefectureScan.yearsText([2019, 2023]) == "2019〜2023年")
+        #expect(PhotoPrefectureScan.yearsText([2021]) == "2021年")
+    }
+
     @Test("県の名前から都道府県を引く。日本の外は県にしない")
     func regionPrefecture() {
         #expect(TripRegion(countryCode: "JP", prefectureName: "東京都").prefecture == .tokyo)
