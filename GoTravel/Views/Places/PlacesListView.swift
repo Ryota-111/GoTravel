@@ -113,15 +113,10 @@ struct PlacesListView: View {
     /// リストの末尾に置くと件数が増えるほど遠ざかるため、内容に左右されない右下に浮かせる
     private var addPlaceFloatingButton: some View {
         NavigationLink(destination: MapHomeView()) {
-            Image(systemName: "plus")
-                .font(.system(size: 24, weight: .bold))
-                .foregroundColor(ThemePreset.readableText(on: mainColor))
-                .frame(width: 56, height: 56)
-                .background(Circle().fill(mainColor))
-                .shadow(color: .black.opacity(0.25), radius: 8, x: 0, y: 4)
+            FloatingAddButtonLabel()
         }
-        .padding(.trailing, 20)
-        .padding(.bottom, 20)
+        .padding(.trailing, FloatingAddButtonLabel.margin)
+        .padding(.bottom, FloatingAddButtonLabel.margin)
         .accessibilityLabel(Text("場所を追加"))
     }
 

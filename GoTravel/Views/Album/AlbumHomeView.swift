@@ -70,8 +70,8 @@ struct AlbumHomeView: View {
                             Spacer()
                             fabButton
                         }
-                        .padding(.trailing, 20)
-                        .padding(.bottom, 24)
+                        .padding(.trailing, FloatingAddButtonLabel.margin)
+                        .padding(.bottom, FloatingAddButtonLabel.margin)
                     }
                 }
             }
@@ -437,15 +437,7 @@ struct AlbumHomeView: View {
     // MARK: - FAB
     private var fabButton: some View {
         Button(action: { showCreateAlbum = true }) {
-            ZStack {
-                Circle()
-                    .fill(themeManager.currentTheme.xprimary)
-                    .frame(width: 58, height: 58)
-                    .shadow(color: themeManager.currentTheme.xprimary.opacity(0.45), radius: 12, x: 0, y: 5)
-                Image(systemName: "plus")
-                    .font(.title2.bold())
-                    .foregroundColor(.white)
-            }
+            FloatingAddButtonLabel()
         }
         .accessibilityLabel("アルバムを作成")
     }
