@@ -18,12 +18,8 @@ struct JapanPhotoView: View {
     @State private var scanning = false
     @State private var showsPro = false
     @ObservedObject private var proStore = ProStore.shared
-    @State private var scale: CGFloat = 1.0
-    @State private var lastScale: CGFloat = 1.0
-    @State private var offset: CGSize = .zero
-    @State private var lastOffset: CGSize = .zero
-    /// 地図をつまんで広げられることは、最初の1回だけ知らせる
-    @AppStorage("photoMapGestureHintShown") private var gestureHintShown = false
+    /// 地図を全画面で開く（つまんで広げる・動かすのは全画面で。スクロールの中では取り合いになって操作しにくかった）
+    @State private var showsFullMap = false
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dismiss) var dismiss
 
@@ -175,101 +171,29 @@ struct JapanPhotoView: View {
         .padding(.bottom, 12)
     }
 
-    // MARK: - 地図（画面の幅いっぱい。つまんで広げ、指で動かせる）
-
-    /// 47都道府県がちょうど入る四角（370 × 600 の中）
-    private static let mapBounds: CGRect = Prefecture.allCases.reduce(CGRect.null) { rect, prefecture in
-        let center = CGPoint(x: Prefecture.mapCanvas.width * prefecture.mapPosition.x,
-                             y: Prefecture.mapCanvas.height * prefecture.mapPosition.y)
-        let size = prefecture.mapSize
-        return rect.union(CGRect(x: center.x - size.width / 2, y: center.y - size.height / 2,
-                                 width: size.width, height: size.height))
-    }
+    // MARK: - 地図（画面の幅いっぱい。押すと県を開き、「広げて見る」で全画面）
 
     private var mapSection: some View {
-        GeometryReader { geo in
-            let box = Self.mapBounds
-            let fit = min(geo.size.width / box.width, geo.size.height / box.height)
-            let dx = (geo.size.width - box.width * fit) / 2
-            let dy = (geo.size.height - box.height * fit) / 2
-            ZStack(alignment: .topLeading) {
-                ForEach(Prefecture.allCases) { prefecture in
-                    mapCell(prefecture, scale: fit)
-                        .position(x: dx + (Prefecture.mapCanvas.width * prefecture.mapPosition.x - box.minX) * fit,
-                                  y: dy + (Prefecture.mapCanvas.height * prefecture.mapPosition.y - box.minY) * fit)
-                }
-            }
-            .frame(width: geo.size.width, height: geo.size.height)
-            .scaleEffect(scale)
-            .offset(offset)
-            .frame(width: geo.size.width, height: geo.size.height)
-            .clipped()
-            .contentShape(Rectangle())
-            .gesture(
-                MagnificationGesture()
-                    .onChanged { value in
-                        scale = min(max(lastScale * value, 1), 3)
-                        gestureHintShown = true
-                    }
-                    .onEnded { _ in
-                        lastScale = scale
-                        if scale <= 1.01 { withAnimation(.spring) { offset = .zero; lastOffset = .zero } }
-                    }
-            )
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 10)
-                    .onChanged { value in
-                        guard scale > 1.01 else { return }
-                        let limitX = geo.size.width * (scale - 1) / 2
-                        let limitY = geo.size.height * (scale - 1) / 2
-                        offset = CGSize(width: min(max(lastOffset.width + value.translation.width, -limitX), limitX),
-                                        height: min(max(lastOffset.height + value.translation.height, -limitY), limitY))
-                    }
-                    .onEnded { _ in lastOffset = offset }
-            )
-            // 広げたあと2回たたくと、元の大きさに戻る
-            .onTapGesture(count: 2) {
-                withAnimation(.spring) {
-                    scale = 1; lastScale = 1; offset = .zero; lastOffset = .zero
-                }
-            }
+        PhotoMapCanvas(covers: viewModel.covers, ink: ink, onTap: open)
+            .frame(height: 420)
             .overlay(alignment: .bottomTrailing) {
-                if !gestureHintShown {
-                    Label("つまんで広げられます", systemImage: "hand.pinch")
-                        .font(.caption2.weight(.semibold))
-                        .foregroundColor(faint)
-                        .padding(.horizontal, 10)
-                        .padding(.vertical, 5)
-                        .background(Capsule().fill(ink.opacity(0.06)))
-                        .padding(12)
-                        .allowsHitTesting(false)
+                // ふだんの地図は固定。つまんで広げる・動かすのは全画面で
+                Button { showsFullMap = true } label: {
+                    Label("全画面で見る", systemImage: "arrow.up.left.and.arrow.down.right")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(ink)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(Capsule().stroke(ink.opacity(0.12), lineWidth: 1))
                 }
+                .padding(12)
             }
-        }
-        .frame(height: 420)
-        .padding(.horizontal, 8)
-        .padding(.bottom, 8)
-    }
-
-    @ViewBuilder
-    private func mapCell(_ prefecture: Prefecture, scale fit: CGFloat) -> some View {
-        let size = CGSize(width: prefecture.mapSize.width * fit, height: prefecture.mapSize.height * fit)
-        Group {
-            if let photo = viewModel.covers[prefecture] {
-                MaskedPrefectureImage(prefecture: prefecture, photo: photo, size: size)
-            } else if let mask = prefecture.maskImage {
-                Image(uiImage: mask).renderingMode(.template).resizable().aspectRatio(contentMode: .fit)
-                    .foregroundColor(ink.opacity(0.1))
-            } else {
-                prefecture.shape.fill(ink.opacity(0.1))
+            .padding(.horizontal, 8)
+            .padding(.bottom, 8)
+            .fullScreenCover(isPresented: $showsFullMap) {
+                PhotoMapFullScreen(albumId: albumId, viewModel: viewModel, title: viewModel.title)
             }
-        }
-        .frame(width: size.width, height: size.height)
-        .contentShape(Rectangle())
-        .onTapGesture { open(prefecture) }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel("\(prefecture.name)\(viewModel.covers[prefecture] == nil ? "、写真なし" : "")")
-        .accessibilityAddTraits(.isButton)
     }
 
     // MARK: - 地方ごとの一覧
@@ -350,6 +274,180 @@ struct PrefectureTile: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(prefecture.name)\(photo == nil ? "、写真なし" : "、写真\(max(photoCount, 1))枚")")
         .accessibilityAddTraits(.isButton)
+    }
+}
+
+/// 日本地図（写真のある県は写真を県の形に切り抜き、無い県はごく薄い色）。押した県を `onTap` で返す
+struct PhotoMapCanvas: View {
+    let covers: [Prefecture: UIImage]
+    let ink: Color
+    let onTap: (Prefecture) -> Void
+
+    /// 47都道府県がちょうど入る四角（370 × 600 の中）
+    static let mapBounds: CGRect = Prefecture.allCases.reduce(CGRect.null) { rect, prefecture in
+        let center = CGPoint(x: Prefecture.mapCanvas.width * prefecture.mapPosition.x,
+                             y: Prefecture.mapCanvas.height * prefecture.mapPosition.y)
+        let size = prefecture.mapSize
+        return rect.union(CGRect(x: center.x - size.width / 2, y: center.y - size.height / 2,
+                                 width: size.width, height: size.height))
+    }
+
+    var body: some View {
+        GeometryReader { geo in
+            let box = Self.mapBounds
+            let fit = min(geo.size.width / box.width, geo.size.height / box.height)
+            let dx = (geo.size.width - box.width * fit) / 2
+            let dy = (geo.size.height - box.height * fit) / 2
+            ZStack(alignment: .topLeading) {
+                ForEach(Prefecture.allCases) { prefecture in
+                    cell(prefecture, scale: fit)
+                        .position(x: dx + (Prefecture.mapCanvas.width * prefecture.mapPosition.x - box.minX) * fit,
+                                  y: dy + (Prefecture.mapCanvas.height * prefecture.mapPosition.y - box.minY) * fit)
+                }
+            }
+            .frame(width: geo.size.width, height: geo.size.height)
+        }
+    }
+
+    @ViewBuilder
+    private func cell(_ prefecture: Prefecture, scale fit: CGFloat) -> some View {
+        let size = CGSize(width: prefecture.mapSize.width * fit, height: prefecture.mapSize.height * fit)
+        Group {
+            if let photo = covers[prefecture] {
+                MaskedPrefectureImage(prefecture: prefecture, photo: photo, size: size)
+            } else if let mask = prefecture.maskImage {
+                Image(uiImage: mask).renderingMode(.template).resizable().aspectRatio(contentMode: .fit)
+                    .foregroundColor(ink.opacity(0.1))
+            } else {
+                prefecture.shape.fill(ink.opacity(0.1))
+            }
+        }
+        .frame(width: size.width, height: size.height)
+        .contentShape(Rectangle())
+        .onTapGesture { onTap(prefecture) }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(prefecture.name)\(covers[prefecture] == nil ? "、写真なし" : "")")
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
+/// 地図を全画面で見る。写真アプリと同じように、指を置いた場所に向かって広げ、はじいて動かせ、
+/// 2回たたくとその場所を広げる（もう一度で戻す）。県を押せば、写真を見たり入れたりできる
+private struct PhotoMapFullScreen: View {
+    let albumId: String
+    @ObservedObject var viewModel: JapanPhotoViewModel
+    let title: String
+
+    @ObservedObject private var themeManager = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedPrefecture: Prefecture?
+    @State private var addingPrefecture: Prefecture?
+
+    private var ground: Color {
+        colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight
+    }
+    private var ink: Color { ThemePreset.readableText(on: ground) }
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            ground.ignoresSafeArea()
+            ZoomableScrollView {
+                PhotoMapCanvas(covers: viewModel.covers, ink: ink) { prefecture in
+                    if viewModel.covers[prefecture] == nil { addingPrefecture = prefecture } else { selectedPrefecture = prefecture }
+                }
+                .padding(12)
+                .background(ground)
+            }
+            .ignoresSafeArea(edges: .bottom)
+            HStack {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(ink)
+                        .frame(width: 38, height: 38)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .accessibilityLabel("閉じる")
+                Spacer()
+                Text(title).font(.headline).foregroundColor(ink)
+                Spacer()
+                Color.clear.frame(width: 38, height: 38)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+        }
+        .fullScreenCover(item: $selectedPrefecture) { prefecture in
+            PrefectureSlideView(albumId: albumId, prefecture: prefecture)
+        }
+        .sheet(item: $addingPrefecture) { prefecture in
+            MultiPhotoPicker(selectionLimit: PhotoMapFiles.maxPhotosPerPrefecture) { images in
+                let added = AlbumManager.shared.addJapanPhotos(images, prefecture: prefecture, to: albumId)
+                // 写真を入れた県は、年は分からない行った県として旅の記録にも足す（年はあとから足せる）
+                if added > 0 {
+                    VisitedPrefectureStore.shared.add(prefecture)
+                    ReviewRequestManager.shared.record(.prefectureAdded)
+                }
+            }
+        }
+    }
+}
+
+/// 写真アプリと同じ拡大・移動（UIScrollView）。中身は SwiftUI のまま
+private struct ZoomableScrollView<Content: View>: UIViewRepresentable {
+    @ViewBuilder var content: () -> Content
+
+    func makeCoordinator() -> Coordinator { Coordinator(hosting: UIHostingController(rootView: content())) }
+
+    func makeUIView(context: Context) -> UIScrollView {
+        let scrollView = UIScrollView()
+        scrollView.delegate = context.coordinator
+        scrollView.minimumZoomScale = 1
+        scrollView.maximumZoomScale = 5
+        scrollView.bouncesZoom = true
+        scrollView.showsVerticalScrollIndicator = false
+        scrollView.showsHorizontalScrollIndicator = false
+        scrollView.backgroundColor = .clear
+        let hosted = context.coordinator.hosting.view!
+        hosted.backgroundColor = .clear
+        hosted.translatesAutoresizingMaskIntoConstraints = true
+        hosted.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        scrollView.addSubview(hosted)
+        let doubleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.doubleTapped(_:)))
+        doubleTap.numberOfTapsRequired = 2
+        scrollView.addGestureRecognizer(doubleTap)
+        context.coordinator.scrollView = scrollView
+        return scrollView
+    }
+
+    func updateUIView(_ scrollView: UIScrollView, context: Context) {
+        context.coordinator.hosting.rootView = content()
+        let hosted = context.coordinator.hosting.view!
+        if scrollView.zoomScale == 1, hosted.frame.size != scrollView.bounds.size {
+            hosted.frame = CGRect(origin: .zero, size: scrollView.bounds.size)
+            scrollView.contentSize = scrollView.bounds.size
+        }
+    }
+
+    final class Coordinator: NSObject, UIScrollViewDelegate {
+        let hosting: UIHostingController<Content>
+        weak var scrollView: UIScrollView?
+
+        init(hosting: UIHostingController<Content>) { self.hosting = hosting }
+
+        func viewForZooming(in scrollView: UIScrollView) -> UIView? { hosting.view }
+
+        @objc func doubleTapped(_ recognizer: UITapGestureRecognizer) {
+            guard let scrollView else { return }
+            if scrollView.zoomScale > 1.01 {
+                scrollView.setZoomScale(1, animated: true)
+            } else {
+                let point = recognizer.location(in: hosting.view)
+                let size = CGSize(width: scrollView.bounds.width / 3, height: scrollView.bounds.height / 3)
+                scrollView.zoom(to: CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2,
+                                           width: size.width, height: size.height), animated: true)
+            }
+        }
     }
 }
 
