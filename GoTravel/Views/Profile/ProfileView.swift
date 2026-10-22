@@ -1036,6 +1036,31 @@ struct HelpSupportView: View {
                         .offset(y: animateCards ? 0 : 20)
                         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.18), value: animateCards)
 
+                        // 公式アカウント（2026-10 に開設）
+                        Button(action: { UIApplication.shared.open(TravoryLinks.instagram) }) {
+                            HelpCard(
+                                icon: "camera.fill",
+                                title: "Instagram",
+                                description: "@\(TravoryLinks.accountName)  旅のアイデアやアプリの使い方を発信しています",
+                                color: .pink
+                            )
+                        }
+                        .opacity(animateCards ? 1 : 0)
+                        .offset(y: animateCards ? 0 : 20)
+                        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.19), value: animateCards)
+
+                        Button(action: { UIApplication.shared.open(TravoryLinks.threads) }) {
+                            HelpCard(
+                                icon: "at",
+                                title: "Threads",
+                                description: "@\(TravoryLinks.accountName)  新しい機能のお知らせもこちらで",
+                                color: .indigo
+                            )
+                        }
+                        .opacity(animateCards ? 1 : 0)
+                        .offset(y: animateCards ? 0 : 20)
+                        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.195), value: animateCards)
+
                         // Review
                         Button(action: { requestReview() }) {
                             HelpCard(
@@ -1088,7 +1113,7 @@ struct HelpSupportView: View {
             }
             Button("キャンセル", role: .cancel) {}
         } message: {
-            Text("ご質問やご要望がございましたら、下記のメールアドレスまでお問い合わせください。\n\ntaismryotasis@gmail.com")
+            Text("ご質問やご要望がございましたら、下記のメールアドレスまでお問い合わせください。\n\n\(TravoryLinks.supportEmail)")
         }
     }
 
@@ -1104,7 +1129,7 @@ struct HelpSupportView: View {
     }
 
     private func openEmail() {
-        let email = "taismryotasis@gmail.com"
+        let email = TravoryLinks.supportEmail
         let subject = "Travoryについてのお問い合わせ"
         let urlString = "mailto:\(email)?subject=\(subject.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? "")"
 
@@ -1794,3 +1819,12 @@ struct TipRow: View {
     }
 }
 
+
+
+/// Travory の連絡先と公式アカウント（2026-10 に開設）
+enum TravoryLinks {
+    static let supportEmail = "travory.rf@gmail.com"
+    static let accountName = "travory.rf"
+    static let instagram = URL(string: "https://www.instagram.com/travory.rf/")!
+    static let threads = URL(string: "https://www.threads.com/@travory.rf")!
+}
