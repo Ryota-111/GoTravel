@@ -87,6 +87,13 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
     /// 予定と予定の間にどれだけ移動の時間があるかが分かるように（ご要望から）
     var endTime: Date?
 
+    /// 終わる時刻を読む時計（"Asia/Qatar" など）。**無ければ始まりと同じ時計**（`timeZoneIdentifier`）。
+    ///
+    /// 「パリ 15:00 発 → ドーハ 23:00 着」のように、時差をまたぐ移動を1つの予定で入れると、
+    /// 着く時刻まで出発地の時計で読まれていた（ご要望から、3.1）。JSON の中の項目なので、
+    /// CloudKit のスキーマ変更は要らない
+    var endTimeZoneIdentifier: String?
+
     /// 場所の住所（地図で選んだときのもの）。場所の名前の下に出す。
     ///
     /// 2.9 までは保存しておらず、予定を開き直すと緯度・経度だけから場所を作り直して
@@ -110,7 +117,7 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
     var splitAmounts: [String: Double]?
 
     enum CodingKeys: String, CodingKey {
-        case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId, timeZoneIdentifier, isPinned, participantIds, foreignCost, reservationPart, costNote, endTime, address, dayShift
+        case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId, timeZoneIdentifier, isPinned, participantIds, foreignCost, reservationPart, costNote, endTime, endTimeZoneIdentifier, address, dayShift
         case paidBy, splitWith, splitAmounts
     }
 
@@ -148,6 +155,7 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
          reservationPart: String? = nil,
          costNote: String? = nil,
          endTime: Date? = nil,
+         endTimeZoneIdentifier: String? = nil,
          address: String? = nil,
          dayShift: Int? = nil,
          paidBy: String? = nil,
@@ -171,6 +179,7 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
         self.reservationPart = reservationPart
         self.costNote = costNote
         self.endTime = endTime
+        self.endTimeZoneIdentifier = endTimeZoneIdentifier
         self.address = address
         self.dayShift = dayShift
         self.paidBy = paidBy

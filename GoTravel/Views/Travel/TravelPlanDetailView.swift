@@ -656,19 +656,32 @@ struct TravelPlanDetailView: View {
                     .monospacedDigit()
                     .lineLimit(1)
                     .minimumScaleFactor(0.7)
+                // 時差をまたぐ移動は、それぞれの時刻がどこの時計かを添える（「パリ発」「ドーハ着」）
+                if let departure = item.departureZoneLabel {
+                    Text(departure)
+                        .font(.system(size: 9, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
 
                 // 終わりの時刻があれば、始まりの下に小さく添える（次の予定までの間が分かる）
-                if let endText = item.endTimeText {
-                    Text("〜\(endText)")
+                if let endText = item.endTimeColumnText {
+                    Text(endText)
                         .font(.system(size: 11, weight: .semibold))
                         .monospacedDigit()
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                         .opacity(0.75)
                 }
+                if let arrival = item.arrivalZoneLabel {
+                    Text(arrival)
+                        .font(.system(size: 9, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
 
                 // 見ている人の時計と違う予定だけ、どこの時刻かを添える
-                if let zoneLabel = item.zoneLabel(destination: destinationTimeZone) {
+                if !item.crossesTimeZones, let zoneLabel = item.zoneLabel(destination: destinationTimeZone) {
                     Text(zoneLabel)
                         .font(.system(size: 9, weight: .semibold))
                         .lineLimit(1)

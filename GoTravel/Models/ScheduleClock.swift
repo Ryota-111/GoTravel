@@ -93,6 +93,14 @@ enum ScheduleClock {
         timeZone.localizedName(for: .generic, locale: Locale(identifier: "ja_JP")) ?? timeZone.identifier
     }
 
+    /// 「6時間30分」「45分」
+    static func durationText(_ interval: TimeInterval) -> String {
+        let minutes = max(0, Int((interval / 60).rounded()))
+        let (h, m) = (minutes / 60, minutes % 60)
+        if h == 0 { return "\(m)分" }
+        return m == 0 ? "\(h)時間" : "\(h)時間\(m)分"
+    }
+
     /// 日本との時差の説明（"日本より8時間遅い"）。時差が無ければ nil
     static func offsetFromJapanText(_ timeZone: TimeZone, at date: Date) -> String? {
         let diff = timeZone.secondsFromGMT(for: date) - legacyTimeZone.secondsFromGMT(for: date)
@@ -117,21 +125,55 @@ extension ScheduleItem {
         ScheduleClock.timeText(time, in: timeZone)
     }
 
-    /// 終わる時刻（入れたとおりの時:分）。無ければ nil
-    var endTimeText: String? {
-        endTime.map { ScheduleClock.timeText($0, in: timeZone) }
+    /// 終わる時刻を読む時計。決めていなければ始まりと同じ
+    var endTimeZone: TimeZone {
+        endTimeZoneIdentifier.map { ScheduleClock.timeZone(identifier: $0) } ?? timeZone
     }
 
-    /// 「10:00〜11:30」。終わりが無ければ「10:00」。日をまたいで直した予定は「前日 17:00」
+    /// 始まりと終わりで時差のある時計を使っているか（飛行機などの移動）
+    var crossesTimeZones: Bool {
+        guard let endTime else { return false }
+        return !ScheduleClock.showsSameTime(timeZone, endTimeZone, at: endTime)
+    }
+
+    /// 終わる時刻（入れたとおりの時:分）。無ければ nil
+    var endTimeText: String? {
+        endTime.map { ScheduleClock.timeText($0, in: endTimeZone) }
+    }
+
+    /// 時刻の列で始まりの下に添える終わり（"〜11:30"）。時差をまたぐ移動は "→23:00"
+    var endTimeColumnText: String? {
+        endTimeText.map { (crossesTimeZones ? "→" : "〜") + $0 }
+    }
+
+    /// 時差をまたぐ移動の、出発と到着の都市（"パリ発" / "ドーハ着"）。またがなければ nil
+    var departureZoneLabel: String? {
+        crossesTimeZones ? "\(ScheduleClock.cityName(of: timeZone))発" : nil
+    }
+    var arrivalZoneLabel: String? {
+        crossesTimeZones ? "\(ScheduleClock.cityName(of: endTimeZone))着" : nil
+    }
+
+    /// 「10:00〜11:30」。終わりが無ければ「10:00」。日をまたいで直した予定は「前日 17:00」。
+    /// 時差をまたぐ移動は「15:00 パリ → 23:00 ドーハ」
     var timeRangeText: String {
-        let range = endTimeText.map { "\(timeText)〜\($0)" } ?? timeText
+        let range: String
+        if crossesTimeZones, let endTimeText {
+            range = "\(timeText) \(ScheduleClock.cityName(of: timeZone)) → \(endTimeText) \(ScheduleClock.cityName(of: endTimeZone))"
+        } else {
+            range = endTimeText.map { "\(timeText)〜\($0)" } ?? timeText
+        }
         return dayShiftLabel.map { "\($0) \(range)" } ?? range
     }
 
     /// 終わりの時:分を、始まりの日に合わせた日時にする。
-    /// 始まりより前（23:00〜1:00 のような）なら翌日の時刻とみなす
-    static func endTime(hourAndMinuteOf end: Date, after start: Date, in zone: TimeZone) -> Date {
-        let clock = ScheduleClock.calendar(in: zone)
+    /// 始まりより前（23:00〜1:00 のような）なら翌日の時刻とみなす。
+    ///
+    /// 終わりを別の時計で入れたとき（`endZone`）は、その時計での始まりの日に合わせる。
+    /// 東京 10:00 発 → ホノルル 22:00 着（ホノルルではまだ前日）も、正しく前日の 22:00 になる
+    static func endTime(hourAndMinuteOf end: Date, after start: Date, in zone: TimeZone,
+                        endZone: TimeZone? = nil) -> Date {
+        let clock = ScheduleClock.calendar(in: endZone ?? zone)
         let hm = clock.dateComponents([.hour, .minute], from: end)
         var day = clock.dateComponents([.year, .month, .day], from: start)
         day.hour = hm.hour
@@ -170,8 +212,11 @@ extension ScheduleItem {
     func keepingWallClock(in target: TimeZone) -> ScheduleItem {
         var copy = self
         copy.time = ScheduleClock.keepingWallClock(time, from: timeZone, to: target)
-        // 終わりも同じ時:分のまま付け替える（2.9 まではここが抜けていて、終わりの時刻がずれていた）
-        copy.endTime = endTime.map { ScheduleClock.keepingWallClock($0, from: timeZone, to: target) }
+        // 終わりも同じ時:分のまま付け替える（2.9 まではここが抜けていて、終わりの時刻がずれていた）。
+        // 終わりを別の時計（着いた先）で入れた移動は、終わりはそのまま
+        if endTimeZoneIdentifier == nil {
+            copy.endTime = endTime.map { ScheduleClock.keepingWallClock($0, from: timeZone, to: target) }
+        }
         copy.timeZoneIdentifier = target.identifier
         return copy
     }

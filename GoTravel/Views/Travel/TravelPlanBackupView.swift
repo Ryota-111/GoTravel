@@ -228,8 +228,8 @@ private struct BackupPlanDetailView: View {
                 Text(item.timeText)
                     .font(.system(size: 13, weight: .bold))
                     .monospacedDigit()
-                if let end = item.endTimeText {
-                    Text("〜\(end)")
+                if let end = item.endTimeColumnText {
+                    Text(end)
                         .font(.system(size: 11, weight: .semibold))
                         .monospacedDigit()
                         .opacity(0.75)

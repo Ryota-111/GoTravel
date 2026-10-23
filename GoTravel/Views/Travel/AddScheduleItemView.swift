@@ -25,6 +25,8 @@ struct AddScheduleItemView: View {
     @State private var costInput = CostInput()
     @State private var costNote = ""
     @State private var hasEndTime = false
+    /// 終わりを読む時計。nil なら始まりと同じ（飛行機などで着いた先の時計にするとき）
+    @State private var endZone: TimeZone?
     @State private var endTime = Date()
     @State private var notes = ""
     @State private var linkURL = ""
@@ -200,10 +202,16 @@ struct AddScheduleItemView: View {
                     tint: travelColor,
                     textColor: textColor,
                     secondaryText: themeManager.currentTheme.secondaryText,
-                    fieldBackground: fieldBg
+                    fieldBackground: fieldBg,
+                    endZone: $endZone,
+                    zoneChoices: ScheduleClock.zoneChoices(place: nil, day: dayTimeZone, destination: destinationTimeZone,
+                                                           current: .current, recents: RecentTimeZones.list(), at: time)
                 )
-                // 現地時間・日本時間を切り替えたら、終わりも同じ時:分のまま付け替える
+                // 現地時間・日本時間を切り替えたら、終わりも同じ時:分のまま付け替える。
+                // 終わりを着いた先の時計で入れているときは、終わりはそのまま
                 .onChange(of: timeZone) { oldZone, newZone in
+                    if let zone = endZone, zone.identifier == newZone.identifier { endZone = nil; return }
+                    guard endZone == nil else { return }
                     endTime = ScheduleClock.keepingWallClock(endTime, from: oldZone, to: newZone)
                 }
 
@@ -469,7 +477,8 @@ struct AddScheduleItemView: View {
             foreignCost: costs.foreign,
             costNote: costNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? nil : costNote.trimmingCharacters(in: .whitespacesAndNewlines),
-            endTime: hasEndTime ? ScheduleItem.endTime(hourAndMinuteOf: endTime, after: time, in: timeZone) : nil,
+            endTime: hasEndTime ? ScheduleItem.endTime(hourAndMinuteOf: endTime, after: time, in: timeZone, endZone: endZone) : nil,
+            endTimeZoneIdentifier: hasEndTime ? endZone?.identifier : nil,
             address: selectedLocation == nil ? nil : selectedAddress,
             // 割り勘（3.1）：共有した旅行で金額を入れたら、入れた人が払ったことにする（費用の画面で直せる）
             paidBy: basePlan.isShared && (costs.cost ?? 0) > 0 ? userId : nil

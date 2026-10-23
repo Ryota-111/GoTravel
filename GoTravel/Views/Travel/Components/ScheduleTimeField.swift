@@ -299,7 +299,8 @@ struct LocalTimeZoneChooser: View {
 
 /// 予定の終わる時刻（任意）。始まりの時刻の欄の下に置く。
 ///
-/// 入れていないときは「終了時刻を追加」だけを出し、押すと始まりの1時間後から入れ始める
+/// 入れていないときは「終了時刻を追加」だけを出し、押すと始まりの1時間後から入れ始める。
+/// 海外の旅行では、終わりを着いた先の時計で入れられる（「パリ 15:00 発 → ドーハ 23:00 着」。3.1）
 struct ScheduleEndTimeField: View {
     @Binding var hasEndTime: Bool
     @Binding var endTime: Date
@@ -309,34 +310,36 @@ struct ScheduleEndTimeField: View {
     let textColor: Color
     let secondaryText: Color
     let fieldBackground: Color
+    /// 終わりを読む時計。nil なら始まりと同じ。渡さなければ選べない
+    var endZone: Binding<TimeZone?>? = nil
+    /// 時間帯の候補（`ScheduleClock.zoneChoices`）
+    var zoneChoices: [ScheduleZoneChoice] = []
+
+    @State private var showsSearch = false
+
+    /// 終わりの時:分を読む時計
+    private var effectiveEndZone: TimeZone {
+        endZone?.wrappedValue ?? timeZone
+    }
+
+    /// 着いた先の時間帯を選ぶ欄を出すか。国内の旅行では出さない（選んだあとは消さない）
+    private var offersEndZone: Bool {
+        guard let endZone else { return false }
+        return endZone.wrappedValue != nil
+            || ScheduleClock.offersZoneChoice(zoneChoices, selected: timeZone, at: startTime)
+    }
 
     var body: some View {
         if hasEndTime {
-            HStack {
-                Image(systemName: "clock.badge.checkmark")
-                    .foregroundColor(tint.opacity(0.8))
-                    .frame(width: 24)
-                Text("終了時刻")
-                    .font(.subheadline)
-                    .foregroundColor(textColor)
-                Spacer()
-                DatePicker("", selection: $endTime, displayedComponents: .hourAndMinute)
-                    .environment(\.timeZone, timeZone)
-                    .colorMultiply(tint)
-                    .datePickerStyle(.compact)
-                    .labelsHidden()
-                Button {
-                    hasEndTime = false
-                } label: {
-                    Image(systemName: "xmark.circle.fill")
-                        .foregroundColor(secondaryText)
+            VStack(alignment: .leading, spacing: 10) {
+                endTimeRow
+                if offersEndZone {
+                    endZoneMenu
                 }
-                .buttonStyle(.plain)
-                .accessibilityLabel(Text("終了時刻を消す"))
             }
-            .padding(14)
-            .background(fieldBackground)
-            .cornerRadius(12)
+            .sheet(isPresented: $showsSearch) {
+                TimeZoneSearchView(tint: tint) { setEndZone($0) }
+            }
         } else {
             Button {
                 endTime = startTime.addingTimeInterval(60 * 60)
@@ -350,5 +353,109 @@ struct ScheduleEndTimeField: View {
             .buttonStyle(.plain)
             .padding(.horizontal, 4)
         }
+    }
+
+    private var endTimeRow: some View {
+        HStack {
+            Image(systemName: "clock.badge.checkmark")
+                .foregroundColor(tint.opacity(0.8))
+                .frame(width: 24)
+            Text("終了時刻")
+                .font(.subheadline)
+                .foregroundColor(textColor)
+            Spacer()
+            DatePicker("", selection: $endTime, displayedComponents: .hourAndMinute)
+                .environment(\.timeZone, effectiveEndZone)
+                .colorMultiply(tint)
+                .datePickerStyle(.compact)
+                .labelsHidden()
+            Button {
+                hasEndTime = false
+                endZone?.wrappedValue = nil
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .foregroundColor(secondaryText)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("終了時刻を消す"))
+        }
+        .padding(14)
+        .background(fieldBackground)
+        .cornerRadius(12)
+    }
+
+    private var endZoneMenu: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Menu {
+                Button {
+                    setEndZone(nil)
+                } label: {
+                    let title = "始まりと同じ（\(ScheduleClock.cityName(of: timeZone))）"
+                    if endZone?.wrappedValue == nil { Label(title, systemImage: "checkmark") } else { Text(title) }
+                }
+                Divider()
+                ForEach(zoneChoices.filter { !ScheduleClock.showsSameTime($0.zone, timeZone, at: startTime) }) { choice in
+                    Button {
+                        setEndZone(choice.zone)
+                    } label: {
+                        let title = ScheduleClock.choiceTitle(of: choice.zone)
+                            + (choice.sourceLabel.map { "　\($0)" } ?? "")
+                        if let selected = endZone?.wrappedValue,
+                           ScheduleClock.showsSameTime(choice.zone, selected, at: startTime) {
+                            Label(title, systemImage: "checkmark")
+                        } else {
+                            Text(title)
+                        }
+                    }
+                }
+                Divider()
+                Button {
+                    showsSearch = true
+                } label: {
+                    Label("ほかの時間帯を探す…", systemImage: "magnifyingglass")
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "airplane.arrival")
+                        .foregroundColor(tint.opacity(0.8))
+                        .frame(width: 24)
+                    Text("着いた先の時間帯")
+                        .font(.subheadline)
+                        .foregroundColor(textColor)
+                    Spacer()
+                    Text(endZone?.wrappedValue.map { ScheduleClock.cityName(of: $0) } ?? "始まりと同じ")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(tint)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 10, weight: .semibold))
+                        .foregroundColor(tint)
+                }
+                .padding(14)
+                .background(fieldBackground)
+                .cornerRadius(12)
+            }
+
+            Text(caption)
+                .font(.caption)
+                .foregroundColor(secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    private var caption: String {
+        guard let zone = endZone?.wrappedValue else {
+            return "飛行機など時差のある場所への移動は、終わりの時刻を着いた先の時計で入れられます"
+        }
+        let arrival = ScheduleItem.endTime(hourAndMinuteOf: endTime, after: startTime, in: timeZone, endZone: zone)
+        let japan = ScheduleClock.timeText(arrival, in: ScheduleClock.legacyTimeZone)
+        return "\(ScheduleClock.cityName(of: zone))の時刻で入れています（日本時間では \(japan)）。"
+            + "かかる時間は \(ScheduleClock.durationText(arrival.timeIntervalSince(startTime)))です"
+    }
+
+    /// 終わりの時計を変える。時:分はそのまま（「23:00 はドーハの 23:00 のつもりだった」）
+    private func setEndZone(_ zone: TimeZone?) {
+        let normalized = zone.flatMap { $0.identifier == timeZone.identifier ? nil : $0 }
+        endTime = ScheduleClock.keepingWallClock(endTime, from: effectiveEndZone, to: normalized ?? timeZone)
+        endZone?.wrappedValue = normalized
     }
 }

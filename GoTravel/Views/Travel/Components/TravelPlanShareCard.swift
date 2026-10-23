@@ -272,8 +272,8 @@ struct TravelPlanShareCard: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(item.timeText)
                     .font(.system(size: 13, weight: .bold, design: .rounded).monospacedDigit())
-                if let endText = item.endTimeText {
-                    Text("〜\(endText)")
+                if let endText = item.endTimeColumnText {
+                    Text(endText)
                         .font(.system(size: 10, weight: .semibold, design: .rounded).monospacedDigit())
                         .opacity(0.75)
                 }

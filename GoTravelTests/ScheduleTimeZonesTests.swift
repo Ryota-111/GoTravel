@@ -216,4 +216,55 @@ struct ScheduleTimeZonesTests {
         #expect(merged?.dayTimeZone(1)?.identifier == "Europe/Paris")
         #expect(merged?.daySchedules.first?.scheduleItems.count == 1)
     }
+
+    // MARK: - 時差をまたぐ移動（3.1）
+
+    @Test("終わりを着いた先の時計で入れる：パリ 15:00 発 → ドーハ 23:00 着は7時間")
+    func endInOtherZone() throws {
+        let doha = TimeZone(identifier: "Asia/Qatar")!
+        let start = at(15, in: paris)
+        let end = ScheduleItem.endTime(hourAndMinuteOf: at(23, in: doha), after: start, in: paris, endZone: doha)
+        #expect(end.timeIntervalSince(start) == 7 * 3600)
+
+        let flight = ScheduleItem(time: start, title: "QR40", timeZoneIdentifier: paris.identifier,
+                                  endTime: end, endTimeZoneIdentifier: doha.identifier)
+        #expect(flight.crossesTimeZones)
+        #expect(flight.endTimeText == "23:00")
+        #expect(flight.timeRangeText == "15:00 パリ → 23:00 ドーハ")
+        #expect(flight.endTimeColumnText == "→23:00")
+        #expect(flight.departureZoneLabel == "パリ発")
+        #expect(flight.arrivalZoneLabel == "ドーハ着")
+
+        // 古い版で読んでも壊れず、書き戻しても残る
+        let decoded = try JSONDecoder().decode(ScheduleItem.self, from: JSONEncoder().encode(flight))
+        #expect(decoded.endTimeZoneIdentifier == "Asia/Qatar")
+
+        // 予定をまとめて現地の時計に直しても、着く時刻は動かさない
+        #expect(flight.keepingWallClock(in: japan).endTime == end)
+    }
+
+    @Test("夜に出て翌朝に着く便と、日付変更線を東へ越える便")
+    func endAcrossDays() {
+        let doha = TimeZone(identifier: "Asia/Qatar")!
+        let honolulu = TimeZone(identifier: "Pacific/Honolulu")!
+        let night = at(22, in: paris)
+        let morning = ScheduleItem.endTime(hourAndMinuteOf: at(6, in: doha), after: night, in: paris, endZone: doha)
+        #expect(morning.timeIntervalSince(night) == 7 * 3600)
+
+        // 東京 10:00 発 → ホノルル 22:00 着（ホノルルではまだ前日）
+        let tokyo = at(10, in: japan)
+        let arrival = ScheduleItem.endTime(hourAndMinuteOf: at(22, in: honolulu), after: tokyo, in: japan, endZone: honolulu)
+        #expect(arrival.timeIntervalSince(tokyo) == 7 * 3600)
+    }
+
+    @Test("同じ時計なら今までどおり「10:00〜11:30」")
+    func endInSameZone() {
+        let lunch = item(12, in: paris, end: 13)
+        #expect(!lunch.crossesTimeZones)
+        #expect(lunch.timeRangeText == "12:00〜13:00")
+        #expect(lunch.endTimeColumnText == "〜13:00")
+        #expect(lunch.departureZoneLabel == nil)
+        #expect(ScheduleClock.durationText(6.5 * 3600) == "6時間30分")
+        #expect(ScheduleClock.durationText(45 * 60) == "45分")
+    }
 }

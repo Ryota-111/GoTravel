@@ -92,7 +92,7 @@ extension ScheduleClock {
         "Asia/Jakarta": "ジャカルタ", "Asia/Makassar": "バリ", "Asia/Kuala_Lumpur": "クアラルンプール",
         "Asia/Kolkata": "インド", "Asia/Calcutta": "インド", "Asia/Dubai": "ドバイ", "Asia/Kathmandu": "カトマンズ",
         "Asia/Phnom_Penh": "プノンペン", "Asia/Yangon": "ヤンゴン", "Asia/Ulaanbaatar": "ウランバートル",
-        "Asia/Colombo": "コロンボ", "Asia/Vladivostok": "ウラジオストク", "Asia/Doha": "ドーハ",
+        "Asia/Colombo": "コロンボ", "Asia/Vladivostok": "ウラジオストク", "Asia/Qatar": "ドーハ",
         "Europe/London": "ロンドン", "Europe/Paris": "パリ", "Europe/Berlin": "ベルリン", "Europe/Rome": "ローマ",
         "Europe/Madrid": "マドリード", "Europe/Amsterdam": "アムステルダム",
         "Europe/Brussels": "ブリュッセル", "Europe/Vienna": "ウィーン", "Europe/Zurich": "チューリッヒ",

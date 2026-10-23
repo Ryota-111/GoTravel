@@ -32,6 +32,8 @@ struct EditScheduleItemView: View {
     @State private var costInput: CostInput
     @State private var costNote: String
     @State private var hasEndTime: Bool
+    /// 終わりを読む時計。nil なら始まりと同じ（飛行機などで着いた先の時計にするとき）
+    @State private var endZone: TimeZone?
     @State private var endTime: Date
     @State private var linkURL: String
     @State private var showDeleteConfirmation = false
@@ -64,6 +66,7 @@ struct EditScheduleItemView: View {
         _costNote = State(initialValue: item.costNote ?? "")
         _hasEndTime = State(initialValue: item.endTime != nil)
         _endTime = State(initialValue: item.endTime ?? item.time.addingTimeInterval(60 * 60))
+        _endZone = State(initialValue: item.endTimeZoneIdentifier.map { ScheduleClock.timeZone(identifier: $0) })
         _linkURL = State(initialValue: item.linkURL ?? "")
 
         // 既存の場所情報を選択済み状態として復元
@@ -252,10 +255,16 @@ struct EditScheduleItemView: View {
                     tint: travelColor,
                     textColor: textColor,
                     secondaryText: themeManager.currentTheme.secondaryText,
-                    fieldBackground: fieldBg
+                    fieldBackground: fieldBg,
+                    endZone: $endZone,
+                    zoneChoices: ScheduleClock.zoneChoices(place: nil, day: daySchedule.timeZone, destination: destinationTimeZone,
+                                                           current: .current, recents: RecentTimeZones.list(), at: time)
                 )
-                // 現地時間・日本時間を切り替えたら、終わりも同じ時:分のまま付け替える
+                // 現地時間・日本時間を切り替えたら、終わりも同じ時:分のまま付け替える。
+                // 終わりを着いた先の時計で入れているときは、終わりはそのまま
                 .onChange(of: timeZone) { oldZone, newZone in
+                    if let zone = endZone, zone.identifier == newZone.identifier { endZone = nil; return }
+                    guard endZone == nil else { return }
                     endTime = ScheduleClock.keepingWallClock(endTime, from: oldZone, to: newZone)
                 }
 
@@ -579,7 +588,7 @@ struct EditScheduleItemView: View {
         RecentTimeZones.record(timeZone)
         let locationName = selectedLocation?.name ?? (location.isEmpty ? nil : location.trimmingCharacters(in: .whitespacesAndNewlines))
 
-        return ScheduleItem(
+        var updated = ScheduleItem(
             id: item.id,
             time: time,
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -602,11 +611,17 @@ struct EditScheduleItemView: View {
             reservationPart: item.reservationPart,
             costNote: costNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? nil : costNote.trimmingCharacters(in: .whitespacesAndNewlines),
-            endTime: hasEndTime ? ScheduleItem.endTime(hourAndMinuteOf: endTime, after: time, in: timeZone) : nil,
+            endTime: hasEndTime ? ScheduleItem.endTime(hourAndMinuteOf: endTime, after: time, in: timeZone, endZone: endZone) : nil,
+            endTimeZoneIdentifier: hasEndTime ? endZone?.identifier : nil,
             address: selectedCoordinate == nil ? nil : selectedAddress,
             // 「前日 17:00」のように日をまたいで直した予定は、そのずれを保つ
             dayShift: dayShift
         )
+        // この画面で直さない項目は、そのまま残す（割り勘で決めた払った人・割り勘する人・金額）
+        updated.paidBy = item.paidBy
+        updated.splitWith = item.splitWith
+        updated.splitAmounts = item.splitAmounts
+        return updated
     }
 
     /// 実績 - 予算。どちらかが未入力なら比較しない
