@@ -10,6 +10,8 @@ struct AddScheduleItemView: View {
 
     let plan: TravelPlan
     let dayNumber: Int
+    /// 行きたい場所から「予定に入れる」で開いたとき、その場所を入れておく（3.1）
+    var prefillPlace: WishPlace? = nil
 
     @State private var title = ""
     @State private var time = Date()
@@ -106,6 +108,7 @@ struct AddScheduleItemView: View {
         .sheet(isPresented: $showHistoryPicker) {
             locationHistoryPickerView
         }
+        .onAppear(perform: applyPrefill)
         .sheet(isPresented: $showSavedPlacePicker) {
             SavedPlacePickerView(accentColor: travelColor) { place in
                 applySavedPlace(place)
@@ -695,6 +698,18 @@ struct AddScheduleItemView: View {
 
     /// 保存済みの場所を行き先として設定する。
     /// 次回から検索履歴にも出るよう履歴にも記録しておく
+    /// 行きたい場所の名前・場所・リンクを入れておく（開き直しても入れ直さない）
+    private func applyPrefill() {
+        guard let wish = prefillPlace, selectedLocation == nil else { return }
+        let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: wish.coordinate))
+        mapItem.name = wish.name
+        selectedLocation = mapItem
+        selectedCoordinate = wish.coordinate
+        selectedAddress = wish.address
+        if title.isEmpty { title = wish.name }
+        if linkURL.isEmpty, let link = wish.linkURL { linkURL = link }
+    }
+
     private func applySavedPlace(_ place: VisitedPlace) {
         let coordinate = place.coordinate
         let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))

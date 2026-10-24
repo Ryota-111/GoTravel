@@ -149,6 +149,9 @@ enum SharedPlanMerge {
                                         base: base.split.companions, id: \.id, hasBase: true)
         merged.split.expenses = merge(local: local.split.expenses, remote: remote.split.expenses,
                                       base: base.split.expenses, id: \.id, hasBase: true)
+        // 行きたい場所（3.1）：1つずつ、足した・外したほうを採る
+        merged.wishPlaces = merge(local: local.wishPlaces, remote: remote.wishPlaces,
+                                  base: base.wishPlaces, id: \.id, hasBase: true)
 
         merged.reservations = merge(
             local: local.reservations,

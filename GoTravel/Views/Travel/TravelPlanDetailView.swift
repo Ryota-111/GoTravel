@@ -75,6 +75,10 @@ struct TravelPlanDetailView: View {
     @State private var showsTripMemo = false
     /// 地図タブで、地図と行程表のどちらから選んでも共有する項目
     @State private var focusedItemID: String?
+    /// 地図タブの「行きたい場所」で選んだもの。上の地図がその場所へ寄る（3.1）
+    @State private var focusedWishID: String?
+    /// 「予定に入れる」を押した行きたい場所
+    @State private var wishToSchedule: WishPlace?
     /// 1回のドラッグで何度もタブが飛ばないようにする目印
     @State private var hasSwitchedTabInDrag = false
     /// 地図タブで貼り付いている帯（地図 + Day タブ）が画面のどこにあるか。
@@ -370,6 +374,12 @@ struct TravelPlanDetailView: View {
         // 見えている日に寄せ直すのはここの仕事になる
         .onChange(of: tripDuration) { _, days in
             if selectedDay > days { selectedDay = max(days, 1) }
+        }
+        // 行きたい場所から「予定に入れる」。見ている日に、その場所を入れた状態で開く
+        .fullScreenCover(item: $wishToSchedule) { wish in
+            AddScheduleItemView(plan: plan, dayNumber: selectedDay, prefillPlace: wish)
+                .environmentObject(viewModel)
+                .environmentObject(authVM)
         }
         .fullScreenCover(isPresented: $showAddScheduleItem) {
             AddScheduleItemView(plan: plan, dayNumber: selectedDay)
@@ -1688,6 +1698,7 @@ struct TravelPlanDetailView: View {
                 isSplitMode: true,
                 linkedDay: $selectedDay,
                 linkedItemID: $focusedItemID,
+                linkedWishID: $focusedWishID,
                 memberFilter: memberFilter,
                 participantLabels: mapParticipantLabels(plan: plan)
             )
@@ -1732,6 +1743,15 @@ struct TravelPlanDetailView: View {
                 .padding(.top, 12)
 
             mapTabItinerary(plan: plan)
+
+            // 行きたい場所（3.1）。予定の下に置き、押すと上の地図をその場所へ寄せる
+            WishPlacesSection(plan: plan, focusedWishID: $focusedWishID) { wish in
+                wishToSchedule = wish
+            }
+            .environmentObject(viewModel)
+            .environmentObject(authVM)
+            .padding(.horizontal, 16)
+            .padding(.bottom, 30)
         }
     }
 

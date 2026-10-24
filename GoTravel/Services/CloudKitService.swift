@@ -729,6 +729,12 @@ final class CloudKitService {
         if splitJSON != nil || record["splitJSON"] != nil {
             record["splitJSON"] = splitJSON
         }
+        // 行きたい場所（3.1）。**Production に wishPlacesJSON を反映してからリリースすること。**
+        // 割り勘と同じく、行きたい場所のある計画（か、前に載せていた計画）でだけ値を入れる
+        let wishPlacesJSON = WishPlace.encode(plan.wishPlaces)
+        if wishPlacesJSON != nil || record["wishPlacesJSON"] != nil {
+            record["wishPlacesJSON"] = wishPlacesJSON
+        }
 
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
@@ -1101,7 +1107,8 @@ final class CloudKitService {
             // 2.9 以前の人が memoText だけを書き換えていたら、1枚目の共有メモに反映する
             memo: record["memoText"] as? String,
             memos: TripMemoLegacy.decode(record["memosJSON"] as? String),
-            split: TripSplit.decode(record["splitJSON"] as? String)
+            split: TripSplit.decode(record["splitJSON"] as? String),
+            wishPlaces: WishPlace.decode(record["wishPlacesJSON"] as? String)
         )
     }
 }

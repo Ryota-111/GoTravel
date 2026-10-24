@@ -198,6 +198,10 @@ struct TravelPlan: Identifiable, Codable {
     /// Core Data と共有レコードの `splitJSON` に入る（**Production への反映が要る**）
     var split = TripSplit()
 
+    /// 行きたい場所（3.1）：スケジュールに入れるほどではないが気になる場所（`WishPlace`）。
+    /// Core Data と共有レコードの `wishPlacesJSON` に入る（**Production への反映が要る**）
+    var wishPlaces: [WishPlace] = []
+
     /// 2.9 までの1枚のメモ帳。**3.0 からは `memos` が正で、これは1枚目の共有メモの本文。**
     /// 2.9 以前のアプリ（`memoText`）と行き来するためだけに残す（`TripMemoLegacy`）
     var memo: String? {
@@ -228,6 +232,7 @@ struct TravelPlan: Identifiable, Codable {
         case memo
         case memos
         case split
+        case wishPlaces
     }
 
     /// 実際に割り勘に使う人数。
@@ -271,7 +276,8 @@ struct TravelPlan: Identifiable, Codable {
          customSplitCount: Int? = nil,
          memo: String? = nil,
          memos: [TripMemo] = [],
-         split: TripSplit = TripSplit()) {
+         split: TripSplit = TripSplit(),
+         wishPlaces: [WishPlace] = []) {
         self.id = id
         self.title = title
         self.startDate = startDate
@@ -295,6 +301,7 @@ struct TravelPlan: Identifiable, Codable {
         self.customSplitCount = customSplitCount
         self.memos = TripMemoLegacy.reconcile(memos: memos, legacy: memo)
         self.split = split
+        self.wishPlaces = wishPlaces
     }
 
     init(from decoder: Decoder) throws {
@@ -324,6 +331,7 @@ struct TravelPlan: Identifiable, Codable {
         memos = TripMemoLegacy.reconcile(memos: decodedMemos,
                                          legacy: try container.decodeIfPresent(String.self, forKey: .memo))
         split = try container.decodeIfPresent(TripSplit.self, forKey: .split) ?? TripSplit()
+        wishPlaces = try container.decodeIfPresent([WishPlace].self, forKey: .wishPlaces) ?? []
 
         if let hex = try container.decodeIfPresent(String.self, forKey: .cardColorHex) {
             cardColor = Color(hex: hex)
@@ -358,6 +366,7 @@ struct TravelPlan: Identifiable, Codable {
         try container.encodeIfPresent(memo, forKey: .memo)
         try container.encode(memos, forKey: .memos)
         if !split.isEmpty { try container.encode(split, forKey: .split) }
+        if !wishPlaces.isEmpty { try container.encode(wishPlaces, forKey: .wishPlaces) }
     }
 
     // Helper methods
@@ -412,6 +421,7 @@ struct TravelPlan: Identifiable, Codable {
             && customSplitCount == other.customSplitCount
             && memos == other.memos
             && split == other.split
+            && wishPlaces == other.wishPlaces
             && isShared == other.isShared
             && shareCode == other.shareCode
             && sharedWith == other.sharedWith

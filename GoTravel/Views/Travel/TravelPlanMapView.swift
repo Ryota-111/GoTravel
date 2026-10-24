@@ -64,6 +64,8 @@ struct TravelPlanMapView: View {
     /// 地図に初めから出ている施設（羽田空港など）を押したもの。経路を出せる
     @State private var featureSelection: MapFeature?
     @State private var selectedFeatureItem: MKMapItem?
+    /// 押した行きたい場所（3.1）。施設の案内と同じカードで出す
+    @State private var selectedWishItem: MKMapItem?
 
     /// 実際に使う絞り込み。行程表と並べているときは向こうの日に従う
     private var effectiveScope: Scope {
@@ -99,6 +101,9 @@ struct TravelPlanMapView: View {
     /// 下の行程表と共有する選択中の項目。ScheduleItem の id を入れる
     var linkedItemID: Binding<String?>?
 
+    /// 下の「行きたい場所」で選んだもの。WishPlace の id を入れる（3.1）
+    var linkedWishID: Binding<String?>?
+
     /// 共有した旅行で、誰の時間軸を見ているか。nil なら全員
     var memberFilter: String?
     /// 全員のものでない予定に添える名前（予定ID → 「さくら・父」）
@@ -110,6 +115,7 @@ struct TravelPlanMapView: View {
          isSplitMode: Bool = false,
          linkedDay: Binding<Int>? = nil,
          linkedItemID: Binding<String?>? = nil,
+         linkedWishID: Binding<String?>? = nil,
          memberFilter: String? = nil,
          participantLabels: [String: String] = [:]) {
         self.plan = plan
@@ -117,6 +123,7 @@ struct TravelPlanMapView: View {
         self.isSplitMode = isSplitMode
         self.linkedDay = linkedDay
         self.linkedItemID = linkedItemID
+        self.linkedWishID = linkedWishID
         self.memberFilter = memberFilter
         self.participantLabels = participantLabels
         _scope = State(initialValue: .day(initialDay))
@@ -268,7 +275,7 @@ struct TravelPlanMapView: View {
                 .padding(.top, 8)
             }
 
-            if mappedItems.isEmpty {
+            if mappedItems.isEmpty && plan.wishPlaces.isEmpty {
                 emptyOverlay
             }
         }
@@ -277,6 +284,11 @@ struct TravelPlanMapView: View {
             if !isSplitMode, let selected = selectedGroup {
                 detailPanel(selected)
                     .transition(.move(edge: .bottom).combined(with: .opacity))
+            } else if let wish = selectedWishItem {
+                MapFeatureInfoCard(item: wish, accent: themeManager.currentTheme.actionFill) {
+                    withAnimation { selectedWishItem = nil }
+                }
+                .transition(.move(edge: .bottom).combined(with: .opacity))
             } else if let feature = selectedFeatureItem {
                 MapFeatureInfoCard(item: feature, accent: themeManager.currentTheme.actionFill) {
                     withAnimation {
@@ -298,6 +310,16 @@ struct TravelPlanMapView: View {
         .onChange(of: linkedItemID?.wrappedValue) { _, itemID in
             guard isSplitMode, let itemID else { return }
             focusPin(forItemID: itemID)
+        }
+        // 行きたい場所の一覧で選んだら、その場所へ寄せて案内を出す
+        .onChange(of: linkedWishID?.wrappedValue) { _, wishID in
+            guard let wishID, let wish = plan.wishPlaces.first(where: { $0.id == wishID }) else { return }
+            showWish(wish)
+            withAnimation(.easeInOut(duration: 0.5)) {
+                cameraPosition = .region(MKCoordinateRegion(
+                    center: wish.coordinate,
+                    span: MKCoordinateSpan(latitudeDelta: Self.minimumSpan, longitudeDelta: Self.minimumSpan)))
+            }
         }
         .onAppear { fitCameraToPins(animated: false) }
         .onChange(of: effectiveScope) { _, _ in
@@ -330,6 +352,13 @@ struct TravelPlanMapView: View {
                     pinView(group)
                 }
             }
+
+            // 行きたい場所（3.1）。日に関係なく、いつも ☆ で出す
+            ForEach(plan.wishPlaces) { wish in
+                Annotation(wish.name, coordinate: wish.coordinate) {
+                    wishPin(wish)
+                }
+            }
         }
         .mapStyle(.standard(elevation: .flat))
         .ignoresSafeArea()
@@ -345,6 +374,7 @@ struct TravelPlanMapView: View {
                 return
             }
             selectedGroupID = nil
+            selectedWishItem = nil
             Task {
                 let item = await MapFeatureLookup.mapItem(for: feature)
                 withAnimation { selectedFeatureItem = item }
@@ -355,7 +385,37 @@ struct TravelPlanMapView: View {
             if id != nil {
                 featureSelection = nil
                 selectedFeatureItem = nil
+                selectedWishItem = nil
             }
+        }
+    }
+
+    /// 行きたい場所の ☆。予定の丸ピンより小さく、押すと名前と経路案内を出す
+    private func wishPin(_ wish: WishPlace) -> some View {
+        Button {
+            showWish(wish)
+        } label: {
+            Image(systemName: "star.fill")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(.white)
+                .frame(width: 24, height: 24)
+                .background(Circle().fill(Self.wishColor))
+                .overlay(Circle().stroke(.white, lineWidth: 2))
+                .shadow(color: .black.opacity(0.25), radius: 2, y: 1)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text("行きたい場所、\(wish.name)"))
+    }
+
+    /// 行きたい場所の色。日ごとの色と重ならない金色
+    static let wishColor = Color(red: 0.93, green: 0.66, blue: 0.13)
+
+    private func showWish(_ wish: WishPlace) {
+        let item = MKMapItem(placemark: MKPlacemark(coordinate: wish.coordinate))
+        item.name = wish.name
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+            selectedGroupID = nil
+            selectedWishItem = item
         }
     }
 
@@ -807,7 +867,11 @@ struct TravelPlanMapView: View {
         let items = mappedItems
 
         let region: MKCoordinateRegion
-        if items.isEmpty {
+        if items.isEmpty, let fitted = MapRegionFitting.region(fitting: plan.wishPlaces.map(\.coordinate),
+                                                                minimumSpan: Self.minimumSpan) {
+            // 予定に場所が無くても、行きたい場所があればそこを映す
+            region = fitted
+        } else if items.isEmpty {
             let center = CLLocationCoordinate2D(
                 latitude: plan.latitude ?? 36.2048,
                 longitude: plan.longitude ?? 138.2529
