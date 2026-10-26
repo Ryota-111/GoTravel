@@ -309,6 +309,7 @@ struct AddScheduleItemView: View {
                 CurrencyCostFields(
                     input: $costInput,
                     tripRates: currentPlan.exchangeRates,
+                    baseCurrency: currentPlan.currencyCode,
                     accent: travelColor,
                     textColor: textColor,
                     secondaryText: themeManager.currentTheme.secondaryText,
@@ -513,8 +514,9 @@ struct AddScheduleItemView: View {
     /// この旅行で外貨を1種類だけ使っていれば、最初からその通貨にしておく。
     /// 海外旅行では現地の通貨で続けて入れることが多く、毎回選び直すのは手間
     private func preselectTripCurrency() {
+        costInput.adopt(baseCurrency: currentPlan.currencyCode)
         guard !costInput.isForeign, costInput.amountText.isEmpty else { return }
-        let foreign = currentPlan.exchangeRates.filter { $0.key != CurrencyCatalog.yen }
+        let foreign = currentPlan.exchangeRates.filter { $0.key != currentPlan.currencyCode }
         guard foreign.count == 1, let (code, rate) = foreign.first else { return }
         costInput.currencyCode = code
         costInput.rateText = CurrencyCatalog.editingText(rate)

@@ -504,7 +504,7 @@ struct AddTravelPlanView: View {
     }
 
     private func createAndSavePlan(withImageFileName fileName: String?) {
-        let plan = TravelPlan(
+        var plan = TravelPlan(
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             startDate: startDate,
             endDate: endDate < startDate ? startDate : endDate,
@@ -514,6 +514,8 @@ struct AddTravelPlanView: View {
             localImageFileName: fileName,
             cardColor: themeManager.currentTheme.primary
         )
+        // 前の旅行で円以外の通貨を選んでいれば、その通貨で始める（海外に住んでいる人のため。3.1）
+        plan.currencyCode = CurrencyCatalog.preferredTripCurrency
         onSave(plan)
         isUploading = false
         presentationMode.wrappedValue.dismiss()

@@ -39,6 +39,8 @@ enum TripStats {
         var tripCount = 0
         var dayCount = 0
         var spend: Double = 0
+        /// 使った金額の通貨。いちばん多くの旅行で使っている通貨（ふつうは円。3.1）
+        var spendCurrency = CurrencyCatalog.yen
         var placeCount = 0
         var outingCount = 0
         var prefectures: Set<Prefecture> = []
@@ -75,6 +77,20 @@ enum TripStats {
     /// その旅行で使った金額（実際に使った金額を優先し、無ければ予定の金額。予定にしない支出も入れる）
     static func spend(of plan: TravelPlan) -> Double {
         TripSplitLedger.entries(of: plan, myUserId: nil).map(\.amount).reduce(0, +)
+    }
+
+    /// 使った金額を数える通貨。旅行ごとに通貨を選べるので（3.1）、いちばん多くの旅行の通貨にそろえ、
+    /// ほかの通貨の旅行の金額は足さない（円とユーロを足し合わせない）。同じ数なら円
+    static func spendCurrency(of plans: [TravelPlan]) -> String {
+        let counts = Dictionary(grouping: plans, by: \.currencyCode).mapValues(\.count)
+        let top = counts.values.max() ?? 0
+        if counts[CurrencyCatalog.yen] == top || top == 0 { return CurrencyCatalog.yen }
+        return counts.filter { $0.value == top }.keys.sorted().first ?? CurrencyCatalog.yen
+    }
+
+    /// その通貨で数えるときの、その旅行の金額（通貨が違えば 0）
+    static func spend(of plan: TravelPlan, in currency: String) -> Double {
+        plan.currencyCode == currency ? spend(of: plan) : 0
     }
 
     /// その旅行の場所（目的地と予定の場所）
@@ -117,8 +133,10 @@ enum TripStats {
 
         var prefectureTrips: [Prefecture: Int] = [:]
         var monthCounts: [Int: Int] = [:]
+        // どの期間で見ても同じ通貨で出るよう、終わった旅行ぜんぶから決める
+        summary.spendCurrency = spendCurrency(of: finishedTrips(plans, now: now, calendar: calendar))
         for trip in trips {
-            let amount = spend(of: trip)
+            let amount = spend(of: trip, in: summary.spendCurrency)
             summary.spend += amount
             if summary.longest.map({ trip.dayCount > $0.days }) ?? true {
                 summary.longest = (trip.title, trip.dayCount)
@@ -235,12 +253,14 @@ enum TripStats {
 
     /// 年ごとの回数・日数・金額（古い順）
     static func yearRows(plans: [TravelPlan], now: Date, calendar: Calendar = .current) -> [YearRow] {
-        let grouped = Dictionary(grouping: finishedTrips(plans, now: now, calendar: calendar)) {
+        let finished = finishedTrips(plans, now: now, calendar: calendar)
+        let currency = spendCurrency(of: finished)
+        let grouped = Dictionary(grouping: finished) {
             calendar.component(.year, from: $0.startDate)
         }
         return grouped.map { year, trips in
             YearRow(year: year, trips: trips.count, days: trips.map(\.dayCount).reduce(0, +),
-                    spend: trips.map(spend(of:)).reduce(0, +))
+                    spend: trips.map { spend(of: $0, in: currency) }.reduce(0, +))
         }
         .sorted { $0.year < $1.year }
     }

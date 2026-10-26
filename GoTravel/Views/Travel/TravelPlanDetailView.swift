@@ -779,9 +779,9 @@ struct TravelPlanDetailView: View {
                     HStack(spacing: 10) {
                         if let cost = item.cost, cost > 0 {
                             HStack(spacing: 4) {
-                                Image(systemName: "yensign.circle")
+                                Image(systemName: plan.usesYen ? "yensign.circle" : "banknote")
                                     .font(.system(size: 11))
-                                Text(item.actualCost == nil ? "¥\(Int(cost))" : "予算 ¥\(Int(cost))")
+                                Text(item.actualCost == nil ? plan.money(cost) : "予算 \(plan.money(cost))")
                                     .font(.system(size: 12))
                             }
                             .foregroundColor(themeManager.currentTheme.secondaryText)
@@ -791,7 +791,7 @@ struct TravelPlanDetailView: View {
                             HStack(spacing: 4) {
                                 Image(systemName: "checkmark.circle.fill")
                                     .font(.system(size: 11))
-                                Text("実績 ¥\(Int(actualCost))")
+                                Text("実績 \(plan.money(actualCost))")
                                     .font(.system(size: 12, weight: .semibold))
                             }
                             .foregroundColor(themeManager.currentTheme.info)
@@ -1360,7 +1360,7 @@ struct TravelPlanDetailView: View {
                     Circle()
                         .fill(scheduleAccentColor.opacity(0.12))
                         .frame(width: 48, height: 48)
-                    Image(systemName: "yensign.circle.fill")
+                    Image(systemName: plan.usesYen ? "yensign.circle.fill" : "banknote.fill")
                         .font(.system(size: 24))
                         .foregroundColor(scheduleAccentColor.opacity(0.8))
                 }
@@ -2403,27 +2403,12 @@ struct TravelPlanDetailView: View {
     }
 
     private func formatBudgetAmount(plan: TravelPlan) -> String {
-        let total = plan.totalPlannedCost
-
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 0
-
-        return "¥\(formatter.string(from: NSNumber(value: total)) ?? "0")"
+        plan.money(plan.totalPlannedCost)
     }
 
     private func formatTotalCost(plan: TravelPlan) -> String {
         let total = plan.totalPlannedCost
-
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 0
-
-        if total == 0 {
-            return "まだ金額が登録されていません"
-        } else {
-            return "合計: ¥\(formatter.string(from: NSNumber(value: total)) ?? "0")"
-        }
+        return total == 0 ? "まだ金額が登録されていません" : "合計: \(plan.money(total))"
     }
 
     private func formatDateWithWeekday(_ date: Date) -> String {

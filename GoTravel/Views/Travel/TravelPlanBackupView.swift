@@ -268,7 +268,7 @@ private struct BackupPlanDetailView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let cost = item.displayCost, cost > 0 {
-                    Text("¥" + cost.formatted(.number.precision(.fractionLength(0)))
+                    Text(plan.money(cost)
                          + (item.costNote.map { "　\($0)" } ?? ""))
                         .font(.system(size: 12))
                         .foregroundColor(palette.subText)

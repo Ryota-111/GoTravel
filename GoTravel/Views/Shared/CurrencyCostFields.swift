@@ -1,8 +1,11 @@
 import SwiftUI
 
-/// 費用の入力の中身。円でも外貨でも同じ形で持ち、保存のときに円の金額と外貨の元に分ける
+/// 費用の入力の中身。旅行の通貨（ふだんは円）でも外貨でも同じ形で持ち、
+/// 保存のときに旅行の通貨での金額と外貨の元に分ける
 struct CostInput: Equatable {
     var currencyCode = CurrencyCatalog.yen
+    /// 旅行の通貨（3.1）。入力欄（`CurrencyCostFields`）が開いたときに旅行に合わせる
+    var baseCurrency = CurrencyCatalog.yen
     /// 「1 USD = 150 円」の 150
     var rateText = ""
     /// 予算（選んだ通貨で）
@@ -10,12 +13,21 @@ struct CostInput: Equatable {
     /// 実際に使った金額（選んだ通貨で）。予約では使わない
     var actualText = ""
 
-    var isForeign: Bool { currencyCode != CurrencyCatalog.yen }
+    var isForeign: Bool { currencyCode != baseCurrency }
+
+    /// 旅行の通貨に合わせる。外貨で入れていなければ、旅行の通貨で入れていたことにする
+    mutating func adopt(baseCurrency base: String) {
+        guard base != baseCurrency else { return }
+        if currencyCode == baseCurrency { currencyCode = base }
+        baseCurrency = base
+    }
 
     init() {}
 
     /// 保存されている値から入力欄を作る。外貨で入れていれば外貨のまま出す
-    init(cost: Double?, actualCost: Double? = nil, foreign: ForeignCost?) {
+    init(cost: Double?, actualCost: Double? = nil, foreign: ForeignCost?, base: String = CurrencyCatalog.yen) {
+        baseCurrency = base
+        currencyCode = base
         if let foreign {
             currencyCode = foreign.currencyCode
             rateText = CurrencyCatalog.editingText(foreign.rate)
@@ -36,7 +48,7 @@ struct CostInput: Equatable {
         guard isForeign else { return (amount, actualAmount, nil) }
         guard amount != nil || actualAmount != nil else { return (nil, nil, nil) }
         let foreign = ForeignCost(currencyCode: currencyCode, rate: rate, amount: amount, actualAmount: actualAmount)
-        return (foreign.yenAmount, foreign.yenActualAmount, foreign)
+        return (foreign.baseAmount(in: baseCurrency), foreign.baseActualAmount(in: baseCurrency), foreign)
     }
 }
 
@@ -50,6 +62,8 @@ struct CurrencyCostFields: View {
     var showsActual = false
     /// この旅行で使っている通貨とレート（`TravelPlan.exchangeRates`）
     var tripRates: [String: Double?] = [:]
+    /// 旅行の通貨（`TravelPlan.currencyCode`。3.1）
+    var baseCurrency: String = CurrencyCatalog.yen
     var accent: Color
     var textColor: Color
     var secondaryText: Color
@@ -59,13 +73,13 @@ struct CurrencyCostFields: View {
     /// この旅行で使っている通貨を先に、そのあとよく使う通貨を並べる
     private var currencyChoices: [String] {
         let used = tripRates.keys.sorted()
-        return [CurrencyCatalog.yen] + used.filter { $0 != CurrencyCatalog.yen }
-            + CurrencyCatalog.common.filter { $0 != CurrencyCatalog.yen && !used.contains($0) }
+        return [baseCurrency] + used.filter { $0 != baseCurrency }
+            + CurrencyCatalog.common.filter { $0 != baseCurrency && !used.contains($0) }
     }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            amountRow(icon: "yensign.circle", placeholder: showsActual ? "予算" : "費用",
+            amountRow(icon: baseCurrency == CurrencyCatalog.yen ? "yensign.circle" : "banknote", placeholder: showsActual ? "予算" : "費用",
                       text: $input.amountText, iconColor: accent.opacity(0.7), showsPicker: true)
 
             if showsActual {
@@ -78,6 +92,7 @@ struct CurrencyCostFields: View {
                 rateRow
             }
         }
+        .onAppear { input.adopt(baseCurrency: baseCurrency) }
     }
 
     private func amountRow(icon: String, placeholder: String, text: Binding<String>,
@@ -101,9 +116,9 @@ struct CurrencyCostFields: View {
         .cornerRadius(12)
     }
 
-    /// 円は「円」、外貨は通貨コードで出す
+    /// 円は「円」、外貨と円以外の旅行の通貨は通貨コードで出す
     private var unitLabel: String {
-        input.isForeign ? input.currencyCode : "円"
+        CurrencyCatalog.unitLabel(of: input.currencyCode)
     }
 
     private var currencyMenu: some View {
@@ -132,15 +147,15 @@ struct CurrencyCostFields: View {
     }
 
     private func menuTitle(_ code: String) -> String {
-        code == CurrencyCatalog.yen ? "円（JPY）" : "\(CurrencyCatalog.name(of: code))（\(code)）"
+        "\(CurrencyCatalog.shortName(of: code))（\(code)）"
     }
 
     /// 通貨を変えたら、この旅行で前に使ったレートを入れておく
     private func select(_ code: String) {
         input.currencyCode = code
-        if code != CurrencyCatalog.yen, let rate = tripRates[code] ?? nil {
+        if code != baseCurrency, let rate = tripRates[code] ?? nil {
             input.rateText = CurrencyCatalog.editingText(rate)
-        } else if code == CurrencyCatalog.yen {
+        } else if code == baseCurrency {
             input.rateText = ""
         }
     }
@@ -155,7 +170,7 @@ struct CurrencyCostFields: View {
                     .multilineTextAlignment(.trailing)
                     .foregroundColor(textColor)
                     .frame(maxWidth: 110)
-                Text("円")
+                Text(CurrencyCatalog.unitLabel(of: baseCurrency))
                     .foregroundColor(secondaryText)
                 Spacer(minLength: 0)
             }
@@ -170,15 +185,17 @@ struct CurrencyCostFields: View {
         }
     }
 
+    private var baseName: String { CurrencyCatalog.shortName(of: baseCurrency) }
+
     private var conversionNote: String {
         let result = input.result
         guard input.rate != nil else {
-            return "レートを入れると、円に直して予算の合計に入ります。両替したときのレートを入れてください。"
+            return "レートを入れると、\(baseName)に直して予算の合計に入ります。両替したときのレートを入れてください。"
         }
         var parts: [String] = []
-        if let yen = result.cost { parts.append("予算 約\(CurrencyCatalog.format(yen, code: CurrencyCatalog.yen))") }
-        if showsActual, let yen = result.actualCost { parts.append("実績 約\(CurrencyCatalog.format(yen, code: CurrencyCatalog.yen))") }
+        if let base = result.cost { parts.append("予算 約\(CurrencyCatalog.money(base, code: baseCurrency))") }
+        if showsActual, let base = result.actualCost { parts.append("実績 約\(CurrencyCatalog.money(base, code: baseCurrency))") }
         let converted = parts.isEmpty ? "" : parts.joined(separator: "・") + "。"
-        return converted + "この旅行の \(input.currencyCode) は、すべてこのレートで円に直します。"
+        return converted + "この旅行の \(input.currencyCode) は、すべてこのレートで\(baseName)に直します。"
     }
 }

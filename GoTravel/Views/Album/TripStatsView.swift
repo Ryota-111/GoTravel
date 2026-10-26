@@ -222,7 +222,7 @@ struct TripStatsView: View {
             }
             VStack(spacing: 10) {
                 if s.countries.count > 1 { detail("国と地域", "\(s.countries.count)") }
-                detail("使った金額", TravelPlanTextExporter.currency(s.spend.rounded()))
+                detail("使った金額", TravelPlanTextExporter.currency(s.spend, code: s.spendCurrency))
                 detail("保存した場所", "\(s.placeCount)か所")
                 detail("おでかけ", "\(s.outingCount)回")
             }
@@ -384,7 +384,13 @@ struct TripStatsView: View {
         switch metric {
         case .trips: return "\(row.trips)回"
         case .days: return "\(row.days)日"
-        case .spend: return row.spend >= 10_000 ? "\(Int((row.spend / 10_000).rounded()))万" : "¥\(Int(row.spend))"
+        case .spend:
+            // 円は短く「12万」。ほかの通貨はそのまま（「€1,250」）
+            let currency = summary.spendCurrency
+            guard currency == CurrencyCatalog.yen else {
+                return CurrencyCatalog.money(row.spend.rounded(), code: currency)
+            }
+            return row.spend >= 10_000 ? "\(Int((row.spend / 10_000).rounded()))万" : "¥\(Int(row.spend))"
         }
     }
 
@@ -400,7 +406,7 @@ struct TripStatsView: View {
                     best("いちばん長い旅", longest.title, "\(longest.days) DAYS", photo: plan(s.longestPlanId))
                 }
                 if let most = s.mostSpent {
-                    best("いちばん使った旅", most.title, TravelPlanTextExporter.currency(most.amount.rounded()),
+                    best("いちばん使った旅", most.title, TravelPlanTextExporter.currency(most.amount, code: s.spendCurrency),
                          photo: plan(s.mostSpentPlanId))
                 }
                 if let top = s.topPrefecture {

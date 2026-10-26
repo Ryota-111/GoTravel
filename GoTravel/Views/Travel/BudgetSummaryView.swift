@@ -23,6 +23,9 @@ struct BudgetSummaryView: View {
     @State private var showsCompanionPrompt = false
     @State private var companionName = ""
     @State private var renamingCompanion: TripCompanion?
+    /// 計算する通貨を変えようとしているとき、その通貨（金額が入っていればレートを聞く。3.1）
+    @State private var pendingCurrency: String?
+    @State private var currencyRateText = ""
 
     /// ViewModelから最新のプランを見る。直した結果を即座に反映するため
     private var currentPlan: TravelPlan {
@@ -123,6 +126,15 @@ struct BudgetSummaryView: View {
         } message: {
             Text("アプリを使っていない人も、名前だけで割り勘に入れられます。")
         }
+        .alert(currencyAlertTitle, isPresented: Binding(get: { pendingCurrency != nil },
+                                                      set: { if !$0 { pendingCurrency = nil } })) {
+            TextField("レート", text: $currencyRateText)
+                .keyboardType(.decimalPad)
+            Button("変える") { commitCurrency() }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text(currencyAlertMessage)
+        }
         .alert("名前を変える", isPresented: Binding(get: { renamingCompanion != nil },
                                                 set: { if !$0 { renamingCompanion = nil } })) {
             TextField("名前", text: $companionName)
@@ -151,6 +163,8 @@ struct BudgetSummaryView: View {
 
     private var content: some View {
         VStack(spacing: 14) {
+            currencyRow
+
             VStack(alignment: .leading, spacing: 0) {
                 totalSection
                 splitSection
@@ -185,6 +199,76 @@ struct BudgetSummaryView: View {
         }
     }
 
+    // MARK: - 計算する通貨（3.1）
+
+    /// この旅行の金額を何の通貨で計算するか。海外に住んでいる人は、ユーロなどで合計・割り勘できる
+    private var currencyRow: some View {
+        HStack(spacing: 8) {
+            Text("計算する通貨")
+                .font(.footnote)
+                .foregroundColor(faint)
+            Spacer()
+            Menu {
+                ForEach(CurrencyCatalog.common, id: \.self) { code in
+                    Button {
+                        chooseCurrency(code)
+                    } label: {
+                        let title = "\(CurrencyCatalog.shortName(of: code))（\(code)）"
+                        if code == currentPlan.currencyCode { Label(title, systemImage: "checkmark") } else { Text(title) }
+                    }
+                }
+            } label: {
+                HStack(spacing: 4) {
+                    Text("\(CurrencyCatalog.shortName(of: currentPlan.currencyCode))（\(currentPlan.currencyCode)）")
+                        .font(.footnote.weight(.semibold))
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.system(size: 9, weight: .semibold))
+                }
+                .foregroundColor(tint)
+            }
+            .accessibilityLabel(Text("計算する通貨：\(CurrencyCatalog.shortName(of: currentPlan.currencyCode))"))
+        }
+        .padding(.horizontal, 4)
+    }
+
+    private var currencyAlertTitle: String {
+        guard let code = pendingCurrency else { return "" }
+        return "\(CurrencyCatalog.shortName(of: code))で計算する"
+    }
+
+    private var currencyAlertMessage: String {
+        guard let code = pendingCurrency else { return "" }
+        return "1 \(code) が何\(CurrencyCatalog.unitLabel(of: currentPlan.currencyCode))かを入れてください。"
+            + "入っている金額を、このレートで\(CurrencyCatalog.shortName(of: code))に直します（入れた数字は残るので、あとからレートを直せます）。"
+    }
+
+    /// 金額が入っていなければすぐ変える。入っていれば、直すためのレートを聞く
+    private func chooseCurrency(_ code: String) {
+        guard code != currentPlan.currencyCode else { return }
+        if currentPlan.hasAnyAmount {
+            currencyRateText = ""
+            pendingCurrency = code
+        } else {
+            applyCurrency(code, rate: nil)
+        }
+    }
+
+    private func commitCurrency() {
+        guard let code = pendingCurrency,
+              let rate = CurrencyCatalog.parse(currencyRateText), rate > 0 else {
+            pendingCurrency = nil
+            return
+        }
+        applyCurrency(code, rate: rate)
+        pendingCurrency = nil
+    }
+
+    private func applyCurrency(_ code: String, rate: Double?) {
+        updatePlan { $0.changeCurrency(to: code, rate: rate) }
+        // 次に作る旅行も、この通貨から始める
+        CurrencyCatalog.preferredTripCurrency = code
+    }
+
     // MARK: - 合計
 
     private var totalSection: some View {
@@ -196,7 +280,7 @@ struct BudgetSummaryView: View {
                 Spacer()
                 Text("\(tripDays)日間").font(.footnote).foregroundColor(faint)
             }
-            Text(yen(hasActual ? actualTotal : plannedTotal))
+            Text(money(hasActual ? actualTotal : plannedTotal))
                 .font(.system(size: 36, weight: .semibold))
                 .monospacedDigit()
                 .foregroundColor(ink)
@@ -205,7 +289,7 @@ struct BudgetSummaryView: View {
             if hasActual && plannedTotal > 0 {
                 budgetLine
                 HStack {
-                    Text("予算 \(yen(plannedTotal))")
+                    Text("予算 \(money(plannedTotal))")
                     Spacer()
                     Text(remainingText)
                         .foregroundColor(actualTotal > plannedTotal ? warning : faint)
@@ -238,8 +322,8 @@ struct BudgetSummaryView: View {
 
     private var remainingText: String {
         let difference = actualTotal - plannedTotal
-        if difference > 0 { return "\(yen(difference)) 超えています" }
-        if difference < 0 { return "あと \(yen(-difference))" }
+        if difference > 0 { return "\(money(difference)) 超えています" }
+        if difference < 0 { return "あと \(money(-difference))" }
         return "予算どおり"
     }
 
@@ -265,7 +349,7 @@ struct BudgetSummaryView: View {
 
     private var settlementBody: some View {
         let balances = TripSplitLedger.balances(entries: entries, settlements: settlements, members: members)
-        let transfers = TripSplitLedger.transfers(from: balances)
+        let transfers = TripSplitLedger.transfers(from: balances, unit: CurrencyCatalog.minimumUnit(of: currentPlan.currencyCode))
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline) {
                 sectionTitle("精算")
@@ -305,7 +389,7 @@ struct BudgetSummaryView: View {
             Image(systemName: "arrow.right").font(.caption.weight(.semibold)).foregroundColor(faint)
             Text(name(transfer.to)).lineLimit(1)
             Spacer(minLength: 8)
-            Text(yen(transfer.amount)).fontWeight(.semibold).monospacedDigit()
+            Text(money(transfer.amount)).fontWeight(.semibold).monospacedDigit()
             Button("済み") { settle(transfer) }
                 .font(.caption.weight(.semibold))
                 .foregroundColor(tint)
@@ -313,7 +397,7 @@ struct BudgetSummaryView: View {
                 .padding(.vertical, 5)
                 .overlay(Capsule().stroke(tint.opacity(0.5), lineWidth: 1))
                 .buttonStyle(.plain)
-                .accessibilityLabel("\(name(transfer.from))から\(name(transfer.to))への\(yen(transfer.amount))を済みにする")
+                .accessibilityLabel("\(name(transfer.from))から\(name(transfer.to))への\(money(transfer.amount))を済みにする")
         }
         .font(.subheadline)
         .foregroundColor(ink)
@@ -326,17 +410,17 @@ struct BudgetSummaryView: View {
         if transfers.isEmpty {
             lines.append("精算はいりません。")
         } else {
-            lines += transfers.map { "\(name($0.from)) → \(name($0.to))　\(yen($0.amount))" }
+            lines += transfers.map { "\(name($0.from)) → \(name($0.to))　\(money($0.amount))" }
         }
         if !settlements.isEmpty {
             lines += ["", "済み"]
             lines += settlements.map {
-                "\(name($0.paidBy ?? "")) → \(name($0.splitWith?.first ?? ""))　\(yen($0.amount))"
+                "\(name($0.paidBy ?? "")) → \(name($0.splitWith?.first ?? ""))　\(money($0.amount))"
             }
         }
         lines += ["", "ひとりずつ（払った額／負担する額）"]
-        lines += balances.map { "\(name($0.member))　\(yen($0.paid))／\(yen($0.share))" }
-        lines += ["", "割り勘した金額の合計 \(yen(entries.map(\.amount).reduce(0, +)))"]
+        lines += balances.map { "\(name($0.member))　\(money($0.paid))／\(money($0.share))" }
+        lines += ["", "割り勘した金額の合計 \(money(entries.map(\.amount).reduce(0, +)))"]
         return lines.joined(separator: "\n")
     }
 
@@ -349,7 +433,7 @@ struct BudgetSummaryView: View {
                     Image(systemName: "checkmark").font(.caption2.weight(.bold))
                     Text("\(name(settlement.paidBy ?? "")) → \(name(settlement.splitWith?.first ?? ""))")
                     Spacer()
-                    Text(yen(settlement.amount)).monospacedDigit()
+                    Text(money(settlement.amount)).monospacedDigit()
                     Button("取り消す") {
                         withAnimation { delete(expenseId: settlement.id) }
                     }
@@ -381,8 +465,8 @@ struct BudgetSummaryView: View {
                 HStack {
                     Text(name(balance.member)).lineLimit(1)
                     Spacer()
-                    Text(yen(balance.paid)).frame(width: 84, alignment: .trailing)
-                    Text(yen(balance.share)).frame(width: 84, alignment: .trailing)
+                    Text(money(balance.paid)).frame(width: 84, alignment: .trailing)
+                    Text(money(balance.share)).frame(width: 84, alignment: .trailing)
                 }
                 .font(.caption)
                 .monospacedDigit()
@@ -538,7 +622,7 @@ struct BudgetSummaryView: View {
                 Text(subtitle).font(.caption).foregroundColor(faint)
             }
             Spacer(minLength: 4)
-            Text(yen(group.total)).font(.subheadline.weight(.semibold)).monospacedDigit().foregroundColor(ink)
+            Text(money(group.total)).font(.subheadline.weight(.semibold)).monospacedDigit().foregroundColor(ink)
             if let day = group.dayNumber {
                 Image(systemName: collapsedDays.contains(day) ? "chevron.right" : "chevron.down")
                     .font(.system(size: 10, weight: .semibold))
@@ -573,12 +657,12 @@ struct BudgetSummaryView: View {
             }
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 2) {
-                Text(row.amount.map(yen) ?? "－")
+                Text(row.amount.map(money) ?? "－")
                     .font(.subheadline)
                     .monospacedDigit()
                     .foregroundColor(row.isActual ? ink : faint)
                 if let budget = row.budget {
-                    Text("予算 \(yen(budget))").font(.caption2).monospacedDigit().foregroundColor(faint)
+                    Text("予算 \(money(budget))").font(.caption2).monospacedDigit().foregroundColor(faint)
                 } else if !row.isActual, row.amount != nil, hasActual {
                     Text("予定").font(.caption2).foregroundColor(faint)
                 }
@@ -630,7 +714,7 @@ struct BudgetSummaryView: View {
     /// この旅行で使っている外貨（円は除く）。通貨コード順
     private var foreignRates: [(code: String, rate: Double?)] {
         currentPlan.exchangeRates
-            .filter { $0.key != CurrencyCatalog.yen }
+            .filter { $0.key != currentPlan.currencyCode }
             .map { (code: $0.key, rate: $0.value) }
             .sorted { $0.code < $1.code }
     }
@@ -641,12 +725,13 @@ struct BudgetSummaryView: View {
             thinRule
             sectionTitle("為替レート").padding(.top, 14)
             ForEach(foreignRates, id: \.code) { entry in
-                ExchangeRateRow(code: entry.code, rate: entry.rate, textColor: ink, secondaryText: faint,
+                ExchangeRateRow(code: entry.code, rate: entry.rate, baseCurrency: currentPlan.currencyCode,
+                                textColor: ink, secondaryText: faint,
                                 errorColor: warning) { newRate in
                     updatePlan { $0.setExchangeRate(newRate, for: entry.code) }
                 }
             }
-            Text("両替したときのレートを入れてください。その通貨の費用は、すべてこのレートで円に直して合計します。")
+            Text("両替したときのレートを入れてください。その通貨の費用は、すべてこのレートで\(CurrencyCatalog.shortName(of: currentPlan.currencyCode))に直して合計します。")
                 .font(.caption2)
                 .foregroundColor(faint)
                 .fixedSize(horizontal: false, vertical: true)
@@ -736,11 +821,9 @@ struct BudgetSummaryView: View {
         return CurrencyCatalog.format(amount, code: foreign.currencyCode)
     }
 
-    private func yen(_ amount: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 0
-        return "¥\(formatter.string(from: NSNumber(value: amount.rounded())) ?? "0")"
+    /// この旅行の通貨での書き方（"¥12,000" / "€95.50"。3.1）
+    private func money(_ amount: Double) -> String {
+        currentPlan.money(amount)
     }
 
     private func formatDate(_ date: Date) -> String {
@@ -853,10 +936,10 @@ private struct CostSplitEditor: View {
         guard byAmount, let total else { return nil }
         let fixedTotal = fixedAmounts.values.reduce(0, +)
         if fixedTotal > total + 0.5 {
-            return "決めた額が \(TravelPlanTextExporter.currency(fixedTotal - total)) 多すぎます"
+            return "決めた額が \(TravelPlanTextExporter.currency(fixedTotal - total, code: plan.currencyCode)) 多すぎます"
         }
         if fixedAmounts.count == chosenSharers.count, abs(fixedTotal - total) >= 0.5 {
-            return "全員の額の合計が \(TravelPlanTextExporter.currency(total - fixedTotal)) 足りません"
+            return "全員の額の合計が \(TravelPlanTextExporter.currency(total - fixedTotal, code: plan.currencyCode)) 足りません"
         }
         return nil
     }
@@ -870,9 +953,9 @@ private struct CostSplitEditor: View {
                     Section {
                         TextField("何に（水・お土産 など）", text: $title)
                         HStack {
-                            Text("¥").foregroundColor(.secondary)
+                            Text(CurrencyCatalog.symbol(of: plan.currencyCode)).foregroundColor(.secondary)
                             TextField("金額", text: $amountText)
-                                .keyboardType(.numberPad)
+                                .keyboardType(plan.usesYen ? .numberPad : .decimalPad)
                                 .focused($amountFocused)
                         }
                         DatePicker("日", selection: $date, displayedComponents: .date)
@@ -885,7 +968,7 @@ private struct CostSplitEditor: View {
                             Text(summary.title).lineLimit(1)
                             Spacer()
                             if let amount = summary.amount {
-                                Text(TravelPlanTextExporter.currency(amount)).monospacedDigit().foregroundColor(.secondary)
+                                Text(TravelPlanTextExporter.currency(amount, code: plan.currencyCode)).monospacedDigit().foregroundColor(.secondary)
                             }
                         }
                     } footer: {
@@ -992,11 +1075,11 @@ private struct CostSplitEditor: View {
                 .buttonStyle(.borderless)
                 Spacer()
                 if isOn {
-                    Text("¥").foregroundColor(.secondary)
-                    TextField(restShare.map { CurrencyCatalog.editingText($0.rounded()) } ?? "0",
+                    Text(CurrencyCatalog.symbol(of: plan.currencyCode)).foregroundColor(.secondary)
+                    TextField(restShare.map { CurrencyCatalog.editingText(CurrencyCatalog.round($0, code: plan.currencyCode)) } ?? "0",
                               text: Binding(get: { amountTexts[member] ?? "" },
                                             set: { amountTexts[member] = $0 }))
-                        .keyboardType(.numberPad)
+                        .keyboardType(plan.usesYen ? .numberPad : .decimalPad)
                         .multilineTextAlignment(.trailing)
                         .monospacedDigit()
                         .frame(maxWidth: 110)
@@ -1125,6 +1208,8 @@ private struct ChipFlowLayout: Layout {
 private struct ExchangeRateRow: View {
     let code: String
     let rate: Double?
+    /// 旅行の通貨（「1 USD = 150 円」の「円」）
+    let baseCurrency: String
     let textColor: Color
     let secondaryText: Color
     let errorColor: Color
@@ -1146,7 +1231,7 @@ private struct ExchangeRateRow: View {
                 .monospacedDigit()
                 .foregroundColor(textColor)
                 .frame(maxWidth: 100)
-            Text("円")
+            Text(CurrencyCatalog.unitLabel(of: baseCurrency))
                 .font(.subheadline)
                 .foregroundColor(secondaryText)
             Spacer(minLength: 4)

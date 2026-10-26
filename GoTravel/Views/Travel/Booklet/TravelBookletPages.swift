@@ -287,7 +287,7 @@ struct BookletPageView: View {
                         Text(location).lineLimit(1)
                     }
                     if let cost = item.displayCost, cost > 0 {
-                        Text(TravelPlanTextExporter.currency(cost))
+                        Text(TravelPlanTextExporter.currency(cost, code: plan.currencyCode))
                     }
                 }
                 .font(p.font(10))
@@ -370,7 +370,7 @@ struct BookletPageView: View {
                         Text(TravelPlanTextExporter.dateString(plan.date(forDay: row.dayNumber)))
                             .foregroundColor(p.subInk)
                         Spacer()
-                        Text(TravelPlanTextExporter.currency(row.total))
+                        Text(TravelPlanTextExporter.currency(row.total, code: plan.currencyCode))
                     }
                     .font(p.font(12))
                     .foregroundColor(p.ink)
@@ -380,7 +380,7 @@ struct BookletPageView: View {
             HStack {
                 Text(TravelPlanTextExporter.costTotalLabel(for: plan))
                 Spacer()
-                Text(TravelPlanTextExporter.currency(total))
+                Text(TravelPlanTextExporter.currency(total, code: plan.currencyCode))
             }
             .font(p.font(15, .bold))
             .foregroundColor(p.ink)
@@ -388,7 +388,7 @@ struct BookletPageView: View {
                 HStack {
                     Text("1人あたり（\(plan.splitCount)人）")
                     Spacer()
-                    Text(TravelPlanTextExporter.currency((total / Double(plan.splitCount)).rounded()))
+                    Text(TravelPlanTextExporter.currency(CurrencyCatalog.round(total / Double(plan.splitCount), code: plan.currencyCode), code: plan.currencyCode))
                 }
                 .font(p.font(13, .semibold))
                 .foregroundColor(p.accent)

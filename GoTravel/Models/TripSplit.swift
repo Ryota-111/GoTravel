@@ -15,8 +15,29 @@ struct TripSplit: Codable, Equatable {
     var companions: [TripCompanion] = []
     /// 予定にしない支出（水を買った、など）と、済ませた精算の受け渡し
     var expenses: [TripExpense] = []
+    /// この旅行の金額を何の通貨で計算するか（3.1、`TripCurrency.swift`）。**nil なら円。**
+    ///
+    /// 割り勘と同じ旅行の JSON に入れる。旅行に欄を足すと CloudKit の Production 反映が要るため。
+    /// 3.0 以前はこの項目を読まないので、円として出る（数字はそのまま）
+    var currencyCode: String?
 
-    var isEmpty: Bool { companions.isEmpty && expenses.isEmpty }
+    var isEmpty: Bool { companions.isEmpty && expenses.isEmpty && currencyCode == nil }
+
+    init(companions: [TripCompanion] = [], expenses: [TripExpense] = [], currencyCode: String? = nil) {
+        self.companions = companions
+        self.expenses = expenses
+        self.currencyCode = currencyCode
+    }
+
+    enum CodingKeys: String, CodingKey { case companions, expenses, currencyCode }
+
+    // 通貨だけ決めた旅行では、同行者・支出の欄が無いこともある
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        companions = try container.decodeIfPresent([TripCompanion].self, forKey: .companions) ?? []
+        expenses = try container.decodeIfPresent([TripExpense].self, forKey: .expenses) ?? []
+        currencyCode = try container.decodeIfPresent(String.self, forKey: .currencyCode)
+    }
 
     static func decode(_ json: String?) -> TripSplit {
         guard let data = json?.data(using: .utf8) else { return TripSplit() }
@@ -212,24 +233,25 @@ enum TripSplitLedger {
     }
 
     /// 受け渡しを、なるべく少ない回数にする（払う額の大きい人から、受け取る額の大きい人へ）。
-    /// 円未満は四捨五入し、1円に満たない差は出さない
-    static func transfers(from balances: [Balance]) -> [Transfer] {
-        var creditors = balances.filter { $0.net >= 0.5 }.map { ($0.member, $0.net) }
-        var debtors = balances.filter { $0.net <= -0.5 }.map { ($0.member, -$0.net) }
+    /// 通貨のいちばん小さい単位（円なら1円、ユーロなら1セント）で四捨五入し、それに満たない差は出さない
+    static func transfers(from balances: [Balance], unit: Double = 1) -> [Transfer] {
+        let half = unit / 2
+        var creditors = balances.filter { $0.net >= half }.map { ($0.member, $0.net) }
+        var debtors = balances.filter { $0.net <= -half }.map { ($0.member, -$0.net) }
         creditors.sort { $0.1 > $1.1 }
         debtors.sort { $0.1 > $1.1 }
         var result: [Transfer] = []
         var c = 0, d = 0
         while c < creditors.count, d < debtors.count {
             let amount = min(creditors[c].1, debtors[d].1)
-            let rounded = amount.rounded()
-            if rounded >= 1 {
+            let rounded = (amount / unit).rounded() * unit
+            if rounded >= unit - unit / 1_000 {
                 result.append(Transfer(from: debtors[d].0, to: creditors[c].0, amount: rounded))
             }
             creditors[c].1 -= amount
             debtors[d].1 -= amount
-            if creditors[c].1 < 0.5 { c += 1 }
-            if debtors[d].1 < 0.5 { d += 1 }
+            if creditors[c].1 < half { c += 1 }
+            if debtors[d].1 < half { d += 1 }
         }
         return result
     }

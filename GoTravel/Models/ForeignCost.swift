@@ -23,14 +23,16 @@ struct ForeignCost: Codable, Equatable {
     /// 実際に使った金額（外貨）。予約では使わない
     var actualAmount: Double?
 
-    /// 外貨を円に直す。端数は四捨五入（予算の画面は円単位で出すため）
-    static func yen(_ amount: Double?, rate: Double?) -> Double? {
+    /// 外貨を旅行の通貨（ふだんは円）に直す。端数はその通貨の最小の単位で四捨五入する
+    /// （円なら1円、ユーロなら1セント）
+    static func converted(_ amount: Double?, rate: Double?, into base: String = CurrencyCatalog.yen) -> Double? {
         guard let amount, let rate, rate > 0 else { return nil }
-        return (amount * rate).rounded()
+        return CurrencyCatalog.round(amount * rate, code: base)
     }
 
-    var yenAmount: Double? { Self.yen(amount, rate: rate) }
-    var yenActualAmount: Double? { Self.yen(actualAmount, rate: rate) }
+    /// 旅行の通貨に直した金額
+    func baseAmount(in base: String) -> Double? { Self.converted(amount, rate: rate, into: base) }
+    func baseActualAmount(in base: String) -> Double? { Self.converted(actualAmount, rate: rate, into: base) }
 }
 
 // MARK: - 通貨
@@ -52,6 +54,47 @@ enum CurrencyCatalog {
     /// 「$120」「₩15,000」「€9.50」。小数は通貨の決まりに合わせる（ウォンや円は小数なし）
     static func format(_ amount: Double, code: String) -> String {
         amount.formatted(.currency(code: code).locale(locale))
+    }
+
+    /// 画面に出す金額。円は今までどおり「¥12,000」（日本語の決まりだと全角の「￥」になるため）。
+    /// ほかの通貨は「€9.50」「$120」
+    static func money(_ amount: Double, code: String) -> String {
+        guard code == yen else { return format(amount, code: code) }
+        return "¥" + amount.rounded().formatted(.number.precision(.fractionLength(0)))
+    }
+
+    /// 金額の欄の前に置く記号（"¥" / "€" / "$"）
+    static func symbol(of code: String) -> String {
+        if code == yen { return "¥" }
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.locale = locale
+        formatter.currencyCode = code
+        return formatter.currencySymbol ?? code
+    }
+
+    /// 金額の欄のうしろに置く呼び名。円は「円」、ほかは "EUR" のようにコードで
+    static func unitLabel(of code: String) -> String {
+        code == yen ? "円" : code
+    }
+
+    /// 小数の桁（円・ウォンは 0、ユーロ・ドルは 2）
+    static func fractionDigits(of code: String) -> Int {
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = code
+        return formatter.maximumFractionDigits
+    }
+
+    /// その通貨のいちばん小さい単位（円なら 1、ユーロなら 0.01）
+    static func minimumUnit(of code: String) -> Double {
+        pow(10, -Double(fractionDigits(of: code)))
+    }
+
+    /// その通貨の最小の単位で四捨五入する
+    static func round(_ amount: Double, code: String) -> Double {
+        let unit = minimumUnit(of: code)
+        return (amount / unit).rounded() * unit
     }
 
     /// 入力欄の文字を数にする。全角・カンマ・通貨記号が混ざっていても読む
@@ -109,15 +152,15 @@ extension TravelPlan {
                       foreign.currencyCode == code else { continue }
                 foreign.rate = rate
                 daySchedules[day].scheduleItems[index].foreignCost = foreign
-                daySchedules[day].scheduleItems[index].cost = foreign.yenAmount
-                daySchedules[day].scheduleItems[index].actualCost = foreign.yenActualAmount
+                daySchedules[day].scheduleItems[index].cost = foreign.baseAmount(in: currencyCode)
+                daySchedules[day].scheduleItems[index].actualCost = foreign.baseActualAmount(in: currencyCode)
             }
         }
         for index in reservations.indices {
             guard var foreign = reservations[index].foreignCost, foreign.currencyCode == code else { continue }
             foreign.rate = rate
             reservations[index].foreignCost = foreign
-            reservations[index].cost = foreign.yenAmount
+            reservations[index].cost = foreign.baseAmount(in: currencyCode)
         }
     }
 

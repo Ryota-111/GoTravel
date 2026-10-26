@@ -363,7 +363,7 @@ struct ReservationListView: View {
             chips.append(("ターミナル", terminal))
         }
         if let cost = reservation.cost, cost > 0 {
-            chips.append(("費用", "¥" + cost.formatted(.number.precision(.fractionLength(0)))))
+            chips.append(("費用", plan.money(cost)))
         }
         return chips
     }

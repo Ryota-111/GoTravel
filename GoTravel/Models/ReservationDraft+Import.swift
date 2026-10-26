@@ -21,7 +21,10 @@ extension ReservationDraft {
     ///
     /// 時刻が書いていない日付には仮の時刻を入れ、そのことを `notes` に残す
     /// - Parameter destinationTimeZone: 旅行の目的地の時間帯。日本と時差があるときだけ渡す
-    func makeReservation(destinationTimeZone: TimeZone?) -> ImportedReservation {
+    /// - Parameter tripCurrency: 旅行の通貨（3.1）。円でなければ、メールの金額（円）を円の外貨として入れる
+    /// - Parameter yenRate: その旅行で前に入れた「1 円 = いくら」。無ければレートは空のまま
+    func makeReservation(destinationTimeZone: TimeZone?, tripCurrency: String = CurrencyCatalog.yen,
+                         yenRate: Double? = nil) -> ImportedReservation {
         let japan = ScheduleClock.legacyTimeZone
         let local = destinationTimeZone ?? japan
         var notes: [String] = []
@@ -29,6 +32,11 @@ extension ReservationDraft {
         var reservation = Reservation(kind: kind)
         reservation.confirmationNumber = confirmationNumber
         reservation.cost = cost
+        if tripCurrency != CurrencyCatalog.yen, let cost {
+            let foreign = ForeignCost(currencyCode: CurrencyCatalog.yen, rate: yenRate, amount: cost)
+            reservation.foreignCost = foreign
+            reservation.cost = foreign.baseAmount(in: tripCurrency)
+        }
         if kind.usesRoute {
             reservation.transportNumber = transportNumber
             reservation.departurePlace = departurePlace

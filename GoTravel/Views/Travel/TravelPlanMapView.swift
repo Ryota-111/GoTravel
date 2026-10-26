@@ -917,9 +917,6 @@ struct TravelPlanMapView: View {
     }
 
     private func formatCost(_ cost: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 0
-        return "¥\(formatter.string(from: NSNumber(value: cost)) ?? "0")"
+        plan.money(cost)
     }
 }

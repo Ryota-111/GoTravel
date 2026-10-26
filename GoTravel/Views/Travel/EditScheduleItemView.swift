@@ -62,7 +62,7 @@ struct EditScheduleItemView: View {
         _dayShift = State(initialValue: item.dayShift)
         _isPinned = State(initialValue: item.isPinned == true)
         _participants = State(initialValue: Set(item.participantIds ?? []))
-        _costInput = State(initialValue: CostInput(cost: item.cost, actualCost: item.actualCost, foreign: item.foreignCost))
+        _costInput = State(initialValue: CostInput(cost: item.cost, actualCost: item.actualCost, foreign: item.foreignCost, base: plan.currencyCode))
         _costNote = State(initialValue: item.costNote ?? "")
         _hasEndTime = State(initialValue: item.endTime != nil)
         _endTime = State(initialValue: item.endTime ?? item.time.addingTimeInterval(60 * 60))
@@ -380,6 +380,7 @@ struct EditScheduleItemView: View {
                     input: $costInput,
                     showsActual: true,
                     tripRates: currentPlan.exchangeRates,
+                    baseCurrency: currentPlan.currencyCode,
                     accent: travelColor,
                     textColor: textColor,
                     secondaryText: themeManager.currentTheme.secondaryText,
