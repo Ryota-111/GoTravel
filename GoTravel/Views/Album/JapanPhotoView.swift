@@ -146,7 +146,7 @@ struct JapanPhotoView: View {
                     if proStore.isPurchased { scanning = true } else { showsPro = true }
                 } label: {
                     HStack(spacing: 5) {
-                        Label("カメラロールから追加", systemImage: "sparkle.magnifyingglass")
+                        Label("カメラロールから自動追加", systemImage: "sparkle.magnifyingglass")
                         if !proStore.isPurchased {
                             Text("Pro")
                                 .font(.system(size: 9, weight: .bold))
@@ -163,7 +163,7 @@ struct JapanPhotoView: View {
                     .overlay(Capsule().stroke(accent.opacity(0.5), lineWidth: 1))
                 }
                 .buttonStyle(.plain)
-                .accessibilityLabel(proStore.isPurchased ? "カメラロールから追加" : "カメラロールから追加（Pro）")
+                .accessibilityLabel(proStore.isPurchased ? "カメラロールから自動追加" : "カメラロールから自動追加（Pro）")
             }
         }
         .padding(.horizontal, 24)

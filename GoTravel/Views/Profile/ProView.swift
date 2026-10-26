@@ -49,6 +49,7 @@ struct ProView: View {
                 featureBooklet
                 featureThemes
                 featurePhotoSync
+                featurePhotoMapScan
                 featureRecap
                 onceOnlyCard
 
@@ -225,7 +226,25 @@ struct ProView: View {
             bullet("同じApple Accountの端末どうしで、同じ写真が見られます。")
             bullet("預け先はお客様のiCloudです。開発者が見ることはできません。")
             bullet("ご購入いただいた時点で、それまでに保存した写真もまとめてお預かりします。")
-            bullet("フォトマップの「カメラロールから追加」で、写真に残っている場所から行った県を見つけ、年ごとにまとめて入れられます。")
+        }
+        .padding(16)
+        .themedCard()
+    }
+
+    // MARK: - 入っているもの：フォトマップの「カメラロールから自動追加」（3.1）
+
+    private var featurePhotoMapScan: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            featureHeading(
+                icon: "sparkle.magnifyingglass",
+                title: "カメラロールから、行った県を自動で追加",
+                detail: "日本全国フォトマップの「カメラロールから自動追加」で、写真に残っている場所から行った県を見つけます。"
+                      + "県ごと・撮った年ごとに写真が並ぶので、選んでまとめて地図に入れられます。"
+            )
+            bullet("入れた県は、写真を撮った年で旅の記録にも入ります。Travory を使う前の旅行も、写真があれば記録に残せます。")
+            bullet("同じ県でも年が違えば別の旅行として分かれるので、選びやすくなっています。")
+            bullet("写真はこの iPhone の中だけで調べ、どこにも送りません。")
+            bullet("県を押して1枚ずつ写真を入れるのは、これまでどおり無料です。")
         }
         .padding(16)
         .themedCard()
