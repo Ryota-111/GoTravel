@@ -361,10 +361,10 @@
 				};
 			};
 			buildConfigurationList = 6C713E3B2E80F8240072D26B /* Build configuration list for PBXProject "GoTravel" */;
-			developmentRegion = en;
+			developmentRegion = ja;
 			hasScannedForEncodings = 0;
 			knownRegions = (
-				en,
+				ja,
 				Base,
 			);
 			mainGroup = 6C713E372E80F8240072D26B;
