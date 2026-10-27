@@ -9,6 +9,9 @@ struct PlacesListView: View {
     @ObservedObject var themeManager = ThemeManager.shared
     @ObservedObject var categoryManager = PlaceCategoryManager.shared
     @State private var selectedCategoryId: String = Self.allCategoryId
+    /// 県で絞り込む（nil ならすべて。3.1、ご要望から）。一覧と地図の両方に効く
+    @State private var selectedArea: PlaceArea?
+    @ObservedObject private var regionResolver = TripRegionResolver.shared
 
     static let allCategoryId = "all"
     @State private var hasLoadedData = false
@@ -30,10 +33,21 @@ struct PlacesListView: View {
 
     // MARK: - Computed Properties
     private var filteredPlaces: [VisitedPlace] {
-        if selectedCategoryId == Self.allCategoryId {
-            return vm.places
+        var places = vm.places
+        if selectedCategoryId != Self.allCategoryId {
+            places = places.filter { $0.categoryId == selectedCategoryId }
         }
-        return vm.places.filter { $0.categoryId == selectedCategoryId }
+        if let selectedArea {
+            _ = regionResolver.version
+            places = places.filter { PlaceArea.of($0, region: regionResolver.region) == selectedArea }
+        }
+        return places
+    }
+
+    /// 場所のある県と数（絞り込みのメニューに出す）
+    private var areaCounts: [(area: PlaceArea, count: Int)] {
+        _ = regionResolver.version
+        return PlaceArea.counts(of: vm.places, region: regionResolver.region)
     }
 
     private var backgroundGradient: some View {
@@ -69,10 +83,11 @@ struct PlacesListView: View {
                 backgroundGradient
                 VStack(spacing: 0) {
                     planEventsTitleSection
+                    // 地図でもカテゴリーと県で絞り込めるように、切り替えの上に置く
+                    eventTypeSelectionSection
                     if showMap {
                         mapView
                     } else {
-                        eventTypeSelectionSection
                         contentView
                     }
                 }
@@ -99,6 +114,12 @@ struct PlacesListView: View {
                 }())
                 .environmentObject(authVM)
             }
+        }
+        // 住所から県が分からない場所は、緯度・経度から調べて覚える（旅の記録と同じ仕組み）
+        .task(id: vm.places.count) {
+            let points = PlaceArea.needsLookup(vm.places, region: regionResolver.region)
+                .map { (latitude: $0.latitude, longitude: $0.longitude) }
+            await regionResolver.resolve(points)
         }
         .task {
             // 初回のみCore DataのFetchedResultsControllerをセットアップ
@@ -158,12 +179,12 @@ struct PlacesListView: View {
                     .frame(width: 100, height: 100)
                     .foregroundColor(secondaryTextColor)
 
-                Text(vm.places.isEmpty ? "まだ保存された場所はありません" : "このカテゴリの場所はありません")
+                Text(vm.places.isEmpty ? "まだ保存された場所はありません" : "選んだカテゴリ・県の場所はありません")
                     .font(.headline)
                     .foregroundColor(textColor)
 
                 // 以前は「マップをタップ」と案内していたが、その操作は存在しなかった
-                Text(vm.places.isEmpty ? "マップで検索するか、地図を長押しして場所を追加できます" : "別のカテゴリを選ぶか、場所を追加しましょう")
+                Text(vm.places.isEmpty ? "マップで検索するか、地図を長押しして場所を追加できます" : "別のカテゴリや県を選ぶか、場所を追加しましょう")
                     .font(.subheadline)
                     .foregroundColor(secondaryTextColor)
 
@@ -241,7 +262,8 @@ struct PlacesListView: View {
                             .background(accent.opacity(colorScheme == .dark ? 0.24 : 0.14), in: Capsule())
                     }
 
-                    Label(formattedDate(place), systemImage: "calendar")
+                    // 日付の無い場所は「いつか行きたい」（3.1、ご要望から）
+                    Label(formattedDate(place), systemImage: place.visitedAt == nil ? "sparkles" : "calendar")
                         .font(.system(size: 12))
                         .foregroundColor(secondaryTextColor)
                         .lineLimit(1)
@@ -411,7 +433,7 @@ struct PlacesListView: View {
             // 長押しで立てたピン
             droppedPinContent(at: placePicker.coordinate, color: themeManager.currentTheme.success)
 
-            ForEach(vm.places) { place in
+            ForEach(filteredPlaces) { place in
                 let category = categoryManager.category(for: place.categoryId)
                 let accent = category.color
                 let isSelected = selectedPlace?.id == place.id
@@ -450,6 +472,9 @@ struct PlacesListView: View {
         .simultaneousGesture(TapGesture().onEnded {
             withAnimation { selectedPlace = nil }
         })
+        // 県やカテゴリーで絞り込んだら、残った場所が入るように寄せる
+        .onChange(of: selectedArea) { _, _ in fitMapToFilteredPlaces() }
+        .onChange(of: selectedCategoryId) { _, _ in fitMapToFilteredPlaces() }
         .onChange(of: featureSelection) { _, feature in
             guard let feature else {
                 selectedFeatureItem = nil
@@ -461,6 +486,12 @@ struct PlacesListView: View {
                 withAnimation { selectedFeatureItem = item }
             }
         }
+    }
+
+    private func fitMapToFilteredPlaces() {
+        selectedPlace = nil
+        guard let region = MapRegionFitting.region(fitting: filteredPlaces.map(\.coordinate), minimumSpan: 0.02) else { return }
+        withAnimation(.easeInOut(duration: 0.5)) { mapPosition = .region(region) }
     }
 
     private func placeBottomPanel(_ place: VisitedPlace) -> some View {
@@ -542,6 +573,8 @@ struct PlacesListView: View {
     private var eventTypeSelectionSection: some View {
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 8) {
+                areaMenu
+
                 categoryChip(
                     title: "すべて",
                     icon: "square.grid.2x2.fill",
@@ -566,6 +599,55 @@ struct PlacesListView: View {
             }
             .padding(.horizontal, 20)
         }
+    }
+
+    /// 県の絞り込み（3.1）。場所のある県だけを北から順に出す
+    private var areaMenu: some View {
+        let tint = themeManager.currentTheme.actionFill
+        let isOn = selectedArea != nil
+        return Menu {
+            Button {
+                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { selectedArea = nil }
+            } label: {
+                if selectedArea == nil { Label("すべての県", systemImage: "checkmark") } else { Text("すべての県") }
+            }
+            Divider()
+            ForEach(areaCounts, id: \.area) { entry in
+                Button {
+                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) { selectedArea = entry.area }
+                } label: {
+                    let title = "\(entry.area.title)（\(entry.count)）"
+                    if selectedArea == entry.area { Label(title, systemImage: "checkmark") } else { Text(title) }
+                }
+            }
+            if regionResolver.remaining > 0 {
+                Divider()
+                Text("県を調べています（あと\(regionResolver.remaining)か所）")
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "map")
+                    .font(.system(size: 12, weight: .semibold))
+                Text(selectedArea?.title ?? "県")
+                    .font(.system(size: 13, weight: .semibold))
+                    .lineLimit(1)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .bold))
+            }
+            .foregroundColor(isOn ? ThemePreset.readableText(on: tint) : textColor)
+            .padding(.horizontal, 13)
+            .frame(height: 44)
+            .background(
+                Capsule().fill(isOn
+                               ? AnyShapeStyle(tint)
+                               : AnyShapeStyle(colorScheme == .dark
+                                               ? themeManager.currentTheme.secondaryBackgroundDark
+                                               : themeManager.currentTheme.backgroundLight))
+            )
+            .shadow(color: colorScheme == .dark ? .clear : Color.black.opacity(isOn ? 0.12 : 0.05),
+                    radius: isOn ? 8 : 4, x: 0, y: 2)
+        }
+        .accessibilityLabel(Text("県で絞り込む：\(selectedArea?.title ?? "すべて")"))
     }
 
     /// 選ぶと色で塗り、選んでいないときは色をアイコンだけに置く。
@@ -622,10 +704,8 @@ struct PlacesListView: View {
 
     // MARK: - Helper Methods
     private func formattedDate(_ place: VisitedPlace) -> String {
-        let formatter = DateFormatter.japaneseDate
-        return place.visitedAt != nil
-            ? formatter.string(from: place.visitedAt!)
-            : formatter.string(from: place.createdAt)
+        guard let visitedAt = place.visitedAt else { return "いつか行きたい" }
+        return DateFormatter.japaneseDate.string(from: visitedAt)
     }
 
     // MARK: - Actions

@@ -30,6 +30,8 @@ struct PlaceDetailView: View {
     @State private var editedLinkURL: String = ""
     @State private var editedCategoryId: String = "other"
     @State private var editedVisitedAt: Date = Date()
+    /// 訪問日を入れるか。外すと「いつか行きたい」場所として日付なしで残す（3.1、ご要望から）
+    @State private var editedHasVisitDate = false
 
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dismiss) var dismiss
@@ -268,11 +270,21 @@ struct PlaceDetailView: View {
 
                 // Visit Date Card
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("訪問日")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(textColor)
+                    Toggle(isOn: $editedHasVisitDate.animation(.spring(response: 0.3, dampingFraction: 0.8))) {
+                        Text("訪問日")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(textColor)
+                    }
+                    .tint(themeManager.currentTheme.xprimary)
 
+                    if !editedHasVisitDate {
+                        Text("日付を入れないと、「いつか行きたい」場所として残ります。")
+                            .font(.caption)
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
+                    }
+
+                    if editedHasVisitDate {
                     DatePicker("", selection: $editedVisitedAt, displayedComponents: .date)
                         .datePickerStyle(.graphical)
                         .tint(textColor)
@@ -286,6 +298,7 @@ struct PlaceDetailView: View {
                                 .stroke(colorScheme == .dark ? themeManager.currentTheme.backgroundDark.opacity(0.5) : themeManager.currentTheme.backgroundLight.opacity(0.5), lineWidth: 1)
                         )
                         .environment(\.colorScheme, isBackgroundDark() ? .dark : .light)
+                    }
                 }
                 .padding(16)
                 .background(
@@ -943,7 +956,7 @@ struct PlaceDetailView: View {
                         .font(.subheadline)
                         .foregroundColor(textColor)
                 } else {
-                    Text("未設定")
+                    Text("いつか行きたい")
                         .font(.subheadline)
                         .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
@@ -960,6 +973,7 @@ struct PlaceDetailView: View {
         editedLinkURL = place.linkURL ?? ""
         editedCategoryId = place.categoryId
         editedVisitedAt = place.visitedAt ?? Date()
+        editedHasVisitDate = place.visitedAt != nil
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             isEditMode = true
         }
@@ -1002,7 +1016,7 @@ struct PlaceDetailView: View {
         updatedPlace.notes = editedNotes.isEmpty ? nil : editedNotes
         updatedPlace.linkURL = editedLinkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : editedLinkURL.trimmingCharacters(in: .whitespacesAndNewlines)
         updatedPlace.categoryId = editedCategoryId
-        updatedPlace.visitedAt = editedVisitedAt
+        updatedPlace.visitedAt = editedHasVisitDate ? editedVisitedAt : nil
         updatedPlace.localPhotoFileName = localFileName
 
 
