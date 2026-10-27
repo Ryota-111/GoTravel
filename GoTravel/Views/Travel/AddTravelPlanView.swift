@@ -35,36 +35,56 @@ struct AddTravelPlanView: View {
         }
     }
 
-    // MARK: - Theme-Adaptive Colors
-    private var travelColor: Color {
-        switch themeManager.currentTheme.type {
-        case .whiteBlack: return Color.white
-        default: return themeManager.currentTheme.primary
-        }
+    /// タイトルと行き先があれば、残り（日程の確認・表紙）を飛ばして保存できる
+    private var canSaveNow: Bool {
+        !title.trimmingCharacters(in: .whitespaces).isEmpty
+            && !destination.trimmingCharacters(in: .whitespaces).isEmpty
+            && startDate <= endDate
     }
 
-    private var uiAccentColor: Color {
-        switch themeManager.currentTheme.type {
-        case .pastelPink:
-            return Color(red: 0.15, green: 0.30, blue: 0.15)
-        default:
-            return themeManager.currentTheme.accent2
-        }
+    /// 入力途中の内容があるか（誤操作による破棄を防ぐ）
+    private var hasUnsavedInput: Bool {
+        currentStep > 0 || !title.trimmingCharacters(in: .whitespaces).isEmpty
+            || !destination.trimmingCharacters(in: .whitespaces).isEmpty || selectedImage != nil
     }
+
+    // MARK: - Theme-Adaptive Colors
+    //
+    // 予定の追加の画面（`AddPlanView`）と同じ作りにそろえる：明るい地に旅行の色をふわりと流し、
+    // 文字はテーマの文字の色、塗りのボタンは白い文字が読める濃さの旅行の色。
+    // 以前は地が白から濃い色へ変わるグラデーションで、文字はダークモード用の明るい色に決め打ちしていたため、
+    // 追加テーマ（藍と生成りなど）では上のほうの文字が読めなかった
+
+    @Environment(\.colorScheme) private var colorScheme
+    @State private var showDiscardConfirm = false
+    @State private var expandedDate: DateField?
+    @FocusState private var focusedField: Field?
+
+    private enum Field { case title, destination }
+    private enum DateField { case start, end }
+
+    /// 旅行の色（予定の一覧・カレンダーの旅行と同じ）
+    private var tripColor: Color { themeManager.currentTheme.travelColor }
+
+    /// 白文字を載せる塗り。明るい色は白が読める濃さまで落とす
+    private var filledTripColor: Color { ThemePreset.readableTint(tripColor, on: .white) }
+
+    /// 文字の色
+    private var uiAccentColor: Color { themeManager.currentTheme.adaptiveText(for: colorScheme) }
+
+    private var cardSurface: Color { themeManager.currentTheme.listCardSurface(for: colorScheme) }
 
     private var backgroundGradient: some View {
-        let colors: [Color]
-        switch themeManager.currentTheme.type {
-        case .whiteBlack:
-            colors = [Color(white: 0.97), Color(white: 0.84)]
-        default:
-            colors = [themeManager.currentTheme.gradientDark, themeManager.currentTheme.dark]
+        let base = colorScheme == .dark
+            ? themeManager.currentTheme.backgroundDark
+            : themeManager.currentTheme.backgroundLight
+        return ZStack {
+            base
+            RadialGradient(colors: [tripColor.opacity(colorScheme == .dark ? 0.30 : 0.16), .clear],
+                           center: UnitPoint(x: 0.06, y: 0), startRadius: 0, endRadius: 430)
+            RadialGradient(colors: [tripColor.opacity(colorScheme == .dark ? 0.16 : 0.09), .clear],
+                           center: UnitPoint(x: 1, y: 0.92), startRadius: 0, endRadius: 380)
         }
-        return LinearGradient(
-            gradient: Gradient(colors: colors),
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
         .ignoresSafeArea()
     }
 
@@ -90,48 +110,95 @@ struct AddTravelPlanView: View {
             ImageCropPickerView(image: $selectedImage, aspectRatio: 1.0)
         }
         .navigationBarHidden(true)
+        .interactiveDismissDisabled(hasUnsavedInput)
+        .confirmationDialog("入力内容を破棄しますか？", isPresented: $showDiscardConfirm, titleVisibility: .visible) {
+            Button("破棄する", role: .destructive) { presentationMode.wrappedValue.dismiss() }
+            Button("編集を続ける", role: .cancel) {}
+        } message: {
+            Text("作成途中の旅行計画は保存されません")
+        }
+        .onChange(of: startDate) { _, newValue in
+            // 出発日を帰る日より後にしたら、帰る日を合わせる
+            if endDate < newValue { endDate = newValue }
+        }
+        .onAppear { focusedField = .title }
     }
 
-    // MARK: - Header
+    // MARK: - Header（左：閉じる／戻る、右：保存）
     private var headerView: some View {
         HStack {
-            Button(action: { presentationMode.wrappedValue.dismiss() }) {
-                Image(systemName: "xmark")
+            Button(action: {
+                if currentStep > 0 {
+                    goBack()
+                } else if hasUnsavedInput {
+                    showDiscardConfirm = true
+                } else {
+                    presentationMode.wrappedValue.dismiss()
+                }
+            }) {
+                Image(systemName: currentStep > 0 ? "chevron.left" : "xmark")
+                    .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(uiAccentColor)
-                    .imageScale(.medium)
-                    .padding(8)
-                    .background(uiAccentColor.opacity(0.15))
-                    .clipShape(Circle())
+                    .frame(width: 38, height: 38)
+                    .background(uiAccentColor.opacity(0.08), in: Circle())
             }
+            .accessibilityLabel(currentStep > 0 ? "前の質問へ" : "閉じる")
+
             Spacer()
-            Text("新しい旅行計画")
-                .font(.headline)
-                .foregroundColor(uiAccentColor)
-            Spacer()
-            Color.clear.frame(width: 36, height: 36)
+
+            if canSaveNow && !isLastStep {
+                Button(action: saveTravelPlan) {
+                    Text("保存")
+                        .font(.subheadline.weight(.bold))
+                        .foregroundColor(.white)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 9)
+                        .background(filledTripColor, in: Capsule())
+                }
+                .disabled(isUploading)
+                .transition(.scale.combined(with: .opacity))
+            }
         }
+        .animation(.easeInOut(duration: 0.2), value: canSaveNow)
         .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .background(travelColor.opacity(0.35))
+        .padding(.top, 8)
+        .padding(.bottom, 4)
     }
 
     // MARK: - Progress Indicator
     private var progressView: some View {
-        VStack(spacing: 6) {
-            HStack(spacing: 5) {
-                ForEach(0..<totalSteps, id: \.self) { i in
-                    Capsule()
-                        .fill(i <= currentStep ? travelColor : uiAccentColor.opacity(0.2))
-                        .frame(height: 4)
-                }
+        HStack(spacing: 5) {
+            ForEach(0..<totalSteps, id: \.self) { i in
+                Capsule()
+                    .fill(i <= currentStep ? tripColor : uiAccentColor.opacity(0.14))
+                    .frame(height: 4)
             }
-            .animation(.spring(response: 0.4, dampingFraction: 0.8), value: currentStep)
-            .padding(.horizontal, 20)
-            Text("\(currentStep + 1) / \(totalSteps)")
-                .font(.caption)
-                .foregroundColor(uiAccentColor.opacity(0.6))
         }
+        .animation(.spring(response: 0.4, dampingFraction: 0.8), value: currentStep)
+        .padding(.horizontal, 20)
         .padding(.vertical, 10)
+    }
+
+    // MARK: - Step Heading（質問文そのものを見出しにする）
+    private func stepHeading(_ stepName: String, question: String, sub: String? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text("ステップ \(currentStep + 1) · \(stepName)")
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(filledTripColor)
+            Text(question)
+                .font(.system(size: 27, weight: .heavy))
+                .foregroundColor(uiAccentColor)
+                .fixedSize(horizontal: false, vertical: true)
+            if let sub {
+                Text(sub)
+                    .font(.system(size: 14))
+                    .foregroundColor(uiAccentColor.opacity(0.55))
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .padding(.horizontal, 20)
+        .padding(.top, 18)
+        .padding(.bottom, 4)
     }
 
     // MARK: - Step Content
@@ -150,30 +217,14 @@ struct AddTravelPlanView: View {
         .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
 
-    // MARK: - Navigation Buttons
+    // MARK: - Navigation Buttons（下は主ボタン1つ。戻るはヘッダーの ‹）
     private var navigationButtons: some View {
-        HStack(spacing: 12) {
-            if currentStep > 0 {
-                Button(action: goBack) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "chevron.left")
-                        Text("戻る")
-                    }
-                    .font(.headline)
-                    .foregroundColor(uiAccentColor)
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 16)
-                    .background(uiAccentColor.opacity(0.15))
-                    .cornerRadius(14)
-                }
-            }
-
+        VStack(spacing: 10) {
             Button(action: goForward) {
-                HStack(spacing: 4) {
+                HStack(spacing: 6) {
                     if isLastStep {
                         if isUploading {
-                            ProgressView()
-                                .progressViewStyle(CircularProgressViewStyle(tint: uiAccentColor))
+                            ProgressView().tint(.white)
                             Text("保存中...")
                         } else {
                             Image(systemName: "airplane.departure")
@@ -181,30 +232,41 @@ struct AddTravelPlanView: View {
                         }
                     } else {
                         Text("次へ")
-                        Image(systemName: "chevron.right")
+                        Image(systemName: "chevron.right").font(.system(size: 14, weight: .bold))
                     }
                 }
-                .font(.headline.weight(.bold))
-                .foregroundColor(canProceed ? uiAccentColor : uiAccentColor.opacity(0.4))
+                .font(.system(size: 17, weight: .bold))
+                .foregroundColor(canProceed ? .white : uiAccentColor.opacity(0.35))
                 .frame(maxWidth: .infinity)
-                .padding(.vertical, 16)
-                .background(canProceed ? travelColor : uiAccentColor.opacity(0.1))
-                .cornerRadius(14)
+                .frame(height: 58)
+                .background(
+                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        .fill(canProceed ? AnyShapeStyle(filledTripColor) : AnyShapeStyle(uiAccentColor.opacity(0.08)))
+                )
+                .shadow(color: canProceed ? tripColor.opacity(colorScheme == .dark ? 0 : 0.32) : .clear,
+                        radius: 14, x: 0, y: 7)
                 .animation(.easeInOut(duration: 0.2), value: canProceed)
             }
             .disabled(!canProceed || isUploading)
+
+            // 表紙は入れなくても保存できる
+            if currentStep == 3 && selectedImage == nil {
+                Button(action: saveTravelPlan) {
+                    Text("表紙なしで保存")
+                        .font(.system(size: 14, weight: .semibold))
+                        .foregroundColor(uiAccentColor.opacity(0.5))
+                }
+                .disabled(isUploading)
+            }
         }
         .padding(.horizontal, 20)
-        .padding(.top, 12)
-        .padding(.bottom, 32)
-        .background(.ultraThinMaterial)
+        .padding(.top, 10)
+        .padding(.bottom, 26)
     }
 
     private func goBack() {
         isGoingForward = false
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-            currentStep -= 1
-        }
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { currentStep -= 1 }
     }
 
     private func goForward() {
@@ -213,203 +275,174 @@ struct AddTravelPlanView: View {
             return
         }
         isGoingForward = true
-        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) {
-            currentStep += 1
+        withAnimation(.spring(response: 0.4, dampingFraction: 0.85)) { currentStep += 1 }
+        focusedField = currentStep == 1 ? .destination : nil
+    }
+
+    // MARK: - 入力欄（箱をやめて直接書く。下線の色で入れ終わったことが分かる）
+    private func bigField(_ label: String, text: Binding<String>, placeholder: String, field: Field,
+                          onChange: ((String) -> Void)? = nil) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(label)
+                .font(.system(size: 12, weight: .bold))
+                .foregroundColor(uiAccentColor.opacity(0.5))
+            ZStack(alignment: .leading) {
+                if text.wrappedValue.isEmpty {
+                    Text(placeholder)
+                        .font(.system(size: 26, weight: .bold))
+                        .foregroundColor(uiAccentColor.opacity(0.22))
+                }
+                TextField("", text: text)
+                    .font(.system(size: 26, weight: .bold))
+                    .foregroundColor(uiAccentColor)
+                    .focused($focusedField, equals: field)
+                    .submitLabel(.next)
+                    .onSubmit { if canProceed { goForward() } }
+                    .onChange(of: text.wrappedValue) { _, value in onChange?(value) }
+            }
+            Rectangle()
+                .fill(text.wrappedValue.isEmpty ? uiAccentColor.opacity(0.15) : tripColor)
+                .frame(height: 2)
+                .animation(.easeInOut(duration: 0.2), value: text.wrappedValue.isEmpty)
         }
+        .padding(.horizontal, 20)
+        .padding(.top, 4)
     }
 
     // MARK: - Step 0: Title
     private var step0Title: some View {
-        VStack(spacing: 28) {
-            VStack(spacing: 8) {
-                Text("旅行プランの名前は？")
-                    .font(.title2.weight(.bold))
-                    .foregroundColor(uiAccentColor)
-                Text("例：夏の北海道旅行、沖縄3泊4日")
-                    .font(.subheadline)
-                    .foregroundColor(uiAccentColor.opacity(0.6))
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                stepHeading("名前", question: "どんな旅行に\n行きますか？")
+                bigField("名前", text: $title, placeholder: "夏の北海道旅行", field: .title)
+                Spacer(minLength: 20)
             }
-            .padding(.top, 40)
-
-            HStack(spacing: 12) {
-                Image(systemName: "pencil")
-                    .foregroundColor(uiAccentColor.opacity(0.6))
-                ZStack(alignment: .leading) {
-                    if title.isEmpty {
-                        Text("夏の北海道旅行")
-                            .foregroundColor(uiAccentColor.opacity(0.3))
-                            .font(.title3)
-                    }
-                    TextField("", text: $title)
-                        .font(.title3)
-                        .foregroundColor(uiAccentColor)
-                }
-            }
-            .padding(20)
-            .background(uiAccentColor.opacity(0.1))
-            .cornerRadius(16)
-            .padding(.horizontal, 20)
-
-            Spacer()
         }
     }
 
     // MARK: - Step 1: Destination
     private var step1Destination: some View {
-        VStack(spacing: 28) {
-            VStack(spacing: 8) {
-                Text("どこへ行きますか？")
-                    .font(.title2.weight(.bold))
-                    .foregroundColor(uiAccentColor)
-                Text("目的地を入力してください")
-                    .font(.subheadline)
-                    .foregroundColor(uiAccentColor.opacity(0.6))
-            }
-            .padding(.top, 40)
-
-            VStack(alignment: .leading, spacing: 8) {
-                HStack(spacing: 12) {
-                    Image(systemName: "mappin.circle.fill")
-                        .foregroundColor(themeManager.currentTheme.xprimary)
-                    ZStack(alignment: .leading) {
-                        if destination.isEmpty {
-                            Text("北海道、東京、大阪…")
-                                .foregroundColor(uiAccentColor.opacity(0.3))
-                                .font(.title3)
-                        }
-                        TextField("", text: $destination)
-                            .font(.title3)
-                            .foregroundColor(uiAccentColor)
-                            .onChange(of: destination) { _, newValue in
-                                searchLocationCoordinate(for: newValue)
-                            }
-                    }
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                stepHeading("行き先", question: "どこへ\n行きますか？", sub: "天気や地図に使います。")
+                bigField("行き先", text: $destination, placeholder: "北海道、沖縄、ソウル…", field: .destination) { value in
+                    searchLocationCoordinate(for: value)
                 }
-                .padding(20)
-                .background(uiAccentColor.opacity(0.1))
-                .cornerRadius(16)
-
                 if destinationCoordinate != nil && !destination.isEmpty {
-                    HStack(spacing: 6) {
-                        Image(systemName: "checkmark.circle.fill")
-                            .foregroundColor(themeManager.currentTheme.xprimary)
-                        Text("位置情報を取得しました")
-                            .font(.caption)
-                            .foregroundColor(themeManager.currentTheme.xprimary)
-                    }
-                    .padding(.horizontal, 4)
+                    Label("場所が見つかりました", systemImage: "checkmark.circle.fill")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(filledTripColor)
+                        .padding(.horizontal, 20)
                 }
+                Spacer(minLength: 20)
             }
-            .padding(.horizontal, 20)
-
-            Spacer()
         }
     }
 
     // MARK: - Step 2: Dates
     private var step2Dates: some View {
-        VStack(spacing: 28) {
-            VStack(spacing: 8) {
-                Text("いつ行きますか？")
-                    .font(.title2.weight(.bold))
-                    .foregroundColor(uiAccentColor)
-                Text("出発日と帰宅日を設定してください")
-                    .font(.subheadline)
-                    .foregroundColor(uiAccentColor.opacity(0.6))
-            }
-            .padding(.top, 40)
-
-            VStack(spacing: 12) {
-                datePickerRow(label: "出発日", icon: "airplane.departure", date: $startDate)
-                datePickerRow(label: "帰宅日", icon: "airplane.arrival", date: $endDate)
-
-                if endDate < startDate {
-                    Label("帰宅日は出発日以降にしてください", systemImage: "exclamationmark.triangle.fill")
-                        .font(.caption)
-                        .foregroundColor(themeManager.currentTheme.error)
-                        .padding(.horizontal, 4)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                stepHeading("日程", question: "いつ\n行きますか？")
+                VStack(spacing: 0) {
+                    dateRow(.start, label: "出発", date: $startDate)
+                    Rectangle().fill(uiAccentColor.opacity(0.08)).frame(height: 1).padding(.leading, 20)
+                    dateRow(.end, label: "帰る日", date: $endDate, from: startDate)
                 }
+                .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(cardSurface))
+                .padding(.horizontal, 20)
 
                 if startDate <= endDate {
                     let nights = Calendar.current.dayDifference(from: startDate, to: endDate)
-                    if nights > 0 {
-                        HStack(spacing: 6) {
-                            Image(systemName: "moon.stars.fill")
-                                .foregroundColor(travelColor)
-                            Text("\(nights)泊\(nights + 1)日")
-                                .font(.caption)
-                                .foregroundColor(travelColor)
-                        }
-                        .padding(.horizontal, 4)
-                    }
+                    Text(nights == 0 ? "日帰り" : "\(nights)泊\(nights + 1)日")
+                        .font(.system(size: 15, weight: .bold))
+                        .foregroundColor(filledTripColor)
+                        .padding(.horizontal, 20)
                 }
+                Spacer(minLength: 20)
             }
-            .padding(.horizontal, 20)
-
-            Spacer()
         }
     }
 
-    private func datePickerRow(label: String, icon: String, date: Binding<Date>) -> some View {
-        HStack {
-            Image(systemName: icon)
-                .foregroundColor(uiAccentColor.opacity(0.7))
-                .frame(width: 28)
-            Text(label)
-                .font(.headline)
-                .foregroundColor(uiAccentColor)
-            Spacer()
-            DatePicker("", selection: date, displayedComponents: .date)
-                .colorMultiply(uiAccentColor)
-                .datePickerStyle(CompactDatePickerStyle())
+    /// 日付を大きく出し、押すとその場にカレンダーが開く（予定の追加の画面と同じ）
+    private func dateRow(_ field: DateField, label: String, date: Binding<Date>, from lower: Date? = nil) -> some View {
+        let isExpanded = expandedDate == field
+        return VStack(alignment: .leading, spacing: 0) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) { expandedDate = isExpanded ? nil : field }
+            } label: {
+                HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(label)
+                            .font(.system(size: 12, weight: .bold))
+                            .foregroundColor(uiAccentColor.opacity(0.5))
+                        Text(TravelPlanTextExporter.dateString(date.wrappedValue))
+                            .font(.system(size: 22, weight: .bold))
+                            .foregroundColor(uiAccentColor)
+                    }
+                    Spacer()
+                    Image(systemName: "chevron.down")
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(uiAccentColor.opacity(0.4))
+                        .rotationEffect(.degrees(isExpanded ? 180 : 0))
+                }
+                .padding(.horizontal, 20)
+                .padding(.vertical, 16)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if isExpanded {
+                Group {
+                    if let lower {
+                        DatePicker("", selection: date, in: lower..., displayedComponents: .date)
+                    } else {
+                        DatePicker("", selection: date, displayedComponents: .date)
+                    }
+                }
+                .datePickerStyle(.graphical)
                 .labelsHidden()
+                .tint(filledTripColor)
+                .padding(.horizontal, 12)
+                .transition(.opacity)
+            }
         }
-        .padding(20)
-        .background(uiAccentColor.opacity(0.1))
-        .cornerRadius(16)
     }
 
     // MARK: - Step 3: Cover Image
     private var step3CoverImage: some View {
-        VStack(spacing: 28) {
-            VStack(spacing: 8) {
-                Text("カードの表紙を設定しますか？")
-                    .font(.title2.weight(.bold))
-                    .foregroundColor(uiAccentColor)
-                Text("任意 — スキップして保存できます")
-                    .font(.subheadline)
-                    .foregroundColor(uiAccentColor.opacity(0.6))
+        ScrollView {
+            VStack(alignment: .leading, spacing: 20) {
+                stepHeading("表紙", question: "表紙の写真を\n選びますか？", sub: "あとからでも変えられます。")
+                Group {
+                    if let image = selectedImage {
+                        selectedImageView(image: image)
+                    } else {
+                        imagePickerButton
+                    }
+                }
+                .padding(.horizontal, 20)
+                Spacer(minLength: 20)
             }
-            .padding(.top, 40)
-
-            if let image = selectedImage {
-                selectedImageView(image: image)
-                    .padding(.horizontal, 20)
-            } else {
-                imagePickerButton
-                    .padding(.horizontal, 20)
-            }
-
-            Spacer()
         }
     }
 
     private func selectedImageView(image: UIImage) -> some View {
         ZStack(alignment: .topTrailing) {
-            Image(uiImage: image)
-                .resizable()
-                .aspectRatio(contentMode: .fill)
-                .frame(maxWidth: .infinity)
+            Color.clear
                 .frame(height: 220)
-                .cornerRadius(20)
-                .clipped()
+                .frame(maxWidth: .infinity)
+                .overlay(Image(uiImage: image).resizable().scaledToFill())
+                .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
 
             Button(action: { selectedImage = nil }) {
-                Image(systemName: "xmark.circle.fill")
-                    .font(.system(size: 28))
-                    .foregroundColor(themeManager.currentTheme.error)
-                    .background(Circle().fill(Color.white.opacity(0.8)))
+                Image(systemName: "xmark")
+                    .font(.system(size: 13, weight: .bold))
+                    .foregroundColor(.white)
+                    .frame(width: 32, height: 32)
+                    .background(.black.opacity(0.45), in: Circle())
             }
+            .accessibilityLabel("表紙の写真を外す")
             .padding(12)
         }
     }
@@ -418,37 +451,23 @@ struct AddTravelPlanView: View {
         VStack(spacing: 10) {
             // 未購入のときだけ出る
             DeviceOnlyPhotoNote()
-
             imagePickerTapArea
         }
     }
 
     private var imagePickerTapArea: some View {
         Button(action: { showImagePicker = true }) {
-            VStack(spacing: 14) {
-                ZStack {
-                    Circle()
-                        .fill(travelColor.opacity(0.2))
-                        .frame(width: 72, height: 72)
-                    Image(systemName: "photo.fill")
-                        .font(.system(size: 30))
-                        .foregroundColor(travelColor)
-                }
-                Text("写真を選択")
-                    .font(.headline)
+            VStack(spacing: 12) {
+                Image(systemName: "photo.on.rectangle.angled")
+                    .font(.system(size: 28, weight: .semibold))
+                    .foregroundColor(filledTripColor)
+                Text("写真を選ぶ")
+                    .font(.system(size: 16, weight: .bold))
                     .foregroundColor(uiAccentColor)
-                Text("タップしてアルバムから選択")
-                    .font(.caption)
-                    .foregroundColor(uiAccentColor.opacity(0.5))
             }
             .frame(maxWidth: .infinity)
-            .padding(.vertical, 36)
-            .background(uiAccentColor.opacity(0.08))
-            .cornerRadius(20)
-            .overlay(
-                RoundedRectangle(cornerRadius: 20)
-                    .stroke(uiAccentColor.opacity(0.15), lineWidth: 1.5)
-            )
+            .padding(.vertical, 40)
+            .background(RoundedRectangle(cornerRadius: 20, style: .continuous).fill(cardSurface))
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -485,7 +504,7 @@ struct AddTravelPlanView: View {
     }
 
     private func createAndSavePlan(withImageFileName fileName: String?) {
-        let plan = TravelPlan(
+        var plan = TravelPlan(
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             startDate: startDate,
             endDate: endDate < startDate ? startDate : endDate,
@@ -495,6 +514,8 @@ struct AddTravelPlanView: View {
             localImageFileName: fileName,
             cardColor: themeManager.currentTheme.primary
         )
+        // 前の旅行で円以外の通貨を選んでいれば、その通貨で始める（海外に住んでいる人のため。3.1）
+        plan.currencyCode = CurrencyCatalog.preferredTripCurrency
         onSave(plan)
         isUploading = false
         presentationMode.wrappedValue.dismiss()

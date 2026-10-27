@@ -46,8 +46,11 @@ struct ProView: View {
 
                 // 予約メールの取り込みを先頭に置く（Pro の目玉）
                 featureReservationEmail
+                featureBooklet
                 featureThemes
                 featurePhotoSync
+                featurePhotoMapScan
+                featureRecap
                 onceOnlyCard
 
                 if !store.isPurchased {
@@ -89,8 +92,8 @@ struct ProView: View {
                 .multilineTextAlignment(.center)
 
             Text(highlighted == nil
-                 ? "予約確認メールを貼り付けるだけで、予約が入ります。追加テーマ18種と写真のiCloud保管も、一度のお支払いで使えるようになります。月額や年額はありません。"
-                 : "一度のお支払いで、予約確認メールの取り込み・追加テーマ18種・写真のiCloud保管が使えるようになります。月額や年額はありません。")
+                 ? "予約確認メールを貼り付けるだけで、予約が入ります。追加テーマ19種と写真のiCloud保管も、一度のお支払いで使えるようになります。月額や年額はありません。"
+                 : "一度のお支払いで、予約確認メールの取り込み・追加テーマ19種・写真のiCloud保管が使えるようになります。月額や年額はありません。")
                 .font(.subheadline)
                 .foregroundColor(theme.secondaryText)
                 .multilineTextAlignment(.center)
@@ -119,7 +122,7 @@ struct ProView: View {
         VStack(alignment: .leading, spacing: 12) {
             featureHeading(
                 icon: "paintpalette.fill",
-                title: "テーマが18種類増えます",
+                title: "テーマが19種類増えます",
                 detail: "色だけではありません。書体・角の丸み・縁・影・カードの形まで変わるので、"
                       + "同じアプリでも別物のように見えます。"
             )
@@ -168,6 +171,41 @@ struct ProView: View {
 
             bullet("季節のテーマ（桜・瀬戸内・紅葉・雪国）は、旬のあいだ購入なしでもお試しいただけます。ご購入いただくと一年中お使いいただけます。")
             bullet("これから増えるテーマも、追加のお支払いなしで使えます。")
+            bullet("ホーム画面のアイコンも、旅の計画・空と地球・窓の景色・空と海から選べます。")
+        }
+        .padding(16)
+        .themedCard()
+    }
+
+    // MARK: - 入っているもの：旅のしおり（PDF）
+
+    private var featureBooklet: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            featureHeading(
+                icon: "book.closed.fill",
+                title: "旅のしおりを、冊子で作れます",
+                detail: "表紙・日ごとの日程と地図・持ち物とお土産・費用・メモを、A5 の冊子（PDF）にまとめます。"
+                      + "印刷して持って行ったり、アプリを入れていない家族に LINE で送ったりできます。"
+            )
+            bullet("デザインは「シンプル」「かわいい」「和風」の3つから選べます。")
+            bullet("入れるページは選べます。自分だけのお土産やメモ、予約番号は入りません。")
+        }
+        .padding(16)
+        .themedCard()
+    }
+
+    // MARK: - 入っているもの：旅の振り返り
+
+    private var featureRecap: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            featureHeading(
+                icon: "film.stack",
+                title: "旅のダイジェスト動画を、印なしで",
+                detail: "旅行中に撮った写真と動画から、1時間に1つずつ選んで2秒ずつつなぎ、1日ごと・旅行全体の短い動画にします。"
+                      + "時刻と、日程の場所の名前も入ります。"
+            )
+            bullet("動画を作るのは無料です。Pro なら右下と最後の「Travory」の印が入らず、場所の名前の代わりに好きな文字も入れられます。")
+            bullet("撮り直しは要りません。カメラロールから自動で選び、自分で選び直すこともできます。動画は iPhone の中だけで作ります。")
         }
         .padding(16)
         .themedCard()
@@ -188,6 +226,25 @@ struct ProView: View {
             bullet("同じApple Accountの端末どうしで、同じ写真が見られます。")
             bullet("預け先はお客様のiCloudです。開発者が見ることはできません。")
             bullet("ご購入いただいた時点で、それまでに保存した写真もまとめてお預かりします。")
+        }
+        .padding(16)
+        .themedCard()
+    }
+
+    // MARK: - 入っているもの：フォトマップの「カメラロールから自動追加」（3.1）
+
+    private var featurePhotoMapScan: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            featureHeading(
+                icon: "sparkle.magnifyingglass",
+                title: "カメラロールから、行った県を自動で追加",
+                detail: "日本全国フォトマップの「カメラロールから自動追加」で、写真に残っている場所から行った県を見つけます。"
+                      + "県ごと・撮った年ごとに写真が並ぶので、選んでまとめて地図に入れられます。"
+            )
+            bullet("入れた県は、写真を撮った年で旅の記録にも入ります。Travory を使う前の旅行も、写真があれば記録に残せます。")
+            bullet("同じ県でも年が違えば別の旅行として分かれるので、選びやすくなっています。")
+            bullet("写真はこの iPhone の中だけで調べ、どこにも送りません。")
+            bullet("県を押して1枚ずつ写真を入れるのは、これまでどおり無料です。")
         }
         .padding(16)
         .themedCard()

@@ -6,6 +6,9 @@ struct PlaceDetailView: View {
     @State private var place: VisitedPlace
 
     @EnvironmentObject var authVM: AuthViewModel
+    @EnvironmentObject var travelVM: TravelPlanViewModel
+    /// 「旅行に追加」のあとに出す一言（3.1）
+    @State private var addedToTripMessage: String?
     @StateObject private var placesVM = PlacesViewModel()
     @ObservedObject var themeManager = ThemeManager.shared
     @State private var showStreetView = false
@@ -27,6 +30,8 @@ struct PlaceDetailView: View {
     @State private var editedLinkURL: String = ""
     @State private var editedCategoryId: String = "other"
     @State private var editedVisitedAt: Date = Date()
+    /// 訪問日を入れるか。外すと「いつか行きたい」場所として日付なしで残す（3.1、ご要望から）
+    @State private var editedHasVisitDate = false
 
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dismiss) var dismiss
@@ -141,6 +146,11 @@ struct PlaceDetailView: View {
                 webSearchButton
                     .padding(.horizontal, 24)
                     .padding(.top, 12)
+
+                // 旅行の「行きたい場所」に足す（3.1）。これからの旅行の地図に ☆ で出る
+                addToTripButton
+                    .padding(.horizontal, 24)
+                    .padding(.top, 8)
 
                 // Gradient Separator
                 gradientSeparator
@@ -260,11 +270,21 @@ struct PlaceDetailView: View {
 
                 // Visit Date Card
                 VStack(alignment: .leading, spacing: 8) {
-                    Text("訪問日")
-                        .font(.subheadline)
-                        .fontWeight(.semibold)
-                        .foregroundColor(textColor)
+                    Toggle(isOn: $editedHasVisitDate.animation(.spring(response: 0.3, dampingFraction: 0.8))) {
+                        Text("訪問日")
+                            .font(.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundColor(textColor)
+                    }
+                    .tint(themeManager.currentTheme.xprimary)
 
+                    if !editedHasVisitDate {
+                        Text("日付を入れないと、「いつか行きたい」場所として残ります。")
+                            .font(.caption)
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
+                    }
+
+                    if editedHasVisitDate {
                     DatePicker("", selection: $editedVisitedAt, displayedComponents: .date)
                         .datePickerStyle(.graphical)
                         .tint(textColor)
@@ -278,6 +298,7 @@ struct PlaceDetailView: View {
                                 .stroke(colorScheme == .dark ? themeManager.currentTheme.backgroundDark.opacity(0.5) : themeManager.currentTheme.backgroundLight.opacity(0.5), lineWidth: 1)
                         )
                         .environment(\.colorScheme, isBackgroundDark() ? .dark : .light)
+                    }
                 }
                 .padding(16)
                 .background(
@@ -637,6 +658,83 @@ struct PlaceDetailView: View {
     ///
     /// 検索語は**名前だけ**にしてある。住所を足すと絞り込みすぎて、
     /// 引っ越した店や施設が見つからなくなる
+    /// まだ終わっていない旅行（近い順）。行きたい場所を足す先
+    private var upcomingTrips: [TravelPlan] {
+        let today = Calendar.current.startOfDay(for: Date())
+        return travelVM.travelPlans
+            .filter { $0.endDate >= today }
+            .sorted { $0.startDate < $1.startDate }
+    }
+
+    private var addToTripButton: some View {
+        let tint = ThemePreset.readableTint(themeManager.currentTheme.actionFill,
+                                            on: themeManager.currentTheme.backgroundLight)
+        return VStack(alignment: .leading, spacing: 6) {
+            Menu {
+                if upcomingTrips.isEmpty {
+                    Text("これからの旅行がありません")
+                }
+                ForEach(upcomingTrips) { trip in
+                    Button {
+                        toggleWish(in: trip)
+                    } label: {
+                        let title = "\(trip.title)（\(Self.tripDateText(trip.startDate))〜）"
+                        if trip.hasWishPlace(from: place) {
+                            Label(title, systemImage: "checkmark")
+                        } else {
+                            Text(title)
+                        }
+                    }
+                }
+            } label: {
+                HStack(spacing: 10) {
+                    Image(systemName: "star")
+                        .font(.subheadline.weight(.semibold))
+                    Text("旅行の行きたい場所に追加")
+                        .font(.subheadline.weight(.semibold))
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    Image(systemName: "chevron.up.chevron.down")
+                        .font(.caption.weight(.bold))
+                }
+                .foregroundColor(tint)
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                .background(
+                    RoundedRectangle(cornerRadius: themeManager.currentTheme.radius(.medium),
+                                     style: .continuous)
+                        .fill(themeManager.currentTheme.actionFill.opacity(0.10))
+                )
+            }
+            if let addedToTripMessage {
+                Text(addedToTripMessage)
+                    .font(.caption)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+        }
+    }
+
+    /// その旅行の行きたい場所に足す。もう足してあれば外す
+    private func toggleWish(in trip: TravelPlan) {
+        guard let userId = authVM.userId else { return }
+        var updated = trip
+        if updated.hasWishPlace(from: place) {
+            updated.wishPlaces.removeAll { $0.sourcePlaceId == place.id }
+            addedToTripMessage = "「\(trip.title)」の行きたい場所から外しました"
+        } else {
+            updated.addWishPlaces([place], addedBy: userId)
+            addedToTripMessage = "「\(trip.title)」の行きたい場所に追加しました。旅行の地図タブに ☆ で出ます"
+        }
+        travelVM.update(updated, userId: userId)
+    }
+
+    private static func tripDateText(_ date: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateFormat = "M/d"
+        return formatter.string(from: date)
+    }
+
     private var webSearchButton: some View {
         Button {
             webSearchURL = Self.searchURL(for: place.title)
@@ -858,7 +956,7 @@ struct PlaceDetailView: View {
                         .font(.subheadline)
                         .foregroundColor(textColor)
                 } else {
-                    Text("未設定")
+                    Text("いつか行きたい")
                         .font(.subheadline)
                         .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
@@ -875,6 +973,7 @@ struct PlaceDetailView: View {
         editedLinkURL = place.linkURL ?? ""
         editedCategoryId = place.categoryId
         editedVisitedAt = place.visitedAt ?? Date()
+        editedHasVisitDate = place.visitedAt != nil
         withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
             isEditMode = true
         }
@@ -917,7 +1016,7 @@ struct PlaceDetailView: View {
         updatedPlace.notes = editedNotes.isEmpty ? nil : editedNotes
         updatedPlace.linkURL = editedLinkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? nil : editedLinkURL.trimmingCharacters(in: .whitespacesAndNewlines)
         updatedPlace.categoryId = editedCategoryId
-        updatedPlace.visitedAt = editedVisitedAt
+        updatedPlace.visitedAt = editedHasVisitDate ? editedVisitedAt : nil
         updatedPlace.localPhotoFileName = localFileName
 
 
@@ -1020,4 +1119,5 @@ struct PlaceDetailView: View {
             )
         )
     }
+    .environmentObject(TravelPlanViewModel())
 }

@@ -50,11 +50,16 @@ struct WhatsNewView: View {
             : themeManager.currentTheme.secondaryBackgroundLight
     }
 
-    /// 背景グラデーションの上に置く文字色。
-    /// グラデーションの明暗はテーマによって逆転する（デフォルトカラーだけ暗い）ので
-    /// colorScheme ではなく背景色そのものから決める
+    /// 背景は単色。テーマの濃い色のグラデーションだと文字が読みにくいテーマがあったため
+    private var backgroundFill: Color {
+        colorScheme == .dark
+            ? themeManager.currentTheme.backgroundDark
+            : themeManager.currentTheme.backgroundLight
+    }
+
+    /// 背景の上に置く文字色。テーマによって背景の明暗が変わるので背景色そのものから決める
     private var onBackground: Color {
-        ThemePreset.readableText(on: themeManager.currentTheme.dark)
+        ThemePreset.readableText(on: backgroundFill)
     }
 
     /// カードの上に置く文字色。
@@ -66,7 +71,7 @@ struct WhatsNewView: View {
     var body: some View {
         NavigationStack {
             ZStack {
-                backgroundGradient
+                backgroundFill.ignoresSafeArea()
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 24) {
@@ -187,19 +192,5 @@ struct WhatsNewView: View {
                 .font(.caption2)
                 .foregroundColor(onBackground.opacity(0.75))
         }
-    }
-
-    // MARK: - Background
-
-    private var backgroundGradient: some View {
-        LinearGradient(
-            colors: [
-                themeManager.currentTheme.gradientDark,
-                themeManager.currentTheme.dark
-            ],
-            startPoint: .top,
-            endPoint: .bottom
-        )
-        .ignoresSafeArea()
     }
 }

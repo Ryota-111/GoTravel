@@ -29,6 +29,11 @@ public class PlanEntity: NSManagedObject {
     /// 鳴らす通知。未設定（nil）と「通知しない」（空配列）を区別する必要があるので、
     /// 空でも書き込む。詳しくは `Plan.reminders`
     @NSManaged public var remindersData: Data?
+    // 友達と共有（3.0）。**Production への反映が要る**
+    /// 入っているカテゴリ（3.0）。nil は「自分用」
+    @NSManaged public var categoryId: String?
+    @NSManaged public var lastEditedBy: String?
+    @NSManaged public var updatedAt: Date?
 }
 
 // MARK: - Fetch Request
@@ -139,7 +144,7 @@ extension PlanEntity {
             tagIDs: tagIDs,
             recurrence: PlanRecurrence(rawValue: recurrence ?? "") ?? .none,
             reminders: reminders
-        )
+        ).withSharing(categoryId: categoryId, lastEditedBy: lastEditedBy, updatedAt: updatedAt)
     }
 
     /// Plan構造体からEntityを更新
@@ -192,6 +197,10 @@ extension PlanEntity {
         } else {
             self.remindersData = nil
         }
+
+        self.categoryId = plan.categoryId
+        self.lastEditedBy = plan.lastEditedBy
+        self.updatedAt = plan.updatedAt
     }
 
     /// Plan構造体から新しいEntityを作成

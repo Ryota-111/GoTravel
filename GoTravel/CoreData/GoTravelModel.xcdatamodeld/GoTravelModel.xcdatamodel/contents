@@ -24,6 +24,9 @@
         <attribute name="customSplitCount" optional="YES" attributeType="Integer 32" usesScalarValueType="NO"/>
         <attribute name="memoText" optional="YES" attributeType="String"/>
         <attribute name="deletedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="memosJSON" optional="YES" attributeType="String"/>
+        <attribute name="splitJSON" optional="YES" attributeType="String"/>
+        <attribute name="wishPlacesJSON" optional="YES" attributeType="String"/>
     </entity>
     <entity name="PlanEntity" representedClassName="PlanEntity" syncable="YES">
         <attribute name="cardColorHex" optional="YES" attributeType="String"/>
@@ -46,6 +49,9 @@
         <attribute name="tagIDsData" optional="YES" attributeType="Binary"/>
         <attribute name="endTime" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
         <attribute name="remindersData" optional="YES" attributeType="Binary"/>
+        <attribute name="categoryId" optional="YES" attributeType="String"/>
+        <attribute name="lastEditedBy" optional="YES" attributeType="String"/>
+        <attribute name="updatedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
     </entity>
     <entity name="PackingPresetEntity" representedClassName="PackingPresetEntity" syncable="YES">
         <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
@@ -79,6 +85,7 @@
         <attribute name="name" optional="YES" attributeType="String"/>
         <attribute name="order" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
         <attribute name="userId" optional="YES" attributeType="String"/>
+        <attribute name="categoryId" optional="YES" attributeType="String"/>
     </entity>
     <entity name="AlbumEntity" representedClassName="AlbumEntity" syncable="YES">
         <attribute name="albumType" optional="YES" attributeType="String"/>
@@ -116,5 +123,17 @@
         <attribute name="travelPlanId" optional="YES" attributeType="String"/>
         <attribute name="userId" optional="YES" attributeType="String"/>
         <attribute name="visitedAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+    </entity>
+    <entity name="PlanCategoryEntity" representedClassName="PlanCategoryEntity" syncable="YES">
+        <attribute name="colorHex" optional="YES" attributeType="String"/>
+        <attribute name="createdAt" optional="YES" attributeType="Date" usesScalarValueType="NO"/>
+        <attribute name="id" optional="YES" attributeType="String"/>
+        <attribute name="isShared" optional="YES" attributeType="Boolean" defaultValueString="NO" usesScalarValueType="YES"/>
+        <attribute name="name" optional="YES" attributeType="String"/>
+        <attribute name="order" optional="YES" attributeType="Integer 32" defaultValueString="0" usesScalarValueType="YES"/>
+        <attribute name="ownerId" optional="YES" attributeType="String"/>
+        <attribute name="shareCode" optional="YES" attributeType="String"/>
+        <attribute name="sharedWithData" optional="YES" attributeType="Binary"/>
+        <attribute name="userId" optional="YES" attributeType="String"/>
     </entity>
 </model>

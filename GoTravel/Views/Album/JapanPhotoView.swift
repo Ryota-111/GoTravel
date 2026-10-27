@@ -1,17 +1,25 @@
 import SwiftUI
 import Combine
 
+/// 日本全国フォトマップ。
+///
+/// 3.1 で作り直した：地図を主役に画面の幅いっぱいに出し、数字は「12 / 47」の1つと細い線1本だけにした。
+/// 一覧は地方ごとに区切り、写真の無い県は県名だけの控えめな点線の枠にする（集めていく感じを出す）。
+/// 以前は色違いの数字のカード3枚・カードの枠に入った小さな地図・均一に並ぶ47個の箱で、地図が主役になっていなかった
 struct JapanPhotoView: View {
     /// 開いているフォトマップ（種類 `.japan` のアルバム）。複数作れるので、どれを開くかを受け取る
     let albumId: String
     @StateObject private var viewModel: JapanPhotoViewModel
     @ObservedObject var themeManager = ThemeManager.shared
     @State private var selectedPrefecture: Prefecture?
-    @State private var scale: CGFloat = 1.0
-    @State private var lastScale: CGFloat = 1.0
-    @State private var offset: CGSize = .zero
-    @State private var lastOffset: CGSize = .zero
-    @State private var animateCards = false
+    /// 写真の無い県を押したとき、写真を選ぶ画面を直接開く
+    @State private var addingPrefecture: Prefecture?
+    /// カメラロールの写真の場所から、行った県の写真を探して入れる（Travory Pro）
+    @State private var scanning = false
+    @State private var showsPro = false
+    @ObservedObject private var proStore = ProStore.shared
+    /// 地図を全画面で開く（つまんで広げる・動かすのは全画面で。スクロールの中では取り合いになって操作しにくかった）
+    @State private var showsFullMap = false
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.dismiss) var dismiss
 
@@ -20,430 +28,425 @@ struct JapanPhotoView: View {
         _viewModel = StateObject(wrappedValue: JapanPhotoViewModel(albumId: albumId))
     }
 
+    // MARK: 色（テーマの地から、文字と差し色を決める）
+
+    private var ground: Color {
+        colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight
+    }
+    private var ink: Color { ThemePreset.readableText(on: ground) }
+    private var faint: Color { ink.opacity(0.55) }
+    private var rule: Color { ink.opacity(0.12) }
+    private var accent: Color {
+        ThemePreset.readableTintEitherWay(themeManager.currentTheme.primary, on: ground, minimum: 3.0)
+    }
+
+    private var filledCount: Int { viewModel.covers.count }
+
     var body: some View {
-        ZStack {
-            backgroundGradient
-
-            VStack(spacing: 0) {
-                headerBar
-
-                ScrollView(showsIndicators: false) {
-                    VStack(spacing: 20) {
-                        statsSection
-                            .padding(.top, 16)
-
-                        mapCardSection
-
-                        prefectureGridSection
+        VStack(spacing: 0) {
+            header
+            ScrollView(showsIndicators: false) {
+                VStack(alignment: .leading, spacing: 0) {
+                    countSection
+                    mapSection
+                    ForEach(Self.regions, id: \.name) { region in
+                        regionSection(region)
                     }
-                    .padding(.horizontal, 16)
-                    .padding(.bottom, 32)
                 }
+                .padding(.bottom, 40)
             }
         }
-        .onAppear {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
-                animateCards = true
+        .background(ground.ignoresSafeArea())
+        // 県を押したら、まず写真をスライドで見返す（編集は右上から）。
+        // 前は編集の一覧が開き、1枚ずつ開いて見直す必要があった。ご要望をいただいて変えた。
+        // 写真がまだ無い県は、足せるように編集の一覧を開く
+        .fullScreenCover(item: $selectedPrefecture) { prefecture in
+            PrefectureSlideView(albumId: albumId, prefecture: prefecture)
+        }
+        // 写真の無い県は、スライドの画面と一覧の画面を重ねて開かず、写真を選ぶ画面だけを開く
+        // （以前は黒いスライドの画面・写真の一覧・写真を選ぶ画面と、何枚も重なって開いていた）
+        .sheet(isPresented: $scanning) { PhotoMapScanView(albumId: albumId) }
+        .sheet(isPresented: $showsPro) { ProSheet(highlighted: nil) }
+        .sheet(item: $addingPrefecture) { prefecture in
+            MultiPhotoPicker(selectionLimit: PhotoMapFiles.maxPhotosPerPrefecture) { images in
+                let added = AlbumManager.shared.addJapanPhotos(images, prefecture: prefecture, to: albumId)
+                // 写真を入れた県は、年は分からない行った県として旅の記録にも足す（年はあとから足せる）
+                if added > 0 { VisitedPrefectureStore.shared.add(prefecture) }
+                // 地図が1県埋まるのは達成感のある場面
+                if added > 0 { ReviewRequestManager.shared.record(.prefectureAdded) }
             }
         }
-        // 県を押したら、その県の写真の一覧を開く（1つの県に複数枚置けるようにした）
-        .sheet(item: $selectedPrefecture) { prefecture in
-            PrefectureGalleryView(albumId: albumId, prefecture: prefecture)
+    }
+
+    /// 県を押したとき。写真があればスライドで見返し、無ければ写真を選ぶ画面を開く
+    private func open(_ prefecture: Prefecture) {
+        if viewModel.covers[prefecture] == nil {
+            addingPrefecture = prefecture
+        } else {
+            selectedPrefecture = prefecture
         }
     }
 
-    // MARK: - Background
-    private var backgroundGradient: some View {
-        let colors: [Color]
-        switch themeManager.currentTheme.type {
-        case .whiteBlack:
-            colors = [Color(white: 0.97), Color(white: 0.91)]
-        default:
-            colors = colorScheme == .dark
-                ? [themeManager.currentTheme.backgroundDark, themeManager.currentTheme.secondaryBackgroundDark]
-                : [themeManager.currentTheme.backgroundLight, themeManager.currentTheme.secondaryBackgroundLight]
-        }
-        return LinearGradient(gradient: Gradient(colors: colors), startPoint: .topLeading, endPoint: .bottomTrailing)
-            .ignoresSafeArea()
-    }
+    // MARK: - 見出し（閉じるボタンと名前だけ）
 
-    private var accentColor: Color {
-        colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
-    }
-
-    private var cardBg: Color {
-        colorScheme == .dark
-            ? themeManager.currentTheme.secondaryBackgroundDark
-            : themeManager.currentTheme.backgroundLight
-    }
-
-    // MARK: - Header Bar
-    private var headerBar: some View {
+    private var header: some View {
         HStack {
             Button(action: { dismiss() }) {
                 Image(systemName: "xmark")
-                    .foregroundColor(accentColor)
-                    .imageScale(.medium)
-                    .padding(8)
-                    .background(accentColor.opacity(0.1))
-                    .clipShape(Circle())
+                    .font(.system(size: 15, weight: .semibold))
+                    .foregroundColor(ink)
+                    .frame(width: 38, height: 38)
+                    .background(ink.opacity(0.07), in: Circle())
             }
-
+            .accessibilityLabel("閉じる")
             Spacer()
+            Text(viewModel.title)
+                .font(.headline)
+                .foregroundColor(ink)
+                .lineLimit(1)
+            Spacer()
+            Color.clear.frame(width: 38, height: 38)
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 8)
+    }
 
-            VStack(spacing: 2) {
-                Text(viewModel.title)
-                    .font(.headline)
-                    .foregroundColor(accentColor)
-                    .lineLimit(1)
-                Text("訪れた都道府県の思い出を記録")
-                    .font(.caption)
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
+    // MARK: - 数字（12 / 47 と細い線1本）
+
+    private var countSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                Text("\(filledCount)")
+                    .font(.system(size: 56, weight: .thin).width(.condensed))
+                    .monospacedDigit()
+                    .foregroundColor(ink)
+                Text("/ 47")
+                    .font(.system(size: 20, weight: .light))
+                    .foregroundColor(faint)
+                Spacer()
+                Text(filledCount == 47 ? "全国制覇" : "あと\(47 - filledCount)県")
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(filledCount == 47 ? accent : faint)
             }
+            GeometryReader { geo in
+                ZStack(alignment: .leading) {
+                    Capsule().fill(rule)
+                    Capsule().fill(accent)
+                        .frame(width: max(geo.size.width * CGFloat(filledCount) / 47, filledCount > 0 ? 3 : 0))
+                }
+            }
+            .frame(height: 3)
+            HStack {
+                Text("写真を入れた都道府県")
+                    .font(.system(size: 10, weight: .semibold).width(.expanded))
+                    .foregroundColor(accent)
+                Spacer()
+                // 写真に残っている場所から、行った県の写真を探して入れる（Travory Pro）
+                Button {
+                    if proStore.isPurchased { scanning = true } else { showsPro = true }
+                } label: {
+                    HStack(spacing: 5) {
+                        Label("カメラロールから自動追加", systemImage: "sparkle.magnifyingglass")
+                        if !proStore.isPurchased {
+                            Text("Pro")
+                                .font(.system(size: 9, weight: .bold))
+                                .foregroundColor(.white)
+                                .padding(.horizontal, 5)
+                                .padding(.vertical, 2)
+                                .background(Capsule().fill(accent))
+                        }
+                    }
+                    .font(.footnote.weight(.semibold))
+                    .foregroundColor(accent)
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 6)
+                    .overlay(Capsule().stroke(accent.opacity(0.5), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(proStore.isPurchased ? "カメラロールから自動追加" : "カメラロールから自動追加（Pro）")
+            }
+        }
+        .padding(.horizontal, 24)
+        .padding(.top, 8)
+        .padding(.bottom, 12)
+    }
 
-            Spacer()
+    // MARK: - 地図（画面の幅いっぱい。押すと県を開き、「広げて見る」で全画面）
 
-            Color.clear.frame(width: 36, height: 36)
+    private var mapSection: some View {
+        PhotoMapCanvas(covers: viewModel.covers, ink: ink, onTap: open)
+            .frame(height: 420)
+            .overlay(alignment: .bottomTrailing) {
+                // ふだんの地図は固定。つまんで広げる・動かすのは全画面で
+                Button { showsFullMap = true } label: {
+                    Label("全画面で見る", systemImage: "arrow.up.left.and.arrow.down.right")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(ink)
+                        .padding(.horizontal, 16)
+                        .padding(.vertical, 10)
+                        .background(.ultraThinMaterial, in: Capsule())
+                        .overlay(Capsule().stroke(ink.opacity(0.12), lineWidth: 1))
+                }
+                .padding(12)
+            }
+            .padding(.horizontal, 8)
+            .padding(.bottom, 8)
+            .fullScreenCover(isPresented: $showsFullMap) {
+                PhotoMapFullScreen(albumId: albumId, viewModel: viewModel, title: viewModel.title)
+            }
+    }
+
+    // MARK: - 地方ごとの一覧
+
+    /// 地方の区切り（`Prefecture` は北から順に並んでいる）
+    private static let regions: [(name: String, prefectures: [Prefecture])] = {
+        let all = Prefecture.allCases
+        return [("北海道・東北", Array(all[0..<7])), ("関東", Array(all[7..<14])), ("中部", Array(all[14..<23])),
+                ("近畿", Array(all[23..<30])), ("中国・四国", Array(all[30..<39])), ("九州・沖縄", Array(all[39..<47]))]
+    }()
+
+    private func regionSection(_ region: (name: String, prefectures: [Prefecture])) -> some View {
+        let filled = region.prefectures.filter { viewModel.covers[$0] != nil }.count
+        return VStack(alignment: .leading, spacing: 12) {
+            Rectangle().fill(rule).frame(height: 1)
+            HStack(alignment: .firstTextBaseline) {
+                Text(region.name).font(.subheadline.weight(.semibold)).foregroundColor(ink)
+                Spacer()
+                Text("\(filled) / \(region.prefectures.count)")
+                    .font(.footnote.monospacedDigit())
+                    .foregroundColor(faint)
+            }
+            .padding(.top, 16)
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 3), spacing: 12) {
+                ForEach(region.prefectures) { prefecture in
+                    PrefectureTile(prefecture: prefecture, photo: viewModel.covers[prefecture],
+                                   photoCount: viewModel.photoCount(of: prefecture), ink: ink, accent: accent)
+                        .onTapGesture { open(prefecture) }
+                }
+            }
         }
         .padding(.horizontal, 20)
-        .padding(.vertical, 14)
-        .background(themeManager.currentTheme.xprimary.opacity(0.08))
-    }
-
-    // MARK: - Stats Section
-    private var statsSection: some View {
-        HStack(spacing: 12) {
-            JapanStatCard(
-                icon: "photo.on.rectangle",
-                title: "登録済み",
-                value: "\(viewModel.covers.count)",
-                color: themeManager.currentTheme.xprimary
-            )
-            JapanStatCard(
-                icon: "location.fill",
-                title: "残り",
-                value: "\(47 - viewModel.covers.count)",
-                color: themeManager.currentTheme.warning
-            )
-            JapanStatCard(
-                icon: "checkmark.seal.fill",
-                title: "達成率",
-                value: String(format: "%.0f%%", Double(viewModel.covers.count) / 47.0 * 100),
-                color: themeManager.currentTheme.info
-            )
-        }
-        .opacity(animateCards ? 1 : 0)
-        .offset(y: animateCards ? 0 : 20)
-        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.05), value: animateCards)
-    }
-
-    // MARK: - Map Card Section
-    private var mapCardSection: some View {
-        VStack(spacing: 12) {
-            HStack {
-                HStack(spacing: 6) {
-                    Image(systemName: "map.fill")
-                        .font(.caption.weight(.semibold))
-                        .foregroundColor(themeManager.currentTheme.xprimary)
-                    Text("日本地図")
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundColor(accentColor)
-                }
-                Spacer()
-                HStack(spacing: 4) {
-                    Image(systemName: "hand.pinch")
-                        .font(.caption2)
-                    Text("ピンチ・ドラッグで操作")
-                        .font(.caption2)
-                }
-                .foregroundColor(themeManager.currentTheme.secondaryText)
-                .padding(.horizontal, 10)
-                .padding(.vertical, 5)
-                .background(themeManager.currentTheme.secondaryText.opacity(0.1))
-                .clipShape(Capsule())
-            }
-
-            mapView
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(cardBg)
-                .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
-        )
-        .opacity(animateCards ? 1 : 0)
-        .offset(y: animateCards ? 0 : 20)
-        .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1), value: animateCards)
-    }
-
-    private var mapView: some View {
-        GeometryReader { geometry in
-            ZStack {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(themeManager.currentTheme.xprimary.opacity(0.06))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(themeManager.currentTheme.xprimary.opacity(0.15), lineWidth: 1)
-                    )
-
-                ZStack {
-                    Color.clear
-                        .frame(width: 370 * 2, height: 600 * 2)
-
-                    ForEach(Prefecture.allCases) { prefecture in
-                        prefectureMapCell(prefecture, in: CGSize(width: 370, height: 600))
-                    }
-                }
-                .frame(width: 370, height: 500)
-                .scaleEffect(scale)
-                .offset(offset)
-            }
-            .frame(width: geometry.size.width, height: geometry.size.height, alignment: .center)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
-            .contentShape(Rectangle())
-            .gesture(
-                MagnificationGesture()
-                    .onChanged { value in scale = lastScale * value }
-                    .onEnded { _ in
-                        lastScale = scale
-                        if scale < 1.0 { scale = 1.0; lastScale = 1.0 }
-                        else if scale > 3.0 { scale = 3.0; lastScale = 3.0 }
-                    }
-            )
-            .simultaneousGesture(
-                DragGesture(minimumDistance: 10)
-                    .onChanged { value in
-                        let newOffset = CGSize(
-                            width: lastOffset.width + value.translation.width,
-                            height: lastOffset.height + value.translation.height
-                        )
-                        let maxOffsetX = (370 * 2 * scale - geometry.size.width) / 2
-                        let maxOffsetY = (600 * 2 * scale - geometry.size.height) / 2
-                        offset = CGSize(
-                            width: min(max(newOffset.width, -maxOffsetX), maxOffsetX),
-                            height: min(max(newOffset.height, -maxOffsetY), maxOffsetY)
-                        )
-                    }
-                    .onEnded { _ in lastOffset = offset }
-            )
-        }
-        .frame(height: 460)
-    }
-
-    private func prefectureMapCell(_ prefecture: Prefecture, in size: CGSize) -> some View {
-        let position = prefecture.mapPosition
-        let prefSize = prefecture.mapSize
-
-        return ZStack {
-            if let photo = viewModel.covers[prefecture] {
-                MaskedPrefectureImage(prefecture: prefecture, photo: photo, size: prefSize)
-                    .contentShape(Rectangle().size(prefSize))
-                    .onTapGesture { selectedPrefecture = prefecture }
-            } else {
-                if let maskImage = prefecture.maskImage {
-                    Image(uiImage: maskImage)
-                        .resizable()
-                        .aspectRatio(contentMode: .fit)
-                        .frame(width: prefSize.width, height: prefSize.height)
-                        .foregroundColor(themeManager.currentTheme.xprimary.opacity(0.65))
-                        .contentShape(Rectangle().size(prefSize))
-                        .onTapGesture { selectedPrefecture = prefecture }
-                } else {
-                    prefecture.shape
-                        .fill(themeManager.currentTheme.xprimary.opacity(0.55))
-                        .frame(width: prefSize.width, height: prefSize.height)
-                        .overlay(prefecture.shape.stroke(Color.white.opacity(0.4), lineWidth: 1))
-                        .contentShape(prefecture.shape)
-                        .onTapGesture { selectedPrefecture = prefecture }
-                }
-            }
-
-            Text(prefecture.shortName)
-                .font(.system(size: 4))
-                .fontWeight(.bold)
-                .foregroundColor(.white)
-                .shadow(color: .black.opacity(0.8), radius: 1)
-                .allowsHitTesting(false)
-        }
-        .position(x: size.width * position.x, y: size.height * position.y)
-    }
-
-    // MARK: - Prefecture Grid Section
-    private var prefectureGridSection: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            HStack(spacing: 6) {
-                Image(systemName: "list.bullet.rectangle")
-                    .font(.caption.weight(.semibold))
-                    .foregroundColor(themeManager.currentTheme.xprimary)
-                Text("都道府県一覧")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundColor(accentColor)
-            }
-
-            LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: 10),
-                GridItem(.flexible(), spacing: 10),
-                GridItem(.flexible(), spacing: 10)
-            ], spacing: 10) {
-                ForEach(Array(Prefecture.allCases.enumerated()), id: \.element.id) { index, prefecture in
-                    PrefectureGridCard(
-                        prefecture: prefecture,
-                        hasPhoto: viewModel.covers[prefecture] != nil,
-                        photo: viewModel.covers[prefecture],
-                        photoCount: viewModel.photoCount(of: prefecture)
-                    )
-                    .onTapGesture { selectedPrefecture = prefecture }
-                    .opacity(animateCards ? 1 : 0)
-                    .scaleEffect(animateCards ? 1 : 0.85)
-                    .animation(
-                        .spring(response: 0.5, dampingFraction: 0.8).delay(Double(index) * 0.01),
-                        value: animateCards
-                    )
-                }
-            }
-        }
-        .padding(14)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(cardBg)
-                .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
-        )
+        .padding(.bottom, 8)
     }
 }
 
-// MARK: - Japan Stat Card
-struct JapanStatCard: View {
-    let icon: String
-    let title: String
-    let value: String
-    let color: Color
-    @ObservedObject var themeManager = ThemeManager.shared
-    @Environment(\.colorScheme) var colorScheme
-
-    private var cardBg: Color {
-        colorScheme == .dark
-            ? themeManager.currentTheme.secondaryBackgroundDark
-            : themeManager.currentTheme.backgroundLight
-    }
-
-    private var accentColor: Color {
-        colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
-    }
-
-    var body: some View {
-        VStack(spacing: 8) {
-            ZStack {
-                Circle()
-                    .fill(color.opacity(0.12))
-                    .frame(width: 44, height: 44)
-                Image(systemName: icon)
-                    .font(.system(size: 18))
-                    .foregroundColor(color)
-            }
-
-            Text(value)
-                .font(.title3.bold())
-                .foregroundColor(accentColor)
-
-            Text(title)
-                .font(.caption)
-                .foregroundColor(themeManager.currentTheme.secondaryText)
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 16)
-        .background(
-            RoundedRectangle(cornerRadius: 14)
-                .fill(cardBg)
-                .shadow(color: color.opacity(0.15), radius: 6, x: 0, y: 3)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: 14)
-                .stroke(color.opacity(0.25), lineWidth: 1)
-        )
-    }
-}
-
-// MARK: - Prefecture Grid Card
-struct PrefectureGridCard: View {
+/// 一覧の1県。写真があれば写真を大きく、無ければ県名だけの控えめな点線の枠
+struct PrefectureTile: View {
     let prefecture: Prefecture
-    let hasPhoto: Bool
     let photo: UIImage?
-    /// その県の写真の枚数。2枚以上なら添える
     var photoCount: Int = 0
-    @Environment(\.colorScheme) var colorScheme
-    @ObservedObject var themeManager = ThemeManager.shared
+    let ink: Color
+    let accent: Color
 
-    private var accentColor: Color {
-        colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
+    var body: some View {
+        VStack(alignment: .leading, spacing: 5) {
+            Color.clear
+                .aspectRatio(1, contentMode: .fit)
+                .overlay {
+                    if let photo {
+                        // 枠の大きさを先に決めて、その中で切り抜く（横長の写真が隣へはみ出さないように）
+                        Image(uiImage: photo).resizable().scaledToFill()
+                    } else {
+                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                            .strokeBorder(ink.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
+                            .overlay(Image(systemName: "plus").font(.footnote.weight(.semibold))
+                                .foregroundColor(ink.opacity(0.28)))
+                    }
+                }
+                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .overlay(alignment: .topTrailing) {
+                    if photoCount > 1 {
+                        Text("\(photoCount)枚")
+                            .font(.system(size: 9, weight: .bold))
+                            .foregroundColor(.white)
+                            .padding(.horizontal, 5)
+                            .padding(.vertical, 2)
+                            .background(Capsule().fill(Color.black.opacity(0.5)))
+                            .padding(5)
+                    }
+                }
+            Text(prefecture.name)
+                .font(.system(size: 11, weight: photo == nil ? .regular : .semibold))
+                .foregroundColor(photo == nil ? ink.opacity(0.5) : ink)
+                .lineLimit(1)
+        }
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(prefecture.name)\(photo == nil ? "、写真なし" : "、写真\(max(photoCount, 1))枚")")
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
+/// 日本地図（写真のある県は写真を県の形に切り抜き、無い県はごく薄い色）。押した県を `onTap` で返す
+struct PhotoMapCanvas: View {
+    let covers: [Prefecture: UIImage]
+    let ink: Color
+    let onTap: (Prefecture) -> Void
+
+    /// 47都道府県がちょうど入る四角（370 × 600 の中）
+    static let mapBounds: CGRect = Prefecture.allCases.reduce(CGRect.null) { rect, prefecture in
+        let center = CGPoint(x: Prefecture.mapCanvas.width * prefecture.mapPosition.x,
+                             y: Prefecture.mapCanvas.height * prefecture.mapPosition.y)
+        let size = prefecture.mapSize
+        return rect.union(CGRect(x: center.x - size.width / 2, y: center.y - size.height / 2,
+                                 width: size.width, height: size.height))
     }
 
     var body: some View {
-        VStack(spacing: 6) {
-            ZStack {
-                if let image = photo {
-                    // 枠の大きさを先に決めて、その中で切り抜く。
-                    // 写真に高さだけ与えると、横長の写真は写真の幅のまま隣のカードへはみ出す
-                    Color.clear
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 80)
-                        .overlay(
-                            Image(uiImage: image)
-                                .resizable()
-                                .aspectRatio(contentMode: .fill)
-                        )
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
-                } else {
-                    RoundedRectangle(cornerRadius: 10)
-                        .fill(themeManager.currentTheme.xprimary.opacity(0.08))
-                        .frame(height: 80)
-                        .overlay(
-                            VStack(spacing: 4) {
-                                Image(systemName: "photo.badge.plus")
-                                    .font(.title3)
-                                    .foregroundColor(themeManager.currentTheme.xprimary.opacity(0.4))
-                                Text("追加")
-                                    .font(.system(size: 9))
-                                    .foregroundColor(themeManager.currentTheme.secondaryText)
-                            }
-                        )
-                }
-
-                if hasPhoto {
-                    VStack {
-                        HStack {
-                            Spacer()
-                            if photoCount > 1 {
-                                Text("\(photoCount)枚")
-                                    .font(.system(size: 9, weight: .bold))
-                                    .foregroundColor(.white)
-                                    .padding(.horizontal, 5)
-                                    .padding(.vertical, 2)
-                                    .background(Capsule().fill(Color.black.opacity(0.55)))
-                                    .padding(5)
-                            } else {
-                                Image(systemName: "checkmark.circle.fill")
-                                    .font(.caption)
-                                    .foregroundColor(themeManager.currentTheme.xprimary)
-                                    .background(Circle().fill(Color.white).frame(width: 16, height: 16))
-                                    .padding(5)
-                            }
-                        }
-                        Spacer()
-                    }
+        GeometryReader { geo in
+            let box = Self.mapBounds
+            let fit = min(geo.size.width / box.width, geo.size.height / box.height)
+            let dx = (geo.size.width - box.width * fit) / 2
+            let dy = (geo.size.height - box.height * fit) / 2
+            ZStack(alignment: .topLeading) {
+                ForEach(Prefecture.allCases) { prefecture in
+                    cell(prefecture, scale: fit)
+                        .position(x: dx + (Prefecture.mapCanvas.width * prefecture.mapPosition.x - box.minX) * fit,
+                                  y: dy + (Prefecture.mapCanvas.height * prefecture.mapPosition.y - box.minY) * fit)
                 }
             }
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(
-                        hasPhoto ? themeManager.currentTheme.xprimary.opacity(0.4) : themeManager.currentTheme.xprimary.opacity(0.1),
-                        lineWidth: hasPhoto ? 1.5 : 1
-                    )
-            )
+            .frame(width: geo.size.width, height: geo.size.height)
+        }
+    }
 
-            Text(prefecture.name)
-                .font(.system(size: 10, weight: .medium))
-                .foregroundColor(accentColor)
-                .lineLimit(1)
+    @ViewBuilder
+    private func cell(_ prefecture: Prefecture, scale fit: CGFloat) -> some View {
+        let size = CGSize(width: prefecture.mapSize.width * fit, height: prefecture.mapSize.height * fit)
+        Group {
+            if let photo = covers[prefecture] {
+                MaskedPrefectureImage(prefecture: prefecture, photo: photo, size: size)
+            } else if let mask = prefecture.maskImage {
+                Image(uiImage: mask).renderingMode(.template).resizable().aspectRatio(contentMode: .fit)
+                    .foregroundColor(ink.opacity(0.1))
+            } else {
+                prefecture.shape.fill(ink.opacity(0.1))
+            }
+        }
+        .frame(width: size.width, height: size.height)
+        .contentShape(Rectangle())
+        .onTapGesture { onTap(prefecture) }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("\(prefecture.name)\(covers[prefecture] == nil ? "、写真なし" : "")")
+        .accessibilityAddTraits(.isButton)
+    }
+}
+
+/// 地図を全画面で見る。写真アプリと同じように、指を置いた場所に向かって広げ、はじいて動かせ、
+/// 2回たたくとその場所を広げる（もう一度で戻す）。県を押せば、写真を見たり入れたりできる
+private struct PhotoMapFullScreen: View {
+    let albumId: String
+    @ObservedObject var viewModel: JapanPhotoViewModel
+    let title: String
+
+    @ObservedObject private var themeManager = ThemeManager.shared
+    @Environment(\.colorScheme) private var colorScheme
+    @Environment(\.dismiss) private var dismiss
+    @State private var selectedPrefecture: Prefecture?
+    @State private var addingPrefecture: Prefecture?
+
+    private var ground: Color {
+        colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight
+    }
+    private var ink: Color { ThemePreset.readableText(on: ground) }
+
+    var body: some View {
+        ZStack(alignment: .top) {
+            ground.ignoresSafeArea()
+            ZoomableScrollView {
+                PhotoMapCanvas(covers: viewModel.covers, ink: ink) { prefecture in
+                    if viewModel.covers[prefecture] == nil { addingPrefecture = prefecture } else { selectedPrefecture = prefecture }
+                }
+                .padding(12)
+                .background(ground)
+            }
+            .ignoresSafeArea(edges: .bottom)
+            HStack {
+                Button { dismiss() } label: {
+                    Image(systemName: "xmark")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(ink)
+                        .frame(width: 38, height: 38)
+                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .accessibilityLabel("閉じる")
+                Spacer()
+                Text(title).font(.headline).foregroundColor(ink)
+                Spacer()
+                Color.clear.frame(width: 38, height: 38)
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 8)
+        }
+        .fullScreenCover(item: $selectedPrefecture) { prefecture in
+            PrefectureSlideView(albumId: albumId, prefecture: prefecture)
+        }
+        .sheet(item: $addingPrefecture) { prefecture in
+            MultiPhotoPicker(selectionLimit: PhotoMapFiles.maxPhotosPerPrefecture) { images in
+                let added = AlbumManager.shared.addJapanPhotos(images, prefecture: prefecture, to: albumId)
+                // 写真を入れた県は、年は分からない行った県として旅の記録にも足す（年はあとから足せる）
+                if added > 0 {
+                    VisitedPrefectureStore.shared.add(prefecture)
+                    ReviewRequestManager.shared.record(.prefectureAdded)
+                }
+            }
+        }
+    }
+}
+
+/// 写真アプリと同じ拡大・移動（UIScrollView）。中身は SwiftUI のまま
+private struct ZoomableScrollView<Content: View>: UIViewRepresentable {
+    @ViewBuilder var content: () -> Content
+
+    func makeCoordinator() -> Coordinator { Coordinator(hosting: UIHostingController(rootView: content())) }
+
+    func makeUIView(context: Context) -> UIScrollView {
+        let scrollView = UIScrollView()
+        scrollView.delegate = context.coordinator
+        scrollView.minimumZoomScale = 1
+        scrollView.maximumZoomScale = 5
+        scrollView.bouncesZoom = true
+        scrollView.showsVerticalScrollIndicator = false
+        scrollView.showsHorizontalScrollIndicator = false
+        scrollView.backgroundColor = .clear
+        let hosted = context.coordinator.hosting.view!
+        hosted.backgroundColor = .clear
+        hosted.translatesAutoresizingMaskIntoConstraints = true
+        hosted.autoresizingMask = [.flexibleWidth, .flexibleHeight]
+        scrollView.addSubview(hosted)
+        let doubleTap = UITapGestureRecognizer(target: context.coordinator, action: #selector(Coordinator.doubleTapped(_:)))
+        doubleTap.numberOfTapsRequired = 2
+        scrollView.addGestureRecognizer(doubleTap)
+        context.coordinator.scrollView = scrollView
+        return scrollView
+    }
+
+    func updateUIView(_ scrollView: UIScrollView, context: Context) {
+        context.coordinator.hosting.rootView = content()
+        let hosted = context.coordinator.hosting.view!
+        if scrollView.zoomScale == 1, hosted.frame.size != scrollView.bounds.size {
+            hosted.frame = CGRect(origin: .zero, size: scrollView.bounds.size)
+            scrollView.contentSize = scrollView.bounds.size
+        }
+    }
+
+    final class Coordinator: NSObject, UIScrollViewDelegate {
+        let hosting: UIHostingController<Content>
+        weak var scrollView: UIScrollView?
+
+        init(hosting: UIHostingController<Content>) { self.hosting = hosting }
+
+        func viewForZooming(in scrollView: UIScrollView) -> UIView? { hosting.view }
+
+        @objc func doubleTapped(_ recognizer: UITapGestureRecognizer) {
+            guard let scrollView else { return }
+            if scrollView.zoomScale > 1.01 {
+                scrollView.setZoomScale(1, animated: true)
+            } else {
+                let point = recognizer.location(in: hosting.view)
+                let size = CGSize(width: scrollView.bounds.width / 3, height: scrollView.bounds.height / 3)
+                scrollView.zoom(to: CGRect(x: point.x - size.width / 2, y: point.y - size.height / 2,
+                                           width: size.width, height: size.height), animated: true)
+            }
         }
     }
 }
@@ -558,6 +561,8 @@ struct PrefectureGalleryView: View {
             MultiPhotoPicker(selectionLimit: remaining) { images in
                 let wasEmpty = fileNames.isEmpty
                 let added = albumManager.addJapanPhotos(images, prefecture: prefecture, to: albumId)
+                // 写真を入れた県は、年は分からない行った県として旅の記録にも足す（年はあとから足せる）
+                if added > 0 { VisitedPrefectureStore.shared.add(prefecture) }
                 // 地図が1県埋まるのは達成感のある場面
                 if wasEmpty && added > 0 {
                     ReviewRequestManager.shared.record(.prefectureAdded)
@@ -707,6 +712,104 @@ struct PrefectureGalleryView: View {
         }
         .buttonStyle(.plain)
         .disabled(remaining == 0)
+    }
+}
+
+/// 県の写真を、横にスライドして見返す。右上の「編集」で、追加・代表・削除の一覧を開く
+struct PrefectureSlideView: View {
+    let albumId: String
+    let prefecture: Prefecture
+
+    @ObservedObject private var albumManager = AlbumManager.shared
+    @Environment(\.dismiss) private var dismiss
+    @State private var page = 0
+    @State private var showsEditor = false
+
+    private var fileNames: [String] {
+        PhotoMapFiles.photos(of: prefecture,
+                             in: albumManager.albums.first { $0.id == albumId }?.photoFileNames ?? [])
+    }
+
+    var body: some View {
+        NavigationStack {
+            ZStack {
+                Color.black.ignoresSafeArea()
+                if fileNames.isEmpty {
+                    VStack(spacing: 14) {
+                        Image(systemName: "photo.badge.plus")
+                            .font(.system(size: 40))
+                            .foregroundColor(.white.opacity(0.7))
+                        Text("\(prefecture.name)の写真はまだありません")
+                            .foregroundColor(.white.opacity(0.8))
+                        Button("写真を追加") { showsEditor = true }
+                            .buttonStyle(.borderedProminent)
+                    }
+                } else {
+                    TabView(selection: $page) {
+                        ForEach(Array(fileNames.enumerated()), id: \.element) { index, fileName in
+                            SlidePhoto(fileName: fileName)
+                                .tag(index)
+                        }
+                    }
+                    .tabViewStyle(.page(indexDisplayMode: fileNames.count > 1 ? .always : .never))
+                    .ignoresSafeArea(edges: .bottom)
+                }
+            }
+            .navigationTitle(fileNames.isEmpty ? prefecture.name
+                             : "\(prefecture.name)  \(min(page, fileNames.count - 1) + 1) / \(fileNames.count)")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbarColorScheme(.dark, for: .navigationBar)
+            .toolbarBackground(.visible, for: .navigationBar)
+            .toolbarBackground(Color.black.opacity(0.6), for: .navigationBar)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("閉じる") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("編集") { showsEditor = true }
+                }
+            }
+        }
+        .sheet(isPresented: $showsEditor) {
+            PrefectureGalleryView(albumId: albumId, prefecture: prefecture)
+        }
+        .onAppear {
+            // 写真が無い県は、足すための一覧をすぐ開く
+            if fileNames.isEmpty { showsEditor = true }
+        }
+        .onChange(of: fileNames.count) { _, count in
+            if page >= count { page = max(count - 1, 0) }
+        }
+    }
+
+    /// 1枚。押し広げて拡大できる
+    private struct SlidePhoto: View {
+        let fileName: String
+        @State private var image: UIImage?
+        @State private var scale: CGFloat = 1
+
+        var body: some View {
+            ZStack {
+                if let image {
+                    Image(uiImage: image)
+                        .resizable()
+                        .scaledToFit()
+                        .scaleEffect(scale)
+                        .gesture(
+                            MagnifyGesture()
+                                .onChanged { scale = max(1, min($0.magnification, 4)) }
+                                .onEnded { _ in withAnimation(.spring) { scale = 1 } }
+                        )
+                } else {
+                    ProgressView().tint(.white)
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .task(id: fileName) {
+                image = JapanPhotoManager.shared.thumbnail(fileName)
+                if let full = JapanPhotoManager.shared.loadImage(fileName) { image = full }
+            }
+        }
     }
 }
 
@@ -863,7 +966,9 @@ enum Prefecture: String, CaseIterable, Identifiable {
         String(name.prefix(3))
     }
 
-    var mapPosition: CGPoint {
+    /// 手でそろえた位置（370 × 600 の中の割合）。**ここの数字は直さない。**
+    /// 微調整は `PrefectureMapAdjustment` の表で持ち、`mapPosition` で足す
+    var baseMapPosition: CGPoint {
         switch self {
         // 北海道
         case .hokkaido: return CGPoint(x: 1.45, y: 0.69)
@@ -930,7 +1035,8 @@ enum Prefecture: String, CaseIterable, Identifiable {
         }
     }
 
-    var mapSize: CGSize {
+    /// 手でそろえた大きさ。**ここの数字は直さない。** 微調整は `mapSize` で掛ける
+    var baseMapSize: CGSize {
         switch self {
         case .hokkaido: return CGSize(width: 130, height: 130)
         case .aomori: return CGSize(width: 50, height: 42)

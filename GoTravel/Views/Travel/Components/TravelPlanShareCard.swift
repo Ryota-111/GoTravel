@@ -33,7 +33,7 @@ enum TravelPlanTextExporter {
                         row += "  @\(location)"
                     }
                     if let cost = item.displayCost, cost > 0 {
-                        row += "  \(currency(cost))"
+                        row += "  \(currency(cost, code: plan.currencyCode))"
                     }
                     lines.append(row)
 
@@ -53,7 +53,7 @@ enum TravelPlanTextExporter {
 
             if total > 0 {
                 lines.append("")
-                lines.append("\(costTotalLabel(for: plan)): \(currency(total))")
+                lines.append("\(costTotalLabel(for: plan)): \(currency(total, code: plan.currencyCode))")
             }
         }
 
@@ -145,11 +145,9 @@ enum TravelPlanTextExporter {
         return hasActual ? "実際に使った額" : "合計（予定）"
     }
 
-    static func currency(_ amount: Double) -> String {
-        let formatter = NumberFormatter()
-        formatter.numberStyle = .decimal
-        formatter.maximumFractionDigits = 0
-        return "¥\(formatter.string(from: NSNumber(value: amount)) ?? "0")"
+    /// 金額の書き方。旅行の通貨で出す（ふだんは "¥12,000"。3.1 から "€95.50" なども）
+    static func currency(_ amount: Double, code: String = CurrencyCatalog.yen) -> String {
+        CurrencyCatalog.money(amount, code: code)
     }
 }
 
@@ -207,7 +205,7 @@ struct TravelPlanShareCard: View {
             Spacer(minLength: 0)
 
             if dayTotal > 0 {
-                Text(TravelPlanTextExporter.currency(dayTotal))
+                Text(TravelPlanTextExporter.currency(dayTotal, code: plan.currencyCode))
                     .font(.caption.weight(.bold))
                     .foregroundColor(.secondary)
             }
@@ -272,8 +270,8 @@ struct TravelPlanShareCard: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(item.timeText)
                     .font(.system(size: 13, weight: .bold, design: .rounded).monospacedDigit())
-                if let endText = item.endTimeText {
-                    Text("〜\(endText)")
+                if let endText = item.endTimeColumnText {
+                    Text(endText)
                         .font(.system(size: 10, weight: .semibold, design: .rounded).monospacedDigit())
                         .opacity(0.75)
                 }
@@ -314,7 +312,7 @@ struct TravelPlanShareCard: View {
                 }
 
                 if let cost = item.displayCost, cost > 0 {
-                    Text(TravelPlanTextExporter.currency(cost))
+                    Text(TravelPlanTextExporter.currency(cost, code: plan.currencyCode))
                         .font(.caption.weight(.bold))
                         .foregroundColor(accentColor)
                 }
@@ -336,7 +334,7 @@ struct TravelPlanShareCard: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                     Spacer()
-                    Text(TravelPlanTextExporter.currency(dayTotal))
+                    Text(TravelPlanTextExporter.currency(dayTotal, code: plan.currencyCode))
                         .font(.system(size: 16, weight: .bold, design: .rounded))
                         .foregroundColor(.primary)
                 }
@@ -402,7 +400,7 @@ struct TravelPlanFullShareCard: View {
                             .font(.caption)
                             .foregroundColor(.secondary)
                         Spacer()
-                        Text(TravelPlanTextExporter.currency(total))
+                        Text(TravelPlanTextExporter.currency(total, code: plan.currencyCode))
                             .font(.system(size: 16, weight: .bold, design: .rounded))
                             .foregroundColor(.primary)
                     }

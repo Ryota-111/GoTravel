@@ -27,6 +27,11 @@ struct GoTravelApp: App {
                 .environment(\.locale, Locale(identifier: "ja_JP"))
                 .environment(\.managedObjectContext, CoreDataManager.shared.viewContext)
                 .preferredColorScheme(preferredScheme)
+                // 「Travory で開く」で .ics が届いたとき（カレンダーの画面で確かめてから入れる）
+                .onOpenURL { url in
+                    guard url.isFileURL, url.pathExtension.lowercased() == "ics" else { return }
+                    ICSImportInbox.shared.open(url)
+                }
                 .task {
                     // 所有を確かめてから、使えなくなったテーマを戻す。
                     // 順番が逆だと、購入済みの人のテーマが起動のたびに外れる。

@@ -228,8 +228,8 @@ private struct BackupPlanDetailView: View {
                 Text(item.timeText)
                     .font(.system(size: 13, weight: .bold))
                     .monospacedDigit()
-                if let end = item.endTimeText {
-                    Text("〜\(end)")
+                if let end = item.endTimeColumnText {
+                    Text(end)
                         .font(.system(size: 11, weight: .semibold))
                         .monospacedDigit()
                         .opacity(0.75)
@@ -268,7 +268,7 @@ private struct BackupPlanDetailView: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
                 if let cost = item.displayCost, cost > 0 {
-                    Text("¥" + cost.formatted(.number.precision(.fractionLength(0)))
+                    Text(plan.money(cost)
                          + (item.costNote.map { "　\($0)" } ?? ""))
                         .font(.system(size: 12))
                         .foregroundColor(palette.subText)
@@ -419,12 +419,22 @@ private struct BackupPlanDetailView: View {
                     .padding(12)
                     .background(palette.cardBackground(radius: 12))
                 }
-            } else if let memo = plan.memo, !memo.isEmpty {
-                Text(memo)
-                    .foregroundColor(palette.text)
+            } else if !plan.memos.isEmpty {
+                // 3.0 からはメモが何枚もある
+                ForEach(plan.memos) { memo in
+                    VStack(alignment: .leading, spacing: 6) {
+                        Text(memo.displayTitle)
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundColor(palette.text)
+                        if !memo.body.isEmpty {
+                            Text(memo.body)
+                                .foregroundColor(palette.text)
+                        }
+                    }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(14)
                     .background(palette.cardBackground(radius: 14))
+                }
             } else {
                 emptyText("メモはありません")
             }

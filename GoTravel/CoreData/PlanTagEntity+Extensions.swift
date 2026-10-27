@@ -11,6 +11,8 @@ public class PlanTagEntity: NSManagedObject {
     @NSManaged public var order: Int32
     @NSManaged public var createdAt: Date?
     @NSManaged public var userId: String?
+    /// どのカテゴリのタグか（3.0）。nil は「自分用」。**Production への反映が要る**
+    @NSManaged public var categoryId: String?
 }
 
 // MARK: - Fetch Request
@@ -52,7 +54,8 @@ extension PlanTagEntity {
             id: id ?? UUID().uuidString,
             name: name ?? "",
             colorHex: colorHex,
-            order: Int(order)
+            order: Int(order),
+            categoryId: categoryId
         )
     }
 
@@ -62,6 +65,7 @@ extension PlanTagEntity {
         self.colorHex = tag.colorHex
         self.order = Int32(tag.order)
         self.userId = userId
+        self.categoryId = tag.categoryId
         if self.createdAt == nil {
             self.createdAt = createdAt
         }

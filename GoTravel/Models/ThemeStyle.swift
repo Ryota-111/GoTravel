@@ -286,6 +286,18 @@ struct ThemeStyle {
                 typeSpineWidth: 5
             )
 
+        case .mocha:
+            // 写真が主役のアプリ画面。角は大きく丸く、影はふんわり。縁は描かず、文字は飾らない
+            return ThemeStyle(
+                radiusSmall: 12, radiusMedium: 16, radiusLarge: 24,
+                rowRadius: 18, cardRadius: 24,
+                borderWidth: 0,
+                shadowStrength: 0.5, shadowRadius: 18, shadowY: 8,
+                fontDesign: .default,
+                displayFontName: nil,
+                bodyFontName: nil
+            )
+
         case .milkTea:
             // カフェのカップ。角は大きく丸く、影はふんわり。縁は描かない
             return ThemeStyle(

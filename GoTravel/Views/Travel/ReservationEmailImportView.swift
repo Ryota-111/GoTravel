@@ -223,9 +223,12 @@ struct ReservationEmailImportView: View {
             destination = zone
         }
 
-        var results = drafts.map { $0.makeReservation(destinationTimeZone: destination) }
+        var results = drafts.map {
+            $0.makeReservation(destinationTimeZone: destination, tripCurrency: plan.currencyCode,
+                               yenRate: plan.exchangeRate(for: CurrencyCatalog.yen))
+        }
         // 往復の航空券などは、メールの金額が全部の合計になっている
-        if results.count > 1, results[0].reservation.cost != nil {
+        if results.count > 1, results[0].reservation.cost != nil || results[0].reservation.foreignCost != nil {
             results[0].notes.append("金額はメールの合計です。ほかの\(results.count - 1)件の分も含まれています")
         }
         onImport(results)

@@ -70,12 +70,21 @@ struct PackingItem: Identifiable, Codable {
         ///
         /// やりたいことは**みんなで出し合いたい**ので共有する。
         /// 持ち物は各自が自分のぶんを持つ（充電器は全員それぞれ要る）ので個人のもの。
-        /// お土産は同行者へのぶんを書くことがあり、本人に見えると台無しになる。
         var isSharedWithMembers: Bool { self == .wish }
+
+        /// 項目ごとに「みんな」か「自分だけ」かを選べるリストか（3.0）。
+        ///
+        /// お土産は、家族で旅行するときは同じリストで確かめたい。
+        /// 一方で同行者へのぶんを書くこともあり、本人に見えると台無しになるので、
+        /// 項目ごとに「自分だけ」にもできるようにする。新しい項目は「みんな」から始まる
+        var choosesVisibilityPerItem: Bool { self == .souvenir }
 
         /// 共有中の旅行で、このリストの立ち位置を一言で説明する
         var sharingNote: String {
-            isSharedWithMembers
+            if choosesVisibilityPerItem {
+                return "同行者と一緒に見て書けます。🔒を付けた項目は自分だけに見えます"
+            }
+            return isSharedWithMembers
                 ? "同行者にも見えます。みんなで書き足せます"
                 : "自分だけに見えます。同行者には共有されません"
         }
@@ -181,9 +190,29 @@ struct TravelPlan: Identifiable, Codable {
     /// 費用を何人で割るか。nil なら人数から自動で決める（`splitCount(defaultingTo:)`）
     var customSplitCount: Int?
 
-    /// 旅行のメモ帳（自由な文章1枚）。共有した旅行では全員が見て書ける。
-    /// まとまった文章を残したい、というご要望から（`docs/設計_旅行のメモ帳.md`）
-    var memo: String?
+    /// 旅行のメモ（3.0 から何枚も書ける。`TripMemo`）。
+    /// 共有した旅行では、メモごとに「みんなで見る」か「自分だけ」を選べる
+    var memos: [TripMemo] = []
+
+    /// 割り勘（3.1）：アプリを使っていない同行者・予定にしない支出・済ませた精算（`TripSplit`）。
+    /// Core Data と共有レコードの `splitJSON` に入る（**Production への反映が要る**）
+    var split = TripSplit()
+
+    /// 行きたい場所（3.1）：スケジュールに入れるほどではないが気になる場所（`WishPlace`）。
+    /// Core Data と共有レコードの `wishPlacesJSON` に入る（**Production への反映が要る**）
+    var wishPlaces: [WishPlace] = []
+
+    /// 2.9 までの1枚のメモ帳。**3.0 からは `memos` が正で、これは1枚目の共有メモの本文。**
+    /// 2.9 以前のアプリ（`memoText`）と行き来するためだけに残す（`TripMemoLegacy`）
+    var memo: String? {
+        get { TripMemoLegacy.legacyText(of: memos) }
+        set { memos = TripMemoLegacy.reconcile(memos: memos, legacy: newValue) }
+    }
+
+    /// 共有している人みんなで見るメモ
+    var sharedMemos: [TripMemo] { memos.filter { !$0.isPrivate } }
+    /// 自分だけのメモ
+    var privateMemos: [TripMemo] { memos.filter(\.isPrivate) }
 
     /// 共有メンバーの表示名（ユーザーID → 名前）。**パブリックDBから読んだときだけ入る。**
     ///
@@ -201,6 +230,9 @@ struct TravelPlan: Identifiable, Codable {
         case reservations
         case isShared, shareCode, sharedWith, ownerId, lastEditedBy, updatedAt, customSplitCount
         case memo
+        case memos
+        case split
+        case wishPlaces
     }
 
     /// 実際に割り勘に使う人数。
@@ -210,7 +242,7 @@ struct TravelPlan: Identifiable, Codable {
         if let customSplitCount, customSplitCount > 0 {
             return customSplitCount
         }
-        return isShared ? max(sharedWith.count, 1) : 1
+        return (isShared ? max(sharedWith.count, 1) : 1) + split.companions.count
     }
 
     var cardColorHex: String? {
@@ -242,7 +274,10 @@ struct TravelPlan: Identifiable, Codable {
          lastEditedBy: String? = nil,
          updatedAt: Date = Date(),
          customSplitCount: Int? = nil,
-         memo: String? = nil) {
+         memo: String? = nil,
+         memos: [TripMemo] = [],
+         split: TripSplit = TripSplit(),
+         wishPlaces: [WishPlace] = []) {
         self.id = id
         self.title = title
         self.startDate = startDate
@@ -264,7 +299,9 @@ struct TravelPlan: Identifiable, Codable {
         self.lastEditedBy = lastEditedBy
         self.updatedAt = updatedAt
         self.customSplitCount = customSplitCount
-        self.memo = memo
+        self.memos = TripMemoLegacy.reconcile(memos: memos, legacy: memo)
+        self.split = split
+        self.wishPlaces = wishPlaces
     }
 
     init(from decoder: Decoder) throws {
@@ -289,7 +326,12 @@ struct TravelPlan: Identifiable, Codable {
         lastEditedBy = try container.decodeIfPresent(String.self, forKey: .lastEditedBy)
         updatedAt = try container.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
         customSplitCount = try container.decodeIfPresent(Int.self, forKey: .customSplitCount)
-        memo = try container.decodeIfPresent(String.self, forKey: .memo)
+        // 3.0 からはメモの一覧。2.9 までの1枚のメモしか無ければ、それを1枚目にする
+        let decodedMemos = try container.decodeIfPresent([TripMemo].self, forKey: .memos) ?? []
+        memos = TripMemoLegacy.reconcile(memos: decodedMemos,
+                                         legacy: try container.decodeIfPresent(String.self, forKey: .memo))
+        split = try container.decodeIfPresent(TripSplit.self, forKey: .split) ?? TripSplit()
+        wishPlaces = try container.decodeIfPresent([WishPlace].self, forKey: .wishPlaces) ?? []
 
         if let hex = try container.decodeIfPresent(String.self, forKey: .cardColorHex) {
             cardColor = Color(hex: hex)
@@ -322,6 +364,9 @@ struct TravelPlan: Identifiable, Codable {
         try container.encode(updatedAt, forKey: .updatedAt)
         try container.encodeIfPresent(customSplitCount, forKey: .customSplitCount)
         try container.encodeIfPresent(memo, forKey: .memo)
+        try container.encode(memos, forKey: .memos)
+        if !split.isEmpty { try container.encode(split, forKey: .split) }
+        if !wishPlaces.isEmpty { try container.encode(wishPlaces, forKey: .wishPlaces) }
     }
 
     // Helper methods
@@ -374,7 +419,9 @@ struct TravelPlan: Identifiable, Codable {
             && localImageFileName == other.localImageFileName
             && cardColorHex == other.cardColorHex
             && customSplitCount == other.customSplitCount
-            && memo == other.memo
+            && memos == other.memos
+            && split == other.split
+            && wishPlaces == other.wishPlaces
             && isShared == other.isShared
             && shareCode == other.shareCode
             && sharedWith == other.sharedWith
@@ -402,6 +449,8 @@ struct TravelPlan: Identifiable, Codable {
         func sharedPart(of plan: TravelPlan) -> TravelPlan {
             var copy = plan
             copy.localImageFileName = nil
+            // 自分だけのメモは載せていない
+            copy.memos = plan.sharedMemos
             copy.packingItems = plan.packingItems
                 .filter { $0.ownerId == nil }
                 .sorted { $0.id < $1.id }

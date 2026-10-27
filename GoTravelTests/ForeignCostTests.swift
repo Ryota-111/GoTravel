@@ -20,8 +20,8 @@ struct ForeignCostTests {
 
     @Test("外貨はレートを掛けて円にする。レートが無ければ円は空")
     func convertsWithRate() {
-        #expect(ForeignCost(currencyCode: "USD", rate: 150.5, amount: 12.5).yenAmount == 1881)   // 1881.25 → 1881
-        #expect(ForeignCost(currencyCode: "USD", rate: nil, amount: 12.5).yenAmount == nil)
+        #expect(ForeignCost(currencyCode: "USD", rate: 150.5, amount: 12.5).baseAmount(in: "JPY") == 1881)   // 1881.25 → 1881
+        #expect(ForeignCost(currencyCode: "USD", rate: nil, amount: 12.5).baseAmount(in: "JPY") == nil)
     }
 
     @Test("入力欄：円ならそのまま、外貨なら元の金額とレートを持ち、円に直した金額も出す")

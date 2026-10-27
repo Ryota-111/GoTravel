@@ -38,6 +38,8 @@ struct ThemePreset {
 
         // 有料。やわらかく大人っぽい配色（2.9 で追加）。
         // 新しいテーマを見つけてもらえるよう、追加テーマの先頭に置く（一覧はこの順に並ぶ）
+        /// 3.1 で追加（名前と無料・有料は、作ってみてから決める。保存される値なので rawValue は変えない）
+        case mocha = "モカ"
         case milkTea = "ミルクティー"
         case dustyRose = "くすみピンク"
         case afternoonTea = "アフタヌーンティー"
@@ -102,6 +104,7 @@ struct ThemePreset {
             case .morningAirport: return "白とガラスの青。影を持たない"
             case .mountainHut: return "深緑と樹皮、地形図の紙"
             case .neonNight: return "黒地にシアンとマゼンタ。常に暗い"
+            case .mocha: return "生成りの地に、モカとチャコール。写真が映える"
             case .milkTea: return "ミルクティーとラテ、キャラメルとココア。茶色だけで"
             case .dustyRose: return "ドライフラワーのくすんだ薔薇。ピンクの濃淡で"
             case .afternoonTea: return "白い器にフランボワーズ。金の縁取り"
@@ -655,6 +658,21 @@ extension ThemePreset {
                             hex(0x7B5CFF), hex(0x4DFF9A), hex(0xFF7A3D)]
                 )
 
+            case .mocha:
+                // 生成り・サンド・モカ・チャコールの4色。茶色だけのミルクティーと分けるため、
+                // 文字と予定の1つはチャコールで締め、モカはボタンと印に使う
+                return Palette(
+                    bgLight: hex(0xF1ECE6), surfaceLight: hex(0xFBF8F4),
+                    bgDark: hex(0x1C1A18), surfaceDark: hex(0x272421),
+                    ink: hex(0x2A2623), ink2: hex(0x786B62), ink3: hex(0xB2A598),
+                    inkDark: hex(0xF1ECE6), inkDark2: hex(0xB2A598),
+                    accent: hex(0x8A5F43),
+                    planOuting: hex(0x2F2B28), planDaily: hex(0xA88D74), planTravel: hex(0x8A5F43),
+                    album: [hex(0x8A5F43), hex(0x2F2B28), hex(0xA88D74),
+                            hex(0x6B5446), hex(0xC4AE98), hex(0x4C4541)],
+                    rule: hex(0xDDD2C6)
+                )
+
             case .milkTea:
                 // カフェのミルクティー。茶色だけでまとめる（ミルクティー・ラテ・キャラメル・ココア）。
                 // 赤みを入れると、アフタヌーンティーと見分けがつかなくなる
@@ -781,6 +799,132 @@ extension ThemePreset {
     func textOnCardBackground2(for scheme: ColorScheme) -> Color {
         let ground = scheme == .dark ? backgroundDark : backgroundLight
         return Self.readableText(on: Self.composite(cardBackground2, over: ground))
+    }
+
+    /// `cardBackground2` のカードの上の、控えめな文字（右に出す値・矢印）の色。
+    /// デフォルトカラーのダークモードでは明るい灰色のカードに灰色の文字となり、比 2.2 しかなかった
+    func secondaryTextOnCardBackground2(for scheme: ColorScheme) -> Color {
+        let ground = scheme == .dark ? backgroundDark : backgroundLight
+        return Self.readableTintEitherWay(secondaryText, on: Self.composite(cardBackground2, over: ground))
+    }
+
+    /// 画面の地に直接置く、控えめな文字（見出しなど）の色
+    func secondaryTextOnScreen(for scheme: ColorScheme) -> Color {
+        Self.readableTintEitherWay(secondaryText, on: scheme == .dark ? backgroundDark : backgroundLight)
+    }
+
+    /// 一覧（`List`）の行の色。システムの色（ライトは白、ダークは #1C1C1E）
+    static func listRowBackground(for scheme: ColorScheme) -> Color {
+        scheme == .dark ? Color(white: 0.11) : .white
+    }
+
+    /// 一覧（`List`）の行に置く差し色（アイコン・チェック・操作の文字）。
+    /// accent1 はデフォルトカラーで黒なので、ダークモードの行（暗い灰色）に溶けていた（比 1.2）
+    func listTint(for scheme: ColorScheme) -> Color {
+        let row = Self.listRowBackground(for: scheme)
+        return Self.contrastRatio(accent1, row) >= 4.5 ? accent1 : Self.readableText(on: row)
+    }
+
+    /// 入力や共有の画面（新しい旅行・共有）に敷く地。
+    ///
+    /// 以前はどのテーマでも「明るい面の色 → ダークモードの地の色」のグラデーションを敷き、
+    /// 文字はダークモード用の明るい色に決め打ちしていた。追加テーマでは白から濃い色へ変わる地に
+    /// 白い文字が載り、上のほうが読めなかった（藍と生成りで報告）。
+    /// デフォルトカラーは今の青い見た目を残して明暗に合わせ、ほかはふだんの画面と同じ地にする
+    func screenGradient(for scheme: ColorScheme) -> LinearGradient {
+        let colors: [Color]
+        switch type {
+        case .originalColor:
+            colors = scheme == .dark ? [gradientDark, dark] : [gradientLight, light]
+        case .whiteBlack:
+            colors = [Color(white: 0.97), Color(white: 0.84)]
+        default:
+            return backgroundGradient(for: scheme)
+        }
+        return LinearGradient(gradient: Gradient(colors: colors), startPoint: .topLeading, endPoint: .bottomTrailing)
+    }
+
+    /// `screenGradient` の、文字が載るあたり（上側）の色。文字や差し色は、この色から決める
+    func screenGround(for scheme: ColorScheme) -> Color {
+        switch type {
+        case .originalColor:
+            return Self.composite(scheme == .dark ? gradientDark : gradientLight, over: scheme == .dark ? .black : .white)
+        case .whiteBlack:
+            return Color(white: 0.97)
+        default:
+            return scheme == .dark ? backgroundDark : backgroundLight
+        }
+    }
+
+    /// 一覧のカード（予定・保存した場所）の面。縁は引かず、面の色だけで地と見分ける。
+    ///
+    /// ライトでは地（`backgroundLight` から始まるグラデーション）と同じ色だったので、白いテーマでは
+    /// カードと地の差が影だけになり、影の弱いテーマではほとんど見えなかった。縁で囲むと浮いて見えたので、
+    /// - 白い地：文字の色をごく薄く敷いた灰色の面（設定画面のまとまりのように）
+    /// - 色のある地：地より少し明るい面
+    func listCardSurface(for scheme: ColorScheme) -> Color {
+        if scheme == .dark { return secondaryBackgroundDark }
+        let ground = backgroundLight
+        // 地はグラデーション（上：backgroundLight、下：secondaryBackgroundLight）。どちらの端とも見分けられること
+        let grounds = [backgroundLight, secondaryBackgroundLight]
+        func distinct(_ color: Color) -> Bool {
+            grounds.allSatisfy { Self.contrastRatio(color, $0) >= Self.listCardMinimumContrast }
+        }
+        // 1. 色のある地なら、地より明るくしてみる。
+        //    白に近い地では、白いカードを載せても地と似た色になって見えにくかったので、ここは通さない
+        if Self.luminance(of: ground) < 0.75 {
+            for opacity in stride(from: 0.6, through: 1.0, by: 0.1) {
+                let lighter = Self.composite(.white, over: ground, opacity: opacity)
+                if distinct(lighter) { return lighter }
+            }
+        }
+        // 2. 白に近い地（と、明るくしても差が出ない地）は、文字の色を薄く敷いた灰色の面にする
+        let ink = Self.readableText(on: ground)
+        var opacity = 0.04
+        var tinted = Self.composite(ink, over: ground, opacity: opacity)
+        while !distinct(tinted) && opacity < 0.2 {
+            opacity += 0.01
+            tinted = Self.composite(ink, over: ground, opacity: opacity)
+        }
+        return tinted
+    }
+
+    /// 一覧のカードと地の差の目安（コントラスト比）。縁を引かずに形が分かる最低限
+    static let listCardMinimumContrast = 1.15
+
+    /// 2つ目のテーマ色（secondary）を薄く敷いた面に、その色で文字を置くときの色。
+    /// オレンジや薄い色はそのままだと地と差が出ない（カレンダーの共有の案内・タグの絞り込みで比 1.0〜2.9）
+    func secondaryLabel(on base: Color, opacity: CGFloat) -> Color {
+        Self.readableTintEitherWay(secondary, on: Self.composite(secondary, over: base, opacity: opacity))
+    }
+
+    /// `readableTint` の、中くらいの明るさの地でも届くもの。
+    ///
+    /// `readableTint` は地の明るさで「明るくする」か「暗くする」かを1つに決めるので、
+    /// 明るくも暗くもない地（デフォルトカラーのダークモードの、明るい灰色のカードや青い画面の上）では
+    /// 反対の向きに寄せてしまい、比 3 に届かなかった。届かなければ反対にも寄せ、それでも足りなければ黒か白にする
+    static func readableTintEitherWay(_ color: Color, on background: Color, minimum: Double = 3.0) -> Color {
+        let first = readableTint(color, on: background)
+        if contrastRatio(first, background) >= minimum { return first }
+
+        var hue: CGFloat = 0, saturation: CGFloat = 0, brightness: CGFloat = 0, alpha: CGFloat = 0
+        guard UIColor(color).getHue(&hue, saturation: &saturation, brightness: &brightness, alpha: &alpha) else {
+            return readableText(on: background)
+        }
+        // readableTint と反対の向き
+        let darken = luminance(of: background) <= 0.4
+        var adjusted = color
+        for _ in 0..<15 where contrastRatio(adjusted, background) < minimum {
+            brightness = darken ? max(brightness - 0.07, 0) : min(brightness + 0.07, 1)
+            adjusted = Color(UIColor(hue: hue, saturation: saturation, brightness: brightness, alpha: alpha))
+        }
+        return contrastRatio(adjusted, background) >= minimum ? adjusted : readableText(on: background)
+    }
+
+    /// カレンダーの画面の上のほう（共有の案内・タグの絞り込みが載るあたり）の地の色。
+    /// 地はテーマ色のグラデーションを、システムの地（白か黒）に重ねたもの
+    func calendarScreenTop(for scheme: ColorScheme) -> Color {
+        scheme == .dark ? Self.composite(gradientDark, over: .black) : Self.composite(gradientLight, over: .white)
     }
 
     /// テーマ色を薄く敷いた上に、その色で文字を置くときの色。

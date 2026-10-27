@@ -10,6 +10,8 @@ struct AddScheduleItemView: View {
 
     let plan: TravelPlan
     let dayNumber: Int
+    /// 行きたい場所から「予定に入れる」で開いたとき、その場所を入れておく（3.1）
+    var prefillPlace: WishPlace? = nil
 
     @State private var title = ""
     @State private var time = Date()
@@ -17,12 +19,16 @@ struct AddScheduleItemView: View {
     @State private var timeZone: TimeZone = .current
     /// 目的地の時間帯。日本と時差があるときだけ入る
     @State private var destinationTimeZone: TimeZone?
+    /// 入れ始める時計を決めたか（その日の時間帯か、目的地か）
+    @State private var didSetInitialZone = false
     /// 共有した旅行で、この予定に参加する人。空なら全員
     @State private var participants: Set<String> = []
     /// 費用。外貨でも入れられる（`CurrencyCostFields`）
     @State private var costInput = CostInput()
     @State private var costNote = ""
     @State private var hasEndTime = false
+    /// 終わりを読む時計。nil なら始まりと同じ（飛行機などで着いた先の時計にするとき）
+    @State private var endZone: TimeZone?
     @State private var endTime = Date()
     @State private var notes = ""
     @State private var linkURL = ""
@@ -102,6 +108,7 @@ struct AddScheduleItemView: View {
         .sheet(isPresented: $showHistoryPicker) {
             locationHistoryPickerView
         }
+        .onAppear(perform: applyPrefill)
         .sheet(isPresented: $showSavedPlacePicker) {
             SavedPlacePickerView(accentColor: travelColor) { place in
                 applySavedPlace(place)
@@ -180,6 +187,8 @@ struct AddScheduleItemView: View {
                 ScheduleTimeField(
                     time: $time,
                     timeZone: $timeZone,
+                    place: selectedCoordinate,
+                    dayZone: dayTimeZone,
                     destination: destinationTimeZone,
                     tint: travelColor,
                     textColor: textColor,
@@ -196,10 +205,16 @@ struct AddScheduleItemView: View {
                     tint: travelColor,
                     textColor: textColor,
                     secondaryText: themeManager.currentTheme.secondaryText,
-                    fieldBackground: fieldBg
+                    fieldBackground: fieldBg,
+                    endZone: $endZone,
+                    zoneChoices: ScheduleClock.zoneChoices(place: nil, day: dayTimeZone, destination: destinationTimeZone,
+                                                           current: .current, recents: RecentTimeZones.list(), at: time)
                 )
-                // 現地時間・日本時間を切り替えたら、終わりも同じ時:分のまま付け替える
+                // 現地時間・日本時間を切り替えたら、終わりも同じ時:分のまま付け替える。
+                // 終わりを着いた先の時計で入れているときは、終わりはそのまま
                 .onChange(of: timeZone) { oldZone, newZone in
+                    if let zone = endZone, zone.identifier == newZone.identifier { endZone = nil; return }
+                    guard endZone == nil else { return }
                     endTime = ScheduleClock.keepingWallClock(endTime, from: oldZone, to: newZone)
                 }
 
@@ -294,6 +309,7 @@ struct AddScheduleItemView: View {
                 CurrencyCostFields(
                     input: $costInput,
                     tripRates: currentPlan.exchangeRates,
+                    baseCurrency: currentPlan.currencyCode,
                     accent: travelColor,
                     textColor: textColor,
                     secondaryText: themeManager.currentTheme.secondaryText,
@@ -419,13 +435,25 @@ struct AddScheduleItemView: View {
         return formatter.string(from: dayDate)
     }
 
-    /// 目的地が海外なら、現地の時計で入れ始める。
+    /// その日の時間帯（決めてあれば）
+    private var dayTimeZone: TimeZone? {
+        (viewModel.travelPlans.first(where: { $0.id == plan.id }) ?? plan).dayTimeZone(dayNumber)
+    }
+
+    /// 入れ始める時計を決める。その日の時間帯を決めてあればそれ、無ければ目的地が海外なら現地の時計。
     /// 時:分は変えないので、開いた直後に入力欄の時刻が動いて見えることはない
     private func resolveDestinationTimeZone() async {
+        if !didSetInitialZone, let dayZone = dayTimeZone {
+            didSetInitialZone = true
+            time = ScheduleClock.keepingWallClock(time, from: timeZone, to: dayZone)
+            timeZone = dayZone
+        }
         guard destinationTimeZone == nil,
               let zone = await DestinationTimeZoneService.shared.timeZone(for: plan),
               ScheduleClock.isForeign(zone, at: dayDate) else { return }
         destinationTimeZone = zone
+        guard !didSetInitialZone else { return }
+        didSetInitialZone = true
         time = ScheduleClock.keepingWallClock(time, from: timeZone, to: zone)
         timeZone = zone
     }
@@ -437,6 +465,7 @@ struct AddScheduleItemView: View {
         // viewModelから常に最新のplanを取得（古いスナップショットを使わない）
         let basePlan = viewModel.travelPlans.first(where: { $0.id == plan.id }) ?? plan
         let costs = costInput.result
+        RecentTimeZones.record(timeZone)
 
         let newItem = ScheduleItem(
             time: time,
@@ -452,8 +481,11 @@ struct AddScheduleItemView: View {
             foreignCost: costs.foreign,
             costNote: costNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? nil : costNote.trimmingCharacters(in: .whitespacesAndNewlines),
-            endTime: hasEndTime ? ScheduleItem.endTime(hourAndMinuteOf: endTime, after: time, in: timeZone) : nil,
-            address: selectedLocation == nil ? nil : selectedAddress
+            endTime: hasEndTime ? ScheduleItem.endTime(hourAndMinuteOf: endTime, after: time, in: timeZone, endZone: endZone) : nil,
+            endTimeZoneIdentifier: hasEndTime ? endZone?.identifier : nil,
+            address: selectedLocation == nil ? nil : selectedAddress,
+            // 割り勘（3.1）：共有した旅行で金額を入れたら、入れた人が払ったことにする（費用の画面で直せる）
+            paidBy: basePlan.isShared && (costs.cost ?? 0) > 0 ? userId : nil
         )
 
         var updatedPlan = basePlan
@@ -482,8 +514,9 @@ struct AddScheduleItemView: View {
     /// この旅行で外貨を1種類だけ使っていれば、最初からその通貨にしておく。
     /// 海外旅行では現地の通貨で続けて入れることが多く、毎回選び直すのは手間
     private func preselectTripCurrency() {
+        costInput.adopt(baseCurrency: currentPlan.currencyCode)
         guard !costInput.isForeign, costInput.amountText.isEmpty else { return }
-        let foreign = currentPlan.exchangeRates.filter { $0.key != CurrencyCatalog.yen }
+        let foreign = currentPlan.exchangeRates.filter { $0.key != currentPlan.currencyCode }
         guard foreign.count == 1, let (code, rate) = foreign.first else { return }
         costInput.currencyCode = code
         costInput.rateText = CurrencyCatalog.editingText(rate)
@@ -667,6 +700,18 @@ struct AddScheduleItemView: View {
 
     /// 保存済みの場所を行き先として設定する。
     /// 次回から検索履歴にも出るよう履歴にも記録しておく
+    /// 行きたい場所の名前・場所・リンクを入れておく（開き直しても入れ直さない）
+    private func applyPrefill() {
+        guard let wish = prefillPlace, selectedLocation == nil else { return }
+        let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: wish.coordinate))
+        mapItem.name = wish.name
+        selectedLocation = mapItem
+        selectedCoordinate = wish.coordinate
+        selectedAddress = wish.address
+        if title.isEmpty { title = wish.name }
+        if linkURL.isEmpty, let link = wish.linkURL { linkURL = link }
+    }
+
     private func applySavedPlace(_ place: VisitedPlace) {
         let coordinate = place.coordinate
         let mapItem = MKMapItem(placemark: MKPlacemark(coordinate: coordinate))

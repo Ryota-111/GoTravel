@@ -31,6 +31,16 @@ struct ThemeContrastTests {
         #expect(ThemePreset.contrastRatio(theme.actionFill, card) >= 3.0)
     }
 
+    @Test("一覧のカード（予定・保存した場所）の面が、画面の地と見分けられ、上の文字が読める", arguments: cases)
+    private func listCardSurface(_ c: Case) {
+        let theme = ThemePreset(type: c.type)
+        guard c.scheme == .light else { return }
+        let surface = theme.listCardSurface(for: .light)
+        #expect(ThemePreset.contrastRatio(surface, theme.backgroundLight) >= ThemePreset.listCardMinimumContrast)
+        #expect(ThemePreset.contrastRatio(surface, theme.secondaryBackgroundLight) >= ThemePreset.listCardMinimumContrast)
+        #expect(ThemePreset.contrastRatio(ThemePreset.readableText(on: surface), surface) >= 4.5)
+    }
+
     @Test("塗りのボタンの文字が読める", arguments: cases)
     private func filledButton(_ c: Case) {
         let theme = ThemePreset(type: c.type)
@@ -56,5 +66,39 @@ struct ThemeContrastTests {
         let ground = dark ? theme.backgroundDark : theme.backgroundLight
         let card2 = ThemePreset.composite(theme.cardBackground2, over: ground)
         #expect(ThemePreset.contrastRatio(theme.textOnCardBackground2(for: c.scheme), card2) >= 4.5)
+    }
+
+    // MARK: - 3.0 で増えた画面
+
+    @Test("プロフィールの行（半透明のカード）の題名・値と、見出しが読める", arguments: cases)
+    private func profileRows(_ c: Case) {
+        let theme = ThemePreset(type: c.type)
+        let ground = c.scheme == .dark ? theme.backgroundDark : theme.backgroundLight
+        let card = ThemePreset.composite(theme.cardBackground2, over: ground)
+        #expect(ThemePreset.contrastRatio(theme.textOnCardBackground2(for: c.scheme), card) >= 4.5)
+        #expect(ThemePreset.contrastRatio(theme.secondaryTextOnCardBackground2(for: c.scheme), card) >= 3.0)
+        #expect(ThemePreset.contrastRatio(theme.secondaryTextOnScreen(for: c.scheme), ground) >= 3.0)
+    }
+
+    @Test("カレンダーの一覧・.ics の読み込みの、行の上のアイコンと操作の文字が読める", arguments: cases)
+    private func listTint(_ c: Case) {
+        let theme = ThemePreset(type: c.type)
+        #expect(ThemePreset.contrastRatio(theme.listTint(for: c.scheme), ThemePreset.listRowBackground(for: c.scheme)) >= 4.5)
+    }
+
+    @Test("カレンダーの共有の案内とタグの絞り込みの文字が、画面の上のほうで読める", arguments: cases)
+    private func calendarTip(_ c: Case) {
+        let theme = ThemePreset(type: c.type)
+        let top = theme.calendarScreenTop(for: c.scheme)
+        let tipGround = ThemePreset.composite(theme.secondary, over: top, opacity: 0.08)
+        #expect(ThemePreset.contrastRatio(ThemePreset.readableText(on: tipGround), tipGround) >= 4.5)
+        #expect(ThemePreset.contrastRatio(theme.secondaryLabel(on: top, opacity: 0.08), tipGround) >= 3.0)
+        let accent = theme.secondaryLabel(on: top, opacity: 0.08)
+        #expect(ThemePreset.contrastRatio(ThemePreset.readableText(on: accent), accent) >= 3.0)
+        let filterGround = ThemePreset.composite(theme.secondary, over: top, opacity: 0.12)
+        #expect(ThemePreset.contrastRatio(theme.secondaryLabel(on: top, opacity: 0.12), filterGround) >= 3.0)
+        // 題名（カレンダーの切り替え）
+        let title = c.scheme == .dark ? theme.accent2 : theme.accent1
+        #expect(ThemePreset.contrastRatio(title, top) >= 3.0)
     }
 }

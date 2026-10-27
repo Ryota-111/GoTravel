@@ -63,8 +63,8 @@ final class WeatherService {
 
 
     // MARK: - Weather Data Models
-    struct DayWeather: Identifiable {
-        let id = UUID()
+    struct DayWeather: Identifiable, Codable {
+        var id = UUID()
         let date: Date
         let condition: String
         let symbolName: String
@@ -80,6 +80,16 @@ final class WeatherService {
         var precipitationText: String {
             "\(Int(precipitation * 100))%"
         }
+
+        enum CodingKeys: String, CodingKey {
+            case date, condition, symbolName, highTemperature, lowTemperature, precipitation, uvIndex
+        }
+    }
+
+    /// 旅行の予報と、それを取ってきた時刻
+    struct TripForecast {
+        let days: [DayWeather]
+        let fetchedAt: Date
     }
 
     struct WeatherAttribution {
@@ -89,14 +99,112 @@ final class WeatherService {
     }
 
     // MARK: - Get Weather Attribution
+
+    /// 出典（ 天気のマークとリンク）。変わらないので、起動中は1回だけ取る
+    private var cachedAttribution: WeatherAttribution?
+
     func getWeatherAttribution() async throws -> WeatherAttribution {
+        if let cachedAttribution { return cachedAttribution }
         let attribution = try await service.attribution
 
-        return WeatherAttribution(
+        let result = WeatherAttribution(
             combinedMarkLightURL: attribution.combinedMarkLightURL,
             combinedMarkDarkURL: attribution.combinedMarkDarkURL,
             legalPageURL: attribution.legalPageURL
         )
+        cachedAttribution = result
+        return result
+    }
+
+    // MARK: - 予報を覚えておく（3.0）
+    //
+    // WeatherKit は問い合わせの回数に上限がある（月 50万回までは無料）。旅行計画の画面を開くたびに
+    // 問い合わせていたため、使う人が増えると上限に近づく作りだった。
+    // 同じ場所・同じ日程の予報は**1時間覚えておき**、そのあいだは問い合わせない。
+    // Apple の予報もおおよそ1時間ごとに新しくなるので、見た目はほぼ変わらない。
+    // 引っぱって更新しても取り直さない（回数を使わないため）
+
+    /// 覚えた予報を使う長さ
+    static let forecastLifetime: TimeInterval = 60 * 60
+
+    private let cacheLock = NSLock()
+    private var inFlight: [String: Task<TripForecast, Error>] = [:]
+
+    private struct CacheEntry: Codable {
+        let fetchedAt: Date
+        let days: [DayWeather]
+    }
+
+    private static var cacheURL: URL {
+        let folder = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+        try? FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+        return folder.appendingPathComponent("WeatherCache.json")
+    }
+
+    /// 覚えておく鍵。座標は約1km（小数2桁）で丸める（同じ目的地なら、ほかの旅行計画とも同じ予報を使う）
+    static func cacheKey(latitude: Double, longitude: Double, startDate: Date, endDate: Date) -> String {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "en_US_POSIX")
+        formatter.timeZone = .current
+        formatter.dateFormat = "yyyy-MM-dd"
+        return String(format: "%.2f,%.2f", latitude, longitude)
+            + "|\(formatter.string(from: startDate))|\(formatter.string(from: endDate))"
+    }
+
+    private func loadCache() -> [String: CacheEntry] {
+        guard let data = try? Data(contentsOf: Self.cacheURL),
+              let cache = try? JSONDecoder().decode([String: CacheEntry].self, from: data) else { return [:] }
+        return cache
+    }
+
+    private func store(_ entry: CacheEntry, key: String) {
+        cacheLock.lock(); defer { cacheLock.unlock() }
+        var cache = loadCache()
+        cache[key] = entry
+        // 1日より古いものは捨てる（ファイルが大きくならないように）
+        cache = cache.filter { Date().timeIntervalSince($0.value.fetchedAt) < 24 * 60 * 60 }
+        if let data = try? JSONEncoder().encode(cache) {
+            try? data.write(to: Self.cacheURL, options: .atomic)
+        }
+    }
+
+    /// 1時間以内に取った予報があれば返す（問い合わせない）
+    func cachedForecast(latitude: Double, longitude: Double, startDate: Date, endDate: Date,
+                        now: Date = Date()) -> TripForecast? {
+        let key = Self.cacheKey(latitude: latitude, longitude: longitude, startDate: startDate, endDate: endDate)
+        cacheLock.lock(); defer { cacheLock.unlock() }
+        guard let entry = loadCache()[key], now.timeIntervalSince(entry.fetchedAt) < Self.forecastLifetime else { return nil }
+        return TripForecast(days: entry.days, fetchedAt: entry.fetchedAt)
+    }
+
+    /// 旅行の予報。1時間以内に取ったものがあれば、問い合わせずにそれを返す。
+    /// 同じ予報を同時に頼まれたら、問い合わせは1回にまとめる
+    func tripForecast(latitude: Double, longitude: Double, startDate: Date, endDate: Date) async throws -> TripForecast {
+        if let cached = cachedForecast(latitude: latitude, longitude: longitude,
+                                                      startDate: startDate, endDate: endDate) {
+            return cached
+        }
+        let key = Self.cacheKey(latitude: latitude, longitude: longitude, startDate: startDate, endDate: endDate)
+        cacheLock.lock()
+        if let running = inFlight[key] {
+            cacheLock.unlock()
+            return try await running.value
+        }
+        let task = Task { () throws -> TripForecast in
+            let days = try await self.fetchWeatherForTrip(latitude: latitude, longitude: longitude,
+                                                          startDate: startDate, endDate: endDate)
+            let forecast = TripForecast(days: days, fetchedAt: Date())
+            self.store(CacheEntry(fetchedAt: forecast.fetchedAt, days: days), key: key)
+            return forecast
+        }
+        inFlight[key] = task
+        cacheLock.unlock()
+        defer {
+            cacheLock.lock()
+            inFlight[key] = nil
+            cacheLock.unlock()
+        }
+        return try await task.value
     }
 
     // MARK: - Fetch Daily Weather
@@ -231,14 +339,20 @@ final class WeatherService {
             throw WeatherError.dateTooFarInPast
         }
 
-        // ローカルタイムゾーンでの日付を使用（UTC のズレを補正）
-        let normalizedStartDate = startDate.startOfDayInLocalTimezone
+        // **前後に1日ずつ広げて頼む。**
+        //
+        // 日付は端末（日本）の暦で決まるが、予報の「1日」は目的地の暦で区切られている。
+        // 日本の 10/14 0:00〜10/17 0:00 はハワイでは 10/13 5:00〜10/16 5:00 で、
+        // ハワイの 10/16 が丸ごと入らず、3日間の旅行で2日ぶんしか出なかった（ご報告から）。
+        // 広めに取り、どの日がどれかは画面の側で目的地の暦で突き合わせる
+        let normalizedStartDate = Calendar.current.date(
+            byAdding: .day, value: -1, to: startDate.startOfDayInLocalTimezone
+        ) ?? startDate.startOfDayInLocalTimezone
 
-        // 期間の終端は含まれない。最終日の0時までを頼むと最終日が落ちるので、
-        // 翌日の0時まで頼む
+        // 期間の終端は含まれない。最終日の翌日の0時に、さらに1日足して頼む
         let requestedEndDate = Calendar.current.date(
             byAdding: .day,
-            value: 1,
+            value: 2,
             to: endDate.startOfDayInLocalTimezone
         ) ?? endDate.startOfDayInLocalTimezone
         // 予報の無い日まで頼まない。範囲をはみ出すと、そのぶんが 404 になり得る。

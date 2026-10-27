@@ -254,7 +254,8 @@ struct ReservationEditorView: View {
         // いま行程に出ているかどうかを、そのままトグルの状態にする。
         // これをしないと、一度オンにしたものをオフに戻せない
         addsToItinerary = plan?.hasScheduleItems(forReservation: reservation.id) ?? false
-        costInput = CostInput(cost: reservation.cost, foreign: reservation.foreignCost)
+        costInput = CostInput(cost: reservation.cost, foreign: reservation.foreignCost,
+                              base: plan?.currencyCode ?? CurrencyCatalog.yen)
     }
 
     /// 予約確認メールから入れる。種類を選んでから押すと、その種類として読む
@@ -972,6 +973,7 @@ struct ReservationEditorView: View {
             CurrencyCostFields(
                 input: $costInput,
                 tripRates: plan?.exchangeRates ?? [:],
+                baseCurrency: plan?.currencyCode ?? CurrencyCatalog.yen,
                 accent: accent,
                 textColor: textColor,
                 secondaryText: themeManager.currentTheme.secondaryText,

@@ -52,7 +52,7 @@ extension TravelPlan {
             var item = fresh
             if let current = existingByPart[part] {
                 let generated = previousGenerated.first { $0.reservationPart == fresh.reservationPart }
-                item = Self.merge(current: current, fresh: fresh, previouslyGenerated: generated)
+                item = Self.merge(current: current, fresh: fresh, previouslyGenerated: generated, currency: currencyCode)
             }
             if let dayNumber = dayNumber(forDate: item.time, in: item.timeZone) {
                 addScheduleItem(item, onDay: dayNumber)
@@ -144,7 +144,8 @@ extension TravelPlan {
     }
 
     /// 行程にある予定に、直した予約の内容を重ねる
-    static func merge(current: ScheduleItem, fresh: ScheduleItem, previouslyGenerated: ScheduleItem?) -> ScheduleItem {
+    static func merge(current: ScheduleItem, fresh: ScheduleItem, previouslyGenerated: ScheduleItem?,
+                      currency: String = CurrencyCatalog.yen) -> ScheduleItem {
         var item = current
         item.reservationPart = fresh.reservationPart
         item.time = fresh.time
@@ -182,7 +183,7 @@ extension TravelPlan {
         item.foreignCost = fresh.foreignCost
         if item.foreignCost != nil {
             item.foreignCost?.actualAmount = actualForeign
-            item.actualCost = item.foreignCost?.yenActualAmount ?? current.actualCost
+            item.actualCost = item.foreignCost?.baseActualAmount(in: currency) ?? current.actualCost
         }
         return item
     }

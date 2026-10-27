@@ -5,6 +5,10 @@ import SwiftUI
 struct SavedPlacePickerView: View {
     let accentColor: Color
     let onSelect: (VisitedPlace) -> Void
+    /// まとめて選ぶとき（旅行の「行きたい場所」に足す。3.1）。渡すと押すたびに選び、「追加」で返す
+    var multiSelect: (([VisitedPlace]) -> Void)? = nil
+    /// もう足してある場所の id。まとめて選ぶときに「追加済み」と出す
+    var alreadyAdded: Set<String> = []
 
     @EnvironmentObject var authVM: AuthViewModel
     @StateObject private var vm = PlacesViewModel()
@@ -14,6 +18,7 @@ struct SavedPlacePickerView: View {
     @Environment(\.colorScheme) var colorScheme
 
     @State private var searchText = ""
+    @State private var picked: [VisitedPlace] = []
     @State private var selectedCategoryId = SavedPlacePickerView.allCategoryId
 
     static let allCategoryId = "all"
@@ -71,12 +76,23 @@ struct SavedPlacePickerView: View {
                 }
             }
             .searchable(text: $searchText, prompt: "保存した場所を検索")
-            .navigationTitle("保存した場所")
+            .navigationTitle(multiSelect == nil ? "保存した場所" : "行きたい場所に追加")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("閉じる") { dismiss() }
+                    Button(multiSelect == nil ? "閉じる" : "キャンセル") { dismiss() }
                         .foregroundColor(accentColor)
+                }
+                if let multiSelect {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button(picked.isEmpty ? "追加" : "追加（\(picked.count)）") {
+                            multiSelect(picked)
+                            dismiss()
+                        }
+                        .fontWeight(.semibold)
+                        .foregroundColor(accentColor)
+                        .disabled(picked.isEmpty)
+                    }
                 }
             }
             .task {
@@ -138,12 +154,17 @@ struct SavedPlacePickerView: View {
         List {
             ForEach(filteredPlaces) { place in
                 Button {
-                    onSelect(place)
-                    dismiss()
+                    if multiSelect != nil {
+                        togglePick(place)
+                    } else {
+                        onSelect(place)
+                        dismiss()
+                    }
                 } label: {
                     row(for: place)
                 }
                 .buttonStyle(PlainButtonStyle())
+                .disabled(isAlreadyAdded(place))
             }
         }
         .listStyle(.plain)
@@ -187,11 +208,39 @@ struct SavedPlacePickerView: View {
 
             Spacer(minLength: 0)
 
-            Image(systemName: "plus.circle.fill")
-                .font(.title3)
-                .foregroundColor(accentColor)
+            if isAlreadyAdded(place) {
+                Text("追加済み")
+                    .font(.caption.weight(.semibold))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            } else if multiSelect != nil {
+                Image(systemName: isPicked(place) ? "checkmark.circle.fill" : "circle")
+                    .font(.title3)
+                    .foregroundColor(isPicked(place) ? accentColor : themeManager.currentTheme.secondaryText.opacity(0.5))
+            } else {
+                Image(systemName: "plus.circle.fill")
+                    .font(.title3)
+                    .foregroundColor(accentColor)
+            }
         }
         .contentShape(Rectangle())
+        .opacity(isAlreadyAdded(place) ? 0.5 : 1)
+    }
+
+    private func isAlreadyAdded(_ place: VisitedPlace) -> Bool {
+        multiSelect != nil && place.id.map(alreadyAdded.contains) == true
+    }
+
+    private func isPicked(_ place: VisitedPlace) -> Bool {
+        picked.contains { $0.id == place.id }
+    }
+
+    /// 押した順に選ぶ。もう一度押すと外す
+    private func togglePick(_ place: VisitedPlace) {
+        if let index = picked.firstIndex(where: { $0.id == place.id }) {
+            picked.remove(at: index)
+        } else {
+            picked.append(place)
+        }
     }
 
     private func emptyState(icon: String, title: String, message: String) -> some View {
