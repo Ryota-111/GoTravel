@@ -1704,14 +1704,20 @@ struct TravelPlanDetailView: View {
             )
             .frame(height: 274)
             // 貼り付けている地図は狭いので、じっくり見たいときは全画面へ。
-            // 右上は「全体を表示」が使っているので左上に置く
+            // 右上は「全体を表示」が使っているので左上に置く。
+            // 丸いアイコンだけでは気付かれず「地図だけ大きく見たい」とご要望をいただいたので、文字を添える（3.2）
             .overlay(alignment: .topLeading) {
                 Button(action: { showScheduleMap = true }) {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(accentColor)
-                        .frame(width: 36, height: 36)
-                        .background(.ultraThinMaterial, in: Circle())
+                    HStack(spacing: 5) {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("大きく見る")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundColor(accentColor)
+                    .padding(.horizontal, 12)
+                    .frame(height: 34)
+                    .background(.ultraThinMaterial, in: Capsule())
                 }
                 .padding(12)
                 .accessibilityLabel(Text("地図を全画面で見る"))

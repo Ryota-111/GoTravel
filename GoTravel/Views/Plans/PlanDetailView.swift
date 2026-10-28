@@ -7,6 +7,8 @@ struct PlanDetailView: View {
     /// 地図から場所を選ぶ画面（全画面）の中の経路案内。上の画面の選択肢は全画面の上に出せないため分ける
     @State var plan: Plan
     @State private var showMap = false
+    /// 地図を押して開く全画面の地図（3.2）
+    @State private var showsFullMap = false
     @State private var showStreetView = false
     @State private var isEditMode = false
     @State private var displayImage: UIImage?
@@ -1573,22 +1575,33 @@ struct PlanDetailView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 30)
             } else {
-                Map(position: .constant(.region(calculateMapRegion()))) {
+                // 行程の順に ①② を付ける。動かすのは全画面のほうで、ここは押すと全画面を開く（3.2）
+                let order = plan.placeOrder
+                Map(position: .constant(.region(calculateMapRegion())), interactionModes: []) {
                     ForEach(plan.places) { place in
-                        Marker(place.name, coordinate: place.coordinate)
-                            .tint(planColor)
+                        Annotation(place.name, coordinate: place.coordinate) {
+                            PlanPlacePin(order: order[place.id], color: planColor)
+                        }
                     }
                 }
                 // 300ptは旅行計画の地図と同じ大きさで、当日の確認には過剰だった
                 .frame(height: 160)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
+                .contentShape(RoundedRectangle(cornerRadius: 16))
+                .onTapGesture { showsFullMap = true }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint(Text("地図を全画面で開きます"))
+                .fullScreenCover(isPresented: $showsFullMap) {
+                    PlanFullMapView(plan: plan, color: planColor)
+                }
                 .overlay(alignment: .bottomTrailing) {
                     HStack(spacing: 6) {
-                        Image(systemName: "mappin.circle.fill")
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
                             .font(.caption)
                         Text("\(plan.places.count)件")
                             .font(.caption.weight(.medium))
                     }
+                    .allowsHitTesting(false)
                     .foregroundColor(.white)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -2236,10 +2249,17 @@ struct PlanDetailView: View {
             )
         }
 
+        // 番号を付けたので、どの場所も枠に入るように全部を囲む（3.2）
+        let coordinates = plan.places.map(\.coordinate).filter { $0.latitude.isFinite && $0.longitude.isFinite }
+        guard coordinates.count >= 2,
+              let minLat = coordinates.map(\.latitude).min(), let maxLat = coordinates.map(\.latitude).max(),
+              let minLng = coordinates.map(\.longitude).min(), let maxLng = coordinates.map(\.longitude).max() else {
+            return MKCoordinateRegion(center: firstPlace.coordinate, latitudinalMeters: 2000, longitudinalMeters: 2000)
+        }
         return MKCoordinateRegion(
-            center: firstPlace.coordinate,
-            latitudinalMeters: CLLocationDistance(max(plan.places.count * 1000, 2000)),
-            longitudinalMeters: CLLocationDistance(max(plan.places.count * 1000, 2000))
+            center: CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2, longitude: (minLng + maxLng) / 2),
+            span: MKCoordinateSpan(latitudeDelta: max((maxLat - minLat) * 1.5, 0.01),
+                                   longitudeDelta: max((maxLng - minLng) * 1.5, 0.01))
         )
     }
 
