@@ -243,7 +243,15 @@ struct EditScheduleItemView: View {
                 )
                 .task { await resolveDestinationTimeZone() }
 
-                if let label = ScheduleItem.dayShiftLabel(dayShift) {
+                // 翌日（1）はスイッチで切り替える。時間帯を直してずれた前日などは知らせて戻せるようにする
+                if dayShift == 1 || ((dayShift ?? 0) == 0 && NextDayToggle.isCandidate(time, in: timeZone)) {
+                    NextDayToggle(
+                        isOn: Binding(get: { dayShift == 1 }, set: { dayShift = $0 ? 1 : nil }),
+                        time: time, timeZone: timeZone,
+                        tint: travelColor, textColor: textColor,
+                        secondaryText: themeManager.currentTheme.secondaryText, fieldBackground: fieldBg
+                    )
+                } else if let label = ScheduleItem.dayShiftLabel(dayShift) {
                     dayShiftNotice(label)
                 }
 

@@ -84,6 +84,33 @@ struct ScheduleReorderTests {
         #expect(a.transportToNextMode == nil)
     }
 
+    @Test("日付をまたぐ予定（翌日 0:30）は、その日の 23:00 より後ろに並ぶ")
+    func nextDayItemSortsLast() {
+        var plan = plan()
+        var checkIn = item("チェックイン", day: 3, 0)
+        checkIn.time = date(3, 0, 30)
+        checkIn.dayShift = 1
+        plan.daySchedules[0].scheduleItems += [item("到着", day: 3, 23), checkIn]
+        #expect(titles(plan, day: 1) == ["A", "B", "C", "到着", "チェックイン"])
+        // 「翌日 0:30」ではなく、その日の続きとして「24:30」と出す
+        #expect(checkIn.dayShiftLabel == nil)
+        #expect(checkIn.timeText == "24:30")
+        checkIn.endTime = date(3, 1, 30)
+        #expect(checkIn.timeRangeText == "24:30〜25:30")
+
+        // 夜をまたぐ予定の終わりも「25:00」
+        var late = item("夜行バス", day: 3, 23)
+        late.endTime = date(4, 1)
+        #expect(late.timeRangeText == "23:00〜25:00")
+
+        // 時間帯を直してずれた翌日の昼は、今までどおり「翌日」
+        var shifted = item("観光", day: 3, 17)
+        shifted.dayShift = 1
+        #expect(shifted.timeRangeText == "翌日 17:00")
+        #expect(NextDayToggle.isCandidate(date(3, 0, 30), in: tokyo))
+        #expect(!NextDayToggle.isCandidate(date(3, 9), in: tokyo))
+    }
+
     @Test("移動の時間は「25分」「1時間10分」で出し、0分以下や1日以上は出さない")
     func transportDuration() {
         #expect(TransportGapRow.durationText(25 * 60) == "25分")
