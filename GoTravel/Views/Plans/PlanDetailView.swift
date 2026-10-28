@@ -1677,10 +1677,23 @@ struct PlanDetailView: View {
                                     let isLast = index == group.items.count - 1
                                     let state = scheduleRowState(index: index, nowIndex: nowIndex)
 
-                                    scheduleItemRow(item: item, isLast: isLast, state: state)
+                                    // 予定の行と間の行をまとめて測り、移動手段のアイコンを区間の真ん中に置く（3.2）。
+                                    // おでかけの予定には終わりの時刻が無いので、移動の時間は出さない
+                                    VStack(spacing: 0) {
+                                        scheduleItemRow(item: item, isLast: isLast, state: state)
 
-                                    if !isLast {
-                                        moveMarkerRow(item: item, state: state)
+                                        if !isLast {
+                                            moveMarkerRow(item: item, state: state)
+                                        }
+                                    }
+                                    .transportBadge(
+                                        mode: isLast ? nil : item.transportToNextMode,
+                                        duration: nil,
+                                        tint: planColor,
+                                        isPast: state == .past,
+                                        leading: 0
+                                    ) { mode in
+                                        setTransport(mode, after: item)
                                     }
                                 }
                             }
@@ -1753,11 +1766,14 @@ struct PlanDetailView: View {
             VStack(spacing: 0) {
                 scheduleDot(state: state)
 
+                // 次の予定までの移動手段を決めていれば、ここから線の種類を変える（3.2）
                 if !isLast {
-                    Rectangle()
-                        .fill(railColor(state: state))
-                        .frame(width: 2)
-                        .frame(maxHeight: .infinity)
+                    TransportRailSegment(
+                        mode: item.transportToNextMode,
+                        tint: planColor,
+                        railColor: railColor(state: state),
+                        isPast: state == .past
+                    )
                 }
             }
             .frame(width: 12)
@@ -1850,36 +1866,18 @@ struct PlanDetailView: View {
             : themeManager.currentTheme.secondaryText.opacity(0.18)
     }
 
-    /// 予定と予定のあいだに挟む移動の目印。
-    ///
-    /// 所要時間は出さない。バス・電車・徒歩を分けて出すには
-    /// 経路計算（`MKDirections`）が要るうえ、電車はそもそも計算できない。
-    /// 「ここで移動する」ことだけ分かれば足りる
-    /// 予定と予定の間。移動手段を選べる（3.2、ご要望から）。
+    /// 予定と予定の間。棒の上に移動手段を出し、押すと選べる（3.2、ご要望から）。
     /// 前は別の場所へ行くときだけ「移動」と出していたが、手段を選べるようにどの間にも出す
     private func moveMarkerRow(item: PlanScheduleItem, state: ScheduleRowState) -> some View {
-        HStack(spacing: 0) {
-            Color.clear.frame(width: 46)
-
-            Rectangle()
-                .fill(railColor(state: state))
-                .frame(width: 2)
-                .frame(maxHeight: .infinity)
-                .frame(width: 12)
-                .padding(.leading, 10)
-                .padding(.trailing, 16)
-
-            TransportGapMenu(
-                mode: item.transportToNextMode,
-                tint: planColor,
-                placeholderColor: themeManager.currentTheme.secondaryText.opacity(0.5)
-            ) { mode in
-                setTransport(mode, after: item)
-            }
-
-            Spacer(minLength: 0)
+        TransportGapRow(
+            mode: item.transportToNextMode,
+            tint: planColor,
+            railColor: railColor(state: state),
+            placeholderColor: themeManager.currentTheme.secondaryText.opacity(0.45),
+            isPast: state == .past
+        ) { mode in
+            setTransport(mode, after: item)
         }
-        .frame(minHeight: 26)
     }
 
     private func setTransport(_ mode: TransportMode?, after item: PlanScheduleItem) {

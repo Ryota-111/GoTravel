@@ -84,6 +84,16 @@ struct ScheduleReorderTests {
         #expect(a.transportToNextMode == nil)
     }
 
+    @Test("移動の時間は「25分」「1時間10分」で出し、0分以下や1日以上は出さない")
+    func transportDuration() {
+        #expect(TransportGapRow.durationText(25 * 60) == "25分")
+        #expect(TransportGapRow.durationText(60 * 60) == "1時間")
+        #expect(TransportGapRow.durationText(70 * 60) == "1時間10分")
+        #expect(TransportGapRow.durationText(0) == nil)
+        #expect(TransportGapRow.durationText(-30 * 60) == nil)
+        #expect(TransportGapRow.durationText(25 * 60 * 60) == nil)
+    }
+
     @Test("予定の地図の番号は、何日目・時刻の順に最初に行く順で、行程に無い場所には付けない")
     func planPlaceOrder() {
         let cafe = PlannedPlace(id: "cafe", name: "カフェ", latitude: 35, longitude: 135)

@@ -718,13 +718,16 @@ struct TravelPlanDetailView: View {
             VStack(spacing: 0) {
                 timelineDot(state: state)
 
+                // 次の予定までの移動手段を決めていれば、ここから線の種類を変える（3.2）
                 if !isLast {
-                    Rectangle()
-                        .fill(state == .past
-                              ? scheduleAccentColor.opacity(0.4)
-                              : themeManager.currentTheme.secondaryText.opacity(0.18))
-                        .frame(width: 2)
-                        .frame(maxHeight: .infinity)
+                    TransportRailSegment(
+                        mode: item.transportToNextMode,
+                        tint: scheduleAccentColor,
+                        railColor: state == .past
+                            ? scheduleAccentColor.opacity(0.4)
+                            : themeManager.currentTheme.secondaryText.opacity(0.18),
+                        isPast: state == .past
+                    )
                 }
             }
             .frame(width: 12)
@@ -1117,32 +1120,25 @@ struct TravelPlanDetailView: View {
     }
 
     /// 予定を一番上に固定する・外す
-    /// 予定と予定の間の行。レールを途切れさせずに、移動手段の札を置く（3.2）
+    /// 予定と予定の間の行。棒の上に移動手段を出す（3.2）
+    /// 終わりの時刻があるときだけ、終わり〜次の始まりを移動の時間とする
+    private func transportDuration(from item: ScheduleItem, to next: ScheduleItem?) -> TimeInterval? {
+        guard let next, let endTime = item.endTime else { return nil }
+        return next.time.timeIntervalSince(endTime)
+    }
+
     private func transportGapRow(item: ScheduleItem, plan: TravelPlan, state: TimelineRowState) -> some View {
-        HStack(spacing: 0) {
-            Color.clear.frame(width: 46)
-
-            Rectangle()
-                .fill(state == .past
-                      ? scheduleAccentColor.opacity(0.4)
-                      : themeManager.currentTheme.secondaryText.opacity(0.18))
-                .frame(width: 2)
-                .frame(maxHeight: .infinity)
-                .frame(width: 12)
-                .padding(.leading, 10)
-                .padding(.trailing, 16)
-
-            TransportGapMenu(
-                mode: item.transportToNextMode,
-                tint: scheduleAccentColor,
-                placeholderColor: themeManager.currentTheme.secondaryText.opacity(0.5)
-            ) { mode in
-                setTransport(mode, after: item, in: plan)
-            }
-
-            Spacer(minLength: 0)
+        TransportGapRow(
+            mode: item.transportToNextMode,
+            tint: scheduleAccentColor,
+            railColor: state == .past
+                ? scheduleAccentColor.opacity(0.4)
+                : themeManager.currentTheme.secondaryText.opacity(0.18),
+            placeholderColor: themeManager.currentTheme.secondaryText.opacity(0.45),
+            isPast: state == .past
+        ) { mode in
+            setTransport(mode, after: item, in: plan)
         }
-        .frame(minHeight: 26)
         .padding(.horizontal, 4)
     }
 
@@ -1527,27 +1523,39 @@ struct TravelPlanDetailView: View {
                 let nowIndex = nextItemIndex(in: sortedItems, dayDate: daySchedule.date)
                 VStack(spacing: 0) {
                     ForEach(Array(sortedItems.enumerated()), id: \.element.id) { index, item in
-                        timelineItemView(
-                            item: item,
-                            isLast: index == sortedItems.count - 1,
-                            plan: plan,
-                            state: rowState(index: index, nowIndex: nowIndex)
-                        )
-                        // 選択中は、行の中のボタン（案内・リンクなど）を止めて、どこを押しても選べるようにする
-                        .allowsHitTesting(!isSelectingItems)
-                        .overlay {
-                            if isSelectingItems {
-                                Color.clear
-                                    .contentShape(Rectangle())
-                                    .onTapGesture { toggleItemSelection(item) }
+                        let state = rowState(index: index, nowIndex: nowIndex)
+                        let next = sortedItems.indices.contains(index + 1) ? sortedItems[index + 1] : nil
+                        // 予定の行と、次の予定までの間の行（3.2）。まとめて測り、移動手段のアイコンを区間の真ん中に置く
+                        VStack(spacing: 0) {
+                            timelineItemView(
+                                item: item,
+                                isLast: next == nil,
+                                plan: plan,
+                                state: state
+                            )
+                            // 選択中は、行の中のボタン（案内・リンクなど）を止めて、どこを押しても選べるようにする
+                            .allowsHitTesting(!isSelectingItems)
+                            .overlay {
+                                if isSelectingItems {
+                                    Color.clear
+                                        .contentShape(Rectangle())
+                                        .onTapGesture { toggleItemSelection(item) }
+                                }
+                            }
+
+                            if next != nil {
+                                transportGapRow(item: item, plan: plan, state: state)
+                                    .allowsHitTesting(!isSelectingItems)
                             }
                         }
-
-                        // 次の予定までの移動手段（3.2）
-                        if index < sortedItems.count - 1 {
-                            transportGapRow(item: item, plan: plan,
-                                            state: rowState(index: index, nowIndex: nowIndex))
-                                .allowsHitTesting(!isSelectingItems)
+                        .transportBadge(
+                            mode: next == nil ? nil : item.transportToNextMode,
+                            duration: transportDuration(from: item, to: next),
+                            tint: scheduleAccentColor,
+                            isPast: state == .past,
+                            leading: 4
+                        ) { mode in
+                            setTransport(mode, after: item, in: plan)
                         }
                     }
                 }
@@ -1850,12 +1858,23 @@ struct TravelPlanDetailView: View {
                 let nowIndex = nextItemIndex(in: sortedItems, dayDate: daySchedule.date)
                 VStack(spacing: 0) {
                     ForEach(Array(sortedItems.enumerated()), id: \.element.id) { index, item in
+                        let next = sortedItems.indices.contains(index + 1) ? sortedItems[index + 1] : nil
                         timelineItemView(
                             item: item,
-                            isLast: index == sortedItems.count - 1,
+                            isLast: next == nil,
                             plan: plan,
                             state: rowState(index: index, nowIndex: nowIndex)
                         )
+                            // 地図タブの行程表には間の行を挟まないので、予定の行の中で区間の真ん中に置く（3.2）
+                            .transportBadge(
+                                mode: next == nil ? nil : item.transportToNextMode,
+                                duration: transportDuration(from: item, to: next),
+                                tint: scheduleAccentColor,
+                                isPast: rowState(index: index, nowIndex: nowIndex) == .past,
+                                leading: 4
+                            ) { mode in
+                                setTransport(mode, after: item, in: plan)
+                            }
                             .id(item.id)
                             .background(
                                 RoundedRectangle(cornerRadius: 10)
