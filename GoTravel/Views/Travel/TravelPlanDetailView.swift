@@ -156,6 +156,8 @@ struct TravelPlanDetailView: View {
     @State private var isSelectingItems = false
     @State private var selectedItemIDs: Set<String> = []
     @State private var showBulkItemDeleteConfirmation = false
+    /// 行程と日程の並び替え（3.2）
+    @State private var showsReorder = false
     /// 共有した旅行で、誰の時間軸を見ているか。nil なら全員
     @State private var memberFilter: String?
     /// 出せなかった理由。文言とアイコンは種類ごとに変える
@@ -385,6 +387,14 @@ struct TravelPlanDetailView: View {
             AddScheduleItemView(plan: plan, dayNumber: selectedDay)
                 .environmentObject(viewModel)
                 .environmentObject(authVM)
+        }
+        .sheet(isPresented: $showsReorder) {
+            ScheduleReorderView(plan: plan, dayNumber: selectedDay, memberFilter: memberFilter) { updated in
+                guard let userId = authVM.userId else { return }
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    viewModel.update(updated, userId: userId)
+                }
+            }
         }
         .fullScreenCover(isPresented: $showScheduleMap) {
             TravelPlanMapView(
@@ -1444,6 +1454,15 @@ struct TravelPlanDetailView: View {
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(accentColor)
                 Spacer()
+
+                // 予定が2件以上あるか、日が2日以上あれば並び替えられる（3.2）
+                if !isSelectingItems,
+                   plan.timelineScheduleItems(onDay: selectedDay, for: memberFilter).count >= 2 || plan.daySchedules.count >= 2 {
+                    Button("並び替え") { showsReorder = true }
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(scheduleAccentColor)
+                        .padding(.trailing, 4)
+                }
 
                 // その日の予定があるときだけ出す
                 if !plan.timelineScheduleItems(onDay: selectedDay, for: memberFilter).isEmpty || isSelectingItems {
