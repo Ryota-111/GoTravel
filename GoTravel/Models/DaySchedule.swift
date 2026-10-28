@@ -116,9 +116,14 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
     /// 割り勘（3.1）：人ごとに決めた金額（円）。決めていない人は、残りを同じ額ずつ分ける。nil なら均等
     var splitAmounts: [String: Double]?
 
+    /// 次の予定までの移動手段（`TransportMode` の rawValue）。無ければ出さない（3.2、ご要望から）。
+    /// JSON の中の項目なので、CloudKit のスキーマ変更は要らない
+    var transportToNext: String?
+
     enum CodingKeys: String, CodingKey {
         case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId, timeZoneIdentifier, isPinned, participantIds, foreignCost, reservationPart, costNote, endTime, endTimeZoneIdentifier, address, dayShift
         case paidBy, splitWith, splitAmounts
+        case transportToNext
     }
 
     /// 書き出しや共有カードに出す金額。

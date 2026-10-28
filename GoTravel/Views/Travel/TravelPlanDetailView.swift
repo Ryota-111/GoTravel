@@ -1107,6 +1107,48 @@ struct TravelPlanDetailView: View {
     }
 
     /// 予定を一番上に固定する・外す
+    /// 予定と予定の間の行。レールを途切れさせずに、移動手段の札を置く（3.2）
+    private func transportGapRow(item: ScheduleItem, plan: TravelPlan, state: TimelineRowState) -> some View {
+        HStack(spacing: 0) {
+            Color.clear.frame(width: 46)
+
+            Rectangle()
+                .fill(state == .past
+                      ? scheduleAccentColor.opacity(0.4)
+                      : themeManager.currentTheme.secondaryText.opacity(0.18))
+                .frame(width: 2)
+                .frame(maxHeight: .infinity)
+                .frame(width: 12)
+                .padding(.leading, 10)
+                .padding(.trailing, 16)
+
+            TransportGapMenu(
+                mode: item.transportToNextMode,
+                tint: scheduleAccentColor,
+                placeholderColor: themeManager.currentTheme.secondaryText.opacity(0.5)
+            ) { mode in
+                setTransport(mode, after: item, in: plan)
+            }
+
+            Spacer(minLength: 0)
+        }
+        .frame(minHeight: 26)
+        .padding(.horizontal, 4)
+    }
+
+    private func setTransport(_ mode: TransportMode?, after item: ScheduleItem, in plan: TravelPlan) {
+        guard let userId = authVM.userId else { return }
+        var updatedPlan = plan
+        for dayIndex in updatedPlan.daySchedules.indices {
+            if let itemIndex = updatedPlan.daySchedules[dayIndex].scheduleItems.firstIndex(where: { $0.id == item.id }) {
+                updatedPlan.daySchedules[dayIndex].scheduleItems[itemIndex].transportToNext = mode?.rawValue
+            }
+        }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            viewModel.update(updatedPlan, userId: userId)
+        }
+    }
+
     private func togglePin(_ item: ScheduleItem, in plan: TravelPlan) {
         guard let userId = authVM.userId else { return }
         var updatedPlan = plan
@@ -1480,6 +1522,13 @@ struct TravelPlanDetailView: View {
                                     .contentShape(Rectangle())
                                     .onTapGesture { toggleItemSelection(item) }
                             }
+                        }
+
+                        // 次の予定までの移動手段（3.2）
+                        if index < sortedItems.count - 1 {
+                            transportGapRow(item: item, plan: plan,
+                                            state: rowState(index: index, nowIndex: nowIndex))
+                                .allowsHitTesting(!isSelectingItems)
                         }
                     }
                 }

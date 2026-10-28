@@ -1679,8 +1679,8 @@ struct PlanDetailView: View {
 
                                     scheduleItemRow(item: item, isLast: isLast, state: state)
 
-                                    if !isLast, needsMoveMarker(from: item, to: group.items[index + 1]) {
-                                        moveMarkerRow(state: state)
+                                    if !isLast {
+                                        moveMarkerRow(item: item, state: state)
                                     }
                                 }
                             }
@@ -1855,7 +1855,9 @@ struct PlanDetailView: View {
     /// 所要時間は出さない。バス・電車・徒歩を分けて出すには
     /// 経路計算（`MKDirections`）が要るうえ、電車はそもそも計算できない。
     /// 「ここで移動する」ことだけ分かれば足りる
-    private func moveMarkerRow(state: ScheduleRowState) -> some View {
+    /// 予定と予定の間。移動手段を選べる（3.2、ご要望から）。
+    /// 前は別の場所へ行くときだけ「移動」と出していたが、手段を選べるようにどの間にも出す
+    private func moveMarkerRow(item: PlanScheduleItem, state: ScheduleRowState) -> some View {
         HStack(spacing: 0) {
             Color.clear.frame(width: 46)
 
@@ -1867,24 +1869,27 @@ struct PlanDetailView: View {
                 .padding(.leading, 10)
                 .padding(.trailing, 16)
 
-            HStack(spacing: 5) {
-                Image(systemName: "arrow.down")
-                    .font(.system(size: 10, weight: .bold))
-                Text("移動")
-                    .font(.system(size: 11, weight: .semibold))
+            TransportGapMenu(
+                mode: item.transportToNextMode,
+                tint: planColor,
+                placeholderColor: themeManager.currentTheme.secondaryText.opacity(0.5)
+            ) { mode in
+                setTransport(mode, after: item)
             }
-            .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.75))
 
             Spacer(minLength: 0)
         }
-        .frame(height: 26)
+        .frame(minHeight: 26)
     }
 
-    /// 移動を挟むのは、続けて別の場所へ行くときだけ。
-    /// 場所が入っていない項目や、同じ場所での続きには出さない
-    private func needsMoveMarker(from: PlanScheduleItem, to: PlanScheduleItem) -> Bool {
-        guard let fromPlace = from.placeId, let toPlace = to.placeId else { return false }
-        return fromPlace != toPlace
+    private func setTransport(_ mode: TransportMode?, after item: PlanScheduleItem) {
+        guard let index = plan.scheduleItems.firstIndex(where: { $0.id == item.id }) else { return }
+        var updatedPlan = plan
+        updatedPlan.scheduleItems[index].transportToNext = mode?.rawValue
+        plan = updatedPlan
+        if let userId = authVM.userId {
+            viewModel.update(updatedPlan, userId: userId)
+        }
     }
 
     /// 次に控えている1件の位置。その日が今日でなければ nil
