@@ -59,10 +59,12 @@ struct TripDigestView: View {
 
     private var usable: [TripDigest.Source] { sources.filter { !excluded.contains($0.id) } }
 
-    /// カードに並べる範囲（コマが1つも無い日は出さない）
+    /// カードに並べる範囲（コマが1つも無い日は出さない）。
+    /// 旅行の期間の写真が1枚も無いときは、全部の日を写真なしで出す（「＋ 足す」で写真を入れられるように）
     private var scopes: [TripDigest.Scope] {
-        let days = (1...max(plan.dayCount, 1)).map { TripDigest.Scope.day($0) }
-        return ([.trip] + days).filter { !clips(for: $0).isEmpty }
+        let all = [TripDigest.Scope.trip] + (1...max(plan.dayCount, 1)).map { TripDigest.Scope.day($0) }
+        let withClips = all.filter { !clips(for: $0).isEmpty }
+        return withClips.isEmpty ? all : withClips
     }
 
     private func clips(for scope: TripDigest.Scope) -> [TripDigest.Clip] {
@@ -83,11 +85,7 @@ struct TripDigestView: View {
                 case .noAccess:
                     noAccessView
                 case .ready:
-                    if scopes.isEmpty {
-                        emptyView
-                    } else {
-                        carousel
-                    }
+                    carousel
                 }
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -214,18 +212,6 @@ struct TripDigestView: View {
             .disabled(saved == nil)
         }
         .frame(maxWidth: .infinity)
-    }
-
-    private var emptyView: some View {
-        VStack(spacing: 12) {
-            Image(systemName: "photo.on.rectangle.angled")
-                .font(.system(size: 44))
-                .foregroundColor(.secondary)
-            Text("この旅行の期間に撮った写真や動画が見つかりませんでした。")
-                .multilineTextAlignment(.center)
-                .foregroundColor(.secondary)
-        }
-        .padding(32)
     }
 
     private var noAccessView: some View {
@@ -522,7 +508,15 @@ private struct DigestCoverCard: View {
     var body: some View {
         Color.clear
             .aspectRatio(3 / 4.6, contentMode: .fit)
-            .overlay { AssetImage(asset: clips.first.flatMap { assets[$0.sourceId] }) }
+            .overlay {
+                if clips.isEmpty {
+                    // 写真が無い日は、白い文字が読める色の地にする
+                    LinearGradient(colors: [Color(red: 0.2, green: 0.38, blue: 0.62), Color(red: 0.12, green: 0.2, blue: 0.34)],
+                                   startPoint: .top, endPoint: .bottom)
+                } else {
+                    AssetImage(asset: clips.first.flatMap { assets[$0.sourceId] })
+                }
+            }
             .overlay {
                 LinearGradient(colors: [.black.opacity(0.35), .clear, .clear, .black.opacity(0.55)],
                                startPoint: .top, endPoint: .bottom)
@@ -530,6 +524,10 @@ private struct DigestCoverCard: View {
             .overlay(alignment: .topLeading) { dateMark.padding(20) }
             .overlay(alignment: .bottomLeading) {
                 VStack(alignment: .leading, spacing: 8) {
+                    if clips.isEmpty {
+                        Label("写真なし・押して足せます", systemImage: "plus.rectangle.on.rectangle")
+                            .font(.footnote.weight(.semibold))
+                    }
                     if let places {
                         Label(places, systemImage: "mappin.and.ellipse")
                             .font(.footnote.weight(.semibold))
@@ -688,8 +686,15 @@ private struct DigestReviewView: View {
     }
 
     /// 日ごとのまとまり
+    /// コマが無い日も出す（見出しの「＋ 足す」から写真を入れられるように）
     private var days: [(day: Int, clips: [TripDigest.Clip])] {
-        Dictionary(grouping: clips, by: \.dayNumber).sorted { $0.key < $1.key }.map { ($0.key, $0.value) }
+        let grouped = Dictionary(grouping: clips, by: \.dayNumber)
+        let numbers: [Int]
+        switch scope {
+        case .day(let n): numbers = [n]
+        case .trip: numbers = Array(1...max(plan.dayCount, 1))
+        }
+        return numbers.map { ($0, grouped[$0] ?? []) }
     }
 
     var body: some View {
@@ -707,6 +712,15 @@ private struct DigestReviewView: View {
                     Section {
                         ForEach(group.clips) { clip in
                             row(clip)
+                        }
+                        if group.clips.isEmpty {
+                            Text("この日の写真や動画はまだありません。「＋ 足す」で入れられます。")
+                                .font(.footnote)
+                                .foregroundColor(.secondary)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                                .padding(14)
+                                .background(RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                    .fill(Color(.secondarySystemGroupedBackground)))
                         }
                     } header: {
                         dayHeader(group.day, count: group.clips.count)
