@@ -2,6 +2,7 @@ import AVFoundation
 import Photos
 import UIKit
 import CoreImage
+import CoreImage.CIFilterBuiltins
 
 /// 旅のダイジェストの動画を作る（Travory Pro）。
 ///
@@ -9,7 +10,10 @@ import CoreImage
 /// 時刻と場所の文字を重ね、縦長（1080 × 1920）の mp4 に書き出す。端末の中だけで作り、どこにも上げない
 enum TripDigestComposer {
 
-    static let renderSize = CGSize(width: 1080, height: 1920)
+    /// 書き出す大きさ。選んでいる画面の形（縦長・正方形・横長。3.2）で変わる
+    static var renderSize: CGSize { DigestShape.current.size }
+    /// 横 ÷ 縦（見本の枠に使う）
+    static var aspectRatio: CGFloat { renderSize.width / renderSize.height }
     static let fps: Int32 = 30
 
     /// 時刻・場所の文字を置く位置
@@ -140,10 +144,22 @@ enum TripDigestComposer {
     ///   - title: 最初のコマに大きく出す題名（旅行名と日付）
     ///   - watermark: 右下に小さく「Travory」を入れる（無料のとき）
     ///   - endCard: 最後に1秒「Travory」の印を入れる（無料のとき）
+    ///   - opening: 最初に題名のカードを入れる（3.2）。入れるときは、1コマ目に題名を重ねない
+    ///   - mapCard: 最後（印の前）に入れる地図のカード（3.2。経路が伸びていく）
+    ///   - music: 下に敷く曲（3.2）。動画より短ければくり返し、最後はだんだん小さくする
+    ///   - keepsOriginalSound: 動画のコマの音を残すか。曲を敷くときは小さめにする
+    ///   - edits: コマごとのトリミングと、動画を何秒目から使うか（写真・動画の id ごと。3.2）
+    ///   - look: 色味（3.2）。題名のカードの背景にもかける
     static func compose(_ items: [Item], title: String, subtitle: String, fileName: String,
                         textPosition: TextPosition = .bottomLeft,
                         watermark: Bool = false,
                         endCard: Bool = false,
+                        opening: Opening? = nil,
+                        mapCard: MapCard? = nil,
+                        music: URL? = nil,
+                        keepsOriginalSound: Bool = true,
+                        edits: [String: DigestClipEdit] = [:],
+                        look: DigestLook = .natural,
                         progress: @escaping @Sendable (Double) -> Void = { _ in }) async throws -> URL {
         guard !items.isEmpty else { throw ComposeError.empty }
         let work = FileManager.default.temporaryDirectory.appendingPathComponent("digest-\(UUID().uuidString)", isDirectory: true)
@@ -156,34 +172,65 @@ enum TripDigestComposer {
         var audioTrack: AVMutableCompositionTrack?
         var cursor = CMTime.zero
 
+        /// 絵を書いた動画を、今の位置に足す（題名・地図のカード）
+        func appendSegment(_ name: String, seconds: Double, draw: (Int, Int) -> CIImage?) async throws {
+            let url = work.appendingPathComponent("\(name).mov")
+            try await writeSegment(to: url, seconds: seconds, draw: draw)
+            let segment = AVURLAsset(url: url)
+            guard let track = try await segment.loadTracks(withMediaType: .video).first else { return }
+            let duration = try await segment.load(.duration)
+            try videoTrack.insertTimeRange(CMTimeRange(start: .zero, duration: duration), of: track, at: cursor)
+            cursor = CMTimeAdd(cursor, duration)
+        }
+
+        /// 題名のカードの文字（コマごとに描かず、1枚を動かして使う）
+        let openingText = opening.flatMap(openingTextImage)
+        /// 1コマの秒数（3.2で選べるようにした）
+        let clipSeconds = TripDigest.clipSeconds
+        /// 1コマ目の文字を出し切るまでのコマ数（題名のカードのあと、文字がいきなり出ないように）
+        let overlayFadeFrames = 0.4 * Double(fps)
+
         for (index, item) in items.enumerated() {
             try Task.checkCancellation()
-            let overlay = overlayImage(for: item.clip, title: index == 0 ? title : nil, subtitle: subtitle,
+            // 1コマ目（読めずに飛ばしたコマは数えない）
+            let isFirst = cursor == .zero
+            let fadesIn = isFirst && opening != nil
+            // 題名のカードを入れたときは、1コマ目に題名を重ねない
+            let overlay = overlayImage(for: item.clip, title: isFirst && opening == nil ? title : nil, subtitle: subtitle,
                                        position: textPosition, watermark: watermark)
+            func overlayAlpha(_ frame: Int) -> Double { fadesIn ? min(1, Double(frame) / overlayFadeFrames) : 1 }
             let segmentURL = work.appendingPathComponent("\(index).mov")
             var audioSource: (track: AVAssetTrack, range: CMTimeRange)?
+            /// このコマの最初の絵（題名のカードは、これにピントが合って終わる）
+            var firstFrame: CIImage?
+            let edit = edits[item.clip.sourceId] ?? DigestClipEdit()
             switch item.media {
             case .image(let image):
-                try await writeSegment(to: segmentURL, seconds: TripDigest.clipSeconds) { frame, frames in
-                    guard let cg = image.cgImage else { return nil }
-                    let zoom = 1 + 0.06 * Double(frame) / Double(max(frames - 1, 1))
-                    return fill(CIImage(cgImage: cg), zoom: zoom).composited(over: .black)
-                        .applyingOverlay(overlay)
+                guard let cg = image.cgImage else { continue }
+                let source = CIImage(cgImage: cg)
+                firstFrame = frameImage(source, edit: edit, look: look)
+                try await writeSegment(to: segmentURL, seconds: clipSeconds) { frame, frames in
+                    // 写真は少しずつ寄っていく
+                    let motion = 1 + 0.06 * Double(frame) / Double(max(frames - 1, 1))
+                    return frameImage(source, edit: edit, look: look, motion: motion)
+                        .applyingOverlay(overlay, alpha: overlayAlpha(frame))
                 }
             case .video(let video):
                 guard let source = try await video.loadTracks(withMediaType: .video).first else { continue }
                 let total = try await video.load(.duration)
-                let length = CMTimeMinimum(CMTime(seconds: TripDigest.clipSeconds, preferredTimescale: 600), total)
-                // 動画は真ん中を使う（撮りはじめと撮り終わりはぶれやすい）
-                let start = CMTimeMaximum(.zero, CMTimeMultiplyByRatio(CMTimeSubtract(total, length), multiplier: 1, divisor: 2))
-                let range = CMTimeRange(start: start, duration: length)
+                // 決めていなければ真ん中を使う（撮りはじめと撮り終わりはぶれやすい）
+                let used = edit.videoRange(duration: total.seconds, length: clipSeconds)
+                let range = CMTimeRange(start: CMTime(seconds: used.start, preferredTimescale: 600),
+                                        duration: CMTime(seconds: used.length, preferredTimescale: 600))
                 let frames = try await readFrames(of: video, track: source, range: range)
                 guard !frames.isEmpty else { continue }
-                try await writeSegment(to: segmentURL, seconds: length.seconds) { frame, total in
+                firstFrame = frameImage(frames[0], edit: edit, look: look)
+                try await writeSegment(to: segmentURL, seconds: used.length) { frame, total in
                     let index = min(frames.count - 1, Int(Double(frame) / Double(max(total, 1)) * Double(frames.count)))
-                    return fill(frames[index], zoom: 1).composited(over: .black).applyingOverlay(overlay)
+                    return frameImage(frames[index], edit: edit, look: look)
+                        .applyingOverlay(overlay, alpha: overlayAlpha(frame))
                 }
-                if let audio = try await video.loadTracks(withMediaType: .audio).first {
+                if keepsOriginalSound, let audio = try await video.loadTracks(withMediaType: .audio).first {
                     audioSource = (audio, range)
                 }
             }
@@ -191,6 +238,13 @@ enum TripDigestComposer {
             let segment = AVURLAsset(url: segmentURL)
             guard let segmentTrack = try await segment.loadTracks(withMediaType: .video).first else { continue }
             let segmentDuration = try await segment.load(.duration)
+            // 題名のカードは1コマ目の前に入れる。ぼかした1コマ目の最初の絵から始まり、最後にピントが合う
+            if fadesIn, let firstFrame {
+                try await appendSegment("opening", seconds: openingSeconds) { frame, frames in
+                    openingFrame(background: firstFrame, text: openingText,
+                                 time: openingSeconds * Double(frame) / Double(max(frames - 1, 1)))
+                }
+            }
             try videoTrack.insertTimeRange(CMTimeRange(start: .zero, duration: segmentDuration), of: segmentTrack, at: cursor)
             if let audioSource {
                 if audioTrack == nil {
@@ -205,6 +259,12 @@ enum TripDigestComposer {
         }
         guard cursor > .zero else { throw ComposeError.failed }
 
+        if let mapCard {
+            try await appendSegment("map", seconds: MapCard.seconds) { frame, frames in
+                mapCard.frame(at: MapCard.seconds * Double(frame) / Double(max(frames - 1, 1)))
+            }
+        }
+
         // 無料のときは、最後に1秒「Travory」の印を入れる（右下の小さな文字とあわせて。Pro は印なし）
         if endCard, let card = endCardImage() {
             let url = work.appendingPathComponent("end.mov")
@@ -217,11 +277,45 @@ enum TripDigestComposer {
             }
         }
 
+        // 曲を敷く。短ければくり返し、最初は少しずつ大きく、最後の1.5秒でだんだん小さくする。
+        // 動画のコマの音は、曲の邪魔にならないよう小さめにする
+        var mixParameters: [AVMutableAudioMixInputParameters] = []
+        if let music {
+            let musicAsset = AVURLAsset(url: music)
+            if let source = try? await musicAsset.loadTracks(withMediaType: .audio).first,
+               let musicTrack = composition.addMutableTrack(withMediaType: .audio, preferredTrackID: kCMPersistentTrackID_Invalid) {
+                let length = try await musicAsset.load(.duration)
+                var at = CMTime.zero
+                while CMTimeCompare(at, cursor) < 0 && CMTimeCompare(length, .zero) > 0 {
+                    let piece = CMTimeMinimum(length, CMTimeSubtract(cursor, at))
+                    try musicTrack.insertTimeRange(CMTimeRange(start: .zero, duration: piece), of: source, at: at)
+                    at = CMTimeAdd(at, piece)
+                }
+                let parameters = AVMutableAudioMixInputParameters(track: musicTrack)
+                let fadeIn = CMTime(seconds: 0.5, preferredTimescale: 600)
+                let fadeOut = CMTime(seconds: min(1.5, cursor.seconds / 3), preferredTimescale: 600)
+                parameters.setVolumeRamp(fromStartVolume: 0, toEndVolume: 0.8, timeRange: CMTimeRange(start: .zero, duration: fadeIn))
+                parameters.setVolumeRamp(fromStartVolume: 0.8, toEndVolume: 0,
+                                         timeRange: CMTimeRange(start: CMTimeSubtract(cursor, fadeOut), duration: fadeOut))
+                mixParameters.append(parameters)
+                if let audioTrack {
+                    let original = AVMutableAudioMixInputParameters(track: audioTrack)
+                    original.setVolume(0.45, at: .zero)
+                    mixParameters.append(original)
+                }
+            }
+        }
+
         try Task.checkCancellation()
         let output = FileManager.default.temporaryDirectory.appendingPathComponent(fileName)
         try? FileManager.default.removeItem(at: output)
         guard let session = AVAssetExportSession(asset: composition, presetName: AVAssetExportPresetHighestQuality)
         else { throw ComposeError.failed }
+        if !mixParameters.isEmpty {
+            let mix = AVMutableAudioMix()
+            mix.inputParameters = mixParameters
+            session.audioMix = mix
+        }
         try await session.export(to: output, as: .mp4)
         progress(1)
         return output
@@ -229,17 +323,36 @@ enum TripDigestComposer {
 
     private static let ciContext = CIContext(options: [.cacheIntermediates: false])
 
-    /// 縦長の画面いっぱいに広げる（はみ出したところは切る）
-    static func fill(_ image: CIImage, zoom: Double) -> CIImage {
+    /// 画面いっぱいに広げる（はみ出したところは切る）。focus（左上が 0）が画面の真ん中に来るよう寄せるが、
+    /// 写真の外が見えるところまでは寄せない
+    static func fill(_ image: CIImage, zoom: Double, focus: CGPoint = CGPoint(x: 0.5, y: 0.5)) -> CIImage {
+        fill(image, zoom: zoom, focus: focus, canvas: renderSize)
+    }
+
+    /// canvas の大きさに広げる（見本の動画のように、作る処理の外からも使う）
+    nonisolated static func fill(_ image: CIImage, zoom: Double, focus: CGPoint, canvas: CGSize) -> CIImage {
         let extent = image.extent
-        let scale = max(renderSize.width / extent.width, renderSize.height / extent.height) * zoom
-        let scaled = image
+        let size = DigestClipEdit.filledSize(of: extent.size, in: canvas, zoom: zoom)
+        let origin = DigestClipEdit.origin(of: extent.size, in: canvas, zoom: zoom, focus: focus)
+        let scale = size.width / extent.width
+        // CIImage は下が 0 なので、上からの位置を下からに直す
+        return image
             .transformed(by: CGAffineTransform(translationX: -extent.minX, y: -extent.minY))
             .transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        let offsetX = (renderSize.width - extent.width * scale) / 2
-        let offsetY = (renderSize.height - extent.height * scale) / 2
-        return scaled.transformed(by: CGAffineTransform(translationX: offsetX, y: offsetY))
-            .cropped(to: CGRect(origin: .zero, size: renderSize))
+            .transformed(by: CGAffineTransform(translationX: origin.x, y: canvas.height - origin.y - size.height))
+            .cropped(to: CGRect(origin: .zero, size: canvas))
+    }
+
+    /// 1コマの絵：トリミングして画面いっぱいに広げ、色味をかける。motion は写真を少しずつ寄せる倍率
+    static func frameImage(_ source: CIImage, edit: DigestClipEdit = DigestClipEdit(), look: DigestLook = .natural,
+                           motion: Double = 1) -> CIImage {
+        frameImage(source, edit: edit, look: look, motion: motion, canvas: renderSize)
+    }
+
+    nonisolated static func frameImage(_ source: CIImage, edit: DigestClipEdit, look: DigestLook,
+                                       motion: Double, canvas: CGSize) -> CIImage {
+        let filled = fill(source, zoom: edit.zoom * motion, focus: CGPoint(x: edit.focusX, y: edit.focusY), canvas: canvas)
+        return look.apply(to: filled.composited(over: .black)).cropped(to: CGRect(origin: .zero, size: canvas))
     }
 
     /// 動画の、その範囲のコマを読む（縦に撮った動画は向きを直す）
@@ -321,6 +434,15 @@ enum TripDigestComposer {
     /// watermark なら右下に小さく「Travory」を入れる（左下の文字より下に置くので重ならない）
     static func overlayImage(for clip: TripDigest.Clip, title: String?, subtitle: String,
                              position: TextPosition = .bottomLeft, watermark: Bool = false) -> CIImage? {
+        overlayImage(caption: "Day \(clip.dayNumber)   \(clip.timeText)", headline: clip.placeName,
+                     title: title, subtitle: subtitle, position: position, watermark: watermark)
+    }
+
+    /// コマの文字（小さい1行 `caption` と、大きい `headline`）を選んだ位置に置く。地図のカードも同じ見た目にするため分けた。
+    /// - Parameter centerTop: 真ん中のときの文字の上端（画面の高さに対する割合）。地図のカードは経路と重ならないよう下げる
+    static func overlayImage(caption: String, headline: String?, title: String?, subtitle: String,
+                             position: TextPosition = .bottomLeft, watermark: Bool = false,
+                             centerTop: CGFloat? = nil) -> CIImage? {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = false
@@ -376,13 +498,13 @@ enum TripDigestComposer {
                 return height
             }
 
-            let timeText = "Day \(clip.dayNumber)   \(clip.timeText)"
+            let timeText = caption
             let width = W - margin * 2
             switch position {
             case .bottomLeft:
                 // 下から積む：場所の名前（2行まで）、その上に時刻
                 var bottom = H - 150
-                if let place = clip.placeName {
+                if let place = headline {
                     bottom -= draw(place, size: 64, weight: .bold, align: .left, width: width,
                                    origin: CGPoint(x: margin, y: bottom), fromBottom: true) + 8
                 }
@@ -392,16 +514,16 @@ enum TripDigestComposer {
                 var top: CGFloat = 170
                 top += draw(timeText, size: 44, weight: .semibold, align: .right, width: width,
                             origin: CGPoint(x: margin, y: top)) + 8
-                if let place = clip.placeName {
+                if let place = headline {
                     draw(place, size: 64, weight: .bold, align: .right, width: width,
                          origin: CGPoint(x: margin, y: top))
                 }
             case .center:
                 // 最初のコマは題名の下に置く
-                var top: CGFloat = title == nil ? H * 0.44 : H * 0.56
+                var top: CGFloat = centerTop.map { H * $0 } ?? (title == nil ? H * 0.44 : H * 0.56)
                 top += draw(timeText, size: 44, weight: .semibold, align: .center, width: width,
                             origin: CGPoint(x: margin, y: top)) + 8
-                if let place = clip.placeName {
+                if let place = headline {
                     draw(place, size: 64, weight: .bold, align: .center, width: width,
                          origin: CGPoint(x: margin, y: top))
                 }
@@ -448,9 +570,16 @@ extension TripDigestComposer {
     }
 }
 
-private extension CIImage {
-    func applyingOverlay(_ overlay: CIImage?) -> CIImage {
-        guard let overlay else { return self }
-        return overlay.composited(over: self)
+extension CIImage {
+    /// 文字などを重ねる。alpha が 1 より小さければ薄く重ねる（だんだん出すとき）
+    func applyingOverlay(_ overlay: CIImage?, alpha: Double = 1) -> CIImage {
+        guard let overlay, alpha > 0 else { return self }
+        let covered = overlay.composited(over: self)
+        guard alpha < 1 else { return covered }
+        let dissolve = CIFilter.dissolveTransition()
+        dissolve.inputImage = self
+        dissolve.targetImage = covered
+        dissolve.time = Float(alpha)
+        return dissolve.outputImage ?? covered
     }
 }

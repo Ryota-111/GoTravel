@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import CoreImage
 @testable import GoTravel
 
 /// 行程と日程の並び替え・移動手段・予定の地図の番号（3.2）。
@@ -135,5 +136,126 @@ struct ScheduleReorderTests {
                         ])
         #expect(plan.placeOrder == ["temple": 1, "cafe": 2])
         #expect(plan.placesInVisitOrder.map(\.id) == ["temple", "cafe"])
+    }
+}
+
+/// 旅のダイジェストの地図のカードに出す場所（3.2）
+struct TripDigestMapStopsTests {
+    private let tokyo = TimeZone(identifier: "Asia/Tokyo")!
+
+    private func date(_ day: Int, _ hour: Int) -> Date {
+        ScheduleClock.calendar(in: tokyo).date(from: DateComponents(year: 2026, month: 11, day: day, hour: hour))!
+    }
+
+    private func item(_ title: String, day: Int, _ hour: Int, lat: Double?, location: String? = nil) -> ScheduleItem {
+        ScheduleItem(time: date(day, hour), title: title, location: location,
+                     latitude: lat, longitude: lat.map { $0 + 100 }, timeZoneIdentifier: tokyo.identifier)
+    }
+
+    private func plan() -> TravelPlan {
+        var plan = TravelPlan(title: "京都", startDate: date(3, 0), endDate: date(4, 0), destination: "京都")
+        plan.daySchedules = [
+            DaySchedule(dayNumber: 1, date: date(3, 0), scheduleItems: [
+                item("お昼", day: 3, 12, lat: 35.01, location: "錦市場"),
+                item("清水寺", day: 3, 9, lat: 35.00),
+                item("移動", day: 3, 10, lat: nil),
+                item("錦市場でおやつ", day: 3, 13, lat: 35.01),
+            ]),
+            DaySchedule(dayNumber: 2, date: date(4, 0), scheduleItems: [item("伏見稲荷", day: 4, 9, lat: 34.97)]),
+        ]
+        return plan
+    }
+
+    @Test("時刻の順に、場所のある予定だけを番号つきで並べ、続けて同じ場所は1つにまとめる")
+    func dayStops() {
+        let stops = TripDigest.mapStops(plan: plan(), scope: .day(1))
+        #expect(stops.map(\.name) == ["清水寺", "錦市場"])
+        #expect(stops.map(\.order) == [1, 2])
+    }
+
+    @Test("旅行全体は日をまたいで通し番号にし、上限で打ち切る")
+    func tripStops() {
+        #expect(TripDigest.mapStops(plan: plan(), scope: .trip).map(\.name) == ["清水寺", "錦市場", "伏見稲荷"])
+        #expect(TripDigest.mapStops(plan: plan(), scope: .trip, limit: 2).count == 2)
+    }
+
+    @Test("題名のカードは背景の写真が無くても作れる")
+    func openingWithoutBackground() {
+        let image = TripDigestComposer.openingImage(.init(title: "京都", subtitle: "Day 1", destination: "京都"), background: nil)
+        #expect(image?.extent.size == TripDigestComposer.renderSize)
+    }
+
+    @Test("題名のカードは、最後に文字が消えてぼかしが抜け、1コマ目の最初の絵そのものになる")
+    func openingEndsSharp() {
+        let start = TripDigestComposer.OpeningLook.at(0)
+        #expect(start.blur == 1 && start.textAlpha == 0 && start.textRise == 1)
+        let middle = TripDigestComposer.OpeningLook.at(0.7)
+        #expect(middle.blur == 1 && middle.textAlpha == 1 && middle.textRise == 0)
+        let end = TripDigestComposer.OpeningLook.at(TripDigestComposer.openingSeconds)
+        #expect(end.blur == 0 && end.textAlpha == 0)
+    }
+
+    @Test("地図のカードの文字は、1日ならその日と行き先、旅行全体なら日数と旅行名")
+    func mapLabel() {
+        let day = DigestFinish.mapLabel(plan: plan(), scope: .day(2))
+        #expect(day.caption == "Day 2" && day.headline == "京都")
+        let trip = DigestFinish.mapLabel(plan: plan(), scope: .trip)
+        #expect(trip.caption == "Day 1〜2" && trip.headline == "京都")
+    }
+}
+
+/// 旅のダイジェストのトリミング・動画の使いはじめ・色味（3.2）
+struct DigestClipEditTests {
+    private let canvas = CGSize(width: 1080, height: 1920)
+    /// 横長の写真（4:3）
+    private let photo = CGSize(width: 4000, height: 3000)
+
+    @Test("トリミングしていなければ、写真の真ん中を画面いっぱいに出す")
+    func centered() {
+        let size = DigestClipEdit.filledSize(of: photo, in: canvas, zoom: 1)
+        #expect(size.height == 1920)
+        let origin = DigestClipEdit.origin(of: photo, in: canvas, zoom: 1, focus: CGPoint(x: 0.5, y: 0.5))
+        #expect(abs(origin.x - (1080 - size.width) / 2) < 0.001 && origin.y == 0)
+    }
+
+    @Test("写真の外が見えるところまでは寄せない")
+    func clampsToEdges() {
+        let left = DigestClipEdit.origin(of: photo, in: canvas, zoom: 1, focus: CGPoint(x: 0, y: 0))
+        #expect(left.x == 0 && left.y == 0)
+        let edit = DigestClipEdit(focusX: -1, focusY: 2, zoom: 9).clamped(source: photo, canvas: canvas)
+        #expect(edit.zoom == DigestClipEdit.maxZoom)
+        let size = DigestClipEdit.filledSize(of: photo, in: canvas, zoom: edit.zoom)
+        #expect(abs(edit.focusX - canvas.width / 2 / size.width) < 0.0001)
+        #expect(abs(edit.focusY - (1 - canvas.height / 2 / size.height)) < 0.0001)
+    }
+
+    @Test("動画は決めていなければ真ん中、決めたらそこから。後ろにはみ出さず、短い動画は全部使う")
+    func videoRange() {
+        #expect(DigestClipEdit().videoRange(duration: 10, length: 2) == (4, 2))
+        #expect(DigestClipEdit(videoStart: 1.5).videoRange(duration: 10, length: 2) == (1.5, 2))
+        #expect(DigestClipEdit(videoStart: 9.5).videoRange(duration: 10, length: 2) == (8, 2))
+        #expect(DigestClipEdit(videoStart: 3).videoRange(duration: 1.2, length: 2) == (0, 1.2))
+    }
+
+    @Test("何も変えていなければ覚えない")
+    func isDefault() {
+        #expect(DigestClipEdit().isDefault)
+        #expect(!DigestClipEdit(zoom: 1.5).isDefault)
+        #expect(!DigestClipEdit(videoStart: 0).isDefault)
+    }
+
+    @Test("色味をかけても絵の大きさは変わらず、白黒は色が無くなる", arguments: DigestLook.allCases)
+    func looks(look: DigestLook) throws {
+        let image = CIImage(color: CIColor(red: 0.8, green: 0.3, blue: 0.2)).cropped(to: CGRect(x: 0, y: 0, width: 8, height: 8))
+        let output = look.apply(to: image)
+        #expect(output.extent == image.extent)
+        var pixel = [UInt8](repeating: 0, count: 4)
+        CIContext().render(output, toBitmap: &pixel, rowBytes: 4, bounds: CGRect(x: 0, y: 0, width: 1, height: 1),
+                           format: .RGBA8, colorSpace: CGColorSpaceCreateDeviceRGB())
+        if look == .mono {
+            #expect(abs(Int(pixel[0]) - Int(pixel[2])) <= 2)
+        } else if look == .warm {
+            #expect(pixel[0] > 200 && pixel[2] < 51)
+        }
     }
 }

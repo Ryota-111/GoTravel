@@ -40,6 +40,8 @@ struct TripDigestView: View {
     @State private var added: [TripDigest.Added] = []
     /// 外した時間（その時間はまるごとコマにしない。旅行ごとに覚えておく）
     @State private var excludedHours: Set<String> = []
+    /// コマごとのトリミングと、動画を何秒目から使うか（旅行ごとに覚えておく。3.2）
+    @State private var edits: [String: DigestClipEdit] = [:]
     @ObservedObject private var proStore = ProStore.shared
     @State private var reviewing: TripDigest.Scope?
     @State private var selected: String? = TripDigest.Scope.trip.id
@@ -100,7 +102,7 @@ struct TripDigestView: View {
             .navigationDestination(item: $reviewing) { scope in
                 DigestReviewView(plan: plan, scope: scope, sources: sources, assets: $assets,
                                  excluded: $excluded, pinned: $pinned, captions: $captions, added: $added,
-                                 excludedHours: $excludedHours)
+                                 excludedHours: $excludedHours, edits: $edits)
             }
             .navigationDestination(item: $result) { result in
                 TripDigestPlayerView(result: result)
@@ -115,7 +117,7 @@ struct TripDigestView: View {
     /// 外した・選び直した写真と、入れた文字を、旅行ごとに覚えておく
     private var savesChoices: some ViewModifier { SaveDigestChoices(planId: plan.id, excluded: excluded, pinned: pinned,
                                                                      captions: captions, added: added,
-                                                                     excludedHours: excludedHours) }
+                                                                     excludedHours: excludedHours, edits: edits) }
 
     // MARK: 上：旅行の名前（押すとほかの旅行へ）
 
@@ -250,6 +252,7 @@ struct TripDigestView: View {
         captions = TripDigestExclusions.loadCaptions(planId: plan.id)
         added = TripDigestExclusions.loadAdded(planId: plan.id)
         excludedHours = TripDigestExclusions.loadExcludedHours(planId: plan.id)
+        edits = TripDigestExclusions.loadEdits(planId: plan.id)
         guard await TripDigestComposer.requestAccess() else {
             phase = .noAccess
             return
@@ -277,9 +280,11 @@ private struct SaveDigestChoices: ViewModifier {
     let captions: [String: String]
     let added: [TripDigest.Added]
     let excludedHours: Set<String>
+    let edits: [String: DigestClipEdit]
 
     func body(content: Content) -> some View {
         content
+            .onChange(of: edits) { _, value in TripDigestExclusions.saveEdits(value, planId: planId) }
             .onChange(of: excludedHours) { _, value in TripDigestExclusions.saveExcludedHours(value, planId: planId) }
             .onChange(of: added) { _, value in TripDigestExclusions.saveAdded(value, planId: planId) }
             .onChange(of: excluded) { _, value in TripDigestExclusions.save(value, planId: planId) }
@@ -345,6 +350,18 @@ enum TripDigestExclusions {
         UserDefaults.standard.set(try? JSONEncoder().encode(added), forKey: addedKey(planId))
     }
 
+    /// コマごとのトリミングと、動画を何秒目から使うか（JSON。3.2）
+    private static func editKey(_ planId: String?) -> String { "tripDigestEdits.\(planId ?? "")" }
+
+    static func loadEdits(planId: String?) -> [String: DigestClipEdit] {
+        guard let data = UserDefaults.standard.data(forKey: editKey(planId)) else { return [:] }
+        return (try? JSONDecoder().decode([String: DigestClipEdit].self, from: data)) ?? [:]
+    }
+
+    static func saveEdits(_ edits: [String: DigestClipEdit], planId: String?) {
+        UserDefaults.standard.set(try? JSONEncoder().encode(edits.filter { !$0.value.isDefault }), forKey: editKey(planId))
+    }
+
     /// その写真・動画を、撮った時間のコマに選び直す（同じ時間の前の選び直しは外す。外していたら戻す）
     static func choose(_ source: TripDigest.Source, among sources: [TripDigest.Source],
                        pinned: inout Set<String>, excluded: inout Set<String>) {
@@ -380,17 +397,32 @@ extension TripDigest.Clip: Identifiable {
 @MainActor
 enum DigestMaker {
     static func make(plan: TravelPlan, scope: TripDigest.Scope, clips: [TripDigest.Clip], assets: [String: PHAsset],
-                     textPosition: TripDigestComposer.TextPosition,
+                     textPosition: TripDigestComposer.TextPosition, edits: [String: DigestClipEdit] = [:],
                      progress: @escaping @Sendable (Double) -> Void) async throws -> TripDigestView.DigestResult {
         // 無料でも作れる。Pro でなければ右下と最後に「Travory」の印を入れる（文字の位置は誰でも選べる）
         let isPro = ProStore.shared.isPurchased
         let items = await TripDigestComposer.loadItems(clips, assets: assets)
         try Task.checkCancellation()
         let subtitle = Self.subtitle(plan: plan, scope: scope)
+        // 仕上げ（3.2）：最初の題名のカード・最後の行程の地図・下に敷く曲
+        let finish = DigestFinish.current
+        let opening = finish.opening ? DigestFinish.opening(plan: plan, scope: scope) : nil
+        var mapCard: TripDigestComposer.MapCard?
+        if finish.map {
+            let label = DigestFinish.mapLabel(plan: plan, scope: scope)
+            mapCard = await TripDigestComposer.mapCard(stops: TripDigest.mapStops(plan: plan, scope: scope),
+                                                       caption: label.caption, headline: label.headline,
+                                                       position: textPosition, watermark: !isPro)
+        }
+        try Task.checkCancellation()
         let temporary = try await TripDigestComposer.compose(items, title: plan.title, subtitle: subtitle,
                                                              fileName: TripDigest.fileName(plan: plan, scope: scope),
                                                              textPosition: textPosition,
-                                                             watermark: !isPro, endCard: !isPro, progress: progress)
+                                                             watermark: !isPro, endCard: !isPro,
+                                                             opening: opening, mapCard: mapCard,
+                                                             music: finish.music?.url, keepsOriginalSound: finish.keepsSound,
+                                                             edits: edits, look: DigestLook.current,
+                                                             progress: progress)
         // 作った動画は残しておく（「思い出」タブのカードから、作り直さずに見られる）
         let url = (try? TripDigestLibrary.save(temporary, planId: plan.id, scopeId: scope.id, title: subtitle)) ?? temporary
         return TripDigestView.DigestResult(url: url, title: subtitle)
@@ -439,7 +471,7 @@ enum DigestDateStyle {
 }
 
 /// 写真を読み込む小さな部品（縮小した写真を1枚）
-private struct AssetImage: View {
+struct AssetImage: View {
     let asset: PHAsset?
     var target = CGSize(width: 600, height: 900)
     @State private var image: UIImage?
@@ -602,6 +634,9 @@ private struct DigestReviewView: View {
     @Binding var captions: [String: String]
     @Binding var added: [TripDigest.Added]
     @Binding var excludedHours: Set<String>
+    @Binding var edits: [String: DigestClipEdit]
+    /// 1コマの秒数が変わったら、上の「約◯秒」を出し直す（3.2）
+    @AppStorage(DigestPace.storageKey) private var pace = DigestPace.standard
 
     @ObservedObject private var proStore = ProStore.shared
     @Environment(\.openURL) private var openURL
@@ -662,6 +697,9 @@ private struct DigestReviewView: View {
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 4)
                 DigestTextPositionPicker(selection: $textPosition, sample: clips.first, assets: assets)
+                // 題名・地図のカードと音楽（3.2）
+                DigestFinishOptions(plan: plan, scope: scope, sample: clips.first, assets: assets,
+                                    textPosition: TripDigestComposer.TextPosition(rawValue: textPosition) ?? .bottomLeft)
                 ForEach(days, id: \.day) { group in
                     Section {
                         ForEach(group.clips) { clip in
@@ -696,7 +734,8 @@ private struct DigestReviewView: View {
         .sheet(item: $previewing) { shown in
             // 外す・選び直す・文字を変えると、ここで作り直したコマの並びがそのまま開いた画面に届く
             DigestPreviewSheet(plan: plan, scope: scope, clips: clips, startId: shown.id, sources: allSources,
-                               assets: assets,
+                               assets: assets, edits: edits,
+                               onEdit: { clip, edit in edits[clip.sourceId] = edit.isDefault ? nil : edit },
                                onExclude: { clip in withAnimation { exclude(clip) } },
                                onChoose: { clip, source in withAnimation { choose(source, for: clip) } },
                                onCaption: { clip, text in captions[clip.sourceId] = text },
@@ -990,7 +1029,8 @@ private struct DigestReviewView: View {
         }
         do {
             result = try await DigestMaker.make(plan: plan, scope: scope, clips: clips, assets: assets,
-                                                textPosition: TripDigestComposer.TextPosition(rawValue: textPosition) ?? .bottomLeft) { value in
+                                                textPosition: TripDigestComposer.TextPosition(rawValue: textPosition) ?? .bottomLeft,
+                                                edits: edits) { value in
                 // 作り終わったあとに遅れて届いた知らせで、作成中の表示を戻さない
                 Task { @MainActor in if progress != nil { progress = value } }
             }
@@ -1041,6 +1081,9 @@ private struct DigestPreviewSheet: View {
     let startId: String
     let sources: [TripDigest.Source]
     let assets: [String: PHAsset]
+    /// コマごとのトリミングと、動画の使いはじめ（3.2）
+    let edits: [String: DigestClipEdit]
+    let onEdit: (TripDigest.Clip, DigestClipEdit) -> Void
     let onExclude: (TripDigest.Clip) -> Void
     let onChoose: (TripDigest.Clip, TripDigest.Source) -> Void
     /// 出す文字を決めた（nil なら場所の名前に戻す）
@@ -1063,6 +1106,13 @@ private struct DigestPreviewSheet: View {
     @State private var draft = ""
     @State private var showsPro = false
     @State private var swapping = false
+    @State private var trimming = false
+    /// 色味・画面の形・1コマの秒数が変わったら描き直す
+    @AppStorage(DigestLook.storageKey) private var lookValue = DigestLook.natural.rawValue
+    @AppStorage(DigestShape.storageKey) private var shapeValue = DigestShape.vertical.rawValue
+    @AppStorage(DigestPace.storageKey) private var paceValue = DigestPace.standard
+
+    private var look: DigestLook { DigestLook(rawValue: lookValue) ?? .natural }
 
     private var current: TripDigest.Clip? {
         clips.indices.contains(index) ? clips[index] : clips.last
@@ -1089,6 +1139,7 @@ private struct DigestPreviewSheet: View {
                 .toolbar { topBar }
                 .toolbar { keyboardBar }
                 .navigationDestination(isPresented: $swapping) { swapView }
+                .navigationDestination(isPresented: $trimming) { trimView }
                 .sheet(isPresented: $showsPro) { DigestProSheet(isPresented: $showsPro) }
                 .modifier(PreviewEvents(sheet: self))
                 .alert("この写真は使えません", isPresented: $showsLimitedAccess) {
@@ -1118,7 +1169,9 @@ private struct DigestPreviewSheet: View {
 
     private func page(_ clip: TripDigest.Clip, offset: Int) -> some View {
         DigestFramePreview(clip: clip, asset: assets[clip.sourceId],
-                           title: offset == 0 ? plan.title : nil,
+                           edit: edits[clip.sourceId] ?? DigestClipEdit(), look: look,
+                           // 題名のカードを入れるときは、動画と同じく1コマ目に題名を重ねない（3.2）
+                           title: offset == 0 && !DigestFinish.current.opening ? plan.title : nil,
                            subtitle: DigestMaker.subtitle(plan: plan, scope: scope),
                            position: position, watermark: !proStore.isPurchased,
                            isActive: offset == index,
@@ -1187,6 +1240,16 @@ private struct DigestPreviewSheet: View {
     }
 
     @ViewBuilder
+    private var trimView: some View {
+        if let current {
+            DigestTrimView(clip: current, asset: assets[current.sourceId],
+                           edit: edits[current.sourceId] ?? DigestClipEdit(), look: look) { edit in
+                onEdit(current, edit)
+            }
+        }
+    }
+
+    @ViewBuilder
     private var swapView: some View {
         if let current {
             DigestSwapView(candidates: sources.filter { Calendar.current.isDate($0.date, inSameDayAs: current.date) },
@@ -1232,7 +1295,7 @@ private struct DigestPreviewSheet: View {
             Text("左右にめくると、前後のコマを見られます")
                 .font(.caption2)
                 .foregroundColor(.white.opacity(0.5))
-            HStack(spacing: 10) {
+            HStack(spacing: 8) {
                 actionButton("文字", systemImage: "textformat", badge: proStore.isPurchased ? nil : "Pro") {
                     editCaption()
                 }
@@ -1243,6 +1306,7 @@ private struct DigestPreviewSheet: View {
                 .disabled(current == nil)
                 .accessibilityLabel("このコマのあとに写真を足す")
                 actionButton("選び直す", systemImage: "photo.on.rectangle") { swapping = true }
+                actionButton("トリミング", systemImage: "crop") { trimming = true }
                 actionButton("外す", systemImage: "eye.slash") {
                     if let current { onExclude(current) }
                 }
@@ -1266,6 +1330,8 @@ private struct DigestPreviewSheet: View {
             VStack(spacing: 6) {
                 Image(systemName: systemImage).font(.system(size: 20, weight: .medium))
                 Text(title).font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.75)
             }
             .foregroundColor(.white)
             .frame(maxWidth: .infinity)
@@ -1349,6 +1415,9 @@ private struct DigestAddedTimeSheet: View {
 private struct DigestFramePreview: View {
     let clip: TripDigest.Clip
     let asset: PHAsset?
+    /// トリミングと動画の使いはじめ（3.2）
+    var edit = DigestClipEdit()
+    var look: DigestLook = .natural
     /// 最初のコマに大きく出す題名
     let title: String?
     let subtitle: String
@@ -1359,6 +1428,9 @@ private struct DigestFramePreview: View {
     var editing: Binding<String>? = nil
     var onCommit: () -> Void = {}
 
+    /// 読んだ写真（トリミングと色味をかける前）
+    @State private var source: UIImage?
+    /// トリミングと色味をかけた写真（動画と同じ部品で描く）
     @State private var image: UIImage?
     @State private var overlay: UIImage?
     /// 書きはじめる前の、画面の中の位置（キーボードで隠れるかを決める）
@@ -1405,7 +1477,7 @@ private struct DigestFramePreview: View {
 
     var body: some View {
         Color(white: 0.12)
-            .aspectRatio(9 / 16, contentMode: .fit)
+            .aspectRatio(TripDigestComposer.aspectRatio, contentMode: .fit)
             .overlay {
                 if let image {
                     Image(uiImage: image).resizable().scaledToFill()
@@ -1415,7 +1487,9 @@ private struct DigestFramePreview: View {
             }
             .overlay {
                 if isActive, let asset, asset.mediaType == .video {
-                    DigestLoopingVideo(asset: asset)
+                    DigestLoopingVideo(asset: asset, edit: edit, look: look, seconds: TripDigest.clipSeconds,
+                                       canvas: TripDigestComposer.renderSize)
+                        .id("\(edit.hashValue)|\(look.rawValue)|\(TripDigest.clipSeconds)|\(TripDigestComposer.aspectRatio)")
                 }
             }
             .overlay {
@@ -1434,7 +1508,10 @@ private struct DigestFramePreview: View {
             .animation(.easeOut(duration: 0.25), value: lift)
             .frame(maxWidth: .infinity, maxHeight: .infinity)
             .task(id: clip.sourceId) { loadImage() }
-            .task(id: "\(clip.sourceId)|\(clip.placeName ?? "")|\(position.rawValue)|\(watermark)|\(title ?? "")|\(isEditing)") {
+            .task(id: "\(source.map { ObjectIdentifier($0) }.debugDescription)|\(edit.hashValue)|\(look.rawValue)|\(TripDigestComposer.aspectRatio)") {
+                renderImage()
+            }
+            .task(id: "\(clip.sourceId)|\(clip.placeName ?? "")|\(position.rawValue)|\(watermark)|\(title ?? "")|\(isEditing)|\(TripDigestComposer.aspectRatio)") {
                 renderOverlay()
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { note in
@@ -1455,8 +1532,18 @@ private struct DigestFramePreview: View {
         options.isNetworkAccessAllowed = true
         PHImageManager.default().requestImage(for: asset, targetSize: CGSize(width: 900, height: 1600),
                                               contentMode: .aspectFill, options: options) { result, _ in
-            if let result { image = result }
+            if let result { source = result }
         }
+    }
+
+    /// 動画と同じ部品で、トリミングと色味をかける（半分の大きさで描く）
+    private func renderImage() {
+        guard let cg = source?.cgImage else { return }
+        let half = CGAffineTransform(scaleX: 0.5, y: 0.5)
+        let frame = TripDigestComposer.frameImage(CIImage(cgImage: cg), edit: edit, look: look).transformed(by: half)
+        let rect = CGRect(origin: .zero, size: TripDigestComposer.renderSize).applying(half)
+        guard let rendered = Self.context.createCGImage(frame, from: rect) else { return }
+        image = UIImage(cgImage: rendered)
     }
 
     /// 場所の名前があったところに、同じ大きさ・同じ見た目の入力欄を置く
@@ -1492,10 +1579,15 @@ private struct DigestFramePreview: View {
 /// 動画のコマの見本：真ん中の2秒を、音を消してくり返し流す（動画で使うのと同じ範囲）
 private struct DigestLoopingVideo: UIViewRepresentable {
     let asset: PHAsset
+    var edit = DigestClipEdit()
+    var look: DigestLook = .natural
+    var seconds: Double = TripDigest.clipSeconds
+    /// 作る動画の大きさ（トリミングをこの形で見せる）
+    var canvas: CGSize = TripDigestComposer.renderSize
 
     func makeUIView(context: Context) -> PlayerView {
         let view = PlayerView()
-        view.load(asset)
+        view.load(asset, edit: edit, look: look, seconds: seconds, canvas: canvas)
         return view
     }
 
@@ -1512,7 +1604,7 @@ private struct DigestLoopingVideo: UIViewRepresentable {
         private var requestID: PHImageRequestID?
         private var stopped = false
 
-        func load(_ asset: PHAsset) {
+        func load(_ asset: PHAsset, edit: DigestClipEdit, look: DigestLook, seconds: Double, canvas: CGSize) {
             playerLayer.videoGravity = .resizeAspectFill
             let options = PHVideoRequestOptions()
             options.isNetworkAccessAllowed = true
@@ -1520,18 +1612,30 @@ private struct DigestLoopingVideo: UIViewRepresentable {
             let duration = asset.duration
             requestID = PHImageManager.default().requestPlayerItem(forVideo: asset, options: options) { [weak self] item, _ in
                 guard let item else { return }
-                DispatchQueue.main.async { self?.start(item, duration: duration) }
+                DispatchQueue.main.async { self?.start(item, duration: duration, edit: edit, look: look,
+                                                       seconds: seconds, canvas: canvas) }
             }
         }
 
-        private func start(_ item: AVPlayerItem, duration: TimeInterval) {
+        private func start(_ item: AVPlayerItem, duration: TimeInterval, edit: DigestClipEdit, look: DigestLook,
+                           seconds: Double, canvas: CGSize) {
             guard !stopped else { return }
             let player = AVQueuePlayer()
             player.isMuted = true
-            let length = min(TripDigest.clipSeconds, max(duration, 0.1))
-            let start = max(0, (duration - length) / 2)
-            let range = CMTimeRange(start: CMTime(seconds: start, preferredTimescale: 600),
-                                    duration: CMTime(seconds: length, preferredTimescale: 600))
+            let used = edit.videoRange(duration: duration, length: max(min(seconds, duration), 0.1))
+            let range = CMTimeRange(start: CMTime(seconds: used.start, preferredTimescale: 600),
+                                    duration: CMTime(seconds: max(used.length, 0.1), preferredTimescale: 600))
+            // トリミングと色味は、動画と同じ部品でかける（半分の大きさで）
+            if !edit.isUncropped || look != .natural {
+                let half = CGSize(width: canvas.width / 2, height: canvas.height / 2)
+                let composition = AVMutableVideoComposition(asset: item.asset) { request in
+                    let frame = TripDigestComposer.frameImage(request.sourceImage, edit: edit, look: look,
+                                                              motion: 1, canvas: half)
+                    request.finish(with: frame, context: nil)
+                }
+                composition.renderSize = half
+                item.videoComposition = composition
+            }
             looper = AVPlayerLooper(player: player, templateItem: item, timeRange: range)
             playerLayer.player = player
             player.play()
@@ -1558,6 +1662,8 @@ private struct DigestTextPositionPicker: View {
     @ObservedObject private var proStore = ProStore.shared
 
     @State private var overlays: [String: UIImage] = [:]
+    /// 画面の形が変わったら描き直す（3.2）
+    @AppStorage(DigestShape.storageKey) private var shape = DigestShape.vertical.rawValue
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1573,8 +1679,8 @@ private struct DigestTextPositionPicker: View {
                         VStack(spacing: 5) {
                             // 画面の幅いっぱいに3つ並ぶ大きさ（縦長 9:16）
                             Color.clear
-                                .aspectRatio(9 / 16, contentMode: .fit)
-                                .frame(maxWidth: 130)
+                                .aspectRatio(TripDigestComposer.aspectRatio, contentMode: .fit)
+                                .frame(maxWidth: 130, maxHeight: 231)
                                 .overlay {
                                     AssetImage(asset: sample.flatMap { assets[$0.sourceId] },
                                                target: CGSize(width: 300, height: 540))
@@ -1614,7 +1720,7 @@ private struct DigestTextPositionPicker: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .task(id: "\(sample?.sourceId ?? "")|\(sample?.placeName ?? "")|\(proStore.isPurchased)") { renderOverlays() }
+        .task(id: "\(sample?.sourceId ?? "")|\(sample?.placeName ?? "")|\(proStore.isPurchased)|\(shape)") { renderOverlays() }
     }
 
     /// 3つの位置の文字を、動画と同じ部品で描く（縮めて持つ）
