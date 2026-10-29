@@ -26,6 +26,27 @@ struct DigestFinish {
                             music: TripDigestMusic.track(id: musicID), keepsSound: bool(keepsSoundKey))
     }
 
+    /// 今の設定のうち、Pro の機能の名前（「「フィルム」の色味」など）。無ければ空
+    static var proFeatures: [String] {
+        var names: [String] = []
+        let look = DigestLook.current
+        if look.isPro { names.append("「\(look.name)」の色味") }
+        let shape = DigestShape.current
+        if shape.isPro { names.append("\(shape.name)の形") }
+        if let track = current.music, TripDigestMusic.isPro(track) { names.append("「\(track.name)」の曲") }
+        return names
+    }
+
+    /// Pro の機能を、無料のもの（そのまま・縦長・無料の1曲目）に戻す
+    static func dropPro() {
+        let defaults = UserDefaults.standard
+        if DigestLook.current.isPro { defaults.set(DigestLook.natural.rawValue, forKey: DigestLook.storageKey) }
+        if DigestShape.current.isPro { defaults.set(DigestShape.vertical.rawValue, forKey: DigestShape.storageKey) }
+        if let track = current.music, TripDigestMusic.isPro(track) {
+            defaults.set(TripDigestMusic.tracks.first?.id ?? noMusic, forKey: musicKey)
+        }
+    }
+
     /// 題名のカードに出す文字（旅行名・日付・行き先）
     static func opening(plan: TravelPlan, scope: TripDigest.Scope) -> TripDigestComposer.Opening {
         let destination = plan.destination.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -127,6 +148,9 @@ struct DigestFinishOptions: View {
                                 .frame(width: 14 * min(1, candidate.size.width / candidate.size.height),
                                        height: 14 * min(1, candidate.size.height / candidate.size.width))
                             Text(candidate.name)
+                            if candidate.isPro && !proStore.isPurchased {
+                                ProBadge(onAccent: shape == candidate.rawValue)
+                            }
                         }
                     }
                 }
@@ -243,13 +267,16 @@ struct DigestFinishOptions: View {
                                         .stroke(selected ? Color.accentColor : Color.primary.opacity(0.1),
                                                 lineWidth: selected ? 3 : 1)
                                 )
+                                .overlay(alignment: .topTrailing) {
+                                    if candidate.isPro && !proStore.isPurchased { ProBadge().padding(4) }
+                                }
                             Text(candidate.name)
                                 .font(.caption2.weight(selected ? .bold : .regular))
                                 .foregroundColor(selected ? .accentColor : .secondary)
                         }
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("色味：\(candidate.name)")
+                    .accessibilityLabel("色味：\(candidate.name)\(candidate.isPro && !proStore.isPurchased ? "（Pro）" : "")")
                     .accessibilityAddTraits(selected ? .isSelected : [])
                 }
             }
@@ -301,6 +328,9 @@ struct DigestFinishOptions: View {
                         .font(.system(size: 9, weight: .bold))
                 }
                 Text(name)
+                if let track, TripDigestMusic.isPro(track), !proStore.isPurchased {
+                    ProBadge(onAccent: selected)
+                }
             }
             .font(.footnote.weight(selected ? .semibold : .regular))
             .foregroundColor(selected ? .white : .primary)
@@ -392,5 +422,101 @@ final class DigestMusicPreview: ObservableObject {
         player?.stop()
         player = nil
         playingID = nil
+    }
+}
+
+/// Pro の機能に付ける小さな印。選んで試せるが、作るときに Pro の案内を出す
+struct ProBadge: View {
+    /// 塗った面（選んでいる丸いボタン）の上に置く
+    var onAccent = false
+
+    var body: some View {
+        Text("Pro")
+            .font(.system(size: 9, weight: .bold))
+            .foregroundColor(.white)
+            .padding(.horizontal, 5)
+            .padding(.vertical, 2)
+            .background(Capsule().fill(onAccent ? Color.white.opacity(0.3) : Color.black.opacity(0.55)))
+            .accessibilityHidden(true)
+    }
+}
+
+/// 色味の見本（Pro の紹介に出す）。描いた風景の絵に、動画と同じ部品で色味をかけて並べる
+struct DigestLookShowcase: View {
+    @State private var samples: [DigestLook: UIImage] = [:]
+
+    var body: some View {
+        HStack(spacing: 8) {
+            ForEach(DigestLook.allCases) { look in
+                VStack(spacing: 4) {
+                    Color(.tertiarySystemFill)
+                        .aspectRatio(9 / 16, contentMode: .fit)
+                        .overlay {
+                            if let image = samples[look] { Image(uiImage: image).resizable().scaledToFill() }
+                        }
+                        .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                    Text(look.name)
+                        .font(.caption2)
+                        .foregroundColor(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("色味の見本：そのまま、フィルム、あたたかい、すっきり、白黒")
+        .task { render() }
+    }
+
+    private func render() {
+        guard samples.isEmpty, let cg = Self.scenery().cgImage else { return }
+        let input = CIImage(cgImage: cg)
+        let context = CIContext()
+        var result: [DigestLook: UIImage] = [:]
+        for look in DigestLook.allCases {
+            if let output = context.createCGImage(look.apply(to: input), from: input.extent) {
+                result[look] = UIImage(cgImage: output)
+            }
+        }
+        samples = result
+    }
+
+    /// 夕方の海と山の絵（写真の代わり。色味の違いが分かるよう、空・山・海・砂浜の色を入れる）
+    static func scenery() -> UIImage {
+        let size = CGSize(width: 180, height: 320)
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 2
+        return UIGraphicsImageRenderer(size: size, format: format).image { context in
+            let cg = context.cgContext
+            let space = CGColorSpaceCreateDeviceRGB()
+            let sky = [UIColor(red: 0.29, green: 0.53, blue: 0.86, alpha: 1).cgColor,
+                       UIColor(red: 0.98, green: 0.74, blue: 0.47, alpha: 1).cgColor] as CFArray
+            if let gradient = CGGradient(colorsSpace: space, colors: sky, locations: [0, 1]) {
+                cg.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 0, y: size.height * 0.55), options: [])
+            }
+            UIColor(red: 1, green: 0.86, blue: 0.55, alpha: 1).setFill()
+            cg.fillEllipse(in: CGRect(x: 104, y: 112, width: 40, height: 40))
+            func mountain(_ points: [CGPoint], _ color: UIColor) {
+                let path = UIBezierPath()
+                path.move(to: CGPoint(x: 0, y: size.height * 0.56))
+                points.forEach { path.addLine(to: $0) }
+                path.addLine(to: CGPoint(x: size.width, y: size.height * 0.56))
+                path.close()
+                color.setFill()
+                path.fill()
+            }
+            mountain([CGPoint(x: 40, y: 120), CGPoint(x: 90, y: 165), CGPoint(x: 140, y: 140)],
+                     UIColor(red: 0.31, green: 0.45, blue: 0.4, alpha: 1))
+            mountain([CGPoint(x: 10, y: 160), CGPoint(x: 70, y: 150), CGPoint(x: 120, y: 175), CGPoint(x: 170, y: 160)],
+                     UIColor(red: 0.18, green: 0.36, blue: 0.27, alpha: 1))
+            UIColor(red: 0.12, green: 0.42, blue: 0.62, alpha: 1).setFill()
+            cg.fill(CGRect(x: 0, y: size.height * 0.56, width: size.width, height: size.height * 0.26))
+            UIColor(red: 0.93, green: 0.82, blue: 0.64, alpha: 1).setFill()
+            cg.fill(CGRect(x: 0, y: size.height * 0.82, width: size.width, height: size.height * 0.18))
+            UIColor(white: 1, alpha: 0.5).setFill()
+            for y in [0.62, 0.69, 0.76] {
+                cg.fill(CGRect(x: 30 + y * 40, y: size.height * y, width: 60, height: 2))
+            }
+        }
     }
 }

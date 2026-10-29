@@ -368,6 +368,13 @@ enum TripDigestMusic {
             .sorted { $0.fileName < $1.fileName }
     }()
 
+    /// 無料で使える曲の数（先頭から）。ほかの曲は Pro
+    static let freeCount = 2
+
+    static func isPro(_ track: Track) -> Bool {
+        (tracks.firstIndex(of: track) ?? 0) >= freeCount
+    }
+
     static func track(id: String?) -> Track? {
         guard let id else { return nil }
         return tracks.first { $0.id == id }

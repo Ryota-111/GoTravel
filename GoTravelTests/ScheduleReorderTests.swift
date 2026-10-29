@@ -259,3 +259,28 @@ struct DigestClipEditTests {
         }
     }
 }
+
+/// 旅のダイジェストの無料と Pro の分け方（3.2）
+@Suite(.serialized)
+struct DigestProFeatureTests {
+    @Test("色味（そのまま以外）と正方形・横長は Pro。外すと、そのまま・縦長に戻る")
+    func proFeatures() {
+        let defaults = UserDefaults.standard
+        let saved = (defaults.object(forKey: DigestLook.storageKey), defaults.object(forKey: DigestShape.storageKey))
+        defer {
+            defaults.set(saved.0, forKey: DigestLook.storageKey)
+            defaults.set(saved.1, forKey: DigestShape.storageKey)
+        }
+        defaults.set(DigestLook.natural.rawValue, forKey: DigestLook.storageKey)
+        defaults.set(DigestShape.vertical.rawValue, forKey: DigestShape.storageKey)
+        #expect(DigestFinish.proFeatures.isEmpty)
+
+        defaults.set(DigestLook.film.rawValue, forKey: DigestLook.storageKey)
+        defaults.set(DigestShape.square.rawValue, forKey: DigestShape.storageKey)
+        #expect(DigestFinish.proFeatures == ["「フィルム」の色味", "正方形の形"])
+
+        DigestFinish.dropPro()
+        #expect(DigestLook.current == .natural && DigestShape.current == .vertical)
+        #expect(DigestFinish.proFeatures.isEmpty)
+    }
+}

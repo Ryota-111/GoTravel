@@ -637,6 +637,9 @@ private struct DigestReviewView: View {
     @Binding var edits: [String: DigestClipEdit]
     /// 1コマの秒数が変わったら、上の「約◯秒」を出し直す（3.2）
     @AppStorage(DigestPace.storageKey) private var pace = DigestPace.standard
+    /// 無料のまま Pro の仕上がり（色味・形・曲）を選んで「作る」を押した。選んだものの名前
+    @State private var proNeeded: [String] = []
+    @State private var showsPro = false
 
     @ObservedObject private var proStore = ProStore.shared
     @Environment(\.openURL) private var openURL
@@ -723,7 +726,7 @@ private struct DigestReviewView: View {
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
-                Button("作る") { making = Task { await make() } }
+                Button("作る", action: startMaking)
                     .fontWeight(.semibold)
                     .disabled(clips.isEmpty || progress != nil)
             }
@@ -731,6 +734,19 @@ private struct DigestReviewView: View {
         .navigationDestination(item: $result) { result in
             TripDigestPlayerView(result: result)
         }
+        // Pro の仕上がりは選んで見本で試せる。作るときに、Pro にするか外して作るかを選んでもらう
+        .alert("Pro の仕上がりを選んでいます", isPresented: Binding(get: { !proNeeded.isEmpty },
+                                                              set: { if !$0 { proNeeded = [] } })) {
+            Button("Pro を見る") { showsPro = true }
+            Button("外して作る") {
+                DigestFinish.dropPro()
+                making = Task { await make() }
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("\(proNeeded.joined(separator: "・"))は Pro の機能です。「外して作る」なら、そのままの色・縦長・無料の曲で作ります。")
+        }
+        .sheet(isPresented: $showsPro) { DigestProSheet(isPresented: $showsPro) }
         .sheet(item: $previewing) { shown in
             // 外す・選び直す・文字を変えると、ここで作り直したコマの並びがそのまま開いた画面に届く
             DigestPreviewSheet(plan: plan, scope: scope, clips: clips, startId: shown.id, sources: allSources,
@@ -1018,6 +1034,16 @@ private struct DigestReviewView: View {
             added.append(TripDigest.Added(sourceId: id, date: date, isVideo: asset.mediaType == .video,
                                           latitude: asset.location?.coordinate.latitude,
                                           longitude: asset.location?.coordinate.longitude))
+        }
+    }
+
+    /// 「作る」。無料のまま Pro の仕上がりを選んでいたら、先に案内を出す
+    private func startMaking() {
+        let pro = proStore.isPurchased ? [] : DigestFinish.proFeatures
+        if pro.isEmpty {
+            making = Task { await make() }
+        } else {
+            proNeeded = pro
         }
     }
 
@@ -1714,7 +1740,7 @@ private struct DigestTextPositionPicker: View {
             }
             .frame(maxWidth: .infinity)
             if !proStore.isPurchased {
-                Text("右下に小さく「Travory」の文字が、最後に1秒「Travory」の印が入ります。Pro なら印なしで、場所の名前の代わりに好きな文字も入れられます。")
+                Text("右下に小さく「Travory」の文字が、最後に1秒「Travory」の印が入ります。Pro なら印なしになり、色味・正方形と横長・すべての曲、場所の名前の代わりに好きな文字も使えます。")
                     .font(.caption2)
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)

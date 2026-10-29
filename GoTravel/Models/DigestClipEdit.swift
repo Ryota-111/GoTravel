@@ -5,6 +5,9 @@ import Foundation
 //
 // - コマごと：トリミング（どこを・どれだけ大きく見せるか）と、動画を何秒目から使うか（`DigestClipEdit`）
 // - 動画全体：色味（`DigestLook`）・画面の形（`DigestShape`）・1コマの秒数（`DigestPace`）
+//
+// 無料と Pro の分け方：直すための機能（トリミング・使いはじめ）と、人に見せられる1本に要るもの
+// （題名・地図・縦長・1コマの秒数）は無料。もっと自分らしくするもの（色味・正方形と横長・曲の全部）は Pro
 
 /// 1コマの調整。写真・動画の id ごとに、旅行ごとに端末に覚えておく
 nonisolated struct DigestClipEdit: Codable, Equatable, Hashable {
@@ -77,6 +80,9 @@ nonisolated enum DigestLook: String, CaseIterable, Identifiable {
         }
     }
 
+    /// Pro の色味（「そのまま」以外）
+    var isPro: Bool { self != .natural }
+
     static var current: DigestLook {
         UserDefaults.standard.string(forKey: storageKey).flatMap(DigestLook.init(rawValue:)) ?? .natural
     }
@@ -102,6 +108,9 @@ enum DigestShape: String, CaseIterable, Identifiable {
         case .landscape: return "横長"
         }
     }
+
+    /// Pro の形（縦長はリール・TikTok に使えるので無料）
+    var isPro: Bool { self != .vertical }
 
     var size: CGSize {
         switch self {
