@@ -758,7 +758,7 @@ private struct DigestReviewView: View {
             }
             Button("キャンセル", role: .cancel) {}
         } message: {
-            Text("\(proNeeded.joined(separator: "・"))は Pro の機能です。「外して作る」なら、そのままの色・縦長・無料の曲で作ります。")
+            Text("\(proNeeded.joined(separator: "・"))は Pro の機能です。「外して作る」なら、そのままの色・縦長で作ります。")
         }
         .sheet(isPresented: $showsPro) { DigestProSheet(isPresented: $showsPro) }
         .sheet(item: $previewing) { shown in
@@ -1754,7 +1754,7 @@ private struct DigestTextPositionPicker: View {
             }
             .frame(maxWidth: .infinity)
             if !proStore.isPurchased {
-                Text("右下に小さく「Travory」の文字が、最後に1秒「Travory」の印が入ります。Pro なら印なしになり、色味・正方形と横長・すべての曲、場所の名前の代わりに好きな文字も使えます。")
+                Text("右下に小さく「Travory」の文字が、最後に1秒「Travory」の印が入ります。Pro なら印なしになり、色味・正方形と横長、場所の名前の代わりに好きな文字も使えます。")
                     .font(.caption2)
                     .foregroundColor(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
