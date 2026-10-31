@@ -7,6 +7,8 @@ struct PlanScheduleItem: Identifiable, Codable, Equatable {
     var title: String
     var placeId: String? // PlannedPlaceのIDを参照（任意）
     var note: String?
+    /// 次の予定までの移動手段（`TransportMode` の rawValue）。無ければ出さない（3.2）
+    var transportToNext: String?
 
     init(id: String = UUID().uuidString,
          time: Date,

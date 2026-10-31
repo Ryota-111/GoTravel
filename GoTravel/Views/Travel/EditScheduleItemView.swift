@@ -243,7 +243,15 @@ struct EditScheduleItemView: View {
                 )
                 .task { await resolveDestinationTimeZone() }
 
-                if let label = ScheduleItem.dayShiftLabel(dayShift) {
+                // 翌日（1）はスイッチで切り替える。時間帯を直してずれた前日などは知らせて戻せるようにする
+                if dayShift == 1 || ((dayShift ?? 0) == 0 && NextDayToggle.isCandidate(time, in: timeZone)) {
+                    NextDayToggle(
+                        isOn: Binding(get: { dayShift == 1 }, set: { dayShift = $0 ? 1 : nil }),
+                        time: time, timeZone: timeZone,
+                        tint: travelColor, textColor: textColor,
+                        secondaryText: themeManager.currentTheme.secondaryText, fieldBackground: fieldBg
+                    )
+                } else if let label = ScheduleItem.dayShiftLabel(dayShift) {
                     dayShiftNotice(label)
                 }
 
@@ -618,10 +626,11 @@ struct EditScheduleItemView: View {
             // 「前日 17:00」のように日をまたいで直した予定は、そのずれを保つ
             dayShift: dayShift
         )
-        // この画面で直さない項目は、そのまま残す（割り勘で決めた払った人・割り勘する人・金額）
+        // この画面で直さない項目は、そのまま残す（割り勘で決めた払った人・割り勘する人・金額、次の予定までの移動手段）
         updated.paidBy = item.paidBy
         updated.splitWith = item.splitWith
         updated.splitAmounts = item.splitAmounts
+        updated.transportToNext = item.transportToNext
         return updated
     }
 

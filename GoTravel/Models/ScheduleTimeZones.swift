@@ -178,9 +178,10 @@ extension ScheduleItem {
         }
     }
 
-    /// 「前日」「翌日」「2日後」。その日の時刻なら nil
+    /// 「前日」「翌日」「2日後」。その日の時刻なら nil。
+    /// 24時以降として出す予定（「24:30」）は時刻だけで分かるので付けない（3.2）
     var dayShiftLabel: String? {
-        Self.dayShiftLabel(dayShift)
+        isLateNight ? nil : Self.dayShiftLabel(dayShift)
     }
 
     static func dayShiftLabel(_ dayShift: Int?) -> String? {

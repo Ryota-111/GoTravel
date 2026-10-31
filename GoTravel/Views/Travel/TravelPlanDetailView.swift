@@ -156,6 +156,8 @@ struct TravelPlanDetailView: View {
     @State private var isSelectingItems = false
     @State private var selectedItemIDs: Set<String> = []
     @State private var showBulkItemDeleteConfirmation = false
+    /// 行程と日程の並び替え（3.2）
+    @State private var showsReorder = false
     /// 共有した旅行で、誰の時間軸を見ているか。nil なら全員
     @State private var memberFilter: String?
     /// 出せなかった理由。文言とアイコンは種類ごとに変える
@@ -385,6 +387,14 @@ struct TravelPlanDetailView: View {
             AddScheduleItemView(plan: plan, dayNumber: selectedDay)
                 .environmentObject(viewModel)
                 .environmentObject(authVM)
+        }
+        .sheet(isPresented: $showsReorder) {
+            ScheduleReorderView(plan: plan, dayNumber: selectedDay, memberFilter: memberFilter) { updated in
+                guard let userId = authVM.userId else { return }
+                withAnimation(.easeInOut(duration: 0.25)) {
+                    viewModel.update(updated, userId: userId)
+                }
+            }
         }
         .fullScreenCover(isPresented: $showScheduleMap) {
             TravelPlanMapView(
@@ -708,13 +718,16 @@ struct TravelPlanDetailView: View {
             VStack(spacing: 0) {
                 timelineDot(state: state)
 
+                // 次の予定までの移動手段を決めていれば、ここから線の種類を変える（3.2）
                 if !isLast {
-                    Rectangle()
-                        .fill(state == .past
-                              ? scheduleAccentColor.opacity(0.4)
-                              : themeManager.currentTheme.secondaryText.opacity(0.18))
-                        .frame(width: 2)
-                        .frame(maxHeight: .infinity)
+                    TransportRailSegment(
+                        mode: item.transportToNextMode,
+                        tint: scheduleAccentColor,
+                        railColor: state == .past
+                            ? scheduleAccentColor.opacity(0.4)
+                            : themeManager.currentTheme.secondaryText.opacity(0.18),
+                        isPast: state == .past
+                    )
                 }
             }
             .frame(width: 12)
@@ -1107,6 +1120,41 @@ struct TravelPlanDetailView: View {
     }
 
     /// 予定を一番上に固定する・外す
+    /// 予定と予定の間の行。棒の上に移動手段を出す（3.2）
+    /// 終わりの時刻があるときだけ、終わり〜次の始まりを移動の時間とする
+    private func transportDuration(from item: ScheduleItem, to next: ScheduleItem?) -> TimeInterval? {
+        guard let next, let endTime = item.endTime else { return nil }
+        return next.time.timeIntervalSince(endTime)
+    }
+
+    private func transportGapRow(item: ScheduleItem, plan: TravelPlan, state: TimelineRowState) -> some View {
+        TransportGapRow(
+            mode: item.transportToNextMode,
+            tint: scheduleAccentColor,
+            railColor: state == .past
+                ? scheduleAccentColor.opacity(0.4)
+                : themeManager.currentTheme.secondaryText.opacity(0.18),
+            placeholderColor: themeManager.currentTheme.secondaryText.opacity(0.45),
+            isPast: state == .past
+        ) { mode in
+            setTransport(mode, after: item, in: plan)
+        }
+        .padding(.horizontal, 4)
+    }
+
+    private func setTransport(_ mode: TransportMode?, after item: ScheduleItem, in plan: TravelPlan) {
+        guard let userId = authVM.userId else { return }
+        var updatedPlan = plan
+        for dayIndex in updatedPlan.daySchedules.indices {
+            if let itemIndex = updatedPlan.daySchedules[dayIndex].scheduleItems.firstIndex(where: { $0.id == item.id }) {
+                updatedPlan.daySchedules[dayIndex].scheduleItems[itemIndex].transportToNext = mode?.rawValue
+            }
+        }
+        withAnimation(.easeInOut(duration: 0.2)) {
+            viewModel.update(updatedPlan, userId: userId)
+        }
+    }
+
     private func togglePin(_ item: ScheduleItem, in plan: TravelPlan) {
         guard let userId = authVM.userId else { return }
         var updatedPlan = plan
@@ -1403,6 +1451,15 @@ struct TravelPlanDetailView: View {
                     .foregroundColor(accentColor)
                 Spacer()
 
+                // 予定が2件以上あるか、日が2日以上あれば並び替えられる（3.2）
+                if !isSelectingItems,
+                   plan.timelineScheduleItems(onDay: selectedDay, for: memberFilter).count >= 2 || plan.daySchedules.count >= 2 {
+                    Button("並び替え") { showsReorder = true }
+                        .font(.system(size: 13, weight: .semibold))
+                        .foregroundColor(scheduleAccentColor)
+                        .padding(.trailing, 4)
+                }
+
                 // その日の予定があるときだけ出す
                 if !plan.timelineScheduleItems(onDay: selectedDay, for: memberFilter).isEmpty || isSelectingItems {
                     Button(isSelectingItems ? "完了" : "選択") {
@@ -1466,20 +1523,39 @@ struct TravelPlanDetailView: View {
                 let nowIndex = nextItemIndex(in: sortedItems, dayDate: daySchedule.date)
                 VStack(spacing: 0) {
                     ForEach(Array(sortedItems.enumerated()), id: \.element.id) { index, item in
-                        timelineItemView(
-                            item: item,
-                            isLast: index == sortedItems.count - 1,
-                            plan: plan,
-                            state: rowState(index: index, nowIndex: nowIndex)
-                        )
-                        // 選択中は、行の中のボタン（案内・リンクなど）を止めて、どこを押しても選べるようにする
-                        .allowsHitTesting(!isSelectingItems)
-                        .overlay {
-                            if isSelectingItems {
-                                Color.clear
-                                    .contentShape(Rectangle())
-                                    .onTapGesture { toggleItemSelection(item) }
+                        let state = rowState(index: index, nowIndex: nowIndex)
+                        let next = sortedItems.indices.contains(index + 1) ? sortedItems[index + 1] : nil
+                        // 予定の行と、次の予定までの間の行（3.2）。まとめて測り、移動手段のアイコンを区間の真ん中に置く
+                        VStack(spacing: 0) {
+                            timelineItemView(
+                                item: item,
+                                isLast: next == nil,
+                                plan: plan,
+                                state: state
+                            )
+                            // 選択中は、行の中のボタン（案内・リンクなど）を止めて、どこを押しても選べるようにする
+                            .allowsHitTesting(!isSelectingItems)
+                            .overlay {
+                                if isSelectingItems {
+                                    Color.clear
+                                        .contentShape(Rectangle())
+                                        .onTapGesture { toggleItemSelection(item) }
+                                }
                             }
+
+                            if next != nil {
+                                transportGapRow(item: item, plan: plan, state: state)
+                                    .allowsHitTesting(!isSelectingItems)
+                            }
+                        }
+                        .transportBadge(
+                            mode: next == nil ? nil : item.transportToNextMode,
+                            duration: transportDuration(from: item, to: next),
+                            tint: scheduleAccentColor,
+                            isPast: state == .past,
+                            leading: 4
+                        ) { mode in
+                            setTransport(mode, after: item, in: plan)
                         }
                     }
                 }
@@ -1704,14 +1780,20 @@ struct TravelPlanDetailView: View {
             )
             .frame(height: 274)
             // 貼り付けている地図は狭いので、じっくり見たいときは全画面へ。
-            // 右上は「全体を表示」が使っているので左上に置く
+            // 右上は「全体を表示」が使っているので左上に置く。
+            // 丸いアイコンだけでは気付かれず「地図だけ大きく見たい」とご要望をいただいたので、文字を添える（3.2）
             .overlay(alignment: .topLeading) {
                 Button(action: { showScheduleMap = true }) {
-                    Image(systemName: "arrow.up.left.and.arrow.down.right")
-                        .font(.system(size: 14, weight: .semibold))
-                        .foregroundColor(accentColor)
-                        .frame(width: 36, height: 36)
-                        .background(.ultraThinMaterial, in: Circle())
+                    HStack(spacing: 5) {
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
+                            .font(.system(size: 12, weight: .semibold))
+                        Text("大きく見る")
+                            .font(.system(size: 12, weight: .semibold))
+                    }
+                    .foregroundColor(accentColor)
+                    .padding(.horizontal, 12)
+                    .frame(height: 34)
+                    .background(.ultraThinMaterial, in: Capsule())
                 }
                 .padding(12)
                 .accessibilityLabel(Text("地図を全画面で見る"))
@@ -1776,12 +1858,23 @@ struct TravelPlanDetailView: View {
                 let nowIndex = nextItemIndex(in: sortedItems, dayDate: daySchedule.date)
                 VStack(spacing: 0) {
                     ForEach(Array(sortedItems.enumerated()), id: \.element.id) { index, item in
+                        let next = sortedItems.indices.contains(index + 1) ? sortedItems[index + 1] : nil
                         timelineItemView(
                             item: item,
-                            isLast: index == sortedItems.count - 1,
+                            isLast: next == nil,
                             plan: plan,
                             state: rowState(index: index, nowIndex: nowIndex)
                         )
+                            // 地図タブの行程表には間の行を挟まないので、予定の行の中で区間の真ん中に置く（3.2）
+                            .transportBadge(
+                                mode: next == nil ? nil : item.transportToNextMode,
+                                duration: transportDuration(from: item, to: next),
+                                tint: scheduleAccentColor,
+                                isPast: rowState(index: index, nowIndex: nowIndex) == .past,
+                                leading: 4
+                            ) { mode in
+                                setTransport(mode, after: item, in: plan)
+                            }
                             .id(item.id)
                             .background(
                                 RoundedRectangle(cornerRadius: 10)

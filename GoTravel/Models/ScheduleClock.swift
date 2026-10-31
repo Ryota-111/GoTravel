@@ -39,6 +39,12 @@ enum ScheduleClock {
         text(date, format: "HH:mm", in: timeZone)
     }
 
+    /// 24時以降の書き方（0:30 → "24:30"、1:00 → "25:00"）。前の日の続きとして出すときに使う（3.2）
+    static func lateNightText(_ date: Date, in timeZone: TimeZone) -> String {
+        let parts = calendar(in: timeZone).dateComponents([.hour, .minute], from: date)
+        return String(format: "%02d:%02d", (parts.hour ?? 0) + 24, parts.minute ?? 0)
+    }
+
     /// その時計で整形する（"M月d日(E) HH:mm" など）
     static func text(_ date: Date, format: String, in timeZone: TimeZone) -> String {
         let formatter = DateFormatter()
@@ -120,9 +126,17 @@ extension ScheduleItem {
         ScheduleClock.timeZone(identifier: timeZoneIdentifier)
     }
 
-    /// 画面に出す時刻（入れたとおりの時:分）
+    /// 画面に出す時刻（入れたとおりの時:分）。日付をまたいだ夜の予定は「24:30」「25:00」
     var timeText: String {
-        ScheduleClock.timeText(time, in: timeZone)
+        isLateNight ? ScheduleClock.lateNightText(time, in: timeZone) : ScheduleClock.timeText(time, in: timeZone)
+    }
+
+    /// 24時以降として出す予定か（3.2）。翌日（`dayShift` が 1）の 0:00〜5:59。
+    ///
+    /// 「翌日 0:30」より「24:30」のほうが、その日の夜の続きだと一目で分かる（ご要望から）。
+    /// 時間帯を直してずれた翌日の昼の予定などは、今までどおり「翌日 17:00」と出す
+    var isLateNight: Bool {
+        dayShift == 1 && ScheduleClock.calendar(in: timeZone).component(.hour, from: time) < 6
     }
 
     /// 終わる時刻を読む時計。決めていなければ始まりと同じ
@@ -136,9 +150,19 @@ extension ScheduleItem {
         return !ScheduleClock.showsSameTime(timeZone, endTimeZone, at: endTime)
     }
 
-    /// 終わる時刻（入れたとおりの時:分）。無ければ nil
+    /// 終わる時刻（入れたとおりの時:分）。無ければ nil。
+    /// 始まりの日の夜の続き（23:00〜1:00 の 1:00、24:30 に始まる予定の終わり）は「25:00」と出す
     var endTimeText: String? {
-        endTime.map { ScheduleClock.timeText($0, in: endTimeZone) }
+        guard let endTime else { return nil }
+        if !crossesTimeZones {
+            let clock = ScheduleClock.calendar(in: endTimeZone)
+            let days = (clock.dateComponents([.day], from: clock.startOfDay(for: time),
+                                             to: clock.startOfDay(for: endTime)).day ?? 0) + (isLateNight ? 1 : 0)
+            if days == 1, clock.component(.hour, from: endTime) < 6 {
+                return ScheduleClock.lateNightText(endTime, in: endTimeZone)
+            }
+        }
+        return ScheduleClock.timeText(endTime, in: endTimeZone)
     }
 
     /// 時刻の列で始まりの下に添える終わり（"〜11:30"）。時差をまたぐ移動は "→23:00"

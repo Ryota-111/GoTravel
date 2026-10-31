@@ -51,7 +51,7 @@ enum TripDigest {
     }
 
     /// 1コマの長さ
-    static let clipSeconds: Double = 2
+    static var clipSeconds: Double { DigestPace.current }
     /// 1日の動画に入れるコマの数（1時間に1つなので、多くても起きている時間ぶん）
     static let maxClipsPerDay = 16
     /// 旅行全体の動画では、1日あたりのコマを減らす（長くなりすぎないように）
@@ -206,5 +206,46 @@ enum TripDigest {
 extension TripDigest.Added {
     var source: TripDigest.Source {
         TripDigest.Source(id: sourceId, date: date, isVideo: isVideo, duration: 0, latitude: latitude, longitude: longitude)
+    }
+}
+
+// MARK: - 地図のカード（3.2）
+//
+// 動画の最後に、その日（旅行全体なら全部の日）の行程の場所を、番号つきのピンと線で出す。
+// ほかの Vlog アプリは撮った場所しか知らないが、Travory は日程の場所と順番を持っているので、
+// 「この日はこう回った」をそのまま地図にできる
+
+extension TripDigest {
+    /// 地図に出す場所1つ
+    struct MapStop: Equatable {
+        var order: Int
+        var dayNumber: Int
+        var name: String
+        var latitude: Double
+        var longitude: Double
+    }
+
+    /// 地図に出す場所。予定の順（何日目 → 時刻）で、場所のある予定だけ。
+    /// 続けて同じ場所（ほぼ同じ位置）の予定は1つにまとめる。旅行全体は多すぎると読めないので上限を置く
+    static func mapStops(plan: TravelPlan, scope: Scope, limit: Int = 12) -> [MapStop] {
+        let days: [Int]
+        switch scope {
+        case .day(let n): days = [n]
+        case .trip: days = plan.daySchedules.map(\.dayNumber).sorted()
+        }
+        var stops: [MapStop] = []
+        for day in days {
+            for item in plan.timelineScheduleItems(onDay: day) {
+                guard let latitude = item.latitude, let longitude = item.longitude,
+                      latitude.isFinite, longitude.isFinite else { continue }
+                if let last = stops.last,
+                   abs(last.latitude - latitude) < 0.0005, abs(last.longitude - longitude) < 0.0005 { continue }
+                let name = (item.location?.isEmpty == false ? item.location : nil) ?? item.title
+                stops.append(MapStop(order: stops.count + 1, dayNumber: day, name: name,
+                                     latitude: latitude, longitude: longitude))
+                if stops.count >= limit { return stops }
+            }
+        }
+        return stops
     }
 }

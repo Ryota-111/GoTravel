@@ -7,6 +7,8 @@ struct PlanDetailView: View {
     /// 地図から場所を選ぶ画面（全画面）の中の経路案内。上の画面の選択肢は全画面の上に出せないため分ける
     @State var plan: Plan
     @State private var showMap = false
+    /// 地図を押して開く全画面の地図（3.2）
+    @State private var showsFullMap = false
     @State private var showStreetView = false
     @State private var isEditMode = false
     @State private var displayImage: UIImage?
@@ -1573,22 +1575,33 @@ struct PlanDetailView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 30)
             } else {
-                Map(position: .constant(.region(calculateMapRegion()))) {
+                // 行程の順に ①② を付ける。動かすのは全画面のほうで、ここは押すと全画面を開く（3.2）
+                let order = plan.placeOrder
+                Map(position: .constant(.region(calculateMapRegion())), interactionModes: []) {
                     ForEach(plan.places) { place in
-                        Marker(place.name, coordinate: place.coordinate)
-                            .tint(planColor)
+                        Annotation(place.name, coordinate: place.coordinate) {
+                            PlanPlacePin(order: order[place.id], color: planColor)
+                        }
                     }
                 }
                 // 300ptは旅行計画の地図と同じ大きさで、当日の確認には過剰だった
                 .frame(height: 160)
                 .clipShape(RoundedRectangle(cornerRadius: 16))
+                .contentShape(RoundedRectangle(cornerRadius: 16))
+                .onTapGesture { showsFullMap = true }
+                .accessibilityAddTraits(.isButton)
+                .accessibilityHint(Text("地図を全画面で開きます"))
+                .fullScreenCover(isPresented: $showsFullMap) {
+                    PlanFullMapView(plan: plan, color: planColor)
+                }
                 .overlay(alignment: .bottomTrailing) {
                     HStack(spacing: 6) {
-                        Image(systemName: "mappin.circle.fill")
+                        Image(systemName: "arrow.up.left.and.arrow.down.right")
                             .font(.caption)
                         Text("\(plan.places.count)件")
                             .font(.caption.weight(.medium))
                     }
+                    .allowsHitTesting(false)
                     .foregroundColor(.white)
                     .padding(.horizontal, 12)
                     .padding(.vertical, 8)
@@ -1664,10 +1677,23 @@ struct PlanDetailView: View {
                                     let isLast = index == group.items.count - 1
                                     let state = scheduleRowState(index: index, nowIndex: nowIndex)
 
-                                    scheduleItemRow(item: item, isLast: isLast, state: state)
+                                    // 予定の行と間の行をまとめて測り、移動手段のアイコンを区間の真ん中に置く（3.2）。
+                                    // おでかけの予定には終わりの時刻が無いので、移動の時間は出さない
+                                    VStack(spacing: 0) {
+                                        scheduleItemRow(item: item, isLast: isLast, state: state)
 
-                                    if !isLast, needsMoveMarker(from: item, to: group.items[index + 1]) {
-                                        moveMarkerRow(state: state)
+                                        if !isLast {
+                                            moveMarkerRow(item: item, state: state)
+                                        }
+                                    }
+                                    .transportBadge(
+                                        mode: isLast ? nil : item.transportToNextMode,
+                                        duration: nil,
+                                        tint: planColor,
+                                        isPast: state == .past,
+                                        leading: 0
+                                    ) { mode in
+                                        setTransport(mode, after: item)
                                     }
                                 }
                             }
@@ -1740,11 +1766,14 @@ struct PlanDetailView: View {
             VStack(spacing: 0) {
                 scheduleDot(state: state)
 
+                // 次の予定までの移動手段を決めていれば、ここから線の種類を変える（3.2）
                 if !isLast {
-                    Rectangle()
-                        .fill(railColor(state: state))
-                        .frame(width: 2)
-                        .frame(maxHeight: .infinity)
+                    TransportRailSegment(
+                        mode: item.transportToNextMode,
+                        tint: planColor,
+                        railColor: railColor(state: state),
+                        isPast: state == .past
+                    )
                 }
             }
             .frame(width: 12)
@@ -1837,41 +1866,28 @@ struct PlanDetailView: View {
             : themeManager.currentTheme.secondaryText.opacity(0.18)
     }
 
-    /// 予定と予定のあいだに挟む移動の目印。
-    ///
-    /// 所要時間は出さない。バス・電車・徒歩を分けて出すには
-    /// 経路計算（`MKDirections`）が要るうえ、電車はそもそも計算できない。
-    /// 「ここで移動する」ことだけ分かれば足りる
-    private func moveMarkerRow(state: ScheduleRowState) -> some View {
-        HStack(spacing: 0) {
-            Color.clear.frame(width: 46)
-
-            Rectangle()
-                .fill(railColor(state: state))
-                .frame(width: 2)
-                .frame(maxHeight: .infinity)
-                .frame(width: 12)
-                .padding(.leading, 10)
-                .padding(.trailing, 16)
-
-            HStack(spacing: 5) {
-                Image(systemName: "arrow.down")
-                    .font(.system(size: 10, weight: .bold))
-                Text("移動")
-                    .font(.system(size: 11, weight: .semibold))
-            }
-            .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.75))
-
-            Spacer(minLength: 0)
+    /// 予定と予定の間。棒の上に移動手段を出し、押すと選べる（3.2、ご要望から）。
+    /// 前は別の場所へ行くときだけ「移動」と出していたが、手段を選べるようにどの間にも出す
+    private func moveMarkerRow(item: PlanScheduleItem, state: ScheduleRowState) -> some View {
+        TransportGapRow(
+            mode: item.transportToNextMode,
+            tint: planColor,
+            railColor: railColor(state: state),
+            placeholderColor: themeManager.currentTheme.secondaryText.opacity(0.45),
+            isPast: state == .past
+        ) { mode in
+            setTransport(mode, after: item)
         }
-        .frame(height: 26)
     }
 
-    /// 移動を挟むのは、続けて別の場所へ行くときだけ。
-    /// 場所が入っていない項目や、同じ場所での続きには出さない
-    private func needsMoveMarker(from: PlanScheduleItem, to: PlanScheduleItem) -> Bool {
-        guard let fromPlace = from.placeId, let toPlace = to.placeId else { return false }
-        return fromPlace != toPlace
+    private func setTransport(_ mode: TransportMode?, after item: PlanScheduleItem) {
+        guard let index = plan.scheduleItems.firstIndex(where: { $0.id == item.id }) else { return }
+        var updatedPlan = plan
+        updatedPlan.scheduleItems[index].transportToNext = mode?.rawValue
+        plan = updatedPlan
+        if let userId = authVM.userId {
+            viewModel.update(updatedPlan, userId: userId)
+        }
     }
 
     /// 次に控えている1件の位置。その日が今日でなければ nil
@@ -2236,10 +2252,17 @@ struct PlanDetailView: View {
             )
         }
 
+        // 番号を付けたので、どの場所も枠に入るように全部を囲む（3.2）
+        let coordinates = plan.places.map(\.coordinate).filter { $0.latitude.isFinite && $0.longitude.isFinite }
+        guard coordinates.count >= 2,
+              let minLat = coordinates.map(\.latitude).min(), let maxLat = coordinates.map(\.latitude).max(),
+              let minLng = coordinates.map(\.longitude).min(), let maxLng = coordinates.map(\.longitude).max() else {
+            return MKCoordinateRegion(center: firstPlace.coordinate, latitudinalMeters: 2000, longitudinalMeters: 2000)
+        }
         return MKCoordinateRegion(
-            center: firstPlace.coordinate,
-            latitudinalMeters: CLLocationDistance(max(plan.places.count * 1000, 2000)),
-            longitudinalMeters: CLLocationDistance(max(plan.places.count * 1000, 2000))
+            center: CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2, longitude: (minLng + maxLng) / 2),
+            span: MKCoordinateSpan(latitudeDelta: max((maxLat - minLat) * 1.5, 0.01),
+                                   longitudeDelta: max((maxLng - minLng) * 1.5, 0.01))
         )
     }
 

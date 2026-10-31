@@ -15,6 +15,8 @@ struct AddScheduleItemView: View {
 
     @State private var title = ""
     @State private var time = Date()
+    /// 日付をまたぐ予定（翌日の時刻）にするか（3.2）
+    @State private var isNextDay = false
     /// 時刻をどこの時計で入れるか。海外の旅行では現地の時計から始める
     @State private var timeZone: TimeZone = .current
     /// 目的地の時間帯。日本と時差があるときだけ入る
@@ -196,6 +198,11 @@ struct AddScheduleItemView: View {
                     fieldBackground: fieldBg
                 )
                 .task { await resolveDestinationTimeZone() }
+
+                if isNextDay || NextDayToggle.isCandidate(time, in: timeZone) {
+                    NextDayToggle(isOn: $isNextDay, time: time, timeZone: timeZone, tint: travelColor, textColor: textColor,
+                                  secondaryText: themeManager.currentTheme.secondaryText, fieldBackground: fieldBg)
+                }
 
                 ScheduleEndTimeField(
                     hasEndTime: $hasEndTime,
@@ -484,6 +491,8 @@ struct AddScheduleItemView: View {
             endTime: hasEndTime ? ScheduleItem.endTime(hourAndMinuteOf: endTime, after: time, in: timeZone, endZone: endZone) : nil,
             endTimeZoneIdentifier: hasEndTime ? endZone?.identifier : nil,
             address: selectedLocation == nil ? nil : selectedAddress,
+            // 日付をまたぐ予定は、その日の最後に「翌日 0:30」と並べる（3.2）
+            dayShift: isNextDay ? 1 : nil,
             // 割り勘（3.1）：共有した旅行で金額を入れたら、入れた人が払ったことにする（費用の画面で直せる）
             paidBy: basePlan.isShared && (costs.cost ?? 0) > 0 ? userId : nil
         )

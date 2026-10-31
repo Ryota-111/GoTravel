@@ -1,4 +1,5 @@
 import SwiftUI
+import MapKit
 
 /// タイムスケジュールの1件を追加・編集する画面。
 ///
@@ -137,8 +138,14 @@ struct ScheduleItemEditorView: View {
                 themeManager.currentTheme.backgroundGradient(for: colorScheme)
                     .ignoresSafeArea()
             )
-            .sheet(isPresented: $showPlaceSearch) {
-                PlaceSearchView { place in
+            // 地図で探す。地図に出ている施設を押しても、長押しでピンを立てても選べる（`MapPlaceSearchView`）。
+            // 前は文字で検索するだけの画面で、「地図から」と書いてあるのに地図が出なかった
+            .fullScreenCover(isPresented: $showPlaceSearch) {
+                MapPlaceSearchView(title: "地図から検索", startRegion: placeSearchRegion, accent: accentColor) { picked in
+                    let place = PlannedPlace(name: picked.name,
+                                             latitude: picked.coordinate.latitude,
+                                             longitude: picked.coordinate.longitude,
+                                             address: picked.address)
                     addedPlaces.append(place)
                     selectedPlaceId = place.id
                 }
@@ -239,6 +246,12 @@ struct ScheduleItemEditorView: View {
         .buttonStyle(PlainButtonStyle())
     }
 
+    /// 地図を開く位置。予定にもう場所があればその近く、無ければ日本全体
+    private var placeSearchRegion: MKCoordinateRegion {
+        guard let first = availablePlaces.first else { return TravelPlan.japanRegion }
+        return MKCoordinateRegion(center: first.coordinate, latitudinalMeters: 5000, longitudinalMeters: 5000)
+    }
+
     @ViewBuilder
     private var placePicker: some View {
         if availablePlaces.isEmpty {
@@ -299,8 +312,10 @@ struct ScheduleItemEditorView: View {
             }
         } label: {
             HStack {
+                // この画面で地図から足した場所（`addedPlaces`）も含めて探す。
+                // 予定の場所（`plan.places`）だけを見ていたため、足した直後は「場所を選択」のままだった
                 if let placeId = selectedPlaceId,
-                   let place = plan.places.first(where: { $0.id == placeId }) {
+                   let place = availablePlaces.first(where: { $0.id == placeId }) {
                     Image(systemName: "mappin.circle.fill")
                         .foregroundColor(accentColor)
                     Text(place.name)
@@ -375,14 +390,14 @@ struct ScheduleItemEditorView: View {
 
         if let existingItem = scheduleItem {
             // 編集モード
+            // この画面で直せる項目だけ書き換える。作り直すと、ここに出ない項目（移動手段など）が消える
             if let index = updatedPlan.scheduleItems.firstIndex(where: { $0.id == existingItem.id }) {
-                updatedPlan.scheduleItems[index] = PlanScheduleItem(
-                    id: existingItem.id,
-                    time: composedDate,
-                    title: title,
-                    placeId: selectedPlaceId,
-                    note: note.isEmpty ? nil : note
-                )
+                var edited = updatedPlan.scheduleItems[index]
+                edited.time = composedDate
+                edited.title = title
+                edited.placeId = selectedPlaceId
+                edited.note = note.isEmpty ? nil : note
+                updatedPlan.scheduleItems[index] = edited
             }
         } else {
             // 新規追加モード
