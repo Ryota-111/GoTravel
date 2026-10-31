@@ -83,6 +83,41 @@ struct WhatsNew: Identifiable {
 
     private static let all: [WhatsNew] = [
         WhatsNew(
+            version: "3.2",
+            items: [
+                Item(
+                    icon: "tram.fill",
+                    title: "予定と予定の間に移動手段を入れられます",
+                    detail: "徒歩・電車・バス・車・タクシー・飛行機・船から選べます。時刻と時刻を線でつなぎ、区間の真ん中に手段とかかる時間が出るので、1日の流れがひと目で分かります。共有した旅行では、相手もTravory 3.2以降が必要です。ご要望をいただいて追加しました。"
+                ),
+                Item(
+                    icon: "arrow.up.arrow.down",
+                    title: "予定の並べ替えと、日にちの入れ替え",
+                    detail: "予定を指で動かして順番を変えられます。2日目と3日目を丸ごと入れ替えることもできます。ご要望をいただいて追加しました。"
+                ),
+                Item(
+                    icon: "moon.stars.fill",
+                    title: "日付をまたぐ夜の予定を入れられます",
+                    detail: "夜行バスや年越しのように、深夜の予定を「24:30」「25:00」としてその日の最後に入れられます。ご要望をいただいて追加しました。"
+                ),
+                Item(
+                    icon: "mappin.circle.fill",
+                    title: "予定の地図に順番の番号が付きました",
+                    detail: "地図のピンに行程の順の番号が出ます。地図を押すと全画面で大きく見られます。ご要望をいただいて追加しました。"
+                ),
+                Item(
+                    icon: "film.stack.fill",
+                    title: "旅のダイジェストを自分好みに仕上げられます",
+                    detail: "最初に旅行の題名、最後に行程の地図が入ります。1コマの長さを1.5〜4秒から選べ、1コマずつトリミングもできます。動画は何秒目から使うかも選べます。まだ写真がない旅行でも、日ごとに写真を足せます。"
+                ),
+                Item(
+                    icon: "camera.filters",
+                    title: "色味と画面の形（Pro）",
+                    detail: "ダイジェストの色味（フィルム・あたたかい・すっきり・白黒）と、正方形・横長の形はTravory Proで使えます。Proでなくても選んで試せます。"
+                )
+            ]
+        ),
+        WhatsNew(
             version: "3.1",
             items: [
                 Item(
