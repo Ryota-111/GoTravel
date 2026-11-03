@@ -1199,10 +1199,14 @@ struct PlanDetailView: View {
     private var headerImageView: some View {
         Group {
             if let image = displayImage {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
+                // 高さだけを付けると、横長の写真で幅が画面より大きくなり画面が押し広げられる。枠に重ねて切る
+                Color.clear
                     .frame(height: 250)
+                    .overlay {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    }
                     .clipped()
             } else {
                 Rectangle()

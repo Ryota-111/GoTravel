@@ -1314,35 +1314,41 @@ struct TravelPlanDetailView: View {
     private func planHeaderSection(plan: TravelPlan) -> some View {
         ZStack {
             // 背景画像
-            Group {
-                if let planId = plan.id, let image = viewModel.planImages[planId] {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else if let localImageFileName = plan.localImageFileName,
-                          let image = FileManager.documentsImage(named: localImageFileName) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else {
-                    Rectangle()
-                        .fill(LinearGradient(
-                            gradient: Gradient(colors: [
-                                themeManager.currentTheme.primary.opacity(0.8),
-                                themeManager.currentTheme.secondary.opacity(0.6)
-                            ]),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ))
-                        .overlay(
-                            Image(systemName: "airplane")
-                                .font(.system(size: 80))
-                                .foregroundColor(.white.opacity(0.15))
-                        )
+            //
+            // 写真は大きさの決まった枠に重ねて、はみ出した分を切る。写真に高さだけを付けると、
+            // 横長の写真では幅が画面より大きくなり、画面全体が横に押し広げられて端が切れていた
+            Color.clear
+                .frame(height: Self.headerHeight)
+                .overlay {
+                    Group {
+                        if let planId = plan.id, let image = viewModel.planImages[planId] {
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } else if let localImageFileName = plan.localImageFileName,
+                                  let image = FileManager.documentsImage(named: localImageFileName) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } else {
+                            Rectangle()
+                                .fill(LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        themeManager.currentTheme.primary.opacity(0.8),
+                                        themeManager.currentTheme.secondary.opacity(0.6)
+                                    ]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ))
+                                .overlay(
+                                    Image(systemName: "airplane")
+                                        .font(.system(size: 80))
+                                        .foregroundColor(.white.opacity(0.15))
+                                )
+                        }
+                    }
                 }
-            }
-            .frame(height: Self.headerHeight)
-            .clipped()
+                .clipped()
 
             // グラデーションオーバーレイ（下部を暗く）
             LinearGradient(
