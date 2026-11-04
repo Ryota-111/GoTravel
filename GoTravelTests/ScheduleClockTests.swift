@@ -178,6 +178,22 @@ struct ScheduleClockTests {
         #expect(plan.dayNumber(forDate: lateNight, in: tokyo) == 2)
     }
 
+    /// ロサンゼルスに住む人が、夜 20:00 に「10/10 出発」の旅行を作ると、出発日は日本時間では 10/11 の昼。
+    /// 日本時間で読むと 10/10 が「旅行の前日」になり、何日目かが1日ずれていた（3.3）
+    @Test("住んでいる地域の時計で、旅行の初日を読む")
+    func dayNumberUsesHomeClock() {
+        let losAngeles = TimeZone(identifier: "America/Los_Angeles")!
+        let plan = TravelPlan(title: "ハワイ",
+                              startDate: date(20, in: losAngeles),
+                              endDate: date(20, in: losAngeles).addingTimeInterval(86_400 * 3),
+                              destination: "ハワイ")
+        let morning = date(9, in: losAngeles)   // ロサンゼルスの 10/10 の朝
+
+        #expect(plan.unclampedDayNumber(forDate: morning, in: losAngeles, home: losAngeles) == 1)
+        // 日本時間で読むと、初日が 10/11 になって 10/10 は 0日目（前日）
+        #expect(plan.unclampedDayNumber(forDate: morning, in: losAngeles, home: tokyo) == 0)
+    }
+
     @Test("時差の無い国は海外扱いしない")
     func sameOffsetIsNotForeign() {
         #expect(!ScheduleClock.isForeign(seoul, at: date(12, in: tokyo)))

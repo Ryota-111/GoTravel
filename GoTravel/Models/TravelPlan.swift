@@ -476,10 +476,12 @@ struct TravelPlan: Identifiable, Codable {
 
     /// 旅行の期間から外れていても数える「何日目」（前日なら 0、翌日なら dayCount + 1）。
     /// 旅行の前日にチェックインする宿のように、期間をまたぐものを扱うのに使う
-    func unclampedDayNumber(forDate date: Date, in timeZone: TimeZone) -> Int? {
-        // 旅行の初日は日本で入れたものとして日付を読む（予定の時刻と同じ考え方）。
+    /// - Parameter home: 旅行の日付を読む時計。テストで住んでいる地域を変えるときだけ渡す
+    func unclampedDayNumber(forDate date: Date, in timeZone: TimeZone,
+                            home: TimeZone = ScheduleClock.homeTimeZone) -> Int? {
+        // 旅行の初日は住んでいる地域（選んでいなければ日本）で入れたものとして日付を読む。
         // 端末の暦で読むと、海外にいるときだけ初日が前の日にずれることがある
-        let startDay = ScheduleClock.calendar(in: ScheduleClock.legacyTimeZone)
+        let startDay = ScheduleClock.calendar(in: home)
             .dateComponents([.year, .month, .day], from: startDate)
         let targetDay = ScheduleClock.calendar(in: timeZone).dateComponents([.year, .month, .day], from: date)
 

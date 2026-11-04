@@ -16,6 +16,18 @@ enum ScheduleClock {
     /// 利用者の大半は日本で入力しているので、日本時間とみなす
     static let legacyTimeZone = TimeZone(identifier: "Asia/Tokyo")!
 
+    static let homeTimeZoneKey = "homeTimeZone"
+
+    /// 旅行の日付（出発日・帰る日）を読む時計。住んでいる地域の時間帯で、選んでいなければ日本時間（3.3）。
+    ///
+    /// 旅行の日付は、入れた時刻ごと保存されている。日本に住む人が海外で開いても日付が動かないよう、
+    /// 日本で入れたものとして読んできた。ところが海外に住む人では、入れた日付と読む日付がずれる
+    /// （ロサンゼルスの夜 20:00 に入れた「11月10日」は、日本時間では 11日の昼）。
+    /// 何日目かの数え方・ウィジェット・カレンダーへの書き出しが1日ずれていたので、選べるようにした
+    static var homeTimeZone: TimeZone {
+        UserDefaults.standard.string(forKey: homeTimeZoneKey).flatMap(TimeZone.init(identifier:)) ?? legacyTimeZone
+    }
+
     static func calendar(in timeZone: TimeZone) -> Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.locale = Locale(identifier: "ja_JP")

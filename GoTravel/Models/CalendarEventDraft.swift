@@ -65,8 +65,8 @@ enum CalendarEventBuilder {
         var reservationsInSchedule = Set<String>()
 
         if options.includesSchedule {
-            // 旅行の日付は日本で入れたものとして読む（ウィジェットと同じ考え方）
-            let tripCalendar = ScheduleClock.calendar(in: ScheduleClock.legacyTimeZone)
+            // 旅行の日付は住んでいる地域（選んでいなければ日本）で入れたものとして読む（ウィジェットと同じ考え方）
+            let tripCalendar = ScheduleClock.calendar(in: ScheduleClock.homeTimeZone)
             for day in plan.daySchedules {
                 let dayDate = tripCalendar.date(byAdding: .day, value: day.dayNumber - 1, to: plan.startDate) ?? day.date
                 let dayParts = tripCalendar.dateComponents([.year, .month, .day], from: dayDate)
@@ -201,10 +201,10 @@ enum CalendarEventBuilder {
         return parts.isEmpty ? nil : parts.joined(separator: "\n")
     }
 
-    /// 旅行の日付（日本で入れたもの）を、この端末の暦の同じ日の 0:00 にする。
+    /// 旅行の日付（住んでいる地域で入れたもの）を、この端末の暦の同じ日の 0:00 にする。
     /// 終日の予定は時計を持たないので、海外で開いても日付がずれないように
     static func localDay(of date: Date, calendar: Calendar = .current) -> Date {
-        let parts = ScheduleClock.calendar(in: ScheduleClock.legacyTimeZone).dateComponents([.year, .month, .day], from: date)
+        let parts = ScheduleClock.calendar(in: ScheduleClock.homeTimeZone).dateComponents([.year, .month, .day], from: date)
         return calendar.date(from: parts) ?? date
     }
 

@@ -66,7 +66,7 @@ enum WidgetSnapshotBuilder {
     /// 各項目に実際の日付を持たせることで、ウィジェット側が
     /// アプリを起動しなくても当日分を選び出せる
     private static func travelSchedule(of travel: TravelPlan) -> [WidgetSnapshot.Item] {
-        let tripCalendar = ScheduleClock.calendar(in: ScheduleClock.legacyTimeZone)
+        let tripCalendar = ScheduleClock.calendar(in: ScheduleClock.homeTimeZone)
         var result: [WidgetSnapshot.Item] = []
 
         for daySchedule in travel.daySchedulesInRange {
@@ -77,7 +77,7 @@ enum WidgetSnapshotBuilder {
                 to: travel.startDate
             ) ?? daySchedule.date
             let day = tripCalendar.dateComponents([.year, .month, .day], from: dayDate)
-            let dayKey = DayKey.string(for: dayDate, in: ScheduleClock.legacyTimeZone)
+            let dayKey = DayKey.string(for: dayDate, in: ScheduleClock.homeTimeZone)
 
             let items = daySchedule.scheduleItems
                 .sorted(by: ScheduleItem.chronologically)
@@ -101,13 +101,13 @@ enum WidgetSnapshotBuilder {
         return Array(result.prefix(maxTravelScheduleItems))
     }
 
-    /// 旅行の日付は、日本で入れたものとして読む（予定の時刻と同じ考え方）
+    /// 旅行の日付は、住んでいる地域（選んでいなければ日本）で入れたものとして読む
     private static func startDayKey(of plan: TravelPlan) -> String {
-        DayKey.string(for: plan.startDate, in: ScheduleClock.legacyTimeZone)
+        DayKey.string(for: plan.startDate, in: ScheduleClock.homeTimeZone)
     }
 
     private static func endDayKey(of plan: TravelPlan) -> String {
-        DayKey.string(for: plan.endDate, in: ScheduleClock.legacyTimeZone)
+        DayKey.string(for: plan.endDate, in: ScheduleClock.homeTimeZone)
     }
 
     /// その日の、予定の時計での時:分を、実際に起きる瞬間にする。
