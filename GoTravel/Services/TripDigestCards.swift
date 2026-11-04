@@ -251,8 +251,9 @@ extension TripDigestComposer {
             case .center: return CGRect(x: W * 0.14, y: H * 0.1, width: W * 0.72, height: H * 0.5)
             }
         }()
+        let fitted = mapRect(fitting: stops, into: area)
         let options = MKMapSnapshotter.Options()
-        options.mapRect = mapRect(fitting: stops, into: area)
+        options.mapRect = fitted.rect
         options.size = renderSize
         options.scale = 1
         // 写真のあいだに入れてもなじむよう、色を抑えた暗い地図にする
@@ -262,7 +263,11 @@ extension TripDigestComposer {
         options.traitCollection = UITraitCollection(userInterfaceStyle: .dark)
         guard let snapshot = try? await MKMapSnapshotter(options: options).start() else { return nil }
 
-        let points = stops.map { snapshot.point(for: CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)) }
+        // 絵の中の位置は自分で出す。日付変更線をまたぐ地図では、`snapshot.point(for:)` が
+        // 地球の反対側の写しの位置を返すことがあるため
+        let points = fitted.mapPoints.map { point in
+            CGPoint(x: (point.x - fitted.rect.minX) / fitted.perPixel, y: (point.y - fitted.rect.minY) / fitted.perPixel)
+        }
         let overlay = overlayImage(caption: caption, headline: headline, title: nil, subtitle: "",
                                    position: position, watermark: watermark, centerTop: 0.7)
         return MapCard(map: snapshot.image, points: points,
@@ -270,9 +275,24 @@ extension TripDigestComposer {
                        overlay: overlay)
     }
 
-    /// 全部の場所が area（絵の中の範囲）に収まる地図の範囲。1か所だけなら、その周り1.5kmほど
-    private static func mapRect(fitting stops: [TripDigest.MapStop], into area: CGRect) -> MKMapRect {
-        let mapPoints = stops.map { MKMapPoint(CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)) }
+    /// 全部の場所が area（絵の中の範囲）に収まる地図の範囲。1か所だけなら、その周り1.5kmほど。
+    ///
+    /// 日付変更線をまたぐ旅行（羽田 → ホノルル → ロサンゼルス）は、経度のいちばん短い弧で囲む。
+    /// 地図の座標のまま最小と最大を取ると、地球を反対に回ってヨーロッパと大西洋の側が映り、
+    /// 道のりの線もそちらを通っていた。弧の真ん中から半周より遠い場所は、地球1周分ずらして並べる
+    /// - Returns: 地図の範囲、絵の1点あたりの地図の長さ、ずらしたあとの各場所の位置
+    private static func mapRect(fitting stops: [TripDigest.MapStop], into area: CGRect)
+        -> (rect: MKMapRect, perPixel: Double, mapPoints: [MKMapPoint]) {
+        let coordinates = stops.map { CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude) }
+        let world = MKMapSize.world.width
+        let centerLongitude = MapRegionFitting.shortestLongitudeArc(coordinates.map(\.longitude)).center
+        let arcCenterX = MKMapPoint(CLLocationCoordinate2D(latitude: 0, longitude: centerLongitude)).x
+        let mapPoints = coordinates.map { coordinate -> MKMapPoint in
+            var point = MKMapPoint(coordinate)
+            if point.x - arcCenterX > world / 2 { point.x -= world }
+            if arcCenterX - point.x > world / 2 { point.x += world }
+            return point
+        }
         let minX = mapPoints.map(\.x).min()!, maxX = mapPoints.map(\.x).max()!
         let minY = mapPoints.map(\.y).min()!, maxY = mapPoints.map(\.y).max()!
         let minimum = 1500 * MKMapPointsPerMeterAtLatitude(stops[0].latitude)
@@ -280,7 +300,8 @@ extension TripDigestComposer {
         let perPixel = max(max(maxX - minX, minimum) / area.width, max(maxY - minY, minimum) / area.height)
         let width = renderSize.width * perPixel, height = renderSize.height * perPixel
         let centerX = (minX + maxX) / 2, centerY = (minY + maxY) / 2
-        return MKMapRect(x: centerX - area.midX * perPixel, y: centerY - area.midY * perPixel, width: width, height: height)
+        let rect = MKMapRect(x: centerX - area.midX * perPixel, y: centerY - area.midY * perPixel, width: width, height: height)
+        return (rect, perPixel, mapPoints)
     }
 }
 
