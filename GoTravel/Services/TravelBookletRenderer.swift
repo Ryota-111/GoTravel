@@ -86,11 +86,16 @@ enum TravelBookletRenderer {
         guard !numbered.isEmpty else { return nil }
         let coordinates = numbered.compactMap { item -> CLLocationCoordinate2D? in
             guard let lat = item.latitude, let lon = item.longitude else { return nil }
-            return CLLocationCoordinate2D(latitude: lat, longitude: lon)
+            let coordinate = CLLocationCoordinate2D(latitude: lat, longitude: lon)
+            // 壊れた座標が1つでもあると範囲が作れず、MapKit が落ちる
+            return CLLocationCoordinate2DIsValid(coordinate) ? coordinate : nil
         }
 
         let options = MKMapSnapshotter.Options()
-        options.region = region(fitting: coordinates)
+        // 日付変更線をまたぐ日（羽田からロサンゼルスへ飛ぶ日など）も囲めるよう、共通の範囲の決め方を使う。
+        // 以前は経度の最小と最大から幅を出していて、幅が360度を超えると MapKit が例外を投げて落ちていた
+        guard let region = MapRegionFitting.region(fitting: coordinates, minimumSpan: 0.02) else { return nil }
+        options.region = region
         options.size = size
         options.scale = 3
         options.pointOfInterestFilter = .excludingAll
@@ -116,16 +121,5 @@ enum TravelBookletRenderer {
                           withAttributes: attributes)
             }
         }
-    }
-
-    /// 全部の場所が入る範囲（1か所だけなら街が分かるくらいの広さ）
-    static func region(fitting coordinates: [CLLocationCoordinate2D]) -> MKCoordinateRegion {
-        let lats = coordinates.map(\.latitude), lons = coordinates.map(\.longitude)
-        let minLat = lats.min() ?? 0, maxLat = lats.max() ?? 0
-        let minLon = lons.min() ?? 0, maxLon = lons.max() ?? 0
-        let center = CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2, longitude: (minLon + maxLon) / 2)
-        let span = MKCoordinateSpan(latitudeDelta: max((maxLat - minLat) * 1.5, 0.02),
-                                    longitudeDelta: max((maxLon - minLon) * 1.5, 0.02))
-        return MKCoordinateRegion(center: center, span: span)
     }
 }

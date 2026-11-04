@@ -17,6 +17,8 @@ struct ScheduleTimeField: View {
     var dayZone: TimeZone?
     /// 旅行の目的地の時間帯
     let destination: TimeZone?
+    /// 旅行に海外の時間帯が入っているか。入っていれば、最近使った時間帯でも選択を出す（3.3）
+    var countsRecents = false
     let tint: Color
     let textColor: Color
     let secondaryText: Color
@@ -61,7 +63,7 @@ struct ScheduleTimeField: View {
             .background(fieldBackground)
             .cornerRadius(12)
 
-            if ScheduleClock.offersZoneChoice(choices, selected: timeZone, at: time) {
+            if ScheduleClock.offersZoneChoice(choices, selected: timeZone, at: time, countsRecents: countsRecents) {
                 ScheduleZoneMenu(
                     time: time,
                     timeZone: timeZone,
@@ -314,6 +316,8 @@ struct ScheduleEndTimeField: View {
     var endZone: Binding<TimeZone?>? = nil
     /// 時間帯の候補（`ScheduleClock.zoneChoices`）
     var zoneChoices: [ScheduleZoneChoice] = []
+    /// 旅行に海外の時間帯が入っているか（`ScheduleTimeField.countsRecents` と同じ）
+    var countsRecents = false
 
     @State private var showsSearch = false
 
@@ -326,13 +330,20 @@ struct ScheduleEndTimeField: View {
     private var offersEndZone: Bool {
         guard let endZone else { return false }
         return endZone.wrappedValue != nil
-            || ScheduleClock.offersZoneChoice(zoneChoices, selected: timeZone, at: startTime)
+            || ScheduleClock.offersZoneChoice(zoneChoices, selected: timeZone, at: startTime,
+                                              countsRecents: countsRecents)
     }
 
     var body: some View {
         if hasEndTime {
             VStack(alignment: .leading, spacing: 10) {
                 endTimeRow
+                if let nextDayCaption {
+                    Label(nextDayCaption, systemImage: "moon.stars")
+                        .font(.caption)
+                        .foregroundColor(secondaryText)
+                        .padding(.horizontal, 4)
+                }
                 if offersEndZone {
                     endZoneMenu
                 }
@@ -353,6 +364,19 @@ struct ScheduleEndTimeField: View {
             .buttonStyle(.plain)
             .padding(.horizontal, 4)
         }
+    }
+
+    /// 終わりが始まりより後の日になるとき、そう書き添える（3.3）。
+    ///
+    /// 終わりは時:分しか選べず、始まりより前の時刻なら翌日として入る。それが画面から分からず、
+    /// 夜行便を入れるのに「日付も入れたい」とご要望をいただいた。着く日の予定表の一番上にも出ることを伝える
+    private var nextDayCaption: String? {
+        let arrival = ScheduleItem.endTime(hourAndMinuteOf: endTime, after: startTime, in: timeZone,
+                                           endZone: endZone?.wrappedValue)
+        let days = ScheduleClock.dateDifference(from: startTime, in: timeZone, to: arrival, in: effectiveEndZone)
+        guard days >= 1 else { return nil }
+        let day = days == 1 ? "翌日" : "\(days)日後"
+        return "\(day)の \(ScheduleClock.timeText(arrival, in: effectiveEndZone)) に終わります。着く日の予定表のいちばん上にも出ます"
     }
 
     private var endTimeRow: some View {

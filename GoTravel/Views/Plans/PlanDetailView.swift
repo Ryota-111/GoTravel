@@ -1199,10 +1199,14 @@ struct PlanDetailView: View {
     private var headerImageView: some View {
         Group {
             if let image = displayImage {
-                Image(uiImage: image)
-                    .resizable()
-                    .scaledToFill()
+                // 高さだけを付けると、横長の写真で幅が画面より大きくなり画面が押し広げられる。枠に重ねて切る
+                Color.clear
                     .frame(height: 250)
+                    .overlay {
+                        Image(uiImage: image)
+                            .resizable()
+                            .scaledToFill()
+                    }
                     .clipped()
             } else {
                 Rectangle()
@@ -2253,17 +2257,13 @@ struct PlanDetailView: View {
         }
 
         // 番号を付けたので、どの場所も枠に入るように全部を囲む（3.2）
+        // 日付変更線をまたいでも囲めるよう、共通の範囲の決め方を使う（幅が360度を超えると MapKit が落ちる）
         let coordinates = plan.places.map(\.coordinate).filter { $0.latitude.isFinite && $0.longitude.isFinite }
         guard coordinates.count >= 2,
-              let minLat = coordinates.map(\.latitude).min(), let maxLat = coordinates.map(\.latitude).max(),
-              let minLng = coordinates.map(\.longitude).min(), let maxLng = coordinates.map(\.longitude).max() else {
+              let region = MapRegionFitting.region(fitting: coordinates, minimumSpan: 0.01) else {
             return MKCoordinateRegion(center: firstPlace.coordinate, latitudinalMeters: 2000, longitudinalMeters: 2000)
         }
-        return MKCoordinateRegion(
-            center: CLLocationCoordinate2D(latitude: (minLat + maxLat) / 2, longitude: (minLng + maxLng) / 2),
-            span: MKCoordinateSpan(latitudeDelta: max((maxLat - minLat) * 1.5, 0.01),
-                                   longitudeDelta: max((maxLng - minLng) * 1.5, 0.01))
-        )
+        return region
     }
 
     private func dateRangeString(_ start: Date, _ end: Date) -> String {

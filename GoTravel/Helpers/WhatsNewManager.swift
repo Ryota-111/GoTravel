@@ -83,6 +83,36 @@ struct WhatsNew: Identifiable {
 
     private static let all: [WhatsNew] = [
         WhatsNew(
+            version: "3.3",
+            items: [
+                Item(
+                    icon: "photo.on.rectangle.angled",
+                    title: "予定の場所の写真や営業時間を見られます",
+                    detail: "旅行計画のタイムスケジュールで、場所の名前を押すと、その場所の写真・営業時間・評価などをまとめて見られます。出かける前のわくわくに、現地での確認にお使いください。ご要望をいただいて追加しました。"
+                ),
+                Item(
+                    icon: "moon.stars.fill",
+                    title: "日をまたぐ予定が分かりやすくなりました",
+                    detail: "夜行便や夜行バスのように翌日に着く予定は、「22:00〜翌 08:00」と出ます。着く日の予定表のいちばん上にも出るので、朝が乗り物の中から始まることが分かります。ご要望をいただいて追加しました。"
+                ),
+                Item(
+                    icon: "globe.asia.australia.fill",
+                    title: "住んでいる地域の時間帯を選べます",
+                    detail: "海外にお住まいの方は、プロフィールの「住んでいる地域の時間帯」でお住まいの地域を選ぶと、何日目かの数え方やウィジェットの日付がずれなくなります。日本にお住まいの方は、そのままで大丈夫です。ご報告をいただいて追加しました。"
+                ),
+                Item(
+                    icon: "arrow.triangle.turn.up.right.diamond.fill",
+                    title: "Google マップで施設そのものへ案内します",
+                    detail: "経路案内を Google マップで開くと、施設から少しずれた地点に案内されることがありました。場所の名前で開くように直し、施設そのものへ案内されるようにしました。ご報告をいただいて直しました。"
+                ),
+                Item(
+                    icon: "wrench.and.screwdriver.fill",
+                    title: "不具合を直しました",
+                    detail: "日付変更線をまたぐ日のある旅行で、旅のしおりを作るとアプリが終了していたのを直しました。横長の写真を設定した旅行計画で画面の端が切れていたのも直しました。ご報告いただいた皆さま、ありがとうございました。"
+                )
+            ]
+        ),
+        WhatsNew(
             version: "3.2",
             items: [
                 Item(

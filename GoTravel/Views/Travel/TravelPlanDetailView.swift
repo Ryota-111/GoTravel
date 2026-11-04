@@ -143,6 +143,10 @@ struct TravelPlanDetailView: View {
     /// カレンダーに入れる画面（3.0）
     @State private var showsCalendarExport = false
     @State private var editingItem: ScheduleItem?
+    /// 予定を押して開く、iOS の場所カード（写真・営業時間など。3.3）
+    @State private var placeCardItem: MKMapItem?
+    /// 場所カードに渡す施設を探している予定（探している間、「詳細」に読み込み中の印を出す）
+    @State private var resolvingPlaceItemID: String?
 
     // Weather Properties
     /// 日程の各日ぶんの天気。取れなかった日は入らないので、日番号とは対応しない
@@ -425,8 +429,11 @@ struct TravelPlanDetailView: View {
                 }
             }
         }
+        .mapItemDetailSheet(item: $placeCardItem)
         .fullScreenCover(item: $editingItem) { item in
-            if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }) {
+            // 予定が入っている日で開く。前の日から続く予定（3.3）は、選んでいる日とは違う日に入っている
+            if let daySchedule = plan.daySchedules.first(where: { day in day.scheduleItems.contains { $0.id == item.id } })
+                ?? plan.daySchedules.first(where: { $0.dayNumber == selectedDay }) {
                 EditScheduleItemView(plan: plan, daySchedule: daySchedule, item: item)
                     .environmentObject(viewModel)
                     .environmentObject(authVM)
@@ -620,9 +627,25 @@ struct TravelPlanDetailView: View {
         .buttonStyle(PlainButtonStyle())
     }
 
+    /// 予定の場所の、iOS の場所カードを開く。名前で施設を探し、見つからなければ座標だけのカードにする
+    private func openPlaceCard(for item: ScheduleItem) {
+        guard let latitude = item.latitude, let longitude = item.longitude,
+              resolvingPlaceItemID == nil else { return }
+        resolvingPlaceItemID = item.id
+        Task {
+            let found = await PlaceCardResolver.mapItem(
+                name: item.location ?? item.title,
+                coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
+            )
+            resolvingPlaceItemID = nil
+            placeCardItem = found
+        }
+    }
+
     private func deleteScheduleItem(_ item: ScheduleItem, from plan: TravelPlan) {
         var updatedPlan = plan
-        if let dayIndex = updatedPlan.daySchedules.firstIndex(where: { $0.dayNumber == selectedDay }) {
+        // 予定が入っている日から消す。前の日から続く予定（3.3）は、選んでいる日とは違う日に入っている
+        for dayIndex in updatedPlan.daySchedules.indices {
             updatedPlan.daySchedules[dayIndex].scheduleItems.removeAll { $0.id == item.id }
         }
         if let userId = authVM.userId {
@@ -659,11 +682,32 @@ struct TravelPlanDetailView: View {
         return .future
     }
 
-    private func timelineItemView(item: ScheduleItem, isLast: Bool, plan: TravelPlan, state: TimelineRowState) -> some View {
+    /// - Parameter arrival: 前の日に始まって、この日に着く予定として出す（3.3）。時刻の列は着く時刻にする
+    private func timelineItemView(item: ScheduleItem, isLast: Bool, plan: TravelPlan, state: TimelineRowState,
+                                  arrival: Bool = false) -> some View {
         HStack(alignment: .top, spacing: 0) {
             // 時刻は塗りつぶさず、等幅で右に揃える。
             // カプセルで塗ると1行ごとに色の面ができて、レールが読めなくなる
             VStack(alignment: .trailing, spacing: 1) {
+              if arrival, let endTime = item.endTime {
+                // 「前日 22:00〜」の下に、着く時刻を大きく出す
+                Text("\(item.endDayOffset == 1 ? "前日" : "\(item.endDayOffset)日前") \(item.timeText)〜")
+                    .font(.system(size: 9, weight: .bold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.6)
+                Text(ScheduleClock.timeText(endTime, in: item.endTimeZone))
+                    .font(.system(size: 13, weight: .bold))
+                    .monospacedDigit()
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                if let label = item.arrivalZoneLabel {
+                    Text(label)
+                        .font(.system(size: 9, weight: .semibold))
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.7)
+                }
+              } else {
                 // 時間帯を直して日付をまたいだ予定（「前日 17:00」）
                 if let shift = item.dayShiftLabel {
                     Text(shift)
@@ -707,6 +751,7 @@ struct TravelPlanDetailView: View {
                         .lineLimit(1)
                         .minimumScaleFactor(0.7)
                 }
+              }
             }
             .foregroundColor(state == .past
                              ? themeManager.currentTheme.secondaryText.opacity(0.6)
@@ -721,7 +766,8 @@ struct TravelPlanDetailView: View {
                 // 次の予定までの移動手段を決めていれば、ここから線の種類を変える（3.2）
                 if !isLast {
                     TransportRailSegment(
-                        mode: item.transportToNextMode,
+                        // 着く予定の「次の予定までの移動手段」は、始まった日の次の予定へのものなので使わない
+                        mode: arrival ? nil : item.transportToNextMode,
                         tint: scheduleAccentColor,
                         railColor: state == .past
                             ? scheduleAccentColor.opacity(0.4)
@@ -752,14 +798,30 @@ struct TravelPlanDetailView: View {
 
                 if let location = item.location, !location.isEmpty {
                     HStack(spacing: 4) {
-                        Image(systemName: "mappin.circle.fill")
-                            .font(.system(size: 11))
-                            .foregroundColor(scheduleAccentColor.opacity(0.7))
-                        Text(location)
-                            .font(.system(size: 12))
-                            .foregroundColor(themeManager.currentTheme.secondaryText)
-                            .lineLimit(1)
                         if item.latitude != nil && item.longitude != nil {
+                            // 場所の名前を押すと場所カード（写真・営業時間など。3.3）。
+                            // 行を押しても開くが、それだけでは押せることが分からないので、名前をリンクの形にする
+                            Button(action: { openPlaceCard(for: item) }) {
+                                HStack(spacing: 4) {
+                                    Image(systemName: "mappin.circle.fill")
+                                        .font(.system(size: 12))
+                                    Text(location)
+                                        .font(.system(size: 13, weight: .semibold))
+                                        .lineLimit(1)
+                                    if resolvingPlaceItemID == item.id {
+                                        ProgressView()
+                                            .controlSize(.mini)
+                                    } else {
+                                        Image(systemName: "chevron.right")
+                                            .font(.system(size: 9, weight: .bold))
+                                    }
+                                }
+                                .foregroundColor(scheduleAccentColor)
+                            }
+                            .buttonStyle(.borderless)
+                            .accessibilityLabel(location)
+                            .accessibilityHint("押すと、場所の写真や営業時間を見られます")
+
                             Spacer()
                             Button(action: {
                                 if let lat = item.latitude, let lng = item.longitude {
@@ -782,6 +844,14 @@ struct TravelPlanDetailView: View {
                                 .clipShape(Capsule())
                             }
                             .buttonStyle(.borderless)
+                        } else {
+                            Image(systemName: "mappin.circle.fill")
+                                .font(.system(size: 11))
+                                .foregroundColor(scheduleAccentColor.opacity(0.7))
+                            Text(location)
+                                .font(.system(size: 12))
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
+                                .lineLimit(1)
                         }
                     }
                 }
@@ -835,6 +905,13 @@ struct TravelPlanDetailView: View {
             }
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
+            // 場所のある予定は、押すと場所カードを開く（3.3）。行の中のボタン（案内・リンク）はそちらが優先
+            .contentShape(Rectangle())
+            .onTapGesture {
+                if item.latitude != nil && item.longitude != nil { openPlaceCard(for: item) }
+            }
+            .accessibilityAddTraits(item.latitude != nil ? .isButton : [])
+            .accessibilityHint(item.latitude != nil ? "押すと、場所の写真や営業時間を見られます" : "")
 
             // 編集・削除メニュー。選択中はチェックに替える
             if isSelectingItems {
@@ -853,11 +930,14 @@ struct TravelPlanDetailView: View {
                 } label: {
                     Label("編集", systemImage: "pencil")
                 }
-                // その日ずっと気にしたい予定（集合場所など）を、時刻の並びから外して上に出す
-                Button {
-                    togglePin(item, in: plan)
-                } label: {
-                    Label("一番上に固定", systemImage: "pin")
+                // その日ずっと気にしたい予定（集合場所など）を、時刻の並びから外して上に出す。
+                // 前の日から続く予定は、固定すると始まった日のほうに付くので出さない
+                if !arrival {
+                    Button {
+                        togglePin(item, in: plan)
+                    } label: {
+                        Label("一番上に固定", systemImage: "pin")
+                    }
                 }
                 Button(role: .destructive) {
                     deleteScheduleItem(item, from: plan)
@@ -1314,35 +1394,41 @@ struct TravelPlanDetailView: View {
     private func planHeaderSection(plan: TravelPlan) -> some View {
         ZStack {
             // 背景画像
-            Group {
-                if let planId = plan.id, let image = viewModel.planImages[planId] {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else if let localImageFileName = plan.localImageFileName,
-                          let image = FileManager.documentsImage(named: localImageFileName) {
-                    Image(uiImage: image)
-                        .resizable()
-                        .aspectRatio(contentMode: .fill)
-                } else {
-                    Rectangle()
-                        .fill(LinearGradient(
-                            gradient: Gradient(colors: [
-                                themeManager.currentTheme.primary.opacity(0.8),
-                                themeManager.currentTheme.secondary.opacity(0.6)
-                            ]),
-                            startPoint: .topLeading,
-                            endPoint: .bottomTrailing
-                        ))
-                        .overlay(
-                            Image(systemName: "airplane")
-                                .font(.system(size: 80))
-                                .foregroundColor(.white.opacity(0.15))
-                        )
+            //
+            // 写真は大きさの決まった枠に重ねて、はみ出した分を切る。写真に高さだけを付けると、
+            // 横長の写真では幅が画面より大きくなり、画面全体が横に押し広げられて端が切れていた
+            Color.clear
+                .frame(height: Self.headerHeight)
+                .overlay {
+                    Group {
+                        if let planId = plan.id, let image = viewModel.planImages[planId] {
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } else if let localImageFileName = plan.localImageFileName,
+                                  let image = FileManager.documentsImage(named: localImageFileName) {
+                            Image(uiImage: image)
+                                .resizable()
+                                .aspectRatio(contentMode: .fill)
+                        } else {
+                            Rectangle()
+                                .fill(LinearGradient(
+                                    gradient: Gradient(colors: [
+                                        themeManager.currentTheme.primary.opacity(0.8),
+                                        themeManager.currentTheme.secondary.opacity(0.6)
+                                    ]),
+                                    startPoint: .topLeading,
+                                    endPoint: .bottomTrailing
+                                ))
+                                .overlay(
+                                    Image(systemName: "airplane")
+                                        .font(.system(size: 80))
+                                        .foregroundColor(.white.opacity(0.15))
+                                )
+                        }
+                    }
                 }
-            }
-            .frame(height: Self.headerHeight)
-            .clipped()
+                .clipped()
 
             // グラデーションオーバーレイ（下部を暗く）
             LinearGradient(
@@ -1518,10 +1604,25 @@ struct TravelPlanDetailView: View {
 
             // スケジュールアイテムリスト（固定した予定は上に出しているので除く）
             let sortedItems = plan.timelineScheduleItems(onDay: selectedDay, for: memberFilter)
-            if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }),
-               !sortedItems.isEmpty {
-                let nowIndex = nextItemIndex(in: sortedItems, dayDate: daySchedule.date)
+            // 前の日に始まって、この日に着く予定（夜行便など。3.3）。普通の予定と同じ行で、いちばん上に出す
+            let arrivals = plan.arrivingScheduleItems(onDay: selectedDay, for: memberFilter)
+            if !sortedItems.isEmpty || !arrivals.isEmpty {
+                let nowIndex = plan.daySchedules.first(where: { $0.dayNumber == selectedDay })
+                    .flatMap { nextItemIndex(in: sortedItems, dayDate: $0.date) }
                 VStack(spacing: 0) {
+                    ForEach(Array(arrivals.enumerated()), id: \.element.id) { index, item in
+                        timelineItemView(
+                            item: item,
+                            isLast: sortedItems.isEmpty && index == arrivals.count - 1,
+                            plan: plan,
+                            // その日の予定より前のことなので、次の1件が決まっていれば過ぎたものとして出す
+                            state: rowState(index: -1, nowIndex: nowIndex),
+                            arrival: true
+                        )
+                        // 選ぶのはその日の予定だけ（着く予定は始まった日で選ぶ）
+                        .allowsHitTesting(!isSelectingItems)
+                        .opacity(isSelectingItems ? 0.5 : 1)
+                    }
                     ForEach(Array(sortedItems.enumerated()), id: \.element.id) { index, item in
                         let state = rowState(index: index, nowIndex: nowIndex)
                         let next = sortedItems.indices.contains(index + 1) ? sortedItems[index + 1] : nil

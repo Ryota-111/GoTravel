@@ -13,7 +13,9 @@ struct MapAppSettingView: View {
     var body: some View {
         List {
             Section {
-                Text("旅行計画やおでかけの「経路案内」で開く地図アプリです。")
+                // 「Google マップにしたのに、計画の地図が Apple のまま」とご質問をいただいた（3.3）。
+                // アプリの中の地図は MapKit で描いているので、ここで変わるのは開くアプリだけ
+                Text("旅行計画やおでかけの「経路案内」を押したときに開く地図アプリです。アプリの中に出る地図は、どれを選んでも Apple のマップで表示します。")
                     .font(.caption)
                     .foregroundColor(themeManager.currentTheme.secondaryText)
             }

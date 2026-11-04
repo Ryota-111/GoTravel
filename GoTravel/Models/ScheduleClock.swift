@@ -16,6 +16,18 @@ enum ScheduleClock {
     /// 利用者の大半は日本で入力しているので、日本時間とみなす
     static let legacyTimeZone = TimeZone(identifier: "Asia/Tokyo")!
 
+    static let homeTimeZoneKey = "homeTimeZone"
+
+    /// 旅行の日付（出発日・帰る日）を読む時計。住んでいる地域の時間帯で、選んでいなければ日本時間（3.3）。
+    ///
+    /// 旅行の日付は、入れた時刻ごと保存されている。日本に住む人が海外で開いても日付が動かないよう、
+    /// 日本で入れたものとして読んできた。ところが海外に住む人では、入れた日付と読む日付がずれる
+    /// （ロサンゼルスの夜 20:00 に入れた「11月10日」は、日本時間では 11日の昼）。
+    /// 何日目かの数え方・ウィジェット・カレンダーへの書き出しが1日ずれていたので、選べるようにした
+    static var homeTimeZone: TimeZone {
+        UserDefaults.standard.string(forKey: homeTimeZoneKey).flatMap(TimeZone.init(identifier:)) ?? legacyTimeZone
+    }
+
     static func calendar(in timeZone: TimeZone) -> Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.locale = Locale(identifier: "ja_JP")
@@ -75,6 +87,15 @@ enum ScheduleClock {
         }
         // 何ヶ国も回る旅行では「現地」が1つに決まらないので、都市名で出す
         return cityName(of: zone)
+    }
+
+    /// 2つの時刻の日付（それぞれの時計で読んだもの）が何日離れているか
+    static func dateDifference(from start: Date, in startZone: TimeZone, to end: Date, in endZone: TimeZone) -> Int {
+        let a = calendar(in: startZone).dateComponents([.year, .month, .day], from: start)
+        let b = calendar(in: endZone).dateComponents([.year, .month, .day], from: end)
+        let utc = calendar(in: TimeZone(identifier: "UTC")!)
+        guard let dayA = utc.date(from: a), let dayB = utc.date(from: b) else { return 0 }
+        return utc.dateComponents([.day], from: dayA, to: dayB).day ?? 0
     }
 
     /// その時計で 0:00 から何分か
@@ -150,19 +171,44 @@ extension ScheduleItem {
         return !ScheduleClock.showsSameTime(timeZone, endTimeZone, at: endTime)
     }
 
+    /// 終わりが、その日（`DaySchedule`）から何日あとか。終わりが無ければ 0。
+    ///
+    /// 始まりの日付は始まりの時計で、終わりの日付は着いた先の時計で読む
+    /// （羽田 22:00 発 → ホノルル同じ日の 10:00 着 は 0、パリ 22:00 発 → 羽田 翌日 17:00 着 は 1）
+    var endDayOffset: Int {
+        guard let endTime else { return 0 }
+        return ScheduleClock.dateDifference(from: time, in: timeZone, to: endTime, in: endTimeZone) + (dayShift ?? 0)
+    }
+
+    /// 次の日まで続く予定として、着く日の予定表にも出すか（3.3）。
+    ///
+    /// 夜行便・夜行バスのような移動は出す。「24:30〜26:00」のような、その日の夜の続きとして
+    /// 入れた短い予定は出さない（翌朝の予定表に並ぶと、かえって分かりにくい）。
+    /// 朝 6:00 より後に終わる・時差をまたぐ・4時間以上かかる、のどれかなら移動とみなす
+    var continuesIntoNextDay: Bool {
+        guard let endTime, endDayOffset > 0 else { return false }
+        if crossesTimeZones || endTime.timeIntervalSince(time) >= 4 * 60 * 60 { return true }
+        return ScheduleClock.calendar(in: endTimeZone).component(.hour, from: endTime) >= 6
+    }
+
     /// 終わる時刻（入れたとおりの時:分）。無ければ nil。
-    /// 始まりの日の夜の続き（23:00〜1:00 の 1:00、24:30 に始まる予定の終わり）は「25:00」と出す
+    /// 始まりの日の夜の続き（23:00〜1:00 の 1:00、24:30 に始まる予定の終わり）は「25:00」と出す。
+    /// 翌日の朝 6:00 からは「翌 08:00」と出す（3.3）。時刻だけだと、夜行便の「22:00〜08:00」が
+    /// 翌日に着くのか分からず、「日付も入れたい」とご要望をいただいた
     var endTimeText: String? {
         guard let endTime else { return nil }
-        if !crossesTimeZones {
-            let clock = ScheduleClock.calendar(in: endTimeZone)
-            let days = (clock.dateComponents([.day], from: clock.startOfDay(for: time),
-                                             to: clock.startOfDay(for: endTime)).day ?? 0) + (isLateNight ? 1 : 0)
-            if days == 1, clock.component(.hour, from: endTime) < 6 {
-                return ScheduleClock.lateNightText(endTime, in: endTimeZone)
-            }
+        let offset = endDayOffset
+        if !crossesTimeZones, offset == 1,
+           ScheduleClock.calendar(in: endTimeZone).component(.hour, from: endTime) < 6 {
+            return ScheduleClock.lateNightText(endTime, in: endTimeZone)
         }
-        return ScheduleClock.timeText(endTime, in: endTimeZone)
+        let text = ScheduleClock.timeText(endTime, in: endTimeZone)
+        switch offset {
+        case 0: return text
+        case 1: return "翌 \(text)"
+        case 2...: return "\(offset)日後 \(text)"
+        default: return "前日 \(text)"
+        }
     }
 
     /// 時刻の列で始まりの下に添える終わり（"〜11:30"）。時差をまたぐ移動は "→23:00"

@@ -11,6 +11,7 @@ struct ProfileView: View {
     @State private var animateCards = false
     /// カードの副題を、設定画面から戻ったときに書き換えるため
     @AppStorage(MapNavigator.preferenceKey) private var mapAppPreference: String = MapApp.ask.rawValue
+    @AppStorage(ScheduleClock.homeTimeZoneKey) private var homeTimeZoneIdentifier: String = ""
     @EnvironmentObject var travelPlanViewModel: TravelPlanViewModel
 
     var body: some View {
@@ -35,6 +36,7 @@ struct ProfileView: View {
                             reminderDefaultsCard
                             calendarExportCard
                             mapAppCard
+                            homeTimeZoneCard
                         }
 
                         ProfileMenuGroup(title: "データ") {
@@ -271,6 +273,15 @@ struct ProfileView: View {
         NavigationLink(destination: MapAppSettingView()) {
             ProfileMenuRow(icon: "arrow.triangle.turn.up.right.diamond.fill", color: .teal, title: "経路案内のアプリ",
                            value: (MapApp(rawValue: mapAppPreference) ?? .ask).displayName)
+        }
+    }
+
+    /// 住んでいる地域の時間帯（3.3）。海外に住む人向け。日本のままなら「日本時間」
+    private var homeTimeZoneCard: some View {
+        NavigationLink(destination: HomeTimeZoneSettingView()) {
+            ProfileMenuRow(icon: "globe.asia.australia.fill", color: .indigo, title: "住んでいる地域の時間帯",
+                           value: homeTimeZoneIdentifier.isEmpty
+                               ? "日本時間" : ScheduleClock.cityName(of: ScheduleClock.homeTimeZone))
         }
     }
 
