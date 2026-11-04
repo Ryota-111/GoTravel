@@ -71,17 +71,46 @@ enum MapNavigator {
             ])
 
         case .google:
-            let latitude = destination.coordinate.latitude
-            let longitude = destination.coordinate.longitude
-            // アプリが無ければブラウザ版で開く。
-            // 以前はアプリ用の URL だけを開いていたため、入っていないと何も起きなかった
-            let urlString = isGoogleMapsInstalled
-                ? "comgooglemaps://?daddr=\(latitude),\(longitude)&directionsmode=driving"
-                : "https://www.google.com/maps/dir/?api=1&destination=\(latitude),\(longitude)&travelmode=driving"
-            if let url = URL(string: urlString) {
+            if let url = googleMapsURL(for: destination, appInstalled: isGoogleMapsInstalled) {
                 UIApplication.shared.open(url)
             }
         }
+    }
+
+    /// Google マップで開く URL。アプリが無ければブラウザ版。
+    ///
+    /// 行き先は場所の名前で渡し、Google マップ側で施設を引かせる（3.3）。
+    /// 座標だけを渡すと、Apple マップの座標の点（施設の真ん中など）への経路になり、
+    /// 「よみうりランドから少しずれたところに飛ぶ」とご報告をいただいた。
+    /// アプリには `center` も渡し、同じ名前の別の店ではなく、その場所の近くで探させる。
+    /// 名前が無いときは、これまでどおり座標で開く
+    static func googleMapsURL(for destination: MapDestination, appInstalled: Bool) -> URL? {
+        let latitude = destination.coordinate.latitude
+        let longitude = destination.coordinate.longitude
+        let coordinate = "\(latitude),\(longitude)"
+        let name = destination.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let target = name.isEmpty ? coordinate : name
+
+        var components: URLComponents
+        if appInstalled {
+            components = URLComponents(string: "comgooglemaps://")!
+            components.queryItems = [
+                URLQueryItem(name: "daddr", value: target),
+                URLQueryItem(name: "center", value: coordinate),
+                URLQueryItem(name: "directionsmode", value: "driving")
+            ]
+        } else {
+            // 以前はアプリ用の URL だけを開いていたため、入っていないと何も起きなかった
+            components = URLComponents(string: "https://www.google.com/maps/dir/")!
+            components.queryItems = [
+                URLQueryItem(name: "api", value: "1"),
+                URLQueryItem(name: "destination", value: target),
+                URLQueryItem(name: "travelmode", value: "driving")
+            ]
+        }
+        // URLComponents は「+」をそのまま残し、空白と読まれてしまう（「A+B ホテル」など）
+        components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
+        return components.url
     }
 }
 
