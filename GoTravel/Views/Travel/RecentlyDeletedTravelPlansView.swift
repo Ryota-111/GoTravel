@@ -18,6 +18,11 @@ struct RecentlyDeletedTravelPlansView: View {
     }
 
     var body: some View {
+        // iPad・Mac の広い画面では、中身を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         List {
             Section {
                 Text("削除した旅行計画は\(TravelPlanViewModel.trashRetentionDays)日間ここに残り、その後自動で完全に削除されます。共有していた計画は、戻すと自分だけの計画になります。")

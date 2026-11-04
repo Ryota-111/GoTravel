@@ -33,6 +33,11 @@ struct HomeTimeZoneSettingView: View {
     }
 
     var body: some View {
+        // iPad・Mac の広い画面では、中身を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         List {
             Section {
                 Text("旅行の出発日や帰る日を、どこの日付で入れているかを決めます。日本にお住まいの方は「日本時間」のままで大丈夫です。海外にお住まいの方は、お住まいの地域を選ぶと、何日目かの数え方やウィジェットの日付がずれなくなります。")

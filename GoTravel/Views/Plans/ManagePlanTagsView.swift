@@ -25,6 +25,11 @@ struct ManagePlanTagsView: View {
     }
 
     var body: some View {
+        // iPad・Mac の広い画面では、入力欄を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         NavigationView {
             List {
                 tagSection(categoryId: nil, title: PlanCategory.personalName)
@@ -143,6 +148,11 @@ struct PlanTagEditorView: View {
     }
 
     var body: some View {
+        // iPad・Mac の広い画面では、入力欄を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 24) {

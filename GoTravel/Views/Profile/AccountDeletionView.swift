@@ -85,6 +85,11 @@ struct AccountDeletionView: View {
     }
 
     var body: some View {
+        // iPad・Mac の広い画面では、中身を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         Form {
             Section {
                 Label("サインアウトとは違い、元に戻せません", systemImage: "exclamationmark.triangle.fill")

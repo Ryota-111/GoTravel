@@ -21,6 +21,11 @@ struct EditVisitedPlaceView: View {
     }
 
     var body: some View {
+        // iPad・Mac の広い画面では、入力欄を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         NavigationView {
             Form {
                 Section(header: Text("基本情報")) {
@@ -44,6 +49,7 @@ struct EditVisitedPlaceView: View {
 
                 Section(header: Text("メモ")) {
                     TextEditor(text: $notes)
+                        .resetFormMargins()
                         .frame(minHeight: 100)
                 }
 

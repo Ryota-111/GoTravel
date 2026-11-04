@@ -182,6 +182,8 @@ struct PlaceDetailView: View {
 
                     .padding(.bottom, 24)
             }
+            // iPad・Mac の広い画面では読みやすい幅にそろえる（iPhone では何もしない）
+            .readableWidth()
         }
     }
 
@@ -411,6 +413,8 @@ struct PlaceDetailView: View {
                 .padding(.top, 10)
             }
             .padding(24)
+            // iPad・Mac の広い画面では、入力欄を読みやすい幅にそろえる（iPhone では何もしない）
+            .readableWidth(WideLayout.formWidth)
         }
     }
 
@@ -507,6 +511,8 @@ struct PlaceDetailView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(24)
+            // 下の中身と同じ幅にそろえる（iPhone では何もしない）
+            .readableWidth()
         }
         .frame(maxWidth: .infinity)
         .clipped()
@@ -518,7 +524,7 @@ struct PlaceDetailView: View {
             if let image = displayImage {
                 // 高さだけを付けると、横長の写真で幅が画面より大きくなり画面が押し広げられる。枠に重ねて切る
                 Color.clear
-                    .frame(height: 250)
+                    .frame(maxHeight: .infinity)
                     .overlay {
                         Image(uiImage: image)
                             .resizable()
@@ -537,7 +543,7 @@ struct PlaceDetailView: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(height: 250)
+                    .frame(maxHeight: .infinity)
                     .overlay(
                         Image(systemName: PlaceCategoryManager.shared.category(for: place.categoryId).icon)
                             .font(.system(size: 80))
@@ -578,8 +584,11 @@ struct PlaceDetailView: View {
                 }
             }
             .padding(24)
+            // 文字は下の中身と同じ幅にそろえる（写真は窓いっぱい。iPhone では何もしない）
+            .readableWidth(alignment: .bottomLeading)
         }
-        .frame(height: 250)
+        // iPad・Mac の広い画面では、幅に合わせて高くする（iPhone は 250pt のまま）
+        .adaptiveHeroHeight(250)
         .overlay(
             RoundedRectangle(cornerRadius: 0)
                 .stroke(

@@ -31,6 +31,11 @@ struct DataBackupView: View {
     }
 
     var body: some View {
+        // iPad・Mac の広い画面では、中身を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         Form {
             Section {
                 Text("旅行計画・予定・保存した場所・アルバムなどを1つのファイルにして、「ファイル」アプリなどに保存できます。iCloud のデータが失われても、このファイルから戻せます。")

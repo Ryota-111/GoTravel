@@ -36,6 +36,11 @@ struct ProView: View {
     private var onAccent: Color { ThemePreset.readableText(on: accent) }
 
     var body: some View {
+        // iPad・Mac の広い画面では、中身を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         ScrollView {
             VStack(spacing: 24) {
                 header
@@ -166,6 +171,8 @@ struct ProView: View {
                 }
                 .padding(.horizontal, 16)
             }
+            // 広い画面の余白（readableFormWidth）が、この横の並びの中にまで入らないようにする
+            .resetFormMargins()
             // カードの内側の余白を打ち消して、見本を端まで流す
             .padding(.horizontal, -16)
 
@@ -525,6 +532,11 @@ struct ProSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
+        // iPad・Mac の広い画面では、中身を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         NavigationStack {
             ProView(highlighted: highlighted, dismissesOnPurchase: dismissesOnPurchase)
                 .toolbar {

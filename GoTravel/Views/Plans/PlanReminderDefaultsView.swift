@@ -14,6 +14,11 @@ struct PlanReminderDefaultsView: View {
     }
 
     var body: some View {
+        // iPad・Mac の広い画面では、中身を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         List {
             Section {
                 Text("新しく作る予定に、最初から入れておく通知です。すでにある予定の通知は変わりません。")

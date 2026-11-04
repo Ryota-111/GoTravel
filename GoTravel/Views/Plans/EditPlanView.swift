@@ -32,6 +32,11 @@ struct EditPlanView: View {
     }
     
     var body: some View {
+        // iPad・Mac の広い画面では、入力欄を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         NavigationView {
             Form {
                 Section(header: Text("基本情報")) {
@@ -77,6 +82,7 @@ struct EditPlanView: View {
                 if planType == .daily {
                     Section(header: Text("予定内容")) {
                         TextEditor(text: $description)
+                        .resetFormMargins()
                             .frame(minHeight: 100)
                     }
                     

@@ -177,6 +177,11 @@ struct AddPlanView: View {
 
     // MARK: - Body
     var body: some View {
+        // iPad・Mac の広い画面では、入力欄を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         ZStack {
             backgroundGradient
             VStack(spacing: 0) {
@@ -980,6 +985,7 @@ struct AddPlanView: View {
                             .padding(.leading, 4)
                     }
                     TextEditor(text: $description)
+                        .resetFormMargins()
                         .font(.body)
                         .foregroundColor(uiAccentColor)
                         .frame(height: 140)

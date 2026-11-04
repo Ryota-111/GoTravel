@@ -82,9 +82,12 @@ struct PlacesListView: View {
             ZStack {
                 backgroundGradient
                 VStack(spacing: 0) {
+                    // 見出しと絞り込みは一覧と同じ幅にそろえる（iPad・Mac の広い画面だけ。iPhone は今までどおり）
                     planEventsTitleSection
+                        .readableWidth(WideLayout.galleryWidth)
                     // 地図でもカテゴリーと県で絞り込めるように、切り替えの上に置く
                     eventTypeSelectionSection
+                        .readableWidth(WideLayout.galleryWidth)
                     if showMap {
                         mapView
                     } else {
@@ -207,8 +210,21 @@ struct PlacesListView: View {
     private var placesListView: some View {
         ScrollView {
             VStack(spacing: 15) {
-                ForEach(filteredPlaces) { place in
-                    placeCardView(place)
+                // iPad・Mac の広い画面では2列に並べる。1列のままだと、写真と名前が左に寄り、
+                // カテゴリーと「…」だけが遠い右端に残って、右側がほとんど空いていた（iPhone は今までどおり1列）
+                IsWideLayoutReader { isWide in
+                    if isWide {
+                        LazyVGrid(columns: [GridItem(.flexible(), spacing: 15), GridItem(.flexible(), spacing: 15)],
+                                  spacing: 15) {
+                            ForEach(filteredPlaces) { place in
+                                placeCardView(place)
+                            }
+                        }
+                    } else {
+                        ForEach(filteredPlaces) { place in
+                            placeCardView(place)
+                        }
+                    }
                 }
 
                 NavigationLink(destination: MapHomeView()) {
@@ -229,6 +245,7 @@ struct PlacesListView: View {
             .padding()
             // 右下の追加ボタンに最後の項目が隠れないようにする
             .padding(.bottom, 70)
+            .readableWidth(WideLayout.galleryWidth)
         }
     }
 

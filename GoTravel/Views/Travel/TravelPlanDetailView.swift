@@ -62,6 +62,25 @@ struct TravelPlanDetailView: View {
     // MARK: - Properties
     @Environment(\.presentationMode) var presentationMode
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    /// iPad・Mac の広い画面か（iPhone では横向きでも false）
+    private var isWideLayout: Bool {
+        WideLayout.isPadOrMac && horizontalSizeClass == .regular
+    }
+
+    /// 画面の幅。広い画面で写真の高さを決めるのに使う
+    @State private var screenWidth: CGFloat = 0
+
+    /// 実際に使う写真の高さ。
+    /// iPad・Mac の広い画面では、写真は窓いっぱいの幅のまま、幅に合わせて高くする（横 2.6：縦 1 くらい、300〜480pt）。
+    /// 窓いっぱいの幅に 300pt の高さのままだと、細長く切り抜かれて写真がひどく拡大されて見えていた。
+    /// （写真を中身と同じ幅の箱に入れる形も試したが、左右に背景が見えて表紙らしくなかった）
+    /// iPhone では今までどおり `headerHeight`（300pt）
+    private var headerHeight: CGFloat {
+        guard isWideLayout, screenWidth > 0 else { return Self.headerHeight }
+        return min(max(screenWidth / 2.6, Self.headerHeight), 480)
+    }
     @EnvironmentObject var viewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
@@ -228,6 +247,8 @@ struct TravelPlanDetailView: View {
                 ProgressView()
             case .loaded(let plan):
                 contentView(plan: plan)
+                    // 広い画面で写真の高さを幅に合わせるため、画面の幅を測る（iPhone では使わない）
+                    .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { screenWidth = $0 }
             }
         }
         .navigationBarHidden(true)
@@ -250,7 +271,7 @@ struct TravelPlanDetailView: View {
                     VStack(spacing: 0) {
                         // 写真の見える分だけあける（ここを引いてもスクロールする）
                         Color.clear
-                            .frame(height: Self.headerHeight - Self.headerSheetLip)
+                            .frame(height: headerHeight - Self.headerSheetLip)
                             .contentShape(Rectangle())
 
                         VStack(spacing: 0) {
@@ -262,6 +283,7 @@ struct TravelPlanDetailView: View {
                             .padding(.horizontal, 20)
                             .padding(.top, 12)
                             .padding(.bottom, 2)
+                            .readableWidth()
 
                         // タブバーを上に貼り付けたいので Section の見出しに置く
                         LazyVStack(spacing: 0, pinnedViews: [.sectionHeaders]) {
@@ -275,6 +297,8 @@ struct TravelPlanDetailView: View {
                                     case .map: mapTab(plan: plan)
                                     }
                                 }
+                                // iPad・Mac の広い画面では読みやすい幅にそろえる（iPhone では何もしない）
+                                .readableWidth()
                                 .frame(maxWidth: .infinity)
                             } header: {
                                 VStack(spacing: 0) {
@@ -285,6 +309,9 @@ struct TravelPlanDetailView: View {
                                         mapPinnedHeader(plan: plan)
                                     }
                                 }
+                                // 地図も同じ幅にそろえる。窓いっぱいの横長だと、ピンを全部入れるために
+                                // 必要以上に広い範囲（中国の内陸まで）を映していた
+                                .readableWidth()
                                 .background(tabBarBackground)
                             }
                         }
@@ -311,7 +338,7 @@ struct TravelPlanDetailView: View {
                 } action: { _, scrolled in
                     headerScroll.y = scrolled
                     // 写真の残りが 72pt を切ったら貼り付いた表示に切り替える
-                    let collapsed = scrolled > Self.headerHeight - 72
+                    let collapsed = scrolled > headerHeight - 72
                     guard collapsed != isHeaderCollapsed else { return }
                     withAnimation(.easeInOut(duration: 0.2)) { isHeaderCollapsed = collapsed }
                 }
@@ -1398,7 +1425,7 @@ struct TravelPlanDetailView: View {
             // 写真は大きさの決まった枠に重ねて、はみ出した分を切る。写真に高さだけを付けると、
             // 横長の写真では幅が画面より大きくなり、画面全体が横に押し広げられて端が切れていた
             Color.clear
-                .frame(height: Self.headerHeight)
+                .frame(height: headerHeight)
                 .overlay {
                     Group {
                         if let planId = plan.id, let image = viewModel.planImages[planId] {
@@ -1444,7 +1471,7 @@ struct TravelPlanDetailView: View {
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .frame(height: Self.headerHeight)
+            .frame(height: headerHeight)
 
             // テキスト情報（下部）
             //
@@ -1452,6 +1479,8 @@ struct TravelPlanDetailView: View {
             // 視線の行き先が定まっていなかった。
             // 目的地と日数を細い1行にまとめ、タイトルを主役にして、
             // 日付は期間で見せる。装飾のアイコンは外した
+            // 文字と残り日数の円は、下の中身と同じ幅にそろえる（写真は窓いっぱい。iPhone では何もしない）
+            ZStack {
             VStack(alignment: .leading, spacing: 6) {
                 Text("\(plan.destination) · \(formatTripDuration())")
                     .font(.system(size: 13, weight: .medium))
@@ -1479,9 +1508,11 @@ struct TravelPlanDetailView: View {
 
             // 開くたびに「いま知りたいこと」が目に入るようにする
             countdownTicket(plan: plan)
+            }
+            .readableWidth(alignment: .bottom)
 
         }
-        .frame(height: Self.headerHeight)
+        .frame(height: headerHeight)
         .opacity(animateContent ? 1 : 0)
         .offset(y: animateContent ? 0 : -20)
         .animation(.spring(response: 0.6, dampingFraction: 0.8), value: animateContent)

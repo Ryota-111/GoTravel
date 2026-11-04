@@ -84,6 +84,11 @@ struct ScheduleItemEditorView: View {
     // MARK: - Body
 
     var body: some View {
+        // iPad・Mac の広い画面では、入力欄を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         NavigationView {
             ScrollView {
                 VStack(spacing: 0) {
@@ -212,6 +217,8 @@ struct ScheduleItemEditorView: View {
             }
             .padding(.vertical, 2)
         }
+        // 広い画面の余白（readableFormWidth）が、この横の並びの中にまで入らないようにする
+        .resetFormMargins()
     }
 
     private func dayChip(_ day: Int) -> some View {
@@ -357,6 +364,7 @@ struct ScheduleItemEditorView: View {
             }
 
             TextEditor(text: $note)
+                        .resetFormMargins()
                 .font(.body)
                 .frame(minHeight: 100)
                 .foregroundColor(textColor)

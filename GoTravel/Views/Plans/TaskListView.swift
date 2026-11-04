@@ -22,6 +22,11 @@ struct TaskListView: View {
     private var displayedTasks: [TaskItem] { manager.tasks(for: selectedPriority) }
 
     var body: some View {
+        // iPad・Mac の広い画面では、中身を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         ZStack {
             backgroundGradient
 
@@ -295,6 +300,11 @@ struct TaskEditView: View {
     private var canSave: Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty }
 
     var body: some View {
+        // iPad・Mac の広い画面では、入力欄を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         ZStack {
             backgroundGradient
 

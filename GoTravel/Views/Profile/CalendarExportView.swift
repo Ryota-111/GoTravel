@@ -50,6 +50,11 @@ struct CalendarExportSheet: View {
     }
 
     var body: some View {
+        // iPad・Mac の広い画面では、中身を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         NavigationStack {
             Form {
                 Section {
@@ -201,6 +206,11 @@ struct CalendarExportSettingsView: View {
     private var linkedCount: Int { service.state.links.count }
 
     var body: some View {
+        // iPad・Mac の広い画面では、中身を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         Form {
             // カレンダー → Travory（見るだけ）
             Section {

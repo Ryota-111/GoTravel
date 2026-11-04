@@ -14,6 +14,11 @@ struct ManageCategoriesView: View {
     }
 
     var body: some View {
+        // iPad・Mac の広い画面では、入力欄を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         NavigationView {
             List {
                 // デフォルトカテゴリー（削除・変更不可）

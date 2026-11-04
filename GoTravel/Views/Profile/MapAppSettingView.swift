@@ -11,6 +11,11 @@ struct MapAppSettingView: View {
     }
 
     var body: some View {
+        // iPad・Mac の広い画面では、中身を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         List {
             Section {
                 // 「Google マップにしたのに、計画の地図が Apple のまま」とご質問をいただいた（3.3）。

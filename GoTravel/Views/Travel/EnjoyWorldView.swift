@@ -219,6 +219,7 @@ struct EnjoyWorldView: View {
         NavigationView {
             VStack(alignment: .leading, spacing: 15) {
                 titleSection
+                    .readableWidth(WideLayout.galleryWidth)
                     .background(
                         Group {
                             NavigationLink(destination: TaskListView(), isActive: $navigateToTaskList) { EmptyView() }
@@ -226,6 +227,9 @@ struct EnjoyWorldView: View {
                         }
                     )
                 ScrollView(.vertical, showsIndicators: false) {
+                    // ScrollView の中の暗黙の VStack と同じ並び（中央・既定の間隔）。
+                    // iPad・Mac の広い画面でだけ幅を抑えるために包んでいる（iPhone では今までと同じ）
+                    VStack {
                     if let problem = iCloudMonitor.problem {
                         ICloudStatusBanner(problem: problem)
                             .padding(.horizontal, 20)
@@ -264,6 +268,8 @@ struct EnjoyWorldView: View {
                     planEventsTitleSection
                     planTabSelectionSection
                     planEventsListSection
+                    }
+                    .readableWidth(WideLayout.galleryWidth)
                 }
                 .onAppear(perform: reloadBackup)
                 .onChange(of: iCloudMonitor.problem) { _, _ in reloadBackup() }

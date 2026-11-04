@@ -11,6 +11,11 @@ struct PlanTagFilterSheet: View {
     @Environment(\.dismiss) private var dismiss
 
     var body: some View {
+        // iPad・Mac の広い画面では、入力欄を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         NavigationStack {
             List {
                 if tags.isEmpty {
@@ -91,6 +96,11 @@ struct PlanCategoryEditorView: View {
     private var trimmed: String { name.trimmingCharacters(in: .whitespaces) }
 
     var body: some View {
+        // iPad・Mac の広い画面では、入力欄を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         NavigationStack {
             Form {
                 Section {

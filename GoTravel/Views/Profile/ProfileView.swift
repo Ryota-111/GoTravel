@@ -15,6 +15,11 @@ struct ProfileView: View {
     @EnvironmentObject var travelPlanViewModel: TravelPlanViewModel
 
     var body: some View {
+        // iPad・Mac の広い画面では、中身を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         ZStack {
             // Background with mesh gradient effect
             backgroundGradient
@@ -553,6 +558,11 @@ struct ProfileEditView: View {
     }
 
     var body: some View {
+        // iPad・Mac の広い画面では、中身を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         ZStack {
             backgroundGradient
 
@@ -822,6 +832,11 @@ struct AccountActionView: View {
     @State private var animateButtons = false
 
     var body: some View {
+        // iPad・Mac の広い画面では、中身を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         ZStack {
             backgroundGradient
 
@@ -962,6 +977,11 @@ struct HelpSupportView: View {
     @EnvironmentObject private var authVM: AuthViewModel
 
     var body: some View {
+        // iPad・Mac の広い画面では、中身を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         ZStack {
             backgroundGradient
 
@@ -1170,6 +1190,11 @@ struct AppSettingView: View {
     @State private var storeTargetTheme: ThemePreset.ThemeType?
 
     var body: some View {
+        // iPad・Mac の広い画面では、中身を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         ZStack {
             backgroundGradient
 
@@ -1645,6 +1670,11 @@ struct UserGuideView: View {
     ]
 
     var body: some View {
+        // iPad・Mac の広い画面では、中身を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         NavigationView {
             ZStack {
                 backgroundGradient

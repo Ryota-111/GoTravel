@@ -76,6 +76,11 @@ struct FeedbackFormView: View {
     }
 
     var body: some View {
+        // iPad・Mac の広い画面では、入力欄を読みやすい幅にそろえる（iPhone では何もしない）
+        editorBody.readableFormWidth()
+    }
+
+    @ViewBuilder private var editorBody: some View {
         NavigationStack {
             ZStack {
                 backgroundGradient
@@ -169,6 +174,7 @@ struct FeedbackFormView: View {
             // 高さは TextEditor に持たせる。伸縮する図形を ZStack で重ねて
             // minHeight で折り合いをつけると、余白を引いた途中の計算が負になる
             TextEditor(text: $message)
+                        .resetFormMargins()
                 .focused($messageFocused)
                 .font(.subheadline)
                 .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))

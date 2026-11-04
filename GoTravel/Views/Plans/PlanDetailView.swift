@@ -271,6 +271,8 @@ struct PlanDetailView: View {
             .padding(.horizontal, 20)
             .padding(.top, 18)
             .padding(.bottom, 28)
+            // iPad・Mac の広い画面では読みやすい幅にそろえる（写真は窓いっぱいのまま。iPhone では何もしない）
+            .readableWidth()
         }
     }
 
@@ -925,6 +927,11 @@ struct PlanDetailView: View {
 
     // MARK: - Edit Mode View
     private var editModeView: some View {
+        // iPad・Mac の広い画面では、入力欄を読みやすい幅にそろえる（iPhone では何もしない）
+        editModeContent.readableWidth(WideLayout.formWidth)
+    }
+
+    private var editModeContent: some View {
         VStack(spacing: 0) {
             VStack(spacing: 0) {
 
@@ -1201,7 +1208,7 @@ struct PlanDetailView: View {
             if let image = displayImage {
                 // 高さだけを付けると、横長の写真で幅が画面より大きくなり画面が押し広げられる。枠に重ねて切る
                 Color.clear
-                    .frame(height: 250)
+                    .frame(maxHeight: .infinity)
                     .overlay {
                         Image(uiImage: image)
                             .resizable()
@@ -1220,7 +1227,7 @@ struct PlanDetailView: View {
                             endPoint: .bottomTrailing
                         )
                     )
-                    .frame(height: 250)
+                    .frame(maxHeight: .infinity)
                     .overlay(
                         Image(systemName: planTypeIcon)
                             .font(.system(size: 80))
@@ -1228,7 +1235,8 @@ struct PlanDetailView: View {
                     )
             }
         }
-        .frame(height: 250)
+        // iPad・Mac の広い画面では、幅に合わせて高くする（細長く切り抜かれて拡大されて見えるため。iPhone は 250pt のまま）
+        .adaptiveHeroHeight(250)
     }
 
     // MARK: - Header Image (Edit Mode)

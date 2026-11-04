@@ -43,6 +43,7 @@ struct AlbumHomeView: View {
 
                 VStack(spacing: 0) {
                     headerBar
+                        .readableWidth(WideLayout.galleryWidth)
 
                     ScrollView(showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 0) {
@@ -60,6 +61,8 @@ struct AlbumHomeView: View {
                             }
                         }
                         .padding(.bottom, isSelectionMode ? 20 : 100)
+                        // iPad・Mac の広い画面では、見出しと同じ幅にそろえる（iPhone では何もしない）
+                        .readableWidth(WideLayout.galleryWidth)
                     }
                 }
 
@@ -132,10 +135,11 @@ struct AlbumHomeView: View {
 
     // MARK: - Album Grid
     private var albumGrid: some View {
-            LazyVGrid(columns: [
-                GridItem(.flexible(), spacing: 14),
-                GridItem(.flexible(), spacing: 14)
-            ], spacing: 14) {
+        // iPad・Mac の広い画面では4列にする。2列のままだと、1枚のアルバムが窓の半分（1,000pt 以上）の
+        // 大きな正方形になり、右半分が空いていた（iPhone は今までどおり2列）
+        IsWideLayoutReader { isWide in
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: isWide ? 4 : 2),
+                      spacing: 14) {
                 ForEach(albumManager.albums) { album in
                     AlbumCard(
                         album: album,
@@ -150,6 +154,7 @@ struct AlbumHomeView: View {
             }
             .padding(.horizontal, 16)
             .padding(.top, 12)
+        }
     }
 
     // MARK: - Background

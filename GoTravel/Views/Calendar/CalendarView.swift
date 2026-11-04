@@ -138,6 +138,9 @@ struct CalendarView: View {
 
                     Spacer()
                 }
+                // iPad・Mac の広い画面では読みやすい幅にそろえる。窓いっぱいだと、
+                // 共有の案内のボタンが横長の棒になり、日付のマスも間延びしていた（iPhone では何もしない）
+                .readableWidth()
                 .blur(radius: isTimelineExpanded ? 4 : 0)
                 .opacity(isTimelineExpanded ? 0.6 : 1.0)
 
@@ -160,6 +163,8 @@ struct CalendarView: View {
                 )
                 .environmentObject(viewModel)
                 .environmentObject(travelViewModel)
+                // 下の予定のシートも、上のカレンダーと同じ幅にそろえる
+                .readableWidth(alignment: .bottom)
                 .ignoresSafeArea(.keyboard, edges: .bottom)
             }
             .navigationBarTitleDisplayMode(.inline)
