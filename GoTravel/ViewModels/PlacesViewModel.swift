@@ -20,6 +20,12 @@ final class PlacesViewModel: NSObject, ObservableObject {
     override init() {
         self.context = CoreDataManager.shared.viewContext
         super.init()
+
+        // 新しい端末では、場所の記録が先に届いて写真があとから届く。届いたら読み直す
+        NotificationCenter.default.publisher(for: PhotoSyncService.photosMayHaveArrived)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.loadLocalImages() }
+            .store(in: &cancellables)
     }
 
     // MARK: - Core Data Fetch

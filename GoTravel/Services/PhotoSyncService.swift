@@ -27,7 +27,32 @@ final class PhotoSyncService: ObservableObject {
 
     static let shared = PhotoSyncService()
 
-    private init() {}
+    /// 取り戻せなかった写真が、あとから取り戻せるようになったかもしれないときに送る。
+    /// 一覧の画面はこれを受けて、写真をもう一度読み直す
+    static let photosMayHaveArrived = Notification.Name("PhotoSyncService.photosMayHaveArrived")
+
+    private init() {
+        // 新しい端末では、旅行計画などの記録が先に届き、写真の実体（大きい）はあとから届く。
+        // 先に一覧を出したときに取り戻せなかった写真を、届いた時点で取り戻し直せるようにする
+        NotificationCenter.default.addObserver(
+            forName: .coreDataDidUpdate, object: nil, queue: .main
+        ) { [weak self] _ in
+            self?.retryMissing(reason: "iCloud から変更が届いた")
+        }
+    }
+
+    /// 取り戻せなかった覚え書きを捨てて、画面に読み直してもらう。
+    /// 覚え書きが空なら何もしない（写真がそろっている端末では通知を出さない）
+    private func retryMissing(reason: String) {
+        lock.lock()
+        let waiting = knownMissing.count
+        knownMissing.removeAll()
+        lock.unlock()
+        guard waiting > 0, isActive else { return }
+
+        log("\(waiting)枚を取り戻し直します（\(reason)）")
+        NotificationCenter.default.post(name: Self.photosMayHaveArrived, object: nil)
+    }
 
 
     // MARK: - 有効・無効
@@ -47,7 +72,12 @@ final class PhotoSyncService: ObservableObject {
         guard isEnabled != enabled else { return }
         isEnabled = enabled
         log(enabled ? "有効になりました" : "無効になりました")
-        if enabled { backfill() }
+        if enabled {
+            backfill()
+            // Pro の確認は起動直後に少し遅れて終わる。それより前に一覧を出していると、
+            // 写真は取り戻されないまま（止めていたので）なので、ここで読み直してもらう
+            NotificationCenter.default.post(name: Self.photosMayHaveArrived, object: nil)
+        }
     }
 
     /// なぜ預けられないのかを一言で返す。動かないときの切り分け用

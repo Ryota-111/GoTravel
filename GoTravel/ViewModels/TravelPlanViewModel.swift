@@ -35,6 +35,13 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
     override init() {
         self.context = CoreDataManager.shared.viewContext
         super.init()
+
+        // 新しい端末では、旅行計画が先に届いて写真があとから届く。
+        // 届いたら表紙の写真を読み直す（読み直さないと、最初に読めなかった旅行は写真が無いままになる）
+        NotificationCenter.default.publisher(for: PhotoSyncService.photosMayHaveArrived)
+            .receive(on: DispatchQueue.main)
+            .sink { [weak self] _ in self?.loadLocalImages() }
+            .store(in: &cancellables)
     }
 
     // MARK: - Core Data Fetch
