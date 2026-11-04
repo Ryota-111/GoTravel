@@ -333,6 +333,12 @@ struct ScheduleEndTimeField: View {
         if hasEndTime {
             VStack(alignment: .leading, spacing: 10) {
                 endTimeRow
+                if let nextDayCaption {
+                    Label(nextDayCaption, systemImage: "moon.stars")
+                        .font(.caption)
+                        .foregroundColor(secondaryText)
+                        .padding(.horizontal, 4)
+                }
                 if offersEndZone {
                     endZoneMenu
                 }
@@ -353,6 +359,19 @@ struct ScheduleEndTimeField: View {
             .buttonStyle(.plain)
             .padding(.horizontal, 4)
         }
+    }
+
+    /// 終わりが始まりより後の日になるとき、そう書き添える（3.3）。
+    ///
+    /// 終わりは時:分しか選べず、始まりより前の時刻なら翌日として入る。それが画面から分からず、
+    /// 夜行便を入れるのに「日付も入れたい」とご要望をいただいた。着く日の予定表の一番上にも出ることを伝える
+    private var nextDayCaption: String? {
+        let arrival = ScheduleItem.endTime(hourAndMinuteOf: endTime, after: startTime, in: timeZone,
+                                           endZone: endZone?.wrappedValue)
+        let days = ScheduleClock.dateDifference(from: startTime, in: timeZone, to: arrival, in: effectiveEndZone)
+        guard days >= 1 else { return nil }
+        let day = days == 1 ? "翌日" : "\(days)日後"
+        return "\(day)の \(ScheduleClock.timeText(arrival, in: effectiveEndZone)) に終わります。着く日の予定表のいちばん上にも出ます"
     }
 
     private var endTimeRow: some View {

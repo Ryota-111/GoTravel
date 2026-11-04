@@ -426,7 +426,9 @@ struct TravelPlanDetailView: View {
             }
         }
         .fullScreenCover(item: $editingItem) { item in
-            if let daySchedule = plan.daySchedules.first(where: { $0.dayNumber == selectedDay }) {
+            // 予定が入っている日で開く。前の日から続く予定（3.3）は、選んでいる日とは違う日に入っている
+            if let daySchedule = plan.daySchedules.first(where: { day in day.scheduleItems.contains { $0.id == item.id } })
+                ?? plan.daySchedules.first(where: { $0.dayNumber == selectedDay }) {
                 EditScheduleItemView(plan: plan, daySchedule: daySchedule, item: item)
                     .environmentObject(viewModel)
                     .environmentObject(authVM)
@@ -1014,19 +1016,35 @@ struct TravelPlanDetailView: View {
     private enum DayPin: Identifiable {
         case reservation(ReservationOnDay)
         case item(ScheduleItem)
+        /// 前の日に始まって、この日に着く予定（3.3）
+        case arrival(ScheduleItem)
 
         var id: String {
             switch self {
             case .reservation(let entry): return "reservation-\(entry.id)"
             case .item(let item): return "item-\(item.id)"
+            case .arrival(let item): return "arrival-\(item.id)"
             }
         }
     }
 
-    /// 期間のある予約（宿・レンタカーなど）→ 固定した予定 の順
+    /// 前の日から続いて着く予定 → 期間のある予約（宿・レンタカーなど）→ 固定した予定 の順。
+    /// 着く予定は、その日の朝いちばんのことなので先に出す
     private func dayPins(plan: TravelPlan) -> [DayPin] {
-        plan.pinnedReservations(onDay: selectedDay).map(DayPin.reservation)
+        plan.arrivingScheduleItems(onDay: selectedDay, for: memberFilter).map(DayPin.arrival)
+            + plan.pinnedReservations(onDay: selectedDay).map(DayPin.reservation)
             + plan.pinnedScheduleItems(onDay: selectedDay, for: memberFilter).map(DayPin.item)
+    }
+
+    /// 前の日から続く予定の添え書き。「前日 22:00 から・ドーハ 06:00 着」
+    private func arrivalDetail(_ item: ScheduleItem) -> String {
+        guard let endTime = item.endTime else { return "" }
+        let since = item.endDayOffset == 1 ? "前日" : "\(item.endDayOffset)日前"
+        let end = ScheduleClock.timeText(endTime, in: item.endTimeZone)
+        let arrival = item.crossesTimeZones
+            ? "\(ScheduleClock.cityName(of: item.endTimeZone)) \(end) 着"
+            : "\(end) まで"
+        return "\(since) \(item.timeText) から・\(arrival)"
     }
 
     @ViewBuilder
@@ -1042,6 +1060,11 @@ struct TravelPlanDetailView: View {
                         dayPinRow(icon: entry.icon, title: entry.name, detail: entry.detail) {
                             // 予約番号を確かめる場面が多いので、予約確認へ移る
                             withAnimation(.easeInOut(duration: 0.2)) { selectedTab = .reservation }
+                        }
+                    case .arrival(let item):
+                        dayPinRow(icon: item.crossesTimeZones ? "airplane.arrival" : "moon.stars.fill",
+                                  title: item.title, detail: arrivalDetail(item)) {
+                            editingItem = item
                         }
                     case .item(let item):
                         dayPinRow(icon: "pin.fill", title: item.title, detail: pinnedItemDetail(item)) {

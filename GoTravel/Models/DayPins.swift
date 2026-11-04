@@ -122,6 +122,24 @@ extension TravelPlan {
             .sorted(by: ScheduleItem.chronologically)
     }
 
+    /// 前の日に始まって、この日に終わる予定（夜行便・夜行バスなど）。終わる順（3.3）。
+    ///
+    /// 予定は始まった日にしか持たないので、着く日の予定表には何も出ず、
+    /// 朝は乗り物の中から始まることが分からなかった。着く日の一番上に添える
+    /// - Parameter member: 共有した旅行で、この人の時間軸だけを見るとき。nil なら全員
+    func arrivingScheduleItems(onDay dayNumber: Int, for member: String? = nil) -> [ScheduleItem] {
+        daySchedules
+            .filter { $0.dayNumber < dayNumber }
+            .flatMap { day in
+                day.scheduleItems.filter { item in
+                    item.continuesIntoNextDay
+                        && day.dayNumber + item.endDayOffset == dayNumber
+                        && SharedMembers.includes(item, member: member)
+                }
+            }
+            .sorted { ($0.endTime ?? $0.time) < ($1.endTime ?? $1.time) }
+    }
+
     private func scheduleItems(onDay dayNumber: Int) -> [ScheduleItem] {
         daySchedules.first { $0.dayNumber == dayNumber }?.scheduleItems ?? []
     }
