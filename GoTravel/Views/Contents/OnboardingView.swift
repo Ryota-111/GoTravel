@@ -231,8 +231,27 @@ struct OnboardingPageView: View {
     @State private var animateContent = false
 
     var body: some View {
+        // テーマのページと同じく、収まらないときだけスクロールさせる（Mac の窓・小さい iPhone・大きい文字）
+        GeometryReader { proxy in
+            ScrollView(.vertical, showsIndicators: false) {
+                content
+                    .frame(maxWidth: .infinity, minHeight: proxy.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.1)) {
+                animateIcon = true
+            }
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.3)) {
+                animateContent = true
+            }
+        }
+    }
+
+    private var content: some View {
         VStack(spacing: 30) {
-            Spacer()
+            Spacer(minLength: 16)
 
             // Icon
             ZStack {
@@ -305,15 +324,7 @@ struct OnboardingPageView: View {
             .padding(.horizontal, 30)
             .padding(.top, 10)
 
-            Spacer()
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.7).delay(0.1)) {
-                animateIcon = true
-            }
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.3)) {
-                animateContent = true
-            }
+            Spacer(minLength: 16)
         }
     }
 }
@@ -391,8 +402,26 @@ struct OnboardingThemePage: View {
     @State private var animateContent = false
 
     var body: some View {
+        // 画面に収まるときは今までどおり上下の真ん中に置き、収まらないときだけスクロールさせる。
+        // 以前は固定の VStack で、Mac の窓や小さい iPhone・大きい文字の設定では
+        // テーマの一覧の下が切れたまま動かせなかった（季節のテーマが足されると1つ増える）
+        GeometryReader { proxy in
+            ScrollView(.vertical, showsIndicators: false) {
+                content
+                    .frame(maxWidth: .infinity, minHeight: proxy.size.height)
+            }
+            .scrollBounceBehavior(.basedOnSize)
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.15)) {
+                animateContent = true
+            }
+        }
+    }
+
+    private var content: some View {
         VStack(spacing: 24) {
-            Spacer()
+            Spacer(minLength: 16)
 
             ZStack {
                 Circle()
@@ -448,12 +477,7 @@ struct OnboardingThemePage: View {
                 .multilineTextAlignment(.center)
                 .opacity(animateContent ? 1.0 : 0.0)
 
-            Spacer()
-        }
-        .onAppear {
-            withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.15)) {
-                animateContent = true
-            }
+            Spacer(minLength: 16)
         }
     }
 }
