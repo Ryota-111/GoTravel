@@ -77,9 +77,17 @@ extension ScheduleClock {
         return candidates
     }
 
-    /// 時間帯の選択を出すか。日本と時差のある候補が1つも無い（国内旅行）なら出さない
-    static func offersZoneChoice(_ choices: [ScheduleZoneChoice], selected: TimeZone, at date: Date) -> Bool {
-        isForeign(selected, at: date) || choices.contains { isForeign($0.zone, at: date) }
+    /// 時間帯の選択を出すか。日本と時差のある候補が1つも無い（国内旅行）なら出さない。
+    ///
+    /// **最近使った時間帯は、海外の入った旅行でだけ数える（3.3）。** 前に海外旅行で使った時計が
+    /// 候補に残っていると、国内旅行でも「日本時間で入力しています。ホノルルでは 2:00 です」と出ていた。
+    /// 国内と海外を1つの旅行にまとめた人は、場所を選ばずに海外の日の予定を入れることがあるので、
+    /// その旅行に海外の時間帯が1つでもあれば、これまでどおり最近使ったものでも出す
+    /// - Parameter countsRecents: 最近使った時間帯も数えるか（`TravelPlan.hasForeignTimeZones`）
+    static func offersZoneChoice(_ choices: [ScheduleZoneChoice], selected: TimeZone, at date: Date,
+                                 countsRecents: Bool = false) -> Bool {
+        isForeign(selected, at: date)
+            || choices.contains { (countsRecents || $0.source != .recent) && isForeign($0.zone, at: date) }
     }
 
     // MARK: 名前
@@ -220,6 +228,18 @@ extension TravelPlan {
     /// その日の時間帯。決めていなければ nil
     func dayTimeZone(_ dayNumber: Int) -> TimeZone? {
         daySchedules.first { $0.dayNumber == dayNumber }?.timeZone
+    }
+
+    /// 日本と時差のある時間帯が入っているか（日の時間帯か、予定の始まり・終わりの時計）。
+    /// 国内と海外を1つにまとめた旅行で、時間帯の選択を出し続けるのに使う（3.3）
+    var hasForeignTimeZones: Bool {
+        daySchedules.contains { day in
+            day.timeZone.map { ScheduleClock.isForeign($0, at: day.date) } == true
+                || day.scheduleItems.contains { item in
+                    ScheduleClock.isForeign(item.timeZone, at: item.time)
+                        || item.endTime.map { ScheduleClock.isForeign(item.endTimeZone, at: $0) } == true
+                }
+        }
     }
 
     /// その日の予定で使っている、日本と時差のある時間帯（多い順）。日の時間帯を決めるときの勧めに使う

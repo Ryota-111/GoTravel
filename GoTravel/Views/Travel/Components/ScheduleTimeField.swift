@@ -17,6 +17,8 @@ struct ScheduleTimeField: View {
     var dayZone: TimeZone?
     /// 旅行の目的地の時間帯
     let destination: TimeZone?
+    /// 旅行に海外の時間帯が入っているか。入っていれば、最近使った時間帯でも選択を出す（3.3）
+    var countsRecents = false
     let tint: Color
     let textColor: Color
     let secondaryText: Color
@@ -61,7 +63,7 @@ struct ScheduleTimeField: View {
             .background(fieldBackground)
             .cornerRadius(12)
 
-            if ScheduleClock.offersZoneChoice(choices, selected: timeZone, at: time) {
+            if ScheduleClock.offersZoneChoice(choices, selected: timeZone, at: time, countsRecents: countsRecents) {
                 ScheduleZoneMenu(
                     time: time,
                     timeZone: timeZone,
@@ -314,6 +316,8 @@ struct ScheduleEndTimeField: View {
     var endZone: Binding<TimeZone?>? = nil
     /// 時間帯の候補（`ScheduleClock.zoneChoices`）
     var zoneChoices: [ScheduleZoneChoice] = []
+    /// 旅行に海外の時間帯が入っているか（`ScheduleTimeField.countsRecents` と同じ）
+    var countsRecents = false
 
     @State private var showsSearch = false
 
@@ -326,7 +330,8 @@ struct ScheduleEndTimeField: View {
     private var offersEndZone: Bool {
         guard let endZone else { return false }
         return endZone.wrappedValue != nil
-            || ScheduleClock.offersZoneChoice(zoneChoices, selected: timeZone, at: startTime)
+            || ScheduleClock.offersZoneChoice(zoneChoices, selected: timeZone, at: startTime,
+                                              countsRecents: countsRecents)
     }
 
     var body: some View {

@@ -49,6 +49,33 @@ struct ScheduleTimeZonesTests {
         #expect(ScheduleClock.offersZoneChoice(abroad, selected: japan, at: Date()))
     }
 
+    /// 前の海外旅行で使った時計が「最近使った」に残っていても、国内旅行では出さない（3.3）
+    @Test("最近使った海外の時間帯だけでは、時間帯の選択を出さない")
+    func recentsAloneDoNotOfferChoice() {
+        let domestic = ScheduleClock.zoneChoices(place: nil, day: nil, destination: nil, current: japan,
+                                                 recents: [paris], at: Date())
+        #expect(domestic.contains { $0.source == .recent })
+        #expect(!ScheduleClock.offersZoneChoice(domestic, selected: japan, at: Date()))
+        // 国内と海外を1つにまとめた旅行では、これまでどおり出す
+        #expect(ScheduleClock.offersZoneChoice(domestic, selected: japan, at: Date(), countsRecents: true))
+    }
+
+    @Test("海外の時間帯の予定が1つでもあれば、海外の入った旅行とみなす")
+    func detectsForeignPartsOfTrip() {
+        let start = Date()
+        var plan = TravelPlan(title: "大阪とパリ", startDate: start,
+                              endDate: start.addingTimeInterval(86_400 * 5), destination: "大阪")
+        plan.daySchedules = [DaySchedule(dayNumber: 1, date: start, scheduleItems: [
+            ScheduleItem(time: start, title: "大阪城", timeZoneIdentifier: japan.identifier)
+        ])]
+        #expect(!plan.hasForeignTimeZones)
+
+        plan.daySchedules.append(DaySchedule(dayNumber: 4, date: start, scheduleItems: [
+            ScheduleItem(time: start, title: "シャルル・ド・ゴール空港", timeZoneIdentifier: paris.identifier)
+        ]))
+        #expect(plan.hasForeignTimeZones)
+    }
+
     @Test("都市名は日本語で出し、知らない都市は識別子の都市部分")
     func cityNames() {
         #expect(ScheduleClock.cityName(of: paris) == "パリ")

@@ -236,6 +236,7 @@ struct EditScheduleItemView: View {
                     place: selectedCoordinate,
                     dayZone: daySchedule.timeZone,
                     destination: destinationTimeZone,
+                    countsRecents: plan.hasForeignTimeZones,
                     tint: travelColor,
                     textColor: textColor,
                     secondaryText: themeManager.currentTheme.secondaryText,
@@ -266,7 +267,8 @@ struct EditScheduleItemView: View {
                     fieldBackground: fieldBg,
                     endZone: $endZone,
                     zoneChoices: ScheduleClock.zoneChoices(place: nil, day: daySchedule.timeZone, destination: destinationTimeZone,
-                                                           current: .current, recents: RecentTimeZones.list(), at: time)
+                                                           current: .current, recents: RecentTimeZones.list(), at: time),
+                    countsRecents: plan.hasForeignTimeZones
                 )
                 // 現地時間・日本時間を切り替えたら、終わりも同じ時:分のまま付け替える。
                 // 終わりを着いた先の時計で入れているときは、終わりはそのまま
