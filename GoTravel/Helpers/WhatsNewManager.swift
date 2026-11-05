@@ -83,6 +83,31 @@ struct WhatsNew: Identifiable {
 
     private static let all: [WhatsNew] = [
         WhatsNew(
+            version: "3.4",
+            items: [
+                Item(
+                    icon: "airplane.departure",
+                    title: "旅行中、ロック画面に次の予定が出ます",
+                    detail: "旅行の日は、ロック画面と Dynamic Island に「次の予定」と時刻、あと何分かが出ます。Apple Watch をお使いなら、スマートスタックにも出ます。予定の時刻を過ぎたら、アプリを開くと次の予定に切り替わります。いらないときは、設定アプリの「Travory」→「ライブアクティビティ」でオフにできます。"
+                ),
+                Item(
+                    icon: "ipad.landscape",
+                    title: "iPad・Mac の大きな画面で見やすくなりました",
+                    detail: "iPad を横にしたときや Mac で使うときに、画面いっぱいに引き伸ばされていたのを、読みやすい幅にそろえました。場所保存は2列、アルバムは4列に並びます。iPhone の見た目は変わりません。"
+                ),
+                Item(
+                    icon: "photo.stack.fill",
+                    title: "機種変更のあとも写真がそろって出ます",
+                    detail: "新しい iPhone に替えたとき、一部の旅行の表紙や場所の写真が出ないままになることがありました。iCloud から写真が届いたら、すぐに出るように直しました（写真の iCloud 保存は Travory Pro の機能です）。"
+                ),
+                Item(
+                    icon: "wrench.and.screwdriver.fill",
+                    title: "不具合を直しました",
+                    detail: "iOS 26.5 より前の iPhone で、ウィジェットを追加できなかったのを直しました。はじめに出る案内の画面で、小さい iPhone や大きい文字の設定では下が切れて動かせなかったのも直しました。"
+                )
+            ]
+        ),
+        WhatsNew(
             version: "3.3",
             items: [
                 Item(
