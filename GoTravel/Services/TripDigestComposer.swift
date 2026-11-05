@@ -44,6 +44,9 @@ enum TripDigestComposer {
     /// つなぐ素材1つ
     struct Item {
         enum Media {
+            /// 写真。**中身はつなぐ直前に読む**（全部を先に読むと、旅行全体の動画で数百MBになり落ちていた）
+            case photo(PHAsset)
+            /// 読み込み済みの写真（テストなど、写真のライブラリを通さないとき）
             case image(UIImage)
             case video(AVAsset)
         }
@@ -95,16 +98,19 @@ enum TripDigestComposer {
         return (sources, assets)
     }
 
-    /// 選んだコマの写真・動画を読み込む（iCloud にあるものは取ってくる）
+    /// 選んだコマの写真・動画を用意する（動画は iCloud にあるものを取ってくる）。
+    /// 写真の中身はここでは読まない（`compose` がそのコマを書く直前に読む）
     static func loadItems(_ clips: [TripDigest.Clip], assets: [String: PHAsset]) async -> [Item] {
         var items: [Item] = []
         for clip in clips {
             if Task.isCancelled { break }
             guard let asset = assets[clip.sourceId] else { continue }
-            if asset.mediaType == .video, let video = await requestVideo(asset) {
-                items.append(Item(media: .video(video), clip: clip))
-            } else if let image = await requestImage(asset) {
-                items.append(Item(media: .image(image), clip: clip))
+            if asset.mediaType == .video {
+                if let video = await requestVideo(asset) {
+                    items.append(Item(media: .video(video), clip: clip))
+                }
+            } else {
+                items.append(Item(media: .photo(asset), clip: clip))
             }
         }
         return items
@@ -205,8 +211,15 @@ enum TripDigestComposer {
             var firstFrame: CIImage?
             let edit = edits[item.clip.sourceId] ?? DigestClipEdit()
             switch item.media {
-            case .image(let image):
-                guard let cg = image.cgImage else { continue }
+            case .photo, .image:
+                // この写真だけを、このコマを書く直前に読む（書き終われば手放される）
+                let loaded: UIImage?
+                switch item.media {
+                case .photo(let asset): loaded = await requestImage(asset)
+                case .image(let image): loaded = image
+                case .video: loaded = nil
+                }
+                guard let cg = loaded?.cgImage else { continue }
                 let source = CIImage(cgImage: cg)
                 firstFrame = frameImage(source, edit: edit, look: look)
                 try await writeSegment(to: segmentURL, seconds: clipSeconds) { frame, frames in
@@ -222,12 +235,19 @@ enum TripDigestComposer {
                 let used = edit.videoRange(duration: total.seconds, length: clipSeconds)
                 let range = CMTimeRange(start: CMTime(seconds: used.start, preferredTimescale: 600),
                                         duration: CMTime(seconds: used.length, preferredTimescale: 600))
-                let frames = try await readFrames(of: video, track: source, range: range)
-                guard !frames.isEmpty else { continue }
-                firstFrame = frameImage(frames[0], edit: edit, look: look)
-                try await writeSegment(to: segmentURL, seconds: used.length) { frame, total in
-                    let index = min(frames.count - 1, Int(Double(frame) / Double(max(total, 1)) * Double(frames.count)))
-                    return frameImage(frames[index], edit: edit, look: look)
+                // コマは書き出す時刻に合わせて1枚ずつ読み、すぐ手放す。
+                // 以前は2秒分のコマを全部ためてから書いていて、4K の動画1本で 2GB 以上使い、
+                // iOS にアプリを止められていた（「動画を作っている途中で落ちる」）
+                let stream = try await VideoFrameStream(asset: video, track: source, range: range)
+                defer { stream.cancel() }
+                guard let first = stream.frame(at: 0) else { continue }
+                // 題名のカードの背景に使う最初の絵は、読み進める前に写しを取っておく（1枚だけ）
+                firstFrame = snapshot(frameImage(first, edit: edit, look: look))
+                let length = used.length
+                try await writeSegment(to: segmentURL, seconds: length) { frame, total in
+                    let seconds = length * Double(frame) / Double(max(total, 1))
+                    guard let image = stream.frame(at: seconds) else { return nil }
+                    return frameImage(image, edit: edit, look: look)
                         .applyingOverlay(overlay, alpha: overlayAlpha(frame))
                 }
                 if keepsOriginalSound, let audio = try await video.loadTracks(withMediaType: .audio).first {
@@ -355,32 +375,67 @@ enum TripDigestComposer {
         return look.apply(to: filled.composited(over: .black)).cropped(to: CGRect(origin: .zero, size: canvas))
     }
 
-    /// 動画の、その範囲のコマを読む（縦に撮った動画は向きを直す）
-    static func readFrames(of asset: AVAsset, track: AVAssetTrack, range: CMTimeRange) async throws -> [CIImage] {
-        let transform = try await track.load(.preferredTransform)
-        let orientation = orientation(of: transform)
-        let reader = try AVAssetReader(asset: asset)
-        reader.timeRange = range
-        let output = AVAssetReaderTrackOutput(track: track, outputSettings: [
-            kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
-        ])
-        output.alwaysCopiesSampleData = false
-        reader.add(output)
-        guard reader.startReading() else { throw ComposeError.failed }
-        var frames: [CIImage] = []
-        while let sample = output.copyNextSampleBuffer() {
-            guard let buffer = CMSampleBufferGetImageBuffer(sample) else { continue }
-            // 読んだ画素を持ち続けると次の読み込みが詰まるので、縮めてから写しを取っておく
-            let image = CIImage(cvPixelBuffer: buffer).oriented(orientation)
-            let small = image.transformed(by: CGAffineTransform(scaleX: 0.5, y: 0.5))
-            if let cg = ciContext.createCGImage(small, from: small.extent) {
-                frames.append(CIImage(cgImage: cg))
-            }
-        }
-        return frames
+    /// 絵を画素に描いて写しを取る（元の動画のコマを手放しても使えるように）
+    private static func snapshot(_ image: CIImage) -> CIImage? {
+        guard let cg = ciContext.createCGImage(image, from: CGRect(origin: .zero, size: renderSize)) else { return nil }
+        return CIImage(cgImage: cg)
     }
 
-    private static func orientation(of t: CGAffineTransform) -> CGImagePropertyOrientation {
+    /// 動画の、その範囲のコマを1枚ずつ読む（縦に撮った動画は向きを直す）。
+    ///
+    /// **コマをためない。** 頼まれた時刻のコマまで読み進め、それより前のコマは手放す。
+    /// 手元に残るのは「今のコマ」と「先に読んでしまった次のコマ」の2枚だけ
+    final class VideoFrameStream {
+        private let reader: AVAssetReader
+        private let output: AVAssetReaderTrackOutput
+        private let orientation: CGImagePropertyOrientation
+        private let start: CMTime
+        private var current: CIImage?
+        private var pending: (image: CIImage, time: CMTime)?
+        private var isFinished = false
+
+        init(asset: AVAsset, track: AVAssetTrack, range: CMTimeRange) async throws {
+            let transform = try await track.load(.preferredTransform)
+            orientation = TripDigestComposer.orientation(of: transform)
+            start = range.start
+            reader = try AVAssetReader(asset: asset)
+            reader.timeRange = range
+            output = AVAssetReaderTrackOutput(track: track, outputSettings: [
+                kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA
+            ])
+            output.alwaysCopiesSampleData = false
+            reader.add(output)
+            guard reader.startReading() else { throw ComposeError.failed }
+        }
+
+        /// 範囲の始めから `seconds` 秒の時点に映っているコマ（読み終わっていれば最後のコマ）
+        func frame(at seconds: Double) -> CIImage? {
+            let target = CMTimeAdd(start, CMTime(seconds: seconds, preferredTimescale: 600))
+            while true {
+                if let next = pending {
+                    // 次のコマがまだ先なら、今のコマのまま
+                    if current != nil, CMTimeCompare(next.time, target) > 0 { break }
+                    current = next.image
+                    pending = nil
+                    continue
+                }
+                guard !isFinished, let sample = output.copyNextSampleBuffer() else {
+                    isFinished = true
+                    break
+                }
+                guard let buffer = CMSampleBufferGetImageBuffer(sample) else { continue }
+                pending = (CIImage(cvPixelBuffer: buffer).oriented(orientation),
+                           CMSampleBufferGetPresentationTimeStamp(sample))
+            }
+            return current
+        }
+
+        func cancel() {
+            if reader.status == .reading { reader.cancelReading() }
+        }
+    }
+
+    fileprivate static func orientation(of t: CGAffineTransform) -> CGImagePropertyOrientation {
         switch (t.a, t.b, t.c, t.d) {
         case (0, 1, -1, 0): return .right
         case (0, -1, 1, 0): return .left
@@ -414,13 +469,19 @@ enum TripDigestComposer {
                 throw CancellationError()
             }
             while !input.isReadyForMoreMediaData { try await Task.sleep(nanoseconds: 2_000_000) }
-            guard let image = draw(frame, frames), let pool = adaptor.pixelBufferPool else { throw ComposeError.failed }
-            var buffer: CVPixelBuffer?
-            CVPixelBufferPoolCreatePixelBuffer(nil, pool, &buffer)
-            guard let buffer else { throw ComposeError.failed }
-            ciContext.render(image, to: buffer, bounds: CGRect(origin: .zero, size: renderSize),
-                             colorSpace: CGColorSpaceCreateDeviceRGB())
-            adaptor.append(buffer, withPresentationTime: CMTime(value: CMTimeValue(frame), timescale: fps))
+            // 1コマ描くごとに、使い終わった画素をその場で手放す。
+            // 包まないと、書き出しが終わるまで1コマごとに 15MB（フルHD）〜40MB（4K）ずつたまり、
+            // 2秒の動画1コマで 1〜4GB に達して iOS にアプリを止められていた（「動画を作っている途中で落ちる」）
+            let written: Bool = autoreleasepool {
+                guard let image = draw(frame, frames), let pool = adaptor.pixelBufferPool else { return false }
+                var buffer: CVPixelBuffer?
+                CVPixelBufferPoolCreatePixelBuffer(nil, pool, &buffer)
+                guard let buffer else { return false }
+                ciContext.render(image, to: buffer, bounds: CGRect(origin: .zero, size: renderSize),
+                                 colorSpace: CGColorSpaceCreateDeviceRGB())
+                return adaptor.append(buffer, withPresentationTime: CMTime(value: CMTimeValue(frame), timescale: fps))
+            }
+            guard written else { throw ComposeError.failed }
         }
         input.markAsFinished()
         await writer.finishWriting()
