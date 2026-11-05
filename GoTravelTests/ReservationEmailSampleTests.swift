@@ -28,7 +28,7 @@ struct ReservationEmailSampleTests {
     static var sampleFiles: [URL] {
         guard let enumerator = FileManager.default.enumerator(at: samplesFolder, includingPropertiesForKeys: nil) else { return [] }
         return enumerator.compactMap { $0 as? URL }
-            .filter { $0.pathExtension == "txt" || imageExtensions.contains($0.pathExtension.lowercased()) }
+            .filter { ($0.pathExtension == "txt" && !$0.lastPathComponent.hasSuffix(".ocr.txt")) || imageExtensions.contains($0.pathExtension.lowercased()) }
             .sorted { $0.path < $1.path }
     }
 
@@ -38,7 +38,10 @@ struct ReservationEmailSampleTests {
             return try String(contentsOf: file, encoding: .utf8)
         }
         guard let image = UIImage(contentsOfFile: file.path)?.cgImage else { return "" }
-        return (try? await ReservationImageTextReader.text(from: image)) ?? ""
+        let text = (try? await ReservationImageTextReader.text(from: image)) ?? ""
+        // 読み違えたときに原因を追えるよう、読み取った文字を見本の横に残す（見本のフォルダは git にも iCloud にも入らない）
+        try? text.write(to: file.deletingPathExtension().appendingPathExtension("ocr.txt"), atomically: true, encoding: .utf8)
+        return text
     }
 
     /// 比べる項目。正解の JSON に書いた項目だけ比べる（null と書けば「読み取らないこと」が正解）
@@ -47,6 +50,26 @@ struct ReservationEmailSampleTests {
 
     @Test("実際のメールで精度を測る", .enabled(if: !sampleFiles.isEmpty))
     func measureAccuracy() async throws {
+        try await measure(reportName: "report.md", title: "予約メールの読み取り精度") { text, date in
+            ReservationEmailParser.parse(text, referenceDate: date)
+        }
+    }
+
+    /// 端末の中の AI（Foundation Models）で埋めたときの精度。AI が使えない環境では何もしない
+    @Test("ルール＋AI で精度を測る", .enabled(if: !sampleFiles.isEmpty))
+    func measureAccuracyWithAI() async throws {
+        guard #available(iOS 26.0, *), ReservationAIReader.isAvailable else {
+            try? "AI（Foundation Models）が使えない環境のため測っていません\n"
+                .write(to: Self.samplesFolder.appendingPathComponent("report-ai.md"), atomically: true, encoding: .utf8)
+            return
+        }
+        try await measure(reportName: "report-ai.md", title: "予約の読み取り精度（ルール＋AI）") { text, date in
+            await ReservationReader.read(text, referenceDate: date)
+        }
+    }
+
+    private func measure(reportName: String, title: String,
+                         read: (String, Date) async -> [ReservationDraft]) async throws {
         var fieldHits: [String: Int] = [:]
         var fieldTotals: [String: Int] = [:]
         var perfect = 0
@@ -68,7 +91,7 @@ struct ReservationEmailSampleTests {
             }
 
             let referenceDate = (json["referenceDate"] as? String).flatMap(Self.parseDay) ?? Date()
-            let drafts = ReservationEmailParser.parse(text, referenceDate: referenceDate)
+            let drafts = await read(text, referenceDate)
             measured += 1
 
             var misses: [String] = []
@@ -97,7 +120,7 @@ struct ReservationEmailSampleTests {
             }
         }
 
-        var report = ["# 予約メールの読み取り精度", "",
+        var report = ["# \(title)", "",
                       "測った日：\(Self.dayString(Date()))", "",
                       "**直さずに保存できた割合：\(perfect) / \(measured)**", "",
                       "| 項目 | 正解 |", "|---|---|"]
@@ -109,7 +132,7 @@ struct ReservationEmailSampleTests {
         report += ["", "## メールごと", ""] + lines
 
         let output = report.joined(separator: "\n")
-        try? output.write(to: Self.samplesFolder.appendingPathComponent("report.md"), atomically: true, encoding: .utf8)
+        try? output.write(to: Self.samplesFolder.appendingPathComponent(reportName), atomically: true, encoding: .utf8)
         print(output)
     }
 

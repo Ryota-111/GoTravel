@@ -159,7 +159,14 @@ struct ReservationEmailImportView: View {
             Button {
                 Task { await read() }
             } label: {
-                Text("読み取る")
+                // 端末の中の AI で読むと数秒かかることがあるので、読んでいるあいだはそれと分かるようにする
+                HStack(spacing: 8) {
+                    if isReading {
+                        ProgressView()
+                            .tint(ThemePreset.readableText(on: accent))
+                    }
+                    Text(isReading ? "読み取っています…" : "読み取る")
+                }
                     .font(.system(size: 16, weight: .semibold))
                     .foregroundColor(ThemePreset.readableText(on: accent))
                     .frame(maxWidth: .infinity)
@@ -210,7 +217,8 @@ struct ReservationEmailImportView: View {
         isReading = true
         defer { isReading = false }
 
-        let drafts = ReservationEmailParser.parse(text, kind: kind).filter(\.hasContent)
+        // 決まった形の読み取りに、使える端末では端末の中の AI で足りないところを埋める（3.4。どこにも送らない）
+        let drafts = await ReservationReader.read(text, kind: kind).filter(\.hasContent)
         guard !drafts.isEmpty else {
             foundNothing = true
             return
