@@ -88,6 +88,7 @@
 		6CE7BFC53018E33500D30B9F /* Exceptions for "GoTravel" folder in "GoTravelWidgetExtension" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
+				Widget/TravelActivityAttributes.swift,
 				Widget/WidgetSnapshot.swift,
 			);
 			target = 6CE7BFAA3018E05700D30B9F /* GoTravelWidgetExtension */;
@@ -622,6 +623,7 @@
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "現在地を地図に表示し、近くの場所を探すために使用します。位置情報を継続的に記録することはありません。";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "作った旅のダイジェスト動画を写真に保存するために使います。";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "訪問した場所の写真を保存・表示したり、旅行中に撮った写真と動画から旅のダイジェスト動画を作ったりするために使います。";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -666,6 +668,7 @@
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "現在地を地図に表示し、近くの場所を探すために使用します。位置情報を継続的に記録することはありません。";
 				INFOPLIST_KEY_NSPhotoLibraryAddUsageDescription = "作った旅のダイジェスト動画を写真に保存するために使います。";
 				INFOPLIST_KEY_NSPhotoLibraryUsageDescription = "訪問した場所の写真を保存・表示したり、旅行中に撮った写真と動画から旅のダイジェスト動画を作ったりするために使います。";
+				INFOPLIST_KEY_NSSupportsLiveActivities = YES;
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -784,7 +787,7 @@
 				INFOPLIST_FILE = GoTravelWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = GoTravelWidget;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
@@ -817,7 +820,7 @@
 				INFOPLIST_FILE = GoTravelWidget/Info.plist;
 				INFOPLIST_KEY_CFBundleDisplayName = GoTravelWidget;
 				INFOPLIST_KEY_NSHumanReadableCopyright = "";
-				IPHONEOS_DEPLOYMENT_TARGET = 26.5;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.6;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",

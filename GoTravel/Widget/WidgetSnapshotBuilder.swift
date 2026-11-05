@@ -17,6 +17,10 @@ enum WidgetSnapshotBuilder {
     static func update(travelPlans: [TravelPlan], plans: [Plan]) {
         let snapshot = build(travelPlans: travelPlans, plans: plans)
 
+        // 旅行中のライブアクティビティも同じ中身から出し入れする。
+        // 中身が同じでも時間は進んでいる（次の予定が変わる）ので、下の「変わっていなければ戻る」より前で呼ぶ
+        TravelLiveActivity.sync(with: snapshot)
+
         // 中身が変わっていないなら書き込みもリロードもしない
         guard snapshot != WidgetDataStore.load() else { return }
 

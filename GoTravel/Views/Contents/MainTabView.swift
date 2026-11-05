@@ -116,7 +116,9 @@ struct MainTabView: View {
         }
         .onAppear { if icsInbox.file != nil { selectedTab = 1 } }
         .onChange(of: scenePhase) { _, phase in
-            if phase != .active { updateWidgetSnapshot() }
+            // 前面に戻ったときも作り直す。旅行中のライブアクティビティは、アプリが前面にあるときしか
+            // 新しく出せず、次の予定へ進めるのもアプリが動いているときだけなので
+            updateWidgetSnapshot()
 
             // アプリに戻ってきたときに、同行者の編集を取り込む。
             // ホームの onAppear はバックグラウンドから戻っても呼ばれないため、

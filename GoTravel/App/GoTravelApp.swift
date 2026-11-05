@@ -13,6 +13,9 @@ struct GoTravelApp: App {
         _ = CoreDataManager.shared
 
         NotificationService.shared.requestAuthorization { _ in }
+
+        // 旅行中のライブアクティビティの「更新」ボタン。押されるとアプリが裏で起き、ここで入れた処理が動く
+        TravelLiveActivity.registerRefresher()
     }
 
     // 明暗の扱いはテーマ側が決める。ライト固定・ダーク固定・システム追従の3つ
