@@ -12,11 +12,17 @@ enum ReservationImageTextReader {
         case noText
     }
 
+    /// 読む言語（先にあるほど優先）。
+    /// 3.4 で韓国語と中国語（繁体字）を足した。韓国・台湾への旅行の予約画面（航空会社・現地の予約サイト）を読むため。
+    /// 日本語の画面の読み取りが悪くならないことはテストで確かめている（`ReservationImageTextReaderTests`）
+    static let recognitionLanguages = ["ja-JP", "en-US", "ko-KR", "zh-Hant"]
+
     /// 画像の文字を、上の行から順に返す
     /// - Parameter orientation: 写真の向き。カメラで撮った写真は横向きのまま保存されていることがある
     static func text(from image: CGImage,
-                     orientation: CGImagePropertyOrientation = .up) async throws -> String {
-        let observations = try await recognize(image, orientation: orientation)
+                     orientation: CGImagePropertyOrientation = .up,
+                     languages: [String] = recognitionLanguages) async throws -> String {
+        let observations = try await recognize(image, orientation: orientation, languages: languages)
         let text = layout(observations.compactMap { observation in
             observation.topCandidates(1).first.map {
                 TextBox(text: $0.string, frame: observation.boundingBox)
@@ -27,14 +33,18 @@ enum ReservationImageTextReader {
     }
 
     private static func recognize(_ image: CGImage,
-                                  orientation: CGImagePropertyOrientation) async throws -> [VNRecognizedTextObservation] {
+                                  orientation: CGImagePropertyOrientation,
+                                  languages: [String]) async throws -> [VNRecognizedTextObservation] {
         // 時間のかかる処理なので、画面の処理を止めないよう別のスレッドで読む。
         // 完了の知らせ（completionHandler）は使わない。失敗したときに知らせと例外の
         // 両方が来ることがあり、二重に再開して落ちるのを避けるため
         try await Task.detached(priority: .userInitiated) {
             let request = VNRecognizeTextRequest()
             request.recognitionLevel = .accurate
-            request.recognitionLanguages = ["ja-JP", "en-US"]
+            request.recognitionLanguages = languages
+            // 画像ごとに言語を見分ける。並べた言語を一度に使うと、ハングルを先頭の日本語の読み方で読み、
+            // 「출발」が「香些」のような漢字になっていた
+            request.automaticallyDetectsLanguage = languages.count > 2
             // 言葉として自然になるよう直す処理は、予約番号（K7Q2PX など）まで
             // それらしい単語に変えてしまうことがあるので使わない
             request.usesLanguageCorrection = false

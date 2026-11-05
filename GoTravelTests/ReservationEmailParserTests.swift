@@ -148,3 +148,93 @@ extension ReservationEmailParserTests {
         #expect(ReservationEmailParser.flightNumbers(in: "ANA 027便\nANA27便").count == 1)
     }
 }
+
+// MARK: - 12時間制と英語の文面（3.4）
+
+extension ReservationEmailParserTests {
+    private func hm(_ text: String) -> [String] {
+        ReservationEmailParser.timeMatches(in: text).map { String(format: "%02d:%02d", $0.hour, $0.minute) }
+    }
+
+    @Test("午前・午後と AM・PM を24時間制に直す")
+    func twelveHourClock() {
+        #expect(hm("午後6時") == ["18:00"])
+        #expect(hm("午後 6時半") == ["18:30"])
+        #expect(hm("午前10時30分") == ["10:30"])
+        #expect(hm("3:00 PM") == ["15:00"])
+        #expect(hm("11:15am") == ["11:15"])
+        #expect(hm("12:30 a.m.") == ["00:30"])
+        #expect(hm("12:00 PM") == ["12:00"])
+        #expect(hm("7pm") == ["19:00"])
+        #expect(hm("18:00") == ["18:00"])
+        // 「2 PM」より前の数字や、ほかの英単語は時刻にしない
+        #expect(hm("Room 204 PMS") == [])
+    }
+
+    @Test("英語の日付：年なし・序数・数字だけの書き方")
+    func englishDates() {
+        func ymd(_ text: String) -> [String] {
+            ReservationEmailParser.dateTimeEvents(in: text, referenceDate: today).map {
+                String(format: "%04d-%02d-%02d", $0.components.year!, $0.components.month!, $0.components.day!)
+            }
+        }
+        #expect(ymd("Mon, Oct 6") == ["2026-10-06"])
+        #expect(ymd("Sat 10th October") == ["2026-10-10"])
+        #expect(ymd("October 6th, 2026") == ["2026-10-06"])
+        #expect(ymd("6 Oct, 2026") == ["2026-10-06"])
+        // 13以上の数があれば、どちらが日か決まる
+        #expect(ymd("10/25/2026") == ["2026-10-25"])
+        #expect(ymd("25.10.2026") == ["2026-10-25"])
+        // 本文の中の1つで決まれば、ほかの日付もそれに合わせる
+        #expect(ymd("Check-in 03/10/2026 Check-out 13/10/2026") == ["2026-10-03", "2026-10-13"])
+        // 決まらなければ、今日に近い先の日付になるほう（今日は 2026年9月30日）
+        #expect(ymd("10/06/2026") == ["2026-10-06"])
+        // 「Mark」は月ではない
+        #expect(ymd("Mark 12") == [])
+    }
+
+    @Test("英語の宿：チェックインの午後の時刻と、泊数")
+    func englishHotel() throws {
+        let text = """
+        Your booking is confirmed
+        Booked on Sep 20, 2026
+        Property name: Harbor View Hotel
+        Check-in: Thu, Oct 8, 2026 from 3:00 PM
+        2 nights
+        Confirmation number: 4471829
+        """
+        let draft = try #require(ReservationEmailParser.parse(text, referenceDate: today).first)
+
+        #expect(draft.kind == .hotel)
+        #expect(draft.title == "Harbor View Hotel")
+        #expect(ymdhm(draft.start) == "2026-10-08 15:00")
+        #expect(ymdhm(draft.end) == "2026-10-10")
+        #expect(draft.confirmationNumber == "4471829")
+    }
+
+    @Test("英語のレストラン：予約の日付と夜の時刻（受付日は使わない）")
+    func englishRestaurant() throws {
+        let text = """
+        Reservation confirmed at Bistro Lune
+        Order date: Sep 28, 2026
+        Table for 2
+        Date: Fri, Oct 9
+        Time: 7:30 PM
+        """
+        let draft = try #require(ReservationEmailParser.parse(text, referenceDate: today).first)
+
+        #expect(draft.kind == .restaurant)
+        #expect(ymdhm(draft.start) == "2026-10-09 19:30")
+    }
+
+    @Test("日本語のレストラン：午後の時刻")
+    func japaneseAfternoon() throws {
+        let text = """
+        ご来店日時：10月9日(金) 午後6時半
+        レストラン名：ビストロ月
+        """
+        let draft = try #require(ReservationEmailParser.parse(text, referenceDate: today).first)
+        #expect(ymdhm(draft.start) == "2026-10-09 18:30")
+        #expect(draft.title == "ビストロ月")
+    }
+}
