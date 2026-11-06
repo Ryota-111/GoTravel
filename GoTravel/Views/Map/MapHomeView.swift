@@ -66,6 +66,8 @@ struct MapHomeView: View {
     /// 経路案内の行き先。開くアプリはプロフィールの設定に従う（`mapNavigation`）
     @State private var navigationTarget: MapDestination?
     @EnvironmentObject var auth: AuthViewModel
+    /// 旅行中・これからの旅行の行き先のあたりも探すため（3.4）
+    @EnvironmentObject var travelPlanViewModel: TravelPlanViewModel
     @StateObject private var vm = PlacesViewModel()
     @StateObject private var locationManager = LocationManager()
     @ObservedObject var themeManager = ThemeManager.shared
@@ -386,28 +388,15 @@ struct MapHomeView: View {
     }
 
     private func searchLocations(searchText: String) async -> [MKMapItem] {
-        let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = searchText
-
-        // 施設だけに絞ると住所で検索できない。
-        // 「◯◯県◯◯市…」のような入力でも見つかるようにする
-        request.resultTypes = [.pointOfInterest, .address]
-
-        // 表示中の範囲だけを対象にすると、地図を動かさない限り遠方の場所が
-        // 一切ヒットしない（東京を表示中に「通天閣」で0件になる）。
-        // 近くを優先しつつ遠方も拾えるよう、中心だけ引き継いで範囲は広く取る
+        // 施設だけに絞ると住所で検索できない（resultTypes は PlaceSearchHints で施設と住所の両方）。
+        //
+        // 表示中の範囲だけを対象にすると、地図を動かさない限り遠方の場所が一切ヒットしない
+        // （東京を表示中に「通天閣」で0件になる）ので、中心だけ引き継いで範囲は広く取る。
+        // それでも日本を映したまま韓国の住所を探すと、見つからないか日本の別の場所が出ていたので、
+        // 言葉から分かる国・町と、旅行の行き先のあたりでも探す（3.4。`PlaceSearchHints`）
         let center = visibleRegion?.center ?? location
-        request.region = MKCoordinateRegion(
-            center: center,
-            span: MKCoordinateSpan(latitudeDelta: 60, longitudeDelta: 60)
-        )
-
-        do {
-            let search = MKLocalSearch(request: request)
-            return try await search.start().mapItems
-        } catch {
-            return []
-        }
+        let regions = PlaceSearchHints.regions(for: searchText, trips: travelPlanViewModel.travelPlans, around: center)
+        return await PlaceSearchHints.search(searchText, in: regions)
     }
 }
 
