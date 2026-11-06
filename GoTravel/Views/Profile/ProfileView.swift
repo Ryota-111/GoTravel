@@ -1054,6 +1054,12 @@ struct HelpSupportView: View {
                         .offset(y: animateCards ? 0 : 20)
                         .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.16), value: animateCards)
 
+                        // 不具合の情報を送るか（MetricKit。3.4）
+                        DiagnosticsSharingCard()
+                            .opacity(animateCards ? 1 : 0)
+                            .offset(y: animateCards ? 0 : 20)
+                            .animation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.17), value: animateCards)
+
                         // Contact
                         Button(action: { showContactAlert = true }) {
                             HelpCard(
@@ -1590,6 +1596,51 @@ struct HelpCard: View {
                 .stroke(color.opacity(0.3), lineWidth: 1)
         )
         .shadow(color: color.opacity(0.2), radius: 10, x: 0, y: 5)
+    }
+}
+
+// MARK: - 不具合の情報を送る
+
+/// アプリが落ちたり固まったりしたときの情報を、開発者に送るかどうか（`DiagnosticsReporter`）。
+/// 何が送られて、何が送られないかを、スイッチのすぐ下に書く
+struct DiagnosticsSharingCard: View {
+    @AppStorage(DiagnosticsReporter.enabledKey) private var isEnabled = true
+    @Environment(\.colorScheme) var colorScheme
+    @ObservedObject var themeManager = ThemeManager.shared
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Toggle(isOn: $isEnabled) {
+                HStack(spacing: 12) {
+                    ZStack {
+                        Circle()
+                            .fill(LinearGradient(gradient: Gradient(colors: [Color.gray.opacity(0.8), Color.gray.opacity(0.5)]),
+                                                 startPoint: .topLeading, endPoint: .bottomTrailing))
+                            .frame(width: 45, height: 45)
+                        Image(systemName: "ant.fill")
+                            .font(.title3)
+                            .foregroundColor(.white)
+                    }
+                    Text("不具合の情報を送る")
+                        .font(.headline)
+                        .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
+                }
+            }
+            .tint(themeManager.currentTheme.accent1)
+
+            Text("アプリが落ちたり固まったりしたときに、どの処理で起きたかと、アプリ・iOS の版、機種だけを開発者に送ります。旅行計画・予定・写真・お名前などは送りません。")
+                .font(.caption)
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+        .padding()
+        .background(RoundedRectangle(cornerRadius: 16).fill(themeManager.currentTheme.cardBackground2))
+        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.gray.opacity(0.3), lineWidth: 1))
+        .shadow(color: Color.gray.opacity(0.2), radius: 10, x: 0, y: 5)
+        .onChange(of: isEnabled) { _, enabled in
+            // オフにしたら、送れずに取っておいた分も捨てる
+            if !enabled { Task { await DiagnosticsReporter.shared.flush() } }
+        }
     }
 }
 
