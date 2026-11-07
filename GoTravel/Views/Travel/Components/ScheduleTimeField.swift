@@ -23,6 +23,8 @@ struct ScheduleTimeField: View {
     let textColor: Color
     let secondaryText: Color
     let fieldBackground: Color
+    /// 欄の名前。「移動」の予定では「出発」（3.4）
+    var label = "時刻"
 
     @State private var placeZone: TimeZone?
     /// 開いたときの場所。編集で開いただけで時間帯が変わらないよう、これと違うときだけ合わせる
@@ -48,7 +50,7 @@ struct ScheduleTimeField: View {
                 Image(systemName: "clock")
                     .foregroundColor(tint.opacity(0.8))
                     .frame(width: 24)
-                Text("時刻")
+                Text(label)
                     .font(.subheadline)
                     .foregroundColor(textColor)
                 Spacer()
@@ -318,6 +320,8 @@ struct ScheduleEndTimeField: View {
     var zoneChoices: [ScheduleZoneChoice] = []
     /// 旅行に海外の時間帯が入っているか（`ScheduleTimeField.countsRecents` と同じ）
     var countsRecents = false
+    /// 欄の名前。「移動」の予定では「到着」（3.4）
+    var label = "終了時刻"
 
     @State private var showsSearch = false
 
@@ -356,7 +360,7 @@ struct ScheduleEndTimeField: View {
                 endTime = startTime.addingTimeInterval(60 * 60)
                 hasEndTime = true
             } label: {
-                Label("終了時刻を追加", systemImage: "plus.circle")
+                Label("\(label)を追加", systemImage: "plus.circle")
                     .font(.subheadline)
                     .foregroundColor(tint)
                     .frame(maxWidth: .infinity, alignment: .leading)
@@ -376,7 +380,8 @@ struct ScheduleEndTimeField: View {
         let days = ScheduleClock.dateDifference(from: startTime, in: timeZone, to: arrival, in: effectiveEndZone)
         guard days >= 1 else { return nil }
         let day = days == 1 ? "翌日" : "\(days)日後"
-        return "\(day)の \(ScheduleClock.timeText(arrival, in: effectiveEndZone)) に終わります。着く日の予定表のいちばん上にも出ます"
+        let verb = label == "到着" ? "着きます" : "終わります"
+        return "\(day)の \(ScheduleClock.timeText(arrival, in: effectiveEndZone)) に\(verb)。着く日の予定表のいちばん上にも出ます"
     }
 
     private var endTimeRow: some View {
@@ -384,7 +389,7 @@ struct ScheduleEndTimeField: View {
             Image(systemName: "clock.badge.checkmark")
                 .foregroundColor(tint.opacity(0.8))
                 .frame(width: 24)
-            Text("終了時刻")
+            Text(label)
                 .font(.subheadline)
                 .foregroundColor(textColor)
             Spacer()
@@ -401,7 +406,7 @@ struct ScheduleEndTimeField: View {
                     .foregroundColor(secondaryText)
             }
             .buttonStyle(.plain)
-            .accessibilityLabel(Text("終了時刻を消す"))
+            .accessibilityLabel(Text("\(label)を消す"))
         }
         .padding(14)
         .background(fieldBackground)

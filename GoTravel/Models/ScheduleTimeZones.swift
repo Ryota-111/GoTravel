@@ -189,7 +189,8 @@ extension ScheduleItem {
     /// 「前日」「翌日」「2日後」。その日の時刻なら nil。
     /// 24時以降として出す予定（「24:30」）は時刻だけで分かるので付けない（3.2）
     var dayShiftLabel: String? {
-        isLateNight ? nil : Self.dayShiftLabel(dayShift)
+        // 時間未定の予定は、前の予定の日のずれを位置として借りているだけなので出さない
+        isLateNight || hasUndecidedTime ? nil : Self.dayShiftLabel(dayShift)
     }
 
     static func dayShiftLabel(_ dayShift: Int?) -> String? {

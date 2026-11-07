@@ -23,6 +23,12 @@ struct EditTravelPlanBasicInfoView: View {
     @State private var pendingShift: TravelPlan.ScheduleShift?
     @State private var destinationCoordinate: (latitude: Double, longitude: Double)?
     @State private var destinationSearchTask: Task<Void, Never>?
+    /// 行き先の候補（3.4）。押して選べる
+    @StateObject private var destinationSuggestions = DestinationSuggestions()
+    /// 行き先として入っている場所の名前（「パリ（フランス）」）。合っているか確かめられるように出す
+    @State private var destinationLabel: String?
+    /// 候補から選んだ行き先の名前。打ち直すまでは、自動の検索で上書きしない
+    @State private var pickedDestination: String?
 
     // MARK: - Initialization
     init(plan: TravelPlan) {
@@ -257,13 +263,17 @@ struct EditTravelPlanBasicInfoView: View {
                             .font(.body)
                             .foregroundColor(textColor)
                             .onChange(of: destination) { _, newValue in
-                                searchLocationCoordinate(for: newValue)
+                                destinationChanged(newValue)
                             }
                             // 座標が空のまま保存されている計画は、開いた時点で引き直す。
                             // 目的地の文字を変えないと検索しないので、同じ「沖縄」のまま
                             // 保存しても直らなかった
                             .task {
-                                if destinationCoordinate == nil {
+                                if let coordinate = destinationCoordinate {
+                                    // 今の行き先がどこを指しているかを出す（違う場所になっていないか確かめられるように）
+                                    destinationLabel = await DestinationGeocoder.label(
+                                        of: CLLocationCoordinate2D(latitude: coordinate.latitude, longitude: coordinate.longitude))
+                                } else {
                                     searchLocationCoordinate(for: destination)
                                 }
                             }
@@ -276,15 +286,20 @@ struct EditTravelPlanBasicInfoView: View {
                             .stroke(destination.isEmpty ? themeManager.currentTheme.error.opacity(0.5) : travelColor.opacity(0.3), lineWidth: 1.5)
                     )
 
-                    if destinationCoordinate != nil && !destination.isEmpty {
-                        HStack(spacing: 6) {
-                            Image(systemName: "checkmark.circle.fill")
-                                .foregroundColor(travelColor)
-                            Text("位置情報を取得しました")
-                                .font(.caption)
-                                .foregroundColor(travelColor)
-                        }
-                        .padding(.horizontal, 4)
+                    // 候補（3.4）。国・地域つきで並べ、押して選べる
+                    DestinationSuggestionList(
+                        results: destinationSuggestions.results,
+                        tint: travelColor,
+                        textColor: textColor,
+                        secondaryText: themeManager.currentTheme.secondaryText,
+                        background: fieldBg,
+                        onPick: pickDestination
+                    )
+
+                    if destinationCoordinate != nil, !destination.isEmpty, let destinationLabel {
+                        DestinationFoundLabel(label: destinationLabel, isPicked: pickedDestination == destination,
+                                              tint: travelColor, secondaryText: themeManager.currentTheme.secondaryText)
+                            .padding(.horizontal, 4)
                     }
                 }
             }
@@ -528,6 +543,34 @@ struct EditTravelPlanBasicInfoView: View {
     }
 
     // MARK: - Location Search
+
+    /// 行き先の文字が変わったとき。候補を出し直し、自動でも1つ探しておく（選ばなかったときのため）
+    private func destinationChanged(_ value: String) {
+        // 候補から選んで入った名前なら、何もしない（選んだ場所を自動の検索で上書きしない）
+        if let pickedDestination, pickedDestination == value { return }
+        pickedDestination = nil
+        destinationSuggestions.update(value)
+        searchLocationCoordinate(for: value)
+    }
+
+    /// 候補を選んだ。その場所の座標と名前を行き先にする
+    private func pickDestination(_ completion: MKLocalSearchCompletion) {
+        destinationSuggestions.didPick(completion)
+        destinationSearchTask?.cancel()
+        // 先に覚えておく（保存を押されたら、この結果を待つ。`settleDestinationCoordinate`）
+        pickedDestination = completion.title
+        destinationSearchTask = Task { @MainActor in
+            guard let found = await DestinationGeocoder.match(for: completion), !Task.isCancelled else {
+                destinationSearchTask = nil
+                return
+            }
+            destination = completion.title
+            destinationCoordinate = (found.coordinate.latitude, found.coordinate.longitude)
+            destinationLabel = completion.subtitle.isEmpty ? completion.title : "\(completion.title)（\(completion.subtitle)）"
+            destinationSearchTask = nil
+        }
+    }
+
     private func searchLocationCoordinate(for query: String) {
         // 打っている途中の検索は捨てる。残すと古い結果が後から上書きする
         destinationSearchTask?.cancel()
@@ -538,9 +581,10 @@ struct EditTravelPlanBasicInfoView: View {
         }
 
         destinationSearchTask = Task { @MainActor in
-            let coordinate = await DestinationGeocoder.coordinate(for: query)
+            let found = await DestinationGeocoder.match(for: query)
             guard !Task.isCancelled else { return }
-            destinationCoordinate = coordinate.map { ($0.latitude, $0.longitude) }
+            destinationCoordinate = found.map { ($0.coordinate.latitude, $0.coordinate.longitude) }
+            destinationLabel = found?.label
             // 終わったことを保存側に伝える（検索中なら保存が待つ）
             destinationSearchTask = nil
         }
@@ -556,10 +600,18 @@ struct EditTravelPlanBasicInfoView: View {
         let query = destination.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty, destinationCoordinate == nil || destinationSearchTask != nil else { return }
 
-        destinationSearchTask?.cancel()
-        destinationSearchTask = nil
-        let coordinate = await DestinationGeocoder.coordinate(for: query, debounce: 0)
-        destinationCoordinate = coordinate.map { ($0.latitude, $0.longitude) }
+        // 候補を選んでいる途中なら、その結果を待つ（自動の検索で上書きしない）
+        if pickedDestination == nil {
+            destinationSearchTask?.cancel()
+            destinationSearchTask = nil
+        }
+        if let running = destinationSearchTask {
+            await running.value
+            if destinationCoordinate != nil { return }
+        }
+        let found = await DestinationGeocoder.match(for: query, debounce: 0)
+        destinationCoordinate = found.map { ($0.coordinate.latitude, $0.coordinate.longitude) }
+        destinationLabel = found?.label
     }
 
 }

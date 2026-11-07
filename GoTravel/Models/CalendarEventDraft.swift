@@ -86,6 +86,22 @@ enum CalendarEventBuilder {
     }
 
     static func draft(for item: ScheduleItem, onDay day: DateComponents) -> CalendarEventDraft {
+        // 時間未定の予定（3.4）は、その日の終日の予定として入れる。時刻は並ぶ位置でしかない
+        if item.hasUndecidedTime {
+            let dayStart = Calendar.current.date(from: DateComponents(year: day.year, month: day.month, day: day.day)) ?? item.time
+            return CalendarEventDraft(
+                key: "item:\(item.id)",
+                title: item.title,
+                start: dayStart,
+                end: dayStart,
+                isAllDay: true,
+                location: joinedLocation(item.location, item.address),
+                latitude: item.latitude,
+                longitude: item.longitude,
+                notes: joinedNotes(item.notes),
+                url: item.linkURL.flatMap(URL.init(string:))
+            )
+        }
         let start = item.occurrence(onDay: day)
         // 終わりの時刻は始まりと同じ日の時:分で持っている（`ScheduleItem.endTime`）。
         // 始まりからの長さにして、日のずれ（前日など）があってもそのまま足す

@@ -22,9 +22,15 @@ extension TravelPlan {
         var updated = self
         let items = daySchedules[dayIndex].scheduleItems
         func item(_ id: String) -> ScheduleItem? { items.first { $0.id == id } }
+        func isUndecided(_ id: String) -> Bool { item(id)?.hasUndecidedTime == true }
+
+        // 時間未定の予定（3.4）は時刻の枠を持たない。時刻のある予定どうしだけで枠を入れ替え、
+        // 未定の予定は、あとで新しい並びのすぐ前の予定に合わせて位置を付け直す
+        let timedOld = oldOrder.filter { !isUndecided($0) }
+        let timedNew = newOrder.filter { !isUndecided($0) }
 
         var movedItems: [ScheduleItem] = []
-        for (slotID, itemID) in zip(oldOrder, newOrder) where slotID != itemID {
+        for (slotID, itemID) in zip(timedOld, timedNew) where slotID != itemID {
             guard let slot = item(slotID), let original = item(itemID),
                   let index = updated.daySchedules[dayIndex].scheduleItems.firstIndex(where: { $0.id == itemID }) else { continue }
             var moved = original
@@ -35,6 +41,17 @@ extension TravelPlan {
             moved.endTime = original.endTime?.addingTimeInterval(delta)
             updated.daySchedules[dayIndex].scheduleItems[index] = moved
             movedItems.append(moved)
+        }
+
+        // 未定の予定に、新しい並びでの位置を付ける
+        if newOrder.contains(where: isUndecided) {
+            let current = updated.daySchedules[dayIndex].scheduleItems
+            let ordered = newOrder.compactMap { id in current.first { $0.id == id } }
+            for placed in ScheduleUndecided.normalized(ordered) where placed.hasUndecidedTime {
+                if let index = updated.daySchedules[dayIndex].scheduleItems.firstIndex(where: { $0.id == placed.id }) {
+                    updated.daySchedules[dayIndex].scheduleItems[index] = placed
+                }
+            }
         }
 
         // 予約から作った予定は、予約の時刻もそろえる（行程で時刻を直したときと同じ）

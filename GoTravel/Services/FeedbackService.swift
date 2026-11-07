@@ -94,6 +94,34 @@ final class FeedbackService {
         recordSubmission()
     }
 
+    // MARK: - 不具合の情報（MetricKit）
+
+    /// MetricKit の診断（`DiagnosticsSummary` でまとめた文）を送る。
+    ///
+    /// ご意見と同じ `Feedback` に、種類 "diagnostic" として入れる（新しい種類のレコードを作ると、
+    /// Production へのスキーマ反映が要るため）。ご意見の1日3件の上限には数えない。
+    /// 連絡先は入れない。送れなければ false（呼び出し側が次の起動で送り直す）
+    func submitDiagnostic(_ text: String) async -> Bool {
+        guard (try? await container.accountStatus()) == .available else { return false }
+        let record = CKRecord(recordType: Self.recordType)
+        record["kind"] = "diagnostic" as CKRecordValue
+        record["message"] = text as CKRecordValue
+        record["contactEmail"] = "" as CKRecordValue
+        record["appVersion"] = Self.appVersion as CKRecordValue
+        record["osVersion"] = UIDevice.current.systemVersion as CKRecordValue
+        record["deviceModel"] = Self.deviceModel as CKRecordValue
+        record["submittedAt"] = Date() as CKRecordValue
+        do {
+            _ = try await container.publicCloudDatabase.save(record)
+            return true
+        } catch {
+            #if DEBUG
+            print("[FeedbackService] 不具合の情報を送れませんでした: \(error)")
+            #endif
+            return false
+        }
+    }
+
     // MARK: - 送信履歴
 
     private func todaysSubmissions() -> [Date] {

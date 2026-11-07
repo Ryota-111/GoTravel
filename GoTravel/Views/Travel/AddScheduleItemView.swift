@@ -34,6 +34,16 @@ struct AddScheduleItemView: View {
     @State private var endTime = Date()
     @State private var notes = ""
     @State private var linkURL = ""
+    /// 「移動」の予定にするか（3.4）。乗り物・出発地・到着地・便を入れる
+    @State private var isMove = false
+    @State private var moveInput = MoveInput()
+    /// 時間未定にするか（3.4）。未定のときは時刻の代わりに「入れる位置」を選ぶ
+    @State private var isUndecided = false
+    /// 未定の予定のすぐ前に来る予定。nil ならいちばん前。はじめはその日のいちばん後ろ
+    @State private var anchorID: String?
+    @State private var didSetAnchor = false
+    /// 移動の予約番号（3.4）。入れると予約として残る
+    @State private var confirmationNumber = ""
 
     // Location
     @StateObject private var locationHistory = LocationHistoryManager.shared
@@ -51,7 +61,13 @@ struct AddScheduleItemView: View {
     }
 
 
-    private var canAdd: Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty }
+    /// 移動は名前が無くても足せる（「梅田 → 京都」を名前にする）
+    private var canAdd: Bool { isMove || !title.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    /// その日の予定（並んでいる順）。時間未定の「入れる位置」に使う
+    private var dayItems: [ScheduleItem] {
+        currentPlan.timelineScheduleItems(onDay: dayNumber)
+    }
 
     private var travelColor: Color {
         switch themeManager.currentTheme.type {
@@ -94,9 +110,12 @@ struct AddScheduleItemView: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
+                        ScheduleEntryKindPicker(isMove: $isMove.animation(.easeInOut(duration: 0.2)), tint: travelColor)
+                            .padding(.bottom, 4)
                         titleSection
+                        if isMove { moveSection }
                         timeSection
-                        locationSection
+                        if !isMove { locationSection }
                         optionalSection
                     }
                     .padding(.horizontal, 20)
@@ -116,6 +135,11 @@ struct AddScheduleItemView: View {
             locationHistoryPickerView
         }
         .onAppear(perform: applyPrefill)
+        .onAppear {
+            guard !didSetAnchor else { return }
+            didSetAnchor = true
+            anchorID = dayItems.last?.id
+        }
         .sheet(isPresented: $showSavedPlacePicker) {
             SavedPlacePickerView(accentColor: travelColor) { place in
                 applySavedPlace(place)
@@ -166,8 +190,8 @@ struct AddScheduleItemView: View {
     private var titleSection: some View {
         sectionCard {
             VStack(alignment: .leading, spacing: 10) {
-                sectionLabel("タイトル", icon: "text.alignleft")
-                TextField("例：浅草寺観光、ランチ", text: $title)
+                sectionLabel(isMove ? "名前（任意）" : "タイトル", icon: "text.alignleft")
+                TextField(isMove ? "例：\(moveInput.move.defaultTitle)" : "例：浅草寺観光、ランチ", text: $title)
                     .font(.body)
                     .foregroundColor(textColor)
                     .padding(14)
@@ -176,7 +200,7 @@ struct AddScheduleItemView: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(
-                                title.isEmpty
+                                title.isEmpty && !isMove
                                     ? themeManager.currentTheme.error.opacity(0.4)
                                     : travelColor.opacity(0.3),
                                 lineWidth: 1.5
@@ -191,6 +215,17 @@ struct AddScheduleItemView: View {
         sectionCard {
             VStack(alignment: .leading, spacing: 10) {
                 sectionLabel("時間", icon: "clock.fill")
+                UndecidedTimeFields(
+                    isUndecided: $isUndecided,
+                    anchorID: $anchorID,
+                    dayItems: dayItems,
+                    tint: travelColor,
+                    textColor: textColor,
+                    secondaryText: themeManager.currentTheme.secondaryText,
+                    fieldBackground: fieldBg
+                )
+
+                if !isUndecided {
                 ScheduleTimeField(
                     time: $time,
                     timeZone: $timeZone,
@@ -201,7 +236,8 @@ struct AddScheduleItemView: View {
                     tint: travelColor,
                     textColor: textColor,
                     secondaryText: themeManager.currentTheme.secondaryText,
-                    fieldBackground: fieldBg
+                    fieldBackground: fieldBg,
+                    label: isMove ? "出発" : "時刻"
                 )
                 .task { await resolveDestinationTimeZone() }
 
@@ -222,7 +258,8 @@ struct AddScheduleItemView: View {
                     endZone: $endZone,
                     zoneChoices: ScheduleClock.zoneChoices(place: nil, day: dayTimeZone, destination: destinationTimeZone,
                                                            current: .current, recents: RecentTimeZones.list(), at: time),
-                    countsRecents: plan.hasForeignTimeZones
+                    countsRecents: plan.hasForeignTimeZones,
+                    label: isMove ? "到着" : "終了時刻"
                 )
                 // 現地時間・日本時間を切り替えたら、終わりも同じ時:分のまま付け替える。
                 // 終わりを着いた先の時計で入れているときは、終わりはそのまま
@@ -230,6 +267,7 @@ struct AddScheduleItemView: View {
                     if let zone = endZone, zone.identifier == newZone.identifier { endZone = nil; return }
                     guard endZone == nil else { return }
                     endTime = ScheduleClock.keepingWallClock(endTime, from: oldZone, to: newZone)
+                }
                 }
 
                 // 共有していて2人以上のときだけ出る
@@ -241,6 +279,29 @@ struct AddScheduleItemView: View {
                     secondaryText: themeManager.currentTheme.secondaryText,
                     fieldBackground: fieldBg
                 )
+            }
+        }
+    }
+
+    // MARK: - Move Section（3.4）
+    private var moveSection: some View {
+        sectionCard {
+            VStack(alignment: .leading, spacing: 10) {
+                sectionLabel("移動", icon: moveInput.mode.systemImage)
+                ScheduleMoveFields(
+                    input: $moveInput,
+                    searchRegion: plan.placeSearchRegion,
+                    tint: travelColor,
+                    textColor: textColor,
+                    secondaryText: themeManager.currentTheme.secondaryText,
+                    fieldBackground: fieldBg
+                )
+                // 予約のある乗り物で、時間が決まっているときだけ
+                if !isUndecided, Reservation.Kind(transportMode: moveInput.mode) != nil {
+                    ReservationNumberField(number: $confirmationNumber, isLinked: false, tint: travelColor,
+                                           textColor: textColor, secondaryText: themeManager.currentTheme.secondaryText,
+                                           fieldBackground: fieldBg)
+                }
             }
         }
     }
@@ -482,7 +543,7 @@ struct AddScheduleItemView: View {
         let costs = costInput.result
         RecentTimeZones.record(timeZone)
 
-        let newItem = ScheduleItem(
+        var newItem = ScheduleItem(
             time: time,
             title: title.trimmingCharacters(in: .whitespacesAndNewlines),
             location: selectedLocation?.name,
@@ -496,27 +557,41 @@ struct AddScheduleItemView: View {
             foreignCost: costs.foreign,
             costNote: costNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? nil : costNote.trimmingCharacters(in: .whitespacesAndNewlines),
-            endTime: hasEndTime ? ScheduleItem.endTime(hourAndMinuteOf: endTime, after: time, in: timeZone, endZone: endZone) : nil,
-            endTimeZoneIdentifier: hasEndTime ? endZone?.identifier : nil,
+            endTime: hasEndTime && !isUndecided ? ScheduleItem.endTime(hourAndMinuteOf: endTime, after: time, in: timeZone, endZone: endZone) : nil,
+            endTimeZoneIdentifier: hasEndTime && !isUndecided ? endZone?.identifier : nil,
             address: selectedLocation == nil ? nil : selectedAddress,
             // 日付をまたぐ予定は、その日の最後に「翌日 0:30」と並べる（3.2）
-            dayShift: isNextDay ? 1 : nil,
+            dayShift: isNextDay && !isUndecided ? 1 : nil,
             // 割り勘（3.1）：共有した旅行で金額を入れたら、入れた人が払ったことにする（費用の画面で直せる）
             paidBy: basePlan.isShared && (costs.cost ?? 0) > 0 ? userId : nil
         )
+        // 移動（3.4）：名前が無ければ「梅田 → 京都」にし、場所には出発地を入れる
+        if isMove {
+            newItem.apply(move: moveInput.move, title: title)
+        }
 
         var updatedPlan = basePlan
-        if let dayIndex = updatedPlan.daySchedules.firstIndex(where: { $0.dayNumber == dayNumber }) {
-            updatedPlan.daySchedules[dayIndex].scheduleItems.append(newItem)
-        } else {
-            let newDay = DaySchedule(dayNumber: dayNumber, date: dayDate, scheduleItems: [newItem])
-            updatedPlan.daySchedules.append(newDay)
+        if updatedPlan.daySchedules.firstIndex(where: { $0.dayNumber == dayNumber }) == nil {
+            updatedPlan.daySchedules.append(DaySchedule(dayNumber: dayNumber, date: dayDate, scheduleItems: []))
             updatedPlan.daySchedules.sort { $0.dayNumber < $1.dayNumber }
+        }
+        if let dayIndex = updatedPlan.daySchedules.firstIndex(where: { $0.dayNumber == dayNumber }) {
+            if isUndecided {
+                // 時間未定（3.4）：選んだ予定のすぐ後ろに並ぶ位置を付けて入れる
+                updatedPlan.daySchedules[dayIndex].scheduleItems = ScheduleUndecided.inserting(
+                    newItem, after: anchorID, into: updatedPlan.daySchedules[dayIndex].scheduleItems)
+            } else {
+                updatedPlan.daySchedules[dayIndex].scheduleItems.append(newItem)
+            }
         }
 
         // 外貨のレートは旅行ごとに1つ。この予定で入れたレートに、同じ通貨の費用をすべて揃える
         if let foreign = newItem.foreignCost, let rate = foreign.rate {
             updatedPlan.setExchangeRate(rate, for: foreign.currencyCode)
+        }
+        // 移動に予約番号を入れたら、予約としても残す（予約の一覧に入り、この予定とつながる）
+        if isMove, !isUndecided, !confirmationNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            updatedPlan.makeReservation(fromMoveItemID: newItem.id, confirmationNumber: confirmationNumber)
         }
 
         viewModel.update(updatedPlan, userId: userId)

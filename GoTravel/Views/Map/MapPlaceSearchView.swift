@@ -293,11 +293,10 @@ struct MapPlaceSearchView: View {
         guard !query.isEmpty else { return }
         isSearching = true
         defer { isSearching = false }
-        let request = MKLocalSearch.Request()
-        request.naturalLanguageQuery = query
-        request.resultTypes = [.pointOfInterest, .address]
-        request.region = visibleRegion ?? startRegion
-        let items = (try? await MKLocalSearch(request: request).start())?.mapItems ?? []
+        // 映している範囲（はじめは旅行の行き先のあたり）で探す。言葉から国・町が分かれば、そこを先に探す。
+        // 見つからなければ住所としても探す（3.4。`PlaceSearchHints`）
+        let regions = [PlaceSearchHints.hintedRegion(for: query), visibleRegion ?? startRegion].compactMap { $0 }
+        let items = await PlaceSearchHints.search(query, in: regions)
         results = items
         selectedResult = nil
         searchFailed = items.isEmpty

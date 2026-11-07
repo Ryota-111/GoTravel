@@ -16,6 +16,9 @@ struct GoTravelApp: App {
 
         // 旅行中のライブアクティビティの「更新」ボタン。押されるとアプリが裏で起き、ここで入れた処理が動く
         TravelLiveActivity.registerRefresher()
+
+        // 落ちた・固まった・メモリ不足で止められたことを、MetricKit から受け取って開発者に送る（設定でオフにできる）
+        DiagnosticsReporter.shared.start()
     }
 
     // 明暗の扱いはテーマ側が決める。ライト固定・ダーク固定・システム追従の3つ

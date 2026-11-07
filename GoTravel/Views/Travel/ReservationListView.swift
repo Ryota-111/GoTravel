@@ -354,13 +354,13 @@ struct ReservationListView: View {
     private func detailChips(_ reservation: Reservation) -> [(String, String)] {
         var chips: [(String, String)] = []
         if let number = reservation.transportNumber, !number.isEmpty {
-            chips.append((reservation.kind == .flight ? "便名" : "列車", number))
+            chips.append((reservation.kind == .train ? "列車" : reservation.kind == .flight ? "便名" : "便", number))
         }
         if let seat = reservation.seat, !seat.isEmpty {
             chips.append(("座席", seat))
         }
         if let terminal = reservation.terminal, !terminal.isEmpty {
-            chips.append(("ターミナル", terminal))
+            chips.append((reservation.kind.terminalLabel, terminal))
         }
         if let cost = reservation.cost, cost > 0 {
             chips.append(("費用", plan.money(cost)))
