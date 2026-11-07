@@ -37,6 +37,14 @@ struct EditScheduleItemView: View {
     @State private var endTime: Date
     @State private var linkURL: String
     @State private var showDeleteConfirmation = false
+    /// 「移動」の予定か（3.4）
+    @State private var isMove: Bool
+    @State private var moveInput: MoveInput
+    /// 時間未定か（3.4）と、未定のときにすぐ前に来る予定
+    @State private var isUndecided: Bool
+    @State private var anchorID: String?
+    /// 移動の予約番号（3.4）。つないだ予約があればその番号。入れると予約として残る
+    @State private var confirmationNumber: String
 
     // Location
     @StateObject private var locationHistory = LocationHistoryManager.shared
@@ -54,10 +62,19 @@ struct EditScheduleItemView: View {
         self.daySchedule = daySchedule
         self.item = item
 
-        _title = State(initialValue: item.title)
+        // 名前を自動で付けた移動（「梅田 → 京都」）は空で開く。発着地を直したら名前もついてくる
+        _title = State(initialValue: item.hasDefaultMoveTitle ? "" : item.title)
+        // 予約の出発・到着の予定は、場所が1か所の予定として直す（乗り物・便は予約の画面で）
+        _isMove = State(initialValue: item.isSingleMove)
+        _moveInput = State(initialValue: item.move.map(MoveInput.init) ?? MoveInput())
+        _isUndecided = State(initialValue: item.hasUndecidedTime)
+        _anchorID = State(initialValue: ScheduleUndecided.anchorID(of: item.id, in: daySchedule.scheduleItems))
+        _confirmationNumber = State(initialValue: item.reservationId
+            .flatMap { id in plan.reservations.first { $0.id == id }?.confirmationNumber } ?? "")
         _location = State(initialValue: item.location ?? "")
         _notes = State(initialValue: item.notes ?? "")
-        _time = State(initialValue: item.time)
+        // 未定の予定は、時間を決めるときに前の予定と同じ分から入れ始める
+        _time = State(initialValue: item.hasUndecidedTime ? ScheduleUndecided.startingTime(for: item) : item.time)
         _timeZone = State(initialValue: item.timeZone)
         _dayShift = State(initialValue: item.dayShift)
         _isPinned = State(initialValue: item.isPinned == true)
@@ -81,7 +98,23 @@ struct EditScheduleItemView: View {
     }
 
     // MARK: - Computed
-    private var canSave: Bool { !title.trimmingCharacters(in: .whitespaces).isEmpty }
+    private var canSave: Bool { isMove || !title.trimmingCharacters(in: .whitespaces).isEmpty }
+
+    /// 予約から作った予定か。時刻・場所は予約と同じものなので、移動・時間未定には切り替えない
+    private var isFromReservation: Bool { item.reservationId != nil }
+
+    /// 移動の予約番号の欄を出すか。予約のある乗り物（電車・バス・飛行機・船）で、時間が決まっているときだけ
+    private var offersReservationNumber: Bool {
+        isMove && !isUndecided && (isFromReservation || Reservation.Kind(transportMode: moveInput.mode) != nil)
+    }
+
+    /// その日のほかの予定（並んでいる順）。時間未定の「入れる位置」に使う
+    private var otherDayItems: [ScheduleItem] {
+        let day = currentPlan.daySchedules.first { $0.id == daySchedule.id } ?? daySchedule
+        return day.scheduleItems
+            .filter { $0.isPinned != true && $0.id != item.id }
+            .sorted(by: ScheduleItem.chronologically)
+    }
 
 
     private var travelColor: Color {
@@ -130,9 +163,14 @@ struct EditScheduleItemView: View {
 
                 ScrollView(showsIndicators: false) {
                     VStack(spacing: 0) {
+                        if !isFromReservation {
+                            ScheduleEntryKindPicker(isMove: $isMove.animation(.easeInOut(duration: 0.2)), tint: travelColor)
+                                .padding(.bottom, 4)
+                        }
                         titleSection
+                        if isMove { moveSection }
                         timeSection
-                        locationSection
+                        if !isMove { locationSection }
                         optionalSection
                         deleteRow
                     }
@@ -210,8 +248,8 @@ struct EditScheduleItemView: View {
     private var titleSection: some View {
         sectionCard {
             VStack(alignment: .leading, spacing: 10) {
-                sectionLabel("タイトル", icon: "text.alignleft")
-                TextField("例：浅草寺観光、ランチ", text: $title)
+                sectionLabel(isMove ? "名前（任意）" : "タイトル", icon: "text.alignleft")
+                TextField(isMove ? "例：\(moveInput.move.defaultTitle)" : "例：浅草寺観光、ランチ", text: $title)
                     .font(.body)
                     .foregroundColor(textColor)
                     .padding(14)
@@ -220,7 +258,7 @@ struct EditScheduleItemView: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(
-                                title.isEmpty
+                                title.isEmpty && !isMove
                                     ? themeManager.currentTheme.error.opacity(0.4)
                                     : travelColor.opacity(0.3),
                                 lineWidth: 1.5
@@ -235,6 +273,19 @@ struct EditScheduleItemView: View {
         sectionCard {
             VStack(alignment: .leading, spacing: 10) {
                 sectionLabel("時間", icon: "clock.fill")
+                if !isFromReservation && isPinned == false {
+                    UndecidedTimeFields(
+                        isUndecided: $isUndecided,
+                        anchorID: $anchorID,
+                        dayItems: otherDayItems,
+                        tint: travelColor,
+                        textColor: textColor,
+                        secondaryText: themeManager.currentTheme.secondaryText,
+                        fieldBackground: fieldBg
+                    )
+                }
+
+                if !isUndecided {
                 ScheduleTimeField(
                     time: $time,
                     timeZone: $timeZone,
@@ -245,7 +296,8 @@ struct EditScheduleItemView: View {
                     tint: travelColor,
                     textColor: textColor,
                     secondaryText: themeManager.currentTheme.secondaryText,
-                    fieldBackground: fieldBg
+                    fieldBackground: fieldBg,
+                    label: isMove ? "出発" : "時刻"
                 )
                 .task { await resolveDestinationTimeZone() }
 
@@ -273,7 +325,8 @@ struct EditScheduleItemView: View {
                     endZone: $endZone,
                     zoneChoices: ScheduleClock.zoneChoices(place: nil, day: daySchedule.timeZone, destination: destinationTimeZone,
                                                            current: .current, recents: RecentTimeZones.list(), at: time),
-                    countsRecents: plan.hasForeignTimeZones
+                    countsRecents: plan.hasForeignTimeZones,
+                    label: isMove ? "到着" : "終了時刻"
                 )
                 // 現地時間・日本時間を切り替えたら、終わりも同じ時:分のまま付け替える。
                 // 終わりを着いた先の時計で入れているときは、終わりはそのまま
@@ -281,6 +334,7 @@ struct EditScheduleItemView: View {
                     if let zone = endZone, zone.identifier == newZone.identifier { endZone = nil; return }
                     guard endZone == nil else { return }
                     endTime = ScheduleClock.keepingWallClock(endTime, from: oldZone, to: newZone)
+                }
                 }
 
                 // 共有していて2人以上のときだけ出る
@@ -293,7 +347,8 @@ struct EditScheduleItemView: View {
                     fieldBackground: fieldBg
                 )
 
-                // 固定した予定は時刻の並びから外れて、その日の一番上に出る
+                // 固定した予定は時刻の並びから外れて、その日の一番上に出る（時間未定とは一緒にしない）
+                if !isUndecided {
                 Toggle(isOn: $isPinned) {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("この日の一番上に固定")
@@ -308,6 +363,29 @@ struct EditScheduleItemView: View {
                 .padding(14)
                 .background(fieldBg)
                 .cornerRadius(12)
+                }
+            }
+        }
+    }
+
+    // MARK: - Move Section（3.4）
+    private var moveSection: some View {
+        sectionCard {
+            VStack(alignment: .leading, spacing: 10) {
+                sectionLabel("移動", icon: moveInput.mode.systemImage)
+                ScheduleMoveFields(
+                    input: $moveInput,
+                    searchRegion: plan.placeSearchRegion,
+                    tint: travelColor,
+                    textColor: textColor,
+                    secondaryText: themeManager.currentTheme.secondaryText,
+                    fieldBackground: fieldBg
+                )
+                if offersReservationNumber {
+                    ReservationNumberField(number: $confirmationNumber, isLinked: isFromReservation, tint: travelColor,
+                                           textColor: textColor, secondaryText: themeManager.currentTheme.secondaryText,
+                                           fieldBackground: fieldBg)
+                }
             }
         }
     }
@@ -564,6 +642,14 @@ struct EditScheduleItemView: View {
         // どちらの画面で直しても、同じ予約は同じ内容に見えるようにする
         if let reservationId = updatedItem.reservationId {
             updatedPlan.syncReservationFromItinerary(editedItem: updatedItem, reservationId: reservationId)
+            // 移動の予約番号（3.4）を行程の側から直したとき
+            if updatedItem.isMove {
+                updatedPlan.setConfirmationNumber(confirmationNumber, forReservation: reservationId)
+            }
+        } else if offersReservationNumber,
+                  !confirmationNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            // 移動に予約番号を入れたら、予約として残す（予約の一覧にも入り、この予定とつながる）
+            updatedPlan.makeReservation(fromMoveItemID: updatedItem.id, confirmationNumber: confirmationNumber)
         }
 
         viewModel.update(updatedPlan, userId: userId)
@@ -628,12 +714,19 @@ struct EditScheduleItemView: View {
             reservationPart: item.reservationPart,
             costNote: costNote.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                 ? nil : costNote.trimmingCharacters(in: .whitespacesAndNewlines),
-            endTime: hasEndTime ? ScheduleItem.endTime(hourAndMinuteOf: endTime, after: time, in: timeZone, endZone: endZone) : nil,
-            endTimeZoneIdentifier: hasEndTime ? endZone?.identifier : nil,
+            endTime: hasEndTime && !isUndecided ? ScheduleItem.endTime(hourAndMinuteOf: endTime, after: time, in: timeZone, endZone: endZone) : nil,
+            endTimeZoneIdentifier: hasEndTime && !isUndecided ? endZone?.identifier : nil,
             address: selectedCoordinate == nil ? nil : selectedAddress,
             // 「前日 17:00」のように日をまたいで直した予定は、そのずれを保つ
-            dayShift: dayShift
+            dayShift: isUndecided ? nil : dayShift
         )
+        // 移動（3.4）：名前が無ければ「梅田 → 京都」にし、場所には出発地を入れる。予定に戻したら外す
+        if isMove {
+            updated.apply(move: moveInput.move, title: title)
+        }
+        updated.isTimeUndecided = isUndecided ? true : nil
+        // 予約の出発・到着の予定は、乗り物・便を残す（予約から来るもの）
+        if item.isRouteLeg { updated.move = item.move }
         // この画面で直さない項目は、そのまま残す（割り勘で決めた払った人・割り勘する人・金額、次の予定までの移動手段）
         updated.paidBy = item.paidBy
         updated.splitWith = item.splitWith
@@ -653,7 +746,11 @@ struct EditScheduleItemView: View {
         var updatedPlan = viewModel.travelPlans.first(where: { $0.id == plan.id }) ?? plan
 
         if let dayIndex = updatedPlan.daySchedules.firstIndex(where: { $0.id == daySchedule.id }) {
-            if let itemIndex = updatedPlan.daySchedules[dayIndex].scheduleItems.firstIndex(where: { $0.id == item.id }) {
+            if updatedItem.hasUndecidedTime {
+                // 時間未定（3.4）：選んだ予定のすぐ後ろに並ぶ位置を付け直す
+                updatedPlan.daySchedules[dayIndex].scheduleItems = ScheduleUndecided.inserting(
+                    updatedItem, after: anchorID, into: updatedPlan.daySchedules[dayIndex].scheduleItems)
+            } else if let itemIndex = updatedPlan.daySchedules[dayIndex].scheduleItems.firstIndex(where: { $0.id == item.id }) {
                 updatedPlan.daySchedules[dayIndex].scheduleItems[itemIndex] = updatedItem
             }
         }

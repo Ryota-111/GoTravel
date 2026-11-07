@@ -28,6 +28,9 @@ struct ReservationEditorView: View {
     @State private var destinationTimeZone: TimeZone?
 
     @State private var showSchedulePicker = false
+    /// 「予定から持ってくる」で選んだ予定（3.4）。保存すると、新しく作らずにこの予定を予約につなぐ
+    /// （同じものが行程に2つ並ばないように）
+    @State private var pickedScheduleItemID: String?
     /// 地図で場所を選んでいるところ（宿などの場所・出発地・到着地）
     @State private var placeTarget: PlaceTarget?
 
@@ -239,6 +242,7 @@ struct ReservationEditorView: View {
     /// 入力欄を予約の内容で埋める。開いたときと、メールから取り込んだときに使う
     private func load(_ reservation: Reservation) {
         self.reservation = reservation
+        pickedScheduleItemID = nil
         hasDate = false
         hasArrivalDate = false
         hasEndDate = false
@@ -491,7 +495,14 @@ struct ReservationEditorView: View {
     /// 予約番号だけは行程に無いので、そこへ入力を促す形で残す
     private func apply(item: ScheduleItem, dayDate: Date) {
         reservation.title = item.title
-        reservation.kind = Reservation.guessedKind(title: item.title, location: item.location)
+        // 移動の予定（3.4）は乗り物がはっきりしているので、名前から当てずにそれを使う
+        reservation.kind = item.move.flatMap { Reservation.Kind(transportMode: $0.transportMode) }
+            ?? Reservation.guessedKind(title: item.title, location: item.location)
+        // 行程にある予定なので、保存したらその予定とつなぐ（`TravelPlan.link`）
+        if item.reservationId == nil {
+            pickedScheduleItemID = item.id
+            addsToItinerary = true
+        }
 
         // 予定の時刻はその日のものとして扱う。
         // 日付だけを日程側に合わせ、時刻は予定のものを使う。
@@ -536,6 +547,32 @@ struct ReservationEditorView: View {
         if let link = item.linkURL, !link.isEmpty,
            (reservation.linkURL ?? "").isEmpty {
             reservation.linkURL = link
+        }
+
+        // 移動の予定（3.4）：到着地・到着の時刻・便・のりば・座席も持ってくる
+        if let move = item.move, reservation.kind.usesRoute {
+            reservation.transportNumber = move.line
+            reservation.terminal = move.platform
+            reservation.seat = move.seat
+            reservation.departurePlace = move.from?.name
+            reservation.departureLocation = move.from.map {
+                ReservationLocation(name: $0.name, address: $0.address, latitude: $0.latitude, longitude: $0.longitude)
+            }
+            reservation.arrivalPlace = move.to?.name
+            reservation.arrivalLocation = move.to.map {
+                ReservationLocation(name: $0.name, address: $0.address, latitude: $0.latitude, longitude: $0.longitude)
+            }
+            if let endTime = item.endTime {
+                // 出発を選んだ日に合わせたので、到着も同じだけずらす（かかる時間を保つ）
+                arrivalDate = date.addingTimeInterval(endTime.timeIntervalSince(item.time))
+                arrivalZone = item.endTimeZone
+                hasArrivalDate = true
+            }
+            // 発着地はメモに回さない（上で入れた）
+            if let place = move.from?.name, let note = reservation.note {
+                reservation.note = note.components(separatedBy: "\n").filter { $0 != place }.joined(separator: "\n")
+                if reservation.note?.isEmpty == true { reservation.note = nil }
+            }
         }
     }
 
@@ -686,25 +723,25 @@ struct ReservationEditorView: View {
     /// 飛行機・新幹線の入力。空港や駅で見たいものを並べる
     private var routeSection: some View {
         VStack(spacing: 16) {
-            field(label: isFlight ? "便名" : "列車名",
+            field(label: reservation.kind.numberLabel,
                   text: binding(\.transportNumber),
-                  placeholder: isFlight ? "例：ANA123" : "例：のぞみ21号")
+                  placeholder: reservation.kind.numberPlaceholder)
 
             HStack(spacing: 12) {
                 routePlaceField(label: "出発", text: \.departurePlace, location: \.departureLocation,
-                                target: .departure, placeholder: isFlight ? "例：羽田空港" : "例：東京駅")
+                                target: .departure, placeholder: reservation.kind.departurePlaceholder)
                 routePlaceField(label: "到着", text: \.arrivalPlace, location: \.arrivalLocation,
-                                target: .arrival, placeholder: isFlight ? "例：那覇空港" : "例：新大阪駅")
+                                target: .arrival, placeholder: reservation.kind.arrivalPlaceholder)
             }
 
             timeCard
 
             HStack(spacing: 12) {
                 field(label: "座席", text: binding(\.seat),
-                      placeholder: isFlight ? "例：12A" : "例：7号車 3D")
-                if isFlight {
-                    field(label: "ターミナル", text: binding(\.terminal), placeholder: "例：第2")
-                }
+                      placeholder: reservation.kind.seatPlaceholder)
+                // 飛行機はターミナル、電車・バス・船はのりば・番線（3.4。行程の移動の「のりば・番線」と同じもの）
+                field(label: reservation.kind.terminalLabel, text: binding(\.terminal),
+                      placeholder: reservation.kind.terminalPlaceholder)
             }
         }
     }
@@ -1058,7 +1095,7 @@ struct ReservationEditorView: View {
             edited.arrivalDate = nil
             edited.seat = nil
         }
-        if edited.kind != .flight { edited.terminal = nil }
+        if !edited.kind.usesRoute { edited.terminal = nil }
         // 場所は、宿などなら1つ、飛行機・新幹線なら出発と到着。使わないほうは消す
         if edited.kind.usesRoute {
             edited.location = nil
@@ -1090,6 +1127,10 @@ struct ReservationEditorView: View {
         // 外貨のレートは旅行ごとに1つ。この予約で入れたレートに、同じ通貨の費用をすべて揃える
         if let foreign = edited.foreignCost, let rate = foreign.rate {
             plan.setExchangeRate(rate, for: foreign.currencyCode)
+        }
+        // 「予定から持ってくる」で選んだ予定は、新しく作らずにこの予約につなぐ（3.4）
+        if addsToItinerary, let pickedScheduleItemID {
+            plan.link(scheduleItemID: pickedScheduleItemID, to: edited)
         }
         // 行程との連動。オンなら行程の予定を予約に合わせる（日程タブで入れた場所やメモは残す）、
         // オフなら消す

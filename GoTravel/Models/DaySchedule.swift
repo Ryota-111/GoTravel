@@ -75,7 +75,7 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
     /// 円で入れた予定は nil（`ForeignCost.swift`）
     var foreignCost: ForeignCost?
 
-    /// 予約から作った予定のうち、どの部分か（"main" / "departure" / "arrival"）。
+    /// 予約から作った予定のうち、どの部分か（"main" / "move" / "end"。3.3 までの乗り物は "departure" / "arrival"）。
     /// 飛行機は出発と到着の2件になるので、予約を直したときにどちらへ反映するかを決めるのに使う。
     /// 2.9 より前に作った予定には無い（時刻の順で当てる。`ReservationItinerarySync.swift`）
     var reservationPart: String?
@@ -120,10 +120,21 @@ struct ScheduleItem: Identifiable, Codable, Equatable {
     /// JSON の中の項目なので、CloudKit のスキーマ変更は要らない
     var transportToNext: String?
 
+    /// 「移動」の予定の中身（乗り物・出発地・到着地・便や系統）。普通の予定は nil（3.4、`ScheduleMove.swift`）。
+    /// JSON の中の項目なので、CloudKit のスキーマ変更は要らない。古い版は読み飛ばす（名前と出発地は残る）
+    var move: ScheduleMove?
+
+    /// 時間が決まっていない予定か（3.4、`ScheduleUndecidedTime.swift`）。**true のときだけ未定。**
+    ///
+    /// 未定でも `time` は持ち続け、「並ぶ位置」として使う（すぐ前の予定と同じ分の1〜59秒目）。
+    /// 古い版では、前の予定と同じ時刻の予定としてすぐ後ろに出る
+    var isTimeUndecided: Bool?
+
     enum CodingKeys: String, CodingKey {
         case id, time, title, location, notes, latitude, longitude, cost, actualCost, mapURL, linkURL, reservationId, timeZoneIdentifier, isPinned, participantIds, foreignCost, reservationPart, costNote, endTime, endTimeZoneIdentifier, address, dayShift
         case paidBy, splitWith, splitAmounts
         case transportToNext
+        case move, isTimeUndecided
     }
 
     /// 書き出しや共有カードに出す金額。

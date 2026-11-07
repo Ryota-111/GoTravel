@@ -192,9 +192,28 @@ struct TravelPlanMapView: View {
                         coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
                     )
                 )
+                // 移動の1件（3.4）は、到着地にもピンを立てる（出発地 → 到着地を線でつなぐ）
+                if let arrival = Self.arrivalStop(of: item) {
+                    order += 1
+                    result.append(
+                        MappedScheduleItem(id: "\(item.id)#arrival", item: arrival.item, dayNumber: day.dayNumber,
+                                           order: order, coordinate: arrival.coordinate)
+                    )
+                }
             }
         }
         return result
+    }
+
+    /// 移動の予定の到着地。場所を到着地にした写しを返す（ピンの名前・一覧の場所が到着地になる）
+    private static func arrivalStop(of item: ScheduleItem) -> (item: ScheduleItem, coordinate: CLLocationCoordinate2D)? {
+        guard item.isSingleMove, let to = item.move?.to, let latitude = to.latitude, let longitude = to.longitude else { return nil }
+        var arrival = item
+        arrival.location = to.name
+        arrival.address = to.address
+        arrival.latitude = latitude
+        arrival.longitude = longitude
+        return (arrival, CLLocationCoordinate2D(latitude: latitude, longitude: longitude))
     }
 
     /// 同一座標の項目をまとめる。表示順は各グループの先頭項目の順序に従う

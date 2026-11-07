@@ -9,6 +9,11 @@ struct Reservation: Identifiable, Codable, Equatable {
     enum Kind: String, Codable, CaseIterable, Identifiable {
         case flight
         case train
+        /// バス（3.4。高速バス・空港バスなど）。**保存では「電車」として書き、`kindDetail` に "bus" と添える。**
+        /// 古い版は知らない種類を「その他」として読み、出発地・到着地が出なくなる。「電車」なら発着地まで出る
+        case bus
+        /// 船・フェリー（3.4）。保存はバスと同じく「電車」＋ "ferry"
+        case ferry
         case hotel
         case rentalCar
         /// 駐車場（2.9）。**保存では「その他」として書き、`kindDetail` に "parking" と添える。**
@@ -31,6 +36,8 @@ struct Reservation: Identifiable, Codable, Equatable {
             switch self {
             case .flight: return "飛行機"
             case .train: return "新幹線・電車"
+            case .bus: return "バス"
+            case .ferry: return "船・フェリー"
             case .hotel: return "宿泊"
             case .rentalCar: return "レンタカー"
             case .parking: return "駐車場"
@@ -44,6 +51,8 @@ struct Reservation: Identifiable, Codable, Equatable {
             switch self {
             case .flight: return "airplane"
             case .train: return "tram.fill"
+            case .bus: return "bus.fill"
+            case .ferry: return "ferry.fill"
             case .hotel: return "bed.double.fill"
             case .rentalCar: return "car.fill"
             case .parking: return "parkingsign.circle.fill"
@@ -57,6 +66,8 @@ struct Reservation: Identifiable, Codable, Equatable {
             switch self {
             case .flight: return "例：ANA123便 羽田→那覇"
             case .train: return "例：のぞみ21号 東京→新大阪"
+            case .bus: return "例：〇〇高速バス 梅田→新宿"
+            case .ferry: return "例：〇〇フェリー 神戸→大分"
             case .hotel: return "例：〇〇ホテル"
             case .rentalCar: return "例：〇〇レンタカー 那覇空港店"
             case .parking: return "例：〇〇駐車場"
@@ -74,6 +85,8 @@ struct Reservation: Identifiable, Codable, Equatable {
         func has(_ words: [String]) -> Bool { words.contains { text.contains($0) } }
 
         if has(["空港", "飛行機", "フライト", "搭乗", "便", "ana", "jal", "peach", "スカイマーク"]) { return .flight }
+        if has(["高速バス", "夜行バス", "空港バス", "リムジンバス", "バス"]) { return .bus }
+        if has(["フェリー", "高速船", "汽船"]) { return .ferry }
         if has(["新幹線", "電車", "列車", "のぞみ", "ひかり", "こだま", "はやぶさ", "特急", "駅"]) { return .train }
         if has(["ホテル", "宿", "旅館", "チェックイン", "泊", "ゲストハウス", "リゾート", "イン"]) { return .hotel }
         if has(["駐車場", "パーキング", "駐車"]) { return .parking }
@@ -85,12 +98,28 @@ struct Reservation: Identifiable, Codable, Equatable {
 
     var id: String
 
-    /// 種類。駐車場だけは保存の形が違う（下の `storedKind` と `kindDetail`）
+    /// 種類。駐車場・バス・船は保存の形が違う（下の `storedKind` と `kindDetail`）
     var kind: Kind {
-        get { kindDetail == Self.parkingDetail ? .parking : storedKind }
-        set {
-            storedKind = newValue == .parking ? .other : newValue
-            kindDetail = newValue == .parking ? Self.parkingDetail : nil
+        get { Self.kind(stored: storedKind, detail: kindDetail) }
+        set { (storedKind, kindDetail) = Self.storage(of: newValue) }
+    }
+
+    /// 古い版が読める形で書く。駐車場は「その他」、バス・船は「電車」に印を添える
+    private static func storage(of kind: Kind) -> (Kind, String?) {
+        switch kind {
+        case .parking: return (.other, parkingDetail)
+        case .bus: return (.train, busDetail)
+        case .ferry: return (.train, ferryDetail)
+        default: return (kind, nil)
+        }
+    }
+
+    private static func kind(stored: Kind, detail: String?) -> Kind {
+        switch detail {
+        case parkingDetail: return .parking
+        case busDetail: return .bus
+        case ferryDetail: return .ferry
+        default: return stored
         }
     }
 
@@ -99,6 +128,8 @@ struct Reservation: Identifiable, Codable, Equatable {
     /// 種類の詳しい印。駐車場なら "parking"。古いバージョンは読み飛ばす
     private var kindDetail: String?
     private static let parkingDetail = "parking"
+    private static let busDetail = "bus"
+    private static let ferryDetail = "ferry"
 
     var title: String
     /// 搭乗・チェックインなどの日時。決まっていない予約もあるので任意。
@@ -129,7 +160,7 @@ struct Reservation: Identifiable, Codable, Equatable {
     var arrivalDate: Date?
     /// 座席（例: 12A / 7号車 3D）
     var seat: String?
-    /// ターミナル（例: 第2ターミナル）。飛行機のみ
+    /// ターミナル（例: 第2ターミナル）。電車・バス・船では、のりば・番線（例: 14番線。3.4〜）
     var terminal: String?
 
     // MARK: - 時刻をどこの時計で読むか
@@ -224,8 +255,7 @@ struct Reservation: Identifiable, Codable, Equatable {
          cost: Double? = nil,
          foreignCost: ForeignCost? = nil) {
         self.id = id
-        self.storedKind = kind == .parking ? .other : kind
-        self.kindDetail = kind == .parking ? Self.parkingDetail : nil
+        (self.storedKind, self.kindDetail) = Self.storage(of: kind)
         self.title = title
         self.date = date
         self.confirmationNumber = confirmationNumber
@@ -249,7 +279,80 @@ struct Reservation: Identifiable, Codable, Equatable {
 extension Reservation.Kind {
     /// 出発地・到着地・座席を入力させる種類かどうか
     var usesRoute: Bool {
-        self == .flight || self == .train
+        self == .flight || self == .train || self == .bus || self == .ferry
+    }
+
+    /// 行程の「移動」の乗り物（3.4）。経路の無い種類は電車にしておく（使わない）
+    var transportMode: TransportMode {
+        switch self {
+        case .flight: return .plane
+        case .bus: return .bus
+        case .ferry: return .ship
+        default: return .train
+        }
+    }
+
+    /// 行程の「移動」の乗り物から、予約の種類を決める。予約の無い乗り物（車・タクシー・徒歩）は nil
+    init?(transportMode: TransportMode) {
+        switch transportMode {
+        case .plane: self = .flight
+        case .train: self = .train
+        case .bus: self = .bus
+        case .ship: self = .ferry
+        case .car, .taxi, .walk: return nil
+        }
+    }
+
+    /// 乗り場の欄の呼び方と例。飛行機はターミナル、ほかはのりば・番線（`terminal` に入れる）
+    var terminalLabel: String { self == .flight ? "ターミナル" : "のりば・番線" }
+    var terminalPlaceholder: String {
+        switch self {
+        case .flight: return "例：第2"
+        case .bus: return "例：D2のりば"
+        case .ferry: return "例：第3乗り場"
+        default: return "例：14番線"
+        }
+    }
+
+    /// 便名の欄の呼び方と例（経路のある種類）
+    var numberLabel: String {
+        switch self {
+        case .flight: return "便名"
+        case .train: return "列車名"
+        default: return "便・系統"
+        }
+    }
+    var numberPlaceholder: String {
+        switch self {
+        case .flight: return "例：ANA123"
+        case .bus: return "例：〇〇高速バス 3便"
+        case .ferry: return "例：さんふらわあ"
+        default: return "例：のぞみ21号"
+        }
+    }
+    var departurePlaceholder: String {
+        switch self {
+        case .flight: return "例：羽田空港"
+        case .bus: return "例：大阪梅田（阪急三番街）"
+        case .ferry: return "例：神戸港"
+        default: return "例：東京駅"
+        }
+    }
+    var arrivalPlaceholder: String {
+        switch self {
+        case .flight: return "例：那覇空港"
+        case .bus: return "例：バスタ新宿"
+        case .ferry: return "例：大分港"
+        default: return "例：新大阪駅"
+        }
+    }
+    var seatPlaceholder: String {
+        switch self {
+        case .flight: return "例：12A"
+        case .bus: return "例：5A"
+        case .ferry: return "例：2等洋室 205"
+        default: return "例：7号車 3D"
+        }
     }
 
     /// 始まりと終わりの日時を持てる種類（経路のあるもの以外）
@@ -294,9 +397,10 @@ extension Reservation {
     /// 予約から先に登録した人が、同じ内容を行程にもう一度打ち直さずに済むようにする。
     /// 逆向き（行程 → 予約）は `ScheduleItemPickerView` が既に担っている。
     ///
-    /// **飛行機と新幹線で到着時刻もあるときは、出発と到着の2件に分ける。**
-    /// 1件にすると、行程の上では「羽田10:00」としか出ず、
-    /// 何時に着くのかが分からなくなる。
+    /// **飛行機・電車・バス・船で到着時刻もあるときは、出発と到着の2件に分ける。**
+    /// それぞれの時刻・場所（地図のピン）で並ぶので、何時にどこへ着くかが日程で分かる。
+    /// 出発の予定には乗り物・便・のりば・座席（`ScheduleItem.move`）を持たせ、
+    /// 行程に「✈︎ NH991 · 座席 12A」と出す（3.4）。到着は時刻と場所だけ
     ///
     /// **宿やレンタカーで終わりの日時もあるときは、始まりと終わりの2件に分ける。**
     /// 2泊以上の宿で、チェックアウトの日の行程に何も出ないと、その日の動きが組めない
@@ -309,7 +413,7 @@ extension Reservation {
         itineraryItemsWithoutAddress().map { item in
             var item = item
             switch item.reservationPart.flatMap(ReservationPart.init(rawValue:)) {
-            case .departure: item.address = departureLocation?.address
+            case .departure, .move: item.address = departureLocation?.address
             case .arrival: item.address = arrivalLocation?.address
             default: item.address = location?.address
             }
@@ -348,17 +452,37 @@ extension Reservation {
             return items
         }
 
-        // 経路のある予約は、便名を見出しにしたほうが行程で読みやすい。
-        // タイトルは「ANA123 羽田空港 → 那覇空港」のように長い
-        let label = transportNumber?.trimmingCharacters(in: .whitespacesAndNewlines)
-        let name = (label?.isEmpty == false ? label! : title)
+        return routeItems()
+    }
 
+    /// 乗り物の予約の、行程での「移動」の中身
+    var scheduleMove: ScheduleMove {
+        ScheduleMove(mode: kind.transportMode, line: transportNumber, platform: terminal, seat: seat,
+                     from: departurePlace.map { MovePlace(name: $0, address: departureLocation?.address,
+                                                         latitude: departureLocation?.latitude,
+                                                         longitude: departureLocation?.longitude) },
+                     to: arrivalPlace.map { MovePlace(name: $0, address: arrivalLocation?.address,
+                                                     latitude: arrivalLocation?.latitude,
+                                                     longitude: arrivalLocation?.longitude) })
+    }
+
+    /// 行程の見出し（便名、無ければ予約の名前）
+    private var legacyName: String {
+        let label = transportNumber?.trimmingCharacters(in: .whitespacesAndNewlines)
+        return label?.isEmpty == false ? label! : title
+    }
+
+    /// 乗り物の予約の「出発」「到着」の2件。出発にだけ乗り物・便・のりば・座席を持たせる（3.4）
+    private func routeItems() -> [ScheduleItem] {
+        guard kind.usesRoute, let date else { return [] }
+        let name = legacyName
+        let move = scheduleMove
         var items = [
             // 費用は1件目（出発）にだけ入れる。到着にも入れると予算で2重に数える
             ScheduleItem(time: date,
                          title: "\(name) 出発",
                          location: departurePlace,
-                         notes: note,
+                         notes: itineraryNotes,
                          latitude: departureLocation?.latitude,
                          longitude: departureLocation?.longitude,
                          cost: cost,
@@ -381,6 +505,8 @@ extension Reservation {
                              reservationPart: ReservationPart.arrival.rawValue)
             )
         }
+        // 便・座席は乗る前に要るもの。到着は時刻と場所だけにする（2つに同じ行が並ぶと読みにくい）
+        items[0].move = move
         return items
     }
 }

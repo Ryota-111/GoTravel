@@ -345,3 +345,198 @@ extension ReservationItinerarySyncTests {
         #expect(trip.reservations[0].date == date(6, 15))
     }
 }
+
+// MARK: - 乗り物の予約と行程の「移動」（3.4）
+
+extension ReservationItinerarySyncTests {
+
+    private func nh991() -> Reservation {
+        var flight = Reservation(kind: .flight, date: date(6, 10), confirmationNumber: "QX7Y2Z", transportNumber: "NH991",
+                                 departurePlace: "羽田空港", arrivalPlace: "那覇空港", arrivalDate: date(6, 13),
+                                 seat: "12A", terminal: "第2",
+                                 timeZoneIdentifier: tokyo.identifier, arrivalTimeZoneIdentifier: tokyo.identifier)
+        flight.departureLocation = ReservationLocation(name: "羽田空港", latitude: 35.55, longitude: 139.79)
+        flight.arrivalLocation = ReservationLocation(name: "那覇空港", latitude: 26.20, longitude: 127.65)
+        return flight
+    }
+
+    @Test("飛行機の予約は今までどおり出発と到着の2件。出発にだけ便・座席・のりばを添え、到着は時刻と場所だけ")
+    func flightLegsCarryTransport() {
+        var trip = plan()
+        let flight = nh991()
+        trip.reservations = [flight]
+        trip.syncScheduleItems(for: flight, isOn: true)
+
+        let items = trip.scheduleItems(forReservation: flight.id)
+        #expect(items.map(\.title) == ["NH991 出発", "NH991 到着"])
+        #expect(items.map(\.location) == ["羽田空港", "那覇空港"])
+        #expect(items.map(\.latitude) == [35.55, 26.20])          // ピンは出発地と到着地の両方
+        #expect(items[0].isRouteLeg && !items[0].isSingleMove)
+        #expect(items.allSatisfy { $0.endTime == nil })
+        #expect(items[0].move?.transportMode == .plane)
+        #expect(items[0].move?.detailText == "NH991 · 第2 · 座席 12A")
+        #expect(items[1].move == nil)
+    }
+
+    @Test("予約で便や座席を直すと、出発の添え書きが変わる。到着には付かない")
+    func legsFollowReservation() {
+        var trip = plan()
+        let flight = nh991()
+        trip.reservations = [flight]
+        trip.syncScheduleItems(for: flight, isOn: true)
+        var edited = flight
+        edited.seat = "14K"
+        edited.kind = .bus
+        trip.reservations = [edited]
+        trip.syncScheduleItems(for: edited, previous: flight, isOn: true)
+
+        let items = trip.scheduleItems(forReservation: flight.id)
+        #expect(items.count == 2)
+        #expect(items[0].move?.seat == "14K")
+        #expect(items[0].move?.transportMode == .bus)
+        #expect(items[1].move == nil)
+    }
+
+    @Test("3.3 までの添え書きの無い出発も、予約を直すと便・座席が付く。行程で入れたものは残る")
+    func legacyLegsGainTransport() {
+        var trip = plan()
+        let flight = nh991()
+        trip.reservations = [flight]
+        trip.syncScheduleItems(for: flight, isOn: true)
+        for item in trip.scheduleItems(forReservation: flight.id) {
+            editItem(in: &trip, id: item.id) { $0.move = nil }
+        }
+        let departure = trip.scheduleItems(forReservation: flight.id)[0]
+        editItem(in: &trip, id: departure.id) { $0.participantIds = ["u1"] }
+
+        trip.syncScheduleItems(for: flight, previous: flight, isOn: true)
+        let items = trip.scheduleItems(forReservation: flight.id)
+        #expect(items[0].move?.line == "NH991")
+        #expect(items[1].move == nil)
+        #expect(items[0].participantIds == ["u1"])
+    }
+
+    // MARK: 行程の移動 → 予約
+
+    private func busMove() -> ScheduleItem {
+        var item = ScheduleItem(id: "m", time: date(6, 9), title: "", notes: "前の方の席がいい", cost: 230,
+                                timeZoneIdentifier: tokyo.identifier, endTime: date(6, 9, 40))
+        item.apply(move: ScheduleMove(mode: .bus, line: "市バス 206系統", platform: "D2のりば",
+                                      from: MovePlace(name: "京都駅", latitude: 34.98, longitude: 135.75),
+                                      to: MovePlace(name: "清水道", latitude: 34.99, longitude: 135.77)), title: "")
+        return item
+    }
+
+    @Test("移動に予約番号を入れると予約として残り、その予定が出発になって到着が足される（同じものを2つ作らない）")
+    func moveBecomesReservation() throws {
+        var trip = plan()
+        trip.daySchedules[0].scheduleItems = [busMove()]
+
+        let made = trip.makeReservation(fromMoveItemID: "m", confirmationNumber: " B-778 ")
+        let id = try #require(made)
+        let reservation = try #require(trip.reservations.first { $0.id == id })
+        #expect(reservation.kind == .bus)
+        #expect(reservation.confirmationNumber == "B-778")
+        #expect(reservation.transportNumber == "市バス 206系統")
+        #expect(reservation.terminal == "D2のりば")
+        #expect(reservation.departurePlace == "京都駅")
+        #expect(reservation.arrivalPlace == "清水道")
+        #expect(reservation.arrivalDate == date(6, 9, 40))
+        #expect(reservation.cost == 230)
+        #expect(reservation.note == "前の方の席がいい")
+
+        let items = trip.scheduleItems(forReservation: id)
+        #expect(items.count == 2)
+        #expect(items[0].id == "m")
+        #expect(items.map(\.title) == ["市バス 206系統 出発", "市バス 206系統 到着"])
+        #expect(items.map(\.location) == ["京都駅", "清水道"])
+        #expect(items[0].endTime == nil)
+        #expect(items[0].notes == "予約番号 B-778\n前の方の席がいい")
+        #expect(items.map(\.cost) == [230, nil])
+        #expect(trip.daySchedules.flatMap(\.scheduleItems).count == 2)
+    }
+
+    @Test("自分で名前を付けた移動は、予約にしても出発の名前が残る")
+    func moveCustomTitleKept() {
+        var trip = plan()
+        var item = busMove()
+        item.title = "清水寺へ"
+        trip.daySchedules[0].scheduleItems = [item]
+        let id = trip.makeReservation(fromMoveItemID: "m", confirmationNumber: "Z9")!
+        #expect(trip.scheduleItems(forReservation: id).first?.title == "清水寺へ")
+    }
+
+    @Test("車・タクシー・徒歩、時間未定、すでにつながった移動は予約にしない")
+    func moveWithoutReservation() {
+        var trip = plan()
+        var car = busMove()
+        car.move?.mode = TransportMode.car.rawValue
+        var undecided = busMove()
+        undecided.id = "u"
+        undecided.isTimeUndecided = true
+        trip.daySchedules[0].scheduleItems = [car, undecided]
+        #expect(trip.makeReservation(fromMoveItemID: "m", confirmationNumber: "X") == nil)
+        #expect(trip.makeReservation(fromMoveItemID: "u", confirmationNumber: "X") == nil)
+        #expect(trip.reservations.isEmpty)
+    }
+
+    @Test("つないだ予約の予約番号を行程から直すと、予約とメモの行がそろう")
+    func editConfirmationFromItinerary() throws {
+        var trip = plan()
+        trip.daySchedules[0].scheduleItems = [busMove()]
+        let made = trip.makeReservation(fromMoveItemID: "m", confirmationNumber: "B-778")
+        let id = try #require(made)
+        trip.setConfirmationNumber("B-779", forReservation: id)
+        #expect(trip.reservations[0].confirmationNumber == "B-779")
+        #expect(trip.scheduleItems(forReservation: id).first?.notes == "予約番号 B-779\n前の方の席がいい")
+    }
+
+    @Test("予約の画面で行程の宿の予定を選んで保存すると、その予定をつなぐ（新しく作らない）")
+    func linkPickedItem() {
+        var trip = plan()
+        let picked = ScheduleItem(id: "h", time: date(6, 15), title: "ホテル海風", notes: "朝食付き",
+                                  timeZoneIdentifier: tokyo.identifier)
+        trip.daySchedules[0].scheduleItems = [picked]
+        let hotel = Reservation(kind: .hotel, title: "ホテル海風", date: date(6, 15), confirmationNumber: "H1",
+                                note: "朝食付き", timeZoneIdentifier: tokyo.identifier)
+        trip.reservations = [hotel]
+
+        trip.link(scheduleItemID: "h", to: hotel)
+        trip.syncScheduleItems(for: hotel, isOn: true)
+
+        let items = trip.daySchedules.flatMap(\.scheduleItems)
+        #expect(items.count == 1)
+        #expect(items[0].id == "h")
+        #expect(items[0].reservationId == hotel.id)
+        #expect(items[0].notes == "予約番号 H1\n朝食付き")
+    }
+
+    @Test("到着に添え書きの付いた予定（開発中の版で作ったもの）は、直すと外れる")
+    func arrivalLosesTransport() {
+        var trip = plan()
+        let flight = nh991()
+        trip.reservations = [flight]
+        trip.syncScheduleItems(for: flight, isOn: true)
+        let arrival = trip.scheduleItems(forReservation: flight.id)[1]
+        editItem(in: &trip, id: arrival.id) { $0.move = flight.scheduleMove }
+        trip.syncScheduleItems(for: flight, previous: flight, isOn: true)
+        #expect(trip.scheduleItems(forReservation: flight.id)[1].move == nil)
+    }
+
+    @Test("移動の1件の予定（予約の移動の印）は、出発の予定として引き継ぐ")
+    func singleMovePartBecomesDeparture() {
+        var trip = plan()
+        let flight = nh991()
+        var item = busMove()
+        item.reservationId = flight.id
+        item.reservationPart = ReservationPart.move.rawValue
+        trip.daySchedules[0].scheduleItems = [item]
+        trip.reservations = [flight]
+
+        trip.syncScheduleItems(for: flight, isOn: true)
+        let items = trip.scheduleItems(forReservation: flight.id)
+        #expect(items.map(\.reservationPart) == ["departure", "arrival"])
+        #expect(items[0].id == "m")
+        #expect(items[0].endTime == nil)
+    }
+}

@@ -654,6 +654,55 @@ struct TravelPlanDetailView: View {
         .buttonStyle(PlainButtonStyle())
     }
 
+    /// 移動の予定の中身（3.4）。1行目に乗り物と便・のりば・座席、2行目に発着地と「案内」。
+    /// 名前が自動の「梅田 → 京都」なら、発着地は名前と同じなので出さない（案内だけ残す）
+    @ViewBuilder
+    private func moveSummary(_ move: ScheduleMove, item: ScheduleItem) -> some View {
+        HStack(spacing: 5) {
+            Image(systemName: move.transportMode.systemImage)
+                .font(.system(size: 11, weight: .semibold))
+            Text(move.detailText ?? move.transportMode.title)
+                .font(.system(size: 12, weight: .semibold))
+                .lineLimit(2)
+        }
+        .foregroundColor(scheduleAccentColor)
+        .accessibilityElement(children: .combine)
+
+        // 予約の出発・到着の予定は、場所の行（その予定の1か所と「案内」）を今までどおり出す
+        let route = item.hasDefaultMoveTitle || item.isRouteLeg ? nil : move.routeText
+        if !item.isRouteLeg, route != nil || move.navigationPlace != nil {
+            HStack(spacing: 4) {
+                if let route {
+                    Text(route)
+                        .font(.system(size: 12))
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .lineLimit(1)
+                }
+                Spacer()
+                if let place = move.navigationPlace, let lat = place.latitude, let lng = place.longitude {
+                    Button(action: {
+                        navigationTarget = MapDestination(name: place.name,
+                                                          coordinate: CLLocationCoordinate2D(latitude: lat, longitude: lng))
+                    }) {
+                        HStack(spacing: 3) {
+                            Image(systemName: "arrow.triangle.turn.up.right.diamond.fill")
+                                .font(.system(size: 10))
+                            Text("案内")
+                                .font(.system(size: 11, weight: .semibold))
+                        }
+                        .foregroundColor(themeManager.currentTheme.info)
+                        .padding(.horizontal, 8)
+                        .padding(.vertical, 4)
+                        .background(themeManager.currentTheme.info.opacity(0.12))
+                        .clipShape(Capsule())
+                    }
+                    .buttonStyle(.borderless)
+                    .accessibilityLabel("\(place.name)へ案内")
+                }
+            }
+        }
+    }
+
     /// 予定の場所の、iOS の場所カードを開く。名前で施設を探し、見つからなければ座標だけのカードにする
     private func openPlaceCard(for item: ScheduleItem) {
         guard let latitude = item.latitude, let longitude = item.longitude,
@@ -697,8 +746,10 @@ struct TravelPlanDetailView: View {
         // 項目の時刻は日付を持たないため、時刻だけで比べる。
         // **予定ごとの時計で比べる。** パリの予定をパリの今と比べないと、
         // 日本時間の今と比べて「次の1件」が8時間ずれる
+        // 時間未定の予定（3.4）は「次の予定」にしない
         return items.firstIndex {
-            $0.minutesOfDay + ($0.dayShift ?? 0) * 24 * 60 >= ScheduleClock.minutesOfDay(now, in: $0.timeZone)
+            !$0.hasUndecidedTime
+                && $0.minutesOfDay + ($0.dayShift ?? 0) * 24 * 60 >= ScheduleClock.minutesOfDay(now, in: $0.timeZone)
         }
     }
 
@@ -815,6 +866,11 @@ struct TravelPlanDetailView: View {
                     .font(.system(size: 16, weight: state == .now ? .bold : .semibold))
                     .foregroundColor(state == .past ? themeManager.currentTheme.secondaryText : accentColor)
 
+                // 移動（3.4）：乗り物と便・のりば・座席。名前を自分で付けたときは発着地も
+                if let move = item.move {
+                    moveSummary(move, item: item)
+                }
+
                 // 全員の時間軸を見ているときだけ、全員のものでない予定に参加する人を添える
                 if memberFilter == nil, let label = participantLabel(item, plan: plan) {
                     Label(label, systemImage: "person.fill")
@@ -823,7 +879,7 @@ struct TravelPlanDetailView: View {
                         .lineLimit(1)
                 }
 
-                if let location = item.location, !location.isEmpty {
+                if !item.isSingleMove, let location = item.location, !location.isEmpty {
                     HStack(spacing: 4) {
                         if item.latitude != nil && item.longitude != nil {
                             // 場所の名前を押すと場所カード（写真・営業時間など。3.3）。
@@ -1230,7 +1286,8 @@ struct TravelPlanDetailView: View {
     /// 予定と予定の間の行。棒の上に移動手段を出す（3.2）
     /// 終わりの時刻があるときだけ、終わり〜次の始まりを移動の時間とする
     private func transportDuration(from item: ScheduleItem, to next: ScheduleItem?) -> TimeInterval? {
-        guard let next, let endTime = item.endTime else { return nil }
+        // 時間未定の予定（3.4）が絡む区間は、時刻が並ぶ位置でしかないので出さない
+        guard let next, let endTime = item.endTime, !next.hasUndecidedTime else { return nil }
         return next.time.timeIntervalSince(endTime)
     }
 

@@ -147,9 +147,11 @@ extension ScheduleItem {
         ScheduleClock.timeZone(identifier: timeZoneIdentifier)
     }
 
-    /// 画面に出す時刻（入れたとおりの時:分）。日付をまたいだ夜の予定は「24:30」「25:00」
+    /// 画面に出す時刻（入れたとおりの時:分）。日付をまたいだ夜の予定は「24:30」「25:00」。
+    /// 時間未定の予定は「未定」（3.4。`time` は並ぶ位置にしか使っていない）
     var timeText: String {
-        isLateNight ? ScheduleClock.lateNightText(time, in: timeZone) : ScheduleClock.timeText(time, in: timeZone)
+        if hasUndecidedTime { return ScheduleUndecided.label }
+        return isLateNight ? ScheduleClock.lateNightText(time, in: timeZone) : ScheduleClock.timeText(time, in: timeZone)
     }
 
     /// 24時以降として出す予定か（3.2）。翌日（`dayShift` が 1）の 0:00〜5:59。
@@ -196,7 +198,7 @@ extension ScheduleItem {
     /// 翌日の朝 6:00 からは「翌 08:00」と出す（3.3）。時刻だけだと、夜行便の「22:00〜08:00」が
     /// 翌日に着くのか分からず、「日付も入れたい」とご要望をいただいた
     var endTimeText: String? {
-        guard let endTime else { return nil }
+        guard let endTime, !hasUndecidedTime else { return nil }
         let offset = endDayOffset
         if !crossesTimeZones, offset == 1,
            ScheduleClock.calendar(in: endTimeZone).component(.hour, from: endTime) < 6 {
@@ -266,8 +268,12 @@ extension ScheduleItem {
     }
 
     /// 起きる順に並べるための比較
+    ///
+    /// 分まで同じなら、時刻のある予定を先にし、時間未定の予定どうしは位置の秒で並べる（3.4、`ScheduleUndecided`）
     static func chronologically(_ lhs: ScheduleItem, _ rhs: ScheduleItem) -> Bool {
-        lhs.chronologicalMinutes < rhs.chronologicalMinutes
+        let left = lhs.chronologicalMinutes, right = rhs.chronologicalMinutes
+        if left != right { return left < right }
+        return ScheduleUndecided.comesFirst(atSameMinute: lhs, rhs)
     }
 
     /// 見ている人の時計と違うときだけ添える印（"現地" / "日本"）。同じなら nil。

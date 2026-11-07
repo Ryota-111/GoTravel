@@ -83,7 +83,9 @@ enum WidgetSnapshotBuilder {
             let day = tripCalendar.dateComponents([.year, .month, .day], from: dayDate)
             let dayKey = DayKey.string(for: dayDate, in: ScheduleClock.homeTimeZone)
 
+            // 時間未定の予定（3.4）は出さない。ウィジェットとライブアクティビティは時刻で「今・次」を決めるため
             let items = daySchedule.scheduleItems
+                .filter { !$0.hasUndecidedTime }
                 .sorted(by: ScheduleItem.chronologically)
                 .prefix(maxItemsPerDay)
                 .map { item in
@@ -92,7 +94,8 @@ enum WidgetSnapshotBuilder {
                         date: dayDate,
                         time: occursAt(item, on: day),
                         title: item.title,
-                        subtitle: item.location,
+                        // 移動（3.4）は、乗る便・のりばのほうが当日に要る（「阪急バス 12系統 · 3番のりば」）
+                        subtitle: item.move?.detailText ?? item.location,
                         timeZoneIdentifier: item.timeZone.identifier,
                         dayKey: dayKey
                     )

@@ -122,7 +122,7 @@ enum ReservationAIReader {
         do {
             let session = LanguageModelSession(instructions: instructions)
             switch kind {
-            case .flight, .train:
+            case .flight, .train, .bus, .ferry:
                 let answer = try await session.respond(to: prompt, generating: Rides.self, options: options).content
                 return rides(answer, kind: kind, evidence: evidence)
             case .hotel, .rentalCar, .parking:
@@ -207,7 +207,7 @@ enum ReservationAIReader {
         for (index, suggestion) in ai.enumerated() {
             if index < result.count {
                 result[index] = filled(result[index], with: suggestion)
-            } else if [.flight, .train].contains(suggestion.kind),
+            } else if suggestion.kind.usesRoute,
                       let number = suggestion.transportNumber,
                       !result.contains(where: { $0.transportNumber == number }) {
                 result.append(suggestion)
