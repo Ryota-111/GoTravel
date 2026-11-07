@@ -988,13 +988,8 @@ struct TravelPlanDetailView: View {
             }
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
-            // 場所のある予定は、押すと場所カードを開く（3.3）。行の中のボタン（案内・リンク）はそちらが優先
-            .contentShape(Rectangle())
-            .onTapGesture {
-                if item.latitude != nil && item.longitude != nil { openPlaceCard(for: item) }
-            }
-            .accessibilityAddTraits(item.latitude != nil ? .isButton : [])
-            .accessibilityHint(item.latitude != nil ? "押すと、場所の写真や営業時間を見られます" : "")
+            // 場所カード（3.3）は、場所の名前とピンを押したときだけ開く（行のどこを押しても開くと、
+            // スクロールしようとして触れただけで開いてしまうため。3.4）
 
             // 編集・削除メニュー。選択中はチェックに替える
             if isSelectingItems {
