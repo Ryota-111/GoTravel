@@ -22,6 +22,12 @@ struct AddTravelPlanView: View {
     @State private var isUploading = false
     @State private var destinationCoordinate: (latitude: Double, longitude: Double)?
     @State private var destinationSearchTask: Task<Void, Never>?
+    /// 行き先の候補（3.4）。押して選べる
+    @StateObject private var destinationSuggestions = DestinationSuggestions()
+    /// 行き先として入った場所の名前（「パリ（フランス）」）。合っているか確かめられるように出す
+    @State private var destinationLabel: String?
+    /// 候補から選んだ行き先の名前。打ち直すまでは、自動の検索で上書きしない
+    @State private var pickedDestination: String?
 
     private let totalSteps = 4
     private var isLastStep: Bool { currentStep == totalSteps - 1 }
@@ -331,12 +337,21 @@ struct AddTravelPlanView: View {
             VStack(alignment: .leading, spacing: 16) {
                 stepHeading("行き先", question: "どこへ\n行きますか？", sub: "天気や地図に使います。")
                 bigField("行き先", text: $destination, placeholder: "北海道、沖縄、ソウル…", field: .destination) { value in
-                    searchLocationCoordinate(for: value)
+                    destinationChanged(value)
                 }
-                if destinationCoordinate != nil && !destination.isEmpty {
-                    Label("場所が見つかりました", systemImage: "checkmark.circle.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(filledTripColor)
+                // 候補（3.4）。国・地域つきで並べ、押して選べる
+                DestinationSuggestionList(
+                    results: destinationSuggestions.results,
+                    tint: filledTripColor,
+                    textColor: uiAccentColor,
+                    secondaryText: uiAccentColor.opacity(0.55),
+                    background: uiAccentColor.opacity(0.04),
+                    onPick: pickDestination
+                )
+                .padding(.horizontal, 20)
+                if destinationCoordinate != nil, !destination.isEmpty, let destinationLabel {
+                    DestinationFoundLabel(label: destinationLabel, isPicked: pickedDestination == destination,
+                                          tint: filledTripColor, secondaryText: uiAccentColor.opacity(0.55))
                         .padding(.horizontal, 20)
                 }
                 Spacer(minLength: 20)
@@ -527,6 +542,34 @@ struct AddTravelPlanView: View {
     }
 
     // MARK: - Location Search
+
+    /// 行き先の文字が変わったとき。候補を出し直し、自動でも1つ探しておく（選ばなかったときのため）
+    private func destinationChanged(_ value: String) {
+        // 候補から選んで入った名前なら、何もしない（選んだ場所を自動の検索で上書きしない）
+        if let pickedDestination, pickedDestination == value { return }
+        pickedDestination = nil
+        destinationSuggestions.update(value)
+        searchLocationCoordinate(for: value)
+    }
+
+    /// 候補を選んだ。その場所の座標と名前を行き先にする
+    private func pickDestination(_ completion: MKLocalSearchCompletion) {
+        destinationSuggestions.didPick(completion)
+        destinationSearchTask?.cancel()
+        // 先に覚えておく（保存を押されたら、この結果を待つ。`settleDestinationCoordinate`）
+        pickedDestination = completion.title
+        destinationSearchTask = Task { @MainActor in
+            guard let found = await DestinationGeocoder.match(for: completion), !Task.isCancelled else {
+                destinationSearchTask = nil
+                return
+            }
+            destination = completion.title
+            destinationCoordinate = (found.coordinate.latitude, found.coordinate.longitude)
+            destinationLabel = completion.subtitle.isEmpty ? completion.title : "\(completion.title)（\(completion.subtitle)）"
+            destinationSearchTask = nil
+        }
+    }
+
     private func searchLocationCoordinate(for query: String) {
         // 打っている途中の検索は捨てる。残すと古い結果が後から上書きする
         destinationSearchTask?.cancel()
@@ -537,9 +580,10 @@ struct AddTravelPlanView: View {
         }
 
         destinationSearchTask = Task { @MainActor in
-            let coordinate = await DestinationGeocoder.coordinate(for: query)
+            let found = await DestinationGeocoder.match(for: query)
             guard !Task.isCancelled else { return }
-            destinationCoordinate = coordinate.map { ($0.latitude, $0.longitude) }
+            destinationCoordinate = found.map { ($0.coordinate.latitude, $0.coordinate.longitude) }
+            destinationLabel = found?.label
             // 終わったことを保存側に伝える（検索中なら保存が待つ）
             destinationSearchTask = nil
         }
@@ -555,10 +599,18 @@ struct AddTravelPlanView: View {
         let query = destination.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !query.isEmpty, destinationCoordinate == nil || destinationSearchTask != nil else { return }
 
-        destinationSearchTask?.cancel()
-        destinationSearchTask = nil
-        let coordinate = await DestinationGeocoder.coordinate(for: query, debounce: 0)
-        destinationCoordinate = coordinate.map { ($0.latitude, $0.longitude) }
+        // 候補を選んでいる途中なら、その結果を待つ（自動の検索で上書きしない）
+        if pickedDestination == nil {
+            destinationSearchTask?.cancel()
+            destinationSearchTask = nil
+        }
+        if let running = destinationSearchTask {
+            await running.value
+            if destinationCoordinate != nil { return }
+        }
+        let found = await DestinationGeocoder.match(for: query, debounce: 0)
+        destinationCoordinate = found.map { ($0.coordinate.latitude, $0.coordinate.longitude) }
+        destinationLabel = found?.label
     }
 
 }
