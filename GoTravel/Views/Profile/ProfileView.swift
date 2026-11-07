@@ -51,6 +51,7 @@ struct ProfileView: View {
 
                         ProfileMenuGroup(title: "サポート") {
                             helpSupportCard
+                            websiteCard
                             tipJarCard
                         }
 
@@ -323,6 +324,14 @@ struct ProfileView: View {
         }
     }
 
+    /// 公式サイト（3.4）。使い方や機能の紹介を、アプリの外の Safari で開く
+    private var websiteCard: some View {
+        Link(destination: TravoryLinks.website) {
+            ProfileMenuRow(icon: "safari.fill", color: .blue, title: "公式サイト",
+                           value: "使い方・機能の紹介", opensOutside: true)
+        }
+    }
+
     private var tipJarCard: some View {
         NavigationLink(destination: TipJarView()) {
             ProfileMenuRow(icon: "heart.fill", color: .pink, title: "開発者を応援する")
@@ -488,6 +497,8 @@ struct ProfileMenuRow: View {
     let title: String
     var value: String? = nil
     var valueIsWarning = false
+    /// アプリの外（Safari など）で開く行。右の矢印を「↗」にして、画面が切り替わらないことを先に伝える
+    var opensOutside = false
     @ObservedObject private var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) private var colorScheme
 
@@ -512,7 +523,7 @@ struct ProfileMenuRow: View {
                                      : themeManager.currentTheme.secondaryTextOnCardBackground2(for: colorScheme))
                     .lineLimit(1)
             }
-            Image(systemName: "chevron.right")
+            Image(systemName: opensOutside ? "arrow.up.right" : "chevron.right")
                 .font(.system(size: 13, weight: .semibold))
                 .foregroundColor(themeManager.currentTheme.secondaryTextOnCardBackground2(for: colorScheme))
         }
@@ -1919,4 +1930,6 @@ enum TravoryLinks {
     static let accountName = "travory.rf"
     static let instagram = URL(string: "https://www.instagram.com/travory.rf/")!
     static let threads = URL(string: "https://www.threads.com/@travory.rf")!
+    /// 公式サイト（2026-11 に公開。Cloudflare Pages）
+    static let website = URL(string: "https://travory-web.pages.dev/")!
 }
