@@ -316,10 +316,10 @@ struct PlacesListView: View {
             HStack(spacing: 12) {
                 placeThumbnail(place, category: category, accent: accent)
 
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .top, spacing: 6) {
                         Text(place.title)
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(textColor)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
@@ -335,14 +335,14 @@ struct PlacesListView: View {
 
                     // 日付の無い場所は「いつか行きたい」（3.1、ご要望から）
                     Label(formattedDate(place), systemImage: place.visitedAt == nil ? "sparkles" : "calendar")
-                        .font(.system(size: 12))
+                        .font(.system(size: 11))
                         .foregroundColor(secondaryTextColor)
                         .lineLimit(1)
 
                     // 同じ名前の店が複数あっても見分けられるように住所を出す
                     if let address = place.address, !address.isEmpty {
                         Label(address, systemImage: "mappin.and.ellipse")
-                            .font(.system(size: 12))
+                            .font(.system(size: 11))
                             .foregroundColor(secondaryTextColor)
                             .lineLimit(1)
                     }
