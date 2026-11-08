@@ -893,6 +893,36 @@ final class CloudKitService {
         }
     }
 
+    /// ウェブで見られるようにしているか（3.5、`SharedWebPage`）。共有レコードが無ければオフ
+    func sharedWebPageEnabled(planId: String) async throws -> Bool {
+        let recordID = CKRecord.ID(recordName: "shared_\(planId)")
+        do {
+            let record = try await publicDatabase.record(for: recordID)
+            return SharedWebPage.isEnabled(record[SharedWebPage.fieldKey])
+        } catch let ckError as CKError where ckError.code == .unknownItem {
+            return false
+        }
+    }
+
+    /// ウェブで見られるようにする・やめる（3.5）。この項目だけを書く（ほかの項目は触らない）
+    func setSharedWebPageEnabled(_ enabled: Bool, planId: String) async throws {
+        let recordID = CKRecord.ID(recordName: "shared_\(planId)")
+        let record = try await publicDatabase.record(for: recordID)
+        record[SharedWebPage.fieldKey] = enabled ? 1 : 0
+        do {
+            _ = try await publicDatabase.save(record)
+        } catch let ckError as CKError where ckError.code == .serverRecordChanged {
+            // ほかの人が同時に直していたら、新しいほうに書き直す
+            guard let serverRecord = ckError.serverRecord else { throw ckError }
+            serverRecord[SharedWebPage.fieldKey] = enabled ? 1 : 0
+            _ = try await publicDatabase.save(serverRecord)
+        } catch {
+            Self.logShareFailure(error, planId: planId, phase: "webPage")
+            throw error
+        }
+        Self.shareLogger.notice("ウェブで見る=\(enabled, privacy: .public) env=\(Self.environmentHint, privacy: .public) planId=\(planId, privacy: .public)")
+    }
+
     /// 共有コードでパブリックDBから共有プランを検索
     /// 1件だけ取りに行く。旅行計画の画面から更新を押したときに使う。
     ///
