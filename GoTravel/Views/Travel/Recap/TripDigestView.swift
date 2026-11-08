@@ -1472,6 +1472,8 @@ private struct DigestFramePreview: View {
     @State private var source: UIImage?
     /// トリミングと色味をかけた写真（動画と同じ部品で描く）
     @State private var image: UIImage?
+    /// 文字の書体（3.5）。変わったら文字を描き直す
+    @AppStorage(DigestFont.storageKey) private var fontValue = DigestFont.standard.rawValue
     @State private var overlay: UIImage?
     /// 書きはじめる前の、画面の中の位置（キーボードで隠れるかを決める）
     @State private var restingFrame: CGRect = .zero
@@ -1551,7 +1553,7 @@ private struct DigestFramePreview: View {
             .task(id: "\(source.map { ObjectIdentifier($0) }.debugDescription)|\(edit.hashValue)|\(look.rawValue)|\(TripDigestComposer.aspectRatio)") {
                 renderImage()
             }
-            .task(id: "\(clip.sourceId)|\(clip.placeName ?? "")|\(position.rawValue)|\(watermark)|\(title ?? "")|\(isEditing)|\(TripDigestComposer.aspectRatio)") {
+            .task(id: "\(clip.sourceId)|\(clip.placeName ?? "")|\(position.rawValue)|\(watermark)|\(title ?? "")|\(isEditing)|\(TripDigestComposer.aspectRatio)|\(fontValue)") {
                 renderOverlay()
             }
             .onReceive(NotificationCenter.default.publisher(for: UIResponder.keyboardWillShowNotification)) { note in
@@ -1704,6 +1706,8 @@ private struct DigestTextPositionPicker: View {
     @State private var overlays: [String: UIImage] = [:]
     /// 画面の形が変わったら描き直す（3.2）
     @AppStorage(DigestShape.storageKey) private var shape = DigestShape.vertical.rawValue
+    /// 文字の書体が変わったら描き直す（3.5）
+    @AppStorage(DigestFont.storageKey) private var font = DigestFont.standard.rawValue
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -1760,7 +1764,7 @@ private struct DigestTextPositionPicker: View {
                     .fixedSize(horizontal: false, vertical: true)
             }
         }
-        .task(id: "\(sample?.sourceId ?? "")|\(sample?.placeName ?? "")|\(proStore.isPurchased)|\(shape)") { renderOverlays() }
+        .task(id: "\(sample?.sourceId ?? "")|\(sample?.placeName ?? "")|\(proStore.isPurchased)|\(shape)|\(font)") { renderOverlays() }
     }
 
     /// 3つの位置の文字を、動画と同じ部品で描く（縮めて持つ）

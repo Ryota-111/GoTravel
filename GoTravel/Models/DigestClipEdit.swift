@@ -1,5 +1,6 @@
 import CoreGraphics
 import Foundation
+import UIKit
 
 // MARK: - 旅のダイジェストの調整（3.2）
 //
@@ -7,7 +8,7 @@ import Foundation
 // - 動画全体：色味（`DigestLook`）・画面の形（`DigestShape`）・1コマの秒数（`DigestPace`）
 //
 // 無料と Pro の分け方：直すための機能（トリミング・使いはじめ）と、人に見せられる1本に要るもの
-// （題名・地図・縦長・1コマの秒数）は無料。もっと自分らしくするもの（色味・正方形と横長・曲の全部）は Pro
+// （題名・地図・縦長・1コマの秒数）は無料。もっと自分らしくするもの（色味・正方形と横長・曲の全部・文字の書体）は Pro
 
 /// 1コマの調整。写真・動画の id ごとに、旅行ごとに端末に覚えておく
 nonisolated struct DigestClipEdit: Codable, Equatable, Hashable {
@@ -139,5 +140,61 @@ enum DigestPace {
     /// 「1.5秒」「2秒」
     static func text(_ seconds: Double) -> String {
         seconds == seconds.rounded() ? "\(Int(seconds))秒" : String(format: "%.1f秒", seconds)
+    }
+}
+
+/// 文字の書体（3.5。Travory Pro）。時刻・場所の名前・題名・地図のカードの文字に使う。
+///
+/// 端末に入っている書体だけを使う（取り込みや通信をしない）。英字の書体は日本語を持たないので、
+/// 日本語は合う書体へつなぐ（エレガント → 明朝、タイプ → 角ゴシック）
+nonisolated enum DigestFont: String, CaseIterable, Identifiable {
+    case standard, mincho, maru, elegant, typewriter
+
+    static let storageKey = "tripDigestFont"
+
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .standard: return "ふつう"
+        case .mincho: return "明朝"
+        case .maru: return "まる"
+        case .elegant: return "エレガント"
+        case .typewriter: return "タイプ"
+        }
+    }
+
+    /// Pro の書体（「ふつう」以外）
+    var isPro: Bool { self != .standard }
+
+    static var current: DigestFont {
+        UserDefaults.standard.string(forKey: storageKey).flatMap(DigestFont.init(rawValue:)) ?? .standard
+    }
+
+    /// 太い字か（書体ごとに、太字と細字の2つを使い分ける）
+    private static func isBold(_ weight: UIFont.Weight) -> Bool { weight.rawValue >= UIFont.Weight.semibold.rawValue }
+
+    /// この書体の文字。書体が端末に無ければ、ふつうの文字にする
+    func font(ofSize size: CGFloat, weight: UIFont.Weight) -> UIFont {
+        let bold = Self.isBold(weight)
+        let names: [String]
+        switch self {
+        case .standard:
+            return .systemFont(ofSize: size, weight: weight)
+        case .mincho:
+            names = [bold ? "HiraMinProN-W6" : "HiraMinProN-W3"]
+        case .maru:
+            names = ["HiraMaruProN-W4"]
+        case .elegant:
+            names = [bold ? "Didot-Bold" : "Didot", bold ? "HiraMinProN-W6" : "HiraMinProN-W3"]
+        case .typewriter:
+            names = [bold ? "AmericanTypewriter-Bold" : "AmericanTypewriter", bold ? "HiraginoSans-W6" : "HiraginoSans-W3"]
+        }
+        guard let first = names.first, let base = UIFont(name: first, size: size) else {
+            return .systemFont(ofSize: size, weight: weight)
+        }
+        let fallbacks = names.dropFirst().map { UIFontDescriptor(fontAttributes: [.name: $0]) }
+        guard !fallbacks.isEmpty else { return base }
+        return UIFont(descriptor: base.fontDescriptor.addingAttributes([.cascadeList: fallbacks]), size: size)
     }
 }

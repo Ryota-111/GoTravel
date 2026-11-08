@@ -84,18 +84,25 @@ extension TripDigestComposer {
             let shadow = NSShadow()
             shadow.shadowColor = UIColor.black.withAlphaComponent(0.45)
             shadow.shadowBlurRadius = 12
+            // 文字の書体（3.5。Pro）
+            let typeface = DigestFont.current
             func draw(_ string: String, size: CGFloat, weight: UIFont.Weight, alpha: CGFloat, top: CGFloat,
                       lines: Int = 1, kern: CGFloat = 0) -> CGFloat {
                 var fontSize = size
                 func attrs() -> [NSAttributedString.Key: Any] {
-                    [.font: UIFont.systemFont(ofSize: fontSize, weight: weight),
+                    [.font: typeface.font(ofSize: fontSize, weight: weight),
                      .foregroundColor: UIColor.white.withAlphaComponent(alpha),
                      .paragraphStyle: style, .shadow: shadow, .kern: kern]
                 }
                 let width = W - 140
                 var box = (string as NSString).boundingRect(with: CGSize(width: width, height: .greatestFiniteMagnitude),
                                                             options: [.usesLineFragmentOrigin], attributes: attrs(), context: nil)
-                while box.height > fontSize * 1.3 * CGFloat(lines) && fontSize > size * 0.35 {
+                // 何行になったかは、同じ文字を1行で書いたときの高さと比べて数える（行の高い書体でも縮めすぎない。3.5）
+                func lineHeight() -> CGFloat {
+                    (string as NSString).boundingRect(with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude),
+                                                      options: [.usesLineFragmentOrigin], attributes: attrs(), context: nil).height
+                }
+                while box.height > lineHeight() * CGFloat(lines) * 1.2 && fontSize > size * 0.35 {
                     fontSize -= 2
                     box = (string as NSString).boundingRect(with: CGSize(width: width, height: .greatestFiniteMagnitude),
                                                             options: [.usesLineFragmentOrigin], attributes: attrs(), context: nil)

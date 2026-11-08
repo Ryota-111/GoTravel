@@ -34,6 +34,8 @@ struct DigestFinish {
         let shape = DigestShape.current
         if shape.isPro { names.append("\(shape.name)の形") }
         if let track = current.music, TripDigestMusic.isPro(track) { names.append("「\(track.name)」の曲") }
+        let font = DigestFont.current
+        if font.isPro { names.append("「\(font.name)」の書体") }
         return names
     }
 
@@ -42,6 +44,7 @@ struct DigestFinish {
         let defaults = UserDefaults.standard
         if DigestLook.current.isPro { defaults.set(DigestLook.natural.rawValue, forKey: DigestLook.storageKey) }
         if DigestShape.current.isPro { defaults.set(DigestShape.vertical.rawValue, forKey: DigestShape.storageKey) }
+        if DigestFont.current.isPro { defaults.set(DigestFont.standard.rawValue, forKey: DigestFont.storageKey) }
         if let track = current.music, TripDigestMusic.isPro(track) {
             defaults.set(TripDigestMusic.tracks.first?.id ?? noMusic, forKey: musicKey)
         }
@@ -85,6 +88,8 @@ struct DigestFinishOptions: View {
     @AppStorage(DigestLook.storageKey) private var look = DigestLook.natural.rawValue
     @AppStorage(DigestShape.storageKey) private var shape = DigestShape.vertical.rawValue
     @AppStorage(DigestPace.storageKey) private var pace = DigestPace.standard
+    /// 文字の書体（3.5。Pro）
+    @AppStorage(DigestFont.storageKey) private var font = DigestFont.standard.rawValue
 
     @ObservedObject private var proStore = ProStore.shared
     @StateObject private var player = DigestMusicPreview()
@@ -155,6 +160,24 @@ struct DigestFinishOptions: View {
                     }
                 }
             }
+            // 文字の書体（3.5。Pro）。その書体で書いた「旅」と名前を並べる
+            choiceRow("書体") {
+                ForEach(DigestFont.allCases) { candidate in
+                    chip(selected: font == candidate.rawValue,
+                         accessibility: "文字の書体：\(candidate.name)\(candidate.isPro && !proStore.isPurchased ? "（Pro）" : "")") {
+                        font = candidate.rawValue
+                    } label: {
+                        HStack(spacing: 5) {
+                            Text("Aa 旅")
+                                .font(Font(candidate.font(ofSize: 15, weight: .bold)))
+                            Text(candidate.name)
+                            if candidate.isPro && !proStore.isPurchased {
+                                ProBadge(onAccent: font == candidate.rawValue)
+                            }
+                        }
+                    }
+                }
+            }
             choiceRow("1コマ") {
                 ForEach(DigestPace.choices, id: \.self) { seconds in
                     chip(selected: pace == seconds, accessibility: "1コマの長さ：\(DigestPace.text(seconds))") {
@@ -167,8 +190,8 @@ struct DigestFinishOptions: View {
             soundRow
                 .padding(.top, 2)
         }
-        .task(id: "\(plan.title)|\(plan.destination)|\(scope.id)|\(shape)") { renderOpeningText() }
-        .task(id: "\(scope.id)|\(textPosition.rawValue)|\(proStore.isPurchased)|\(stops.count)|\(shape)") { await renderMap() }
+        .task(id: "\(plan.title)|\(plan.destination)|\(scope.id)|\(shape)|\(font)") { renderOpeningText() }
+        .task(id: "\(scope.id)|\(textPosition.rawValue)|\(proStore.isPurchased)|\(stops.count)|\(shape)|\(font)") { await renderMap() }
         .task(id: "\(sample?.sourceId ?? "")|\(shape)") { await renderLooks() }
         .onDisappear { player.stop() }
     }

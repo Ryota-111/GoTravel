@@ -531,11 +531,13 @@ enum TripDigestComposer {
             let shadow = NSShadow()
             shadow.shadowColor = UIColor.black.withAlphaComponent(0.5)
             shadow.shadowBlurRadius = 10
+            // 文字の書体（3.5。Pro）
+            let typeface = DigestFont.current
             func attributes(_ size: CGFloat, _ weight: UIFont.Weight, _ align: NSTextAlignment) -> [NSAttributedString.Key: Any] {
                 let style = NSMutableParagraphStyle()
                 style.alignment = align
                 style.lineBreakMode = .byWordWrapping
-                return [.font: UIFont.systemFont(ofSize: size, weight: weight), .foregroundColor: UIColor.white,
+                return [.font: typeface.font(ofSize: size, weight: weight), .foregroundColor: UIColor.white,
                         .paragraphStyle: style, .shadow: shadow]
             }
             /// 幅に収まるよう、lines 行に入るまで文字を小さくする。描いた高さを返す
@@ -546,7 +548,13 @@ enum TripDigestComposer {
                 var attrs = attributes(fontSize, weight, align)
                 var box = (text as NSString).boundingRect(with: CGSize(width: width, height: .greatestFiniteMagnitude),
                                                           options: [.usesLineFragmentOrigin], attributes: attrs, context: nil)
-                while box.height > fontSize * 1.25 * CGFloat(lines) && fontSize > size * 0.3 {
+                // 何行になったかは、同じ文字を1行で書いたときの高さと比べて数える。
+                // 文字の大きさから見積もると、行の高い書体（エレガント・明朝。3.5）では収まっていても縮めてしまう
+                func lineHeight() -> CGFloat {
+                    (text as NSString).boundingRect(with: CGSize(width: CGFloat.greatestFiniteMagnitude, height: .greatestFiniteMagnitude),
+                                                    options: [.usesLineFragmentOrigin], attributes: attrs, context: nil).height
+                }
+                while box.height > lineHeight() * CGFloat(lines) * 1.2 && fontSize > size * 0.3 {
                     fontSize -= 2
                     attrs = attributes(fontSize, weight, align)
                     box = (text as NSString).boundingRect(with: CGSize(width: width, height: .greatestFiniteMagnitude),
