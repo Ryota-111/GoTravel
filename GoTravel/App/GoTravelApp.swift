@@ -35,6 +35,8 @@ struct GoTravelApp: App {
                 .preferredColorScheme(preferredScheme)
                 // 「Travory で開く」で .ics が届いたとき（カレンダーの画面で確かめてから入れる）
                 .onOpenURL { url in
+                    // travory://shared は共有メニューから切り替えてきたとき。
+                    // 受け取り箱は、アプリが前に出たときに MainTabView が見るので、ここでは何もしない
                     guard url.isFileURL, url.pathExtension.lowercased() == "ics" else { return }
                     ICSImportInbox.shared.open(url)
                 }

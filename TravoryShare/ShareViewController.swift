@@ -81,6 +81,24 @@ final class ShareViewController: UIViewController {
         for data in images where ShareInboxWriter.save(imageData: data, kind: kind) { saved = true }
         state.savedKind = kind
         state.result = saved ? .saved : .nothing
+        if saved { openApp() }
+    }
+
+    /// 送ったあと、そのまま Travory に切り替える（アプリは開いたときに受け取り箱を見て、続きの画面を出す）。
+    /// 共有の拡張からアプリを開く決まった方法は無いので、拡張を載せているアプリ（UIApplication）を探して開いてもらう。
+    /// 開けなかったときは「Travory に送りました」の画面のまま残る
+    private func openApp() {
+        guard let url = URL(string: "travory://shared") else { return }
+        var responder: UIResponder? = self
+        while let current = responder {
+            if let application = current as? UIApplication {
+                application.open(url, options: [:]) { [weak self] opened in
+                    if opened { self?.extensionContext?.completeRequest(returningItems: nil) }
+                }
+                return
+            }
+            responder = current.next
+        }
     }
 
     private func loadURL(_ provider: NSItemProvider) async -> URL? {
