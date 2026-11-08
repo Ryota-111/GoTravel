@@ -11,6 +11,8 @@ struct MainTabView: View {
     /// 一度見せたもの。「あとで」で閉じたあと、アプリに戻るたびに出し直さない
     /// （新しく送られたものがあるときだけ出す。次に起動したときは、残っていればまた出す）
     @State private var shownSharedImports: Set<URL> = []
+    /// 共有メニューから「行きたい場所として送る」で届いたもの（3.5）
+    @State private var sharedPlaces: SharedImportsPresentation?
     @StateObject private var plansViewModel = PlansViewModel()
     @StateObject private var travelPlanViewModel = TravelPlanViewModel()
     @ObservedObject private var icsInbox = ICSImportInbox.shared
@@ -145,20 +147,33 @@ struct MainTabView: View {
         .sheet(item: $whatsNew, onDismiss: checkSharedImports) { content in
             WhatsNewView(content: content)
         }
-        .sheet(item: $sharedImports) { presentation in
+        // 予約の受け取り箱を閉じてから、場所の受け取り箱を見る（シートは1枚ずつ）
+        .sheet(item: $sharedImports, onDismiss: checkSharedImports) { presentation in
             SharedImportInboxView(items: presentation.items)
                 .environmentObject(travelPlanViewModel)
+                .environmentObject(authVM)
+        }
+        .sheet(item: $sharedPlaces) { presentation in
+            SharedPlaceInboxView(items: presentation.items)
                 .environmentObject(authVM)
         }
     }
 
     /// 共有メニューから送られたものがあれば、どの旅行に入れるか聞く
     private func checkSharedImports() {
-        guard whatsNew == nil, sharedImports == nil, authVM.userId != nil else { return }
+        guard whatsNew == nil, sharedImports == nil, sharedPlaces == nil, authVM.userId != nil else { return }
         let items = SharedImportInbox.pendingItems()
-        guard items.contains(where: { !shownSharedImports.contains($0.url) }) else { return }
-        shownSharedImports.formUnion(items.map(\.url))
-        sharedImports = SharedImportsPresentation(items: items)
+        if items.contains(where: { !shownSharedImports.contains($0.url) }) {
+            shownSharedImports.formUnion(items.map(\.url))
+            sharedImports = SharedImportsPresentation(items: items)
+            return
+        }
+        // 行きたい場所として送られたもの（3.5）
+        let places = SharedImportInbox.pendingItems(in: SharedImportInbox.placeFolderName)
+        if places.contains(where: { !shownSharedImports.contains($0.url) }) {
+            shownSharedImports.formUnion(places.map(\.url))
+            sharedPlaces = SharedImportsPresentation(items: places)
+        }
     }
 
     private func updateWidgetSnapshot() {
