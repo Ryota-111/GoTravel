@@ -178,6 +178,7 @@ struct MapHomeView: View {
                 SavePlaceView(vm: {
                     let saveVM = SavePlaceViewModel(coord: result.placemark.coordinate, placesVM: vm)
                     saveVM.title = result.name ?? ""
+                    saveVM.address = AddressLookup.format(result.placemark.postalAddress)
                     return saveVM
                 }())
                 .environmentObject(auth)

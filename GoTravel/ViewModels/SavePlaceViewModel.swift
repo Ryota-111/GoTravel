@@ -9,6 +9,8 @@ final class SavePlaceViewModel: ObservableObject {
     @Published var linkURL: String = ""
     @Published var image: UIImage?
     @Published var visitedAt: Date? = nil
+    /// 地図の検索で選んだ場所の住所。無ければ保存するときに位置から調べる（3.5。前は住所を残していなかった）
+    var address: String?
     @Published var categoryId: String = "hotel"
     @Published var isSaving: Bool = false
     @Published var error: String?
@@ -28,22 +30,28 @@ final class SavePlaceViewModel: ObservableObject {
         }
         isSaving = true
 
-        let place = VisitedPlace(
-            title: title.trimmingCharacters(in: .whitespacesAndNewlines),
-            notes: notes.trimmingCharacters(in: .whitespacesAndNewlines),
-            latitude: coord.latitude,
-            longitude: coord.longitude,
-            createdAt: Date(),
-            visitedAt: visitedAt,
-            linkURL: linkURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                ? nil
-                : linkURL.trimmingCharacters(in: .whitespacesAndNewlines),
-            categoryId: categoryId
-        )
+        let title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+        let notes = notes.trimmingCharacters(in: .whitespacesAndNewlines)
+        let link = linkURL.trimmingCharacters(in: .whitespacesAndNewlines)
 
         // Core Dataに保存
 
         Task { @MainActor in
+            var address = self.address
+            if address?.isEmpty ?? true {
+                address = await AddressLookup.address(latitude: coord.latitude, longitude: coord.longitude)
+            }
+            let place = VisitedPlace(
+                title: title,
+                notes: notes,
+                latitude: coord.latitude,
+                longitude: coord.longitude,
+                createdAt: Date(),
+                visitedAt: self.visitedAt,
+                address: address,
+                linkURL: link.isEmpty ? nil : link,
+                categoryId: self.categoryId
+            )
             placesVM.add(place, userId: userId, image: self.image)
             self.isSaving = false
             completion(.success(()))

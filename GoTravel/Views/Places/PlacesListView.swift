@@ -149,6 +149,11 @@ struct PlacesListView: View {
                 .environmentObject(authVM)
             }
         }
+        // 住所の無い場所（前の「地図で探す」で保存したもの）に、位置から調べた住所を入れる（3.5）
+        .task(id: vm.places.count) {
+            guard let userId = authVM.userId else { return }
+            await PlaceAddressBackfill.fill(vm.places, userId: userId, using: vm)
+        }
         // 住所から県が分からない場所は、緯度・経度から調べて覚える（旅の記録と同じ仕組み）
         .task(id: vm.places.count) {
             let points = PlaceArea.needsLookup(vm.places, region: regionResolver.region)
