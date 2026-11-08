@@ -6,6 +6,8 @@ struct BottomTimelineCard: View {
     let timelineItems: [CalendarTimelineItem]
     @Binding var isExpanded: Bool
     var onAddPlan: () -> Void = {}
+    /// 閉じているときの高さ（画面の高さに対する割合）。タイルの表示では、マスに予定の名前が出るので低くする（3.5）
+    var collapsedFraction: CGFloat = 0.35
 
     @EnvironmentObject var plansViewModel: PlansViewModel
     @EnvironmentObject var travelViewModel: TravelPlanViewModel
@@ -55,7 +57,7 @@ struct BottomTimelineCard: View {
     }
 
     private func minHeight(for geometry: GeometryProxy) -> CGFloat {
-        geometry.size.height * 0.35
+        geometry.size.height * collapsedFraction
     }
 
     private func maxHeight(for geometry: GeometryProxy) -> CGFloat {
