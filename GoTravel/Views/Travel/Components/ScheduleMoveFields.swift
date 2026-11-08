@@ -240,17 +240,43 @@ struct ScheduleMoveFields: View {
     }
 }
 
+/// 「入れる位置」に並べる予定（旅行の予定とおでかけの予定の両方から作る）
+struct UndecidedAnchorChoice: Identifiable {
+    let id: String
+    let timeText: String
+    let title: String
+}
+
 /// 時間未定のスイッチと、未定のときの「どこに入れるか」
 struct UndecidedTimeFields: View {
     @Binding var isUndecided: Bool
     /// この予定のすぐ前に来る予定の id。nil ならいちばん前
     @Binding var anchorID: String?
     /// その日の予定（並んでいる順。自分自身は入れない）
-    let dayItems: [ScheduleItem]
+    let dayItems: [UndecidedAnchorChoice]
     let tint: Color
     let textColor: Color
     let secondaryText: Color
     let fieldBackground: Color
+
+    init(isUndecided: Binding<Bool>, anchorID: Binding<String?>, dayItems: [UndecidedAnchorChoice],
+         tint: Color, textColor: Color, secondaryText: Color, fieldBackground: Color) {
+        _isUndecided = isUndecided
+        _anchorID = anchorID
+        self.dayItems = dayItems
+        self.tint = tint
+        self.textColor = textColor
+        self.secondaryText = secondaryText
+        self.fieldBackground = fieldBackground
+    }
+
+    /// 旅行の日程から
+    init(isUndecided: Binding<Bool>, anchorID: Binding<String?>, dayItems: [ScheduleItem],
+         tint: Color, textColor: Color, secondaryText: Color, fieldBackground: Color) {
+        self.init(isUndecided: isUndecided, anchorID: anchorID,
+                  dayItems: dayItems.map { UndecidedAnchorChoice(id: $0.id, timeText: $0.timeText, title: $0.title) },
+                  tint: tint, textColor: textColor, secondaryText: secondaryText, fieldBackground: fieldBackground)
+    }
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {

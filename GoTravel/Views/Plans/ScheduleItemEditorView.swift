@@ -25,6 +25,13 @@ struct ScheduleItemEditorView: View {
     /// この画面で新しく足した場所。保存を押すまで予定には入れない
     @State private var addedPlaces: [PlannedPlace] = []
     @State private var showPlaceSearch = false
+    /// 「移動」の予定か（3.5。旅行の日程と同じ）
+    @State private var isMove: Bool
+    @State private var moveInput: MoveInput
+    /// 時間未定か（3.5）。未定のときは時刻の代わりに「入れる位置」を選ぶ
+    @State private var isUndecided: Bool
+    /// 未定の予定のすぐ前に来る予定の id（nil ならいちばん前）
+    @State private var anchorID: String?
 
     private var isEditing: Bool {
         scheduleItem != nil
@@ -36,14 +43,37 @@ struct ScheduleItemEditorView: View {
         self.onSave = onSave
 
         // Initialize @State variables
-        _time = State(initialValue: item?.time ?? Date())
-        _title = State(initialValue: item?.title ?? "")
+        _time = State(initialValue: item.map(PlanScheduleUndecided.startingTime(for:)) ?? Date())
+        // 名前が自動で付けたもの（「梅田 → 京都」）なら空で始め、発着地を変えたら名前もついてくるようにする
+        _title = State(initialValue: item.map { $0.hasDefaultMoveTitle ? "" : $0.title } ?? "")
+        _isMove = State(initialValue: item?.isMove ?? false)
+        _moveInput = State(initialValue: item?.move.map(MoveInput.init) ?? MoveInput())
+        _isUndecided = State(initialValue: item?.hasUndecidedTime ?? false)
         _selectedPlaceId = State(initialValue: item?.placeId)
         _note = State(initialValue: item?.note ?? "")
 
         // 何日目の予定かを復元する。新規なら1日目から
         let planValue = plan.wrappedValue
-        _selectedDay = State(initialValue: item.map { planValue.dayNumber(for: $0) } ?? 1)
+        let day = item.map { planValue.dayNumber(for: $0) } ?? 1
+        _selectedDay = State(initialValue: day)
+        // 入れる位置の初期値：直すときは今の位置、足すときはその日のいちばん後ろ
+        let dayItems = planValue.scheduleItems.filter { planValue.dayNumber(for: $0) == day }
+        if let item {
+            _anchorID = State(initialValue: PlanScheduleUndecided.anchorID(of: item.id, in: dayItems))
+        } else {
+            _anchorID = State(initialValue: dayItems.sorted(by: PlanScheduleItem.chronologically).last?.id)
+        }
+    }
+
+    /// 選んだ日の、この予定のほかの予定（並んでいる順）。時間未定の「入れる位置」に使う
+    private var otherDayItems: [PlanScheduleItem] {
+        plan.scheduleItems
+            .filter { $0.id != scheduleItem?.id && plan.dayNumber(for: $0) == selectedDay }
+            .sorted(by: PlanScheduleItem.chronologically)
+    }
+
+    private var canSave: Bool {
+        isMove || !title.trimmingCharacters(in: .whitespaces).isEmpty
     }
 
     // MARK: - Colors
@@ -99,15 +129,49 @@ struct ScheduleItemEditorView: View {
                         }
                     }
 
-                    section("時刻", icon: "clock") {
-                        DatePicker("", selection: $time, displayedComponents: .hourAndMinute)
-                            .datePickerStyle(.wheel)
-                            .labelsHidden()
-                            .frame(maxWidth: .infinity)
+                    // 予定か移動か（3.5。旅行の日程と同じ）
+                    section("種類", icon: "square.grid.2x2") {
+                        ScheduleEntryKindPicker(isMove: $isMove.animation(.easeInOut(duration: 0.2)), tint: accentColor)
                     }
 
-                    section("予定名", icon: "pencil") {
-                        TextField("例：浅草寺を観光", text: $title)
+                    if isMove {
+                        section("移動", icon: moveInput.mode.systemImage) {
+                            ScheduleMoveFields(
+                                input: $moveInput,
+                                searchRegion: placeSearchRegion,
+                                tint: accentColor,
+                                textColor: textColor,
+                                secondaryText: themeManager.currentTheme.secondaryText,
+                                fieldBackground: fieldBackground
+                            )
+                        }
+                    }
+
+                    section(isMove ? "出発の時刻" : "時刻", icon: "clock") {
+                        VStack(spacing: 10) {
+                            UndecidedTimeFields(
+                                isUndecided: $isUndecided,
+                                anchorID: $anchorID,
+                                dayItems: otherDayItems.map {
+                                    UndecidedAnchorChoice(id: $0.id, timeText: $0.timeText, title: $0.title)
+                                },
+                                tint: accentColor,
+                                textColor: textColor,
+                                secondaryText: themeManager.currentTheme.secondaryText,
+                                fieldBackground: fieldBackground
+                            )
+
+                            if !isUndecided {
+                                DatePicker("", selection: $time, displayedComponents: .hourAndMinute)
+                                    .datePickerStyle(.wheel)
+                                    .labelsHidden()
+                                    .frame(maxWidth: .infinity)
+                            }
+                        }
+                    }
+
+                    section(isMove ? "名前（任意）" : "予定名", icon: "pencil") {
+                        TextField(isMove ? "例：\(moveInput.move.defaultTitle)" : "例：浅草寺を観光", text: $title)
                             .font(.body)
                             .foregroundColor(textColor)
                             .padding(14)
@@ -116,7 +180,7 @@ struct ScheduleItemEditorView: View {
                             .overlay(
                                 RoundedRectangle(cornerRadius: 12)
                                     .stroke(
-                                        title.isEmpty
+                                        title.isEmpty && !isMove
                                             ? themeManager.currentTheme.error.opacity(0.5)
                                             : accentColor.opacity(0.3),
                                         lineWidth: 1.5
@@ -127,8 +191,11 @@ struct ScheduleItemEditorView: View {
                     // 予定に場所が1つも無くても出す。
                     // 以前は登録済みの場所からしか選べず、
                     // 先に訪問場所を足しておかないとここで場所を付けられなかった
-                    section("場所（任意）", icon: "mappin.circle.fill") {
-                        placePicker
+                    // 移動は出発地・到着地を持つので、場所は選ばない
+                    if !isMove {
+                        section("場所（任意）", icon: "mappin.circle.fill") {
+                            placePicker
+                        }
                     }
 
                     section("メモ（任意）", icon: "text.alignleft") {
@@ -155,6 +222,10 @@ struct ScheduleItemEditorView: View {
                     selectedPlaceId = place.id
                 }
             }
+            // 日を変えたら、入れる位置はその日のいちばん後ろから
+            .onChange(of: selectedDay) { _, _ in
+                anchorID = otherDayItems.last?.id
+            }
             .navigationTitle(isEditing ? "スケジュール編集" : "スケジュール追加")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
@@ -170,8 +241,8 @@ struct ScheduleItemEditorView: View {
                         saveScheduleItem()
                     }
                     .fontWeight(.semibold)
-                    .foregroundColor(title.isEmpty ? themeManager.currentTheme.secondaryText : accentColor)
-                    .disabled(title.isEmpty)
+                    .foregroundColor(canSave ? accentColor : themeManager.currentTheme.secondaryText)
+                    .disabled(!canSave)
                 }
             }
         }
@@ -392,31 +463,36 @@ struct ScheduleItemEditorView: View {
         var updatedPlan = plan
 
         // この画面で足した場所を予定へ入れる。
-        // 途中でやめたときに残らないよう、保存のときだけ反映する
-        let usedNewPlaces = addedPlaces.filter { $0.id == selectedPlaceId }
-        updatedPlan.places.append(contentsOf: usedNewPlaces)
-
-        if let existingItem = scheduleItem {
-            // 編集モード
-            // この画面で直せる項目だけ書き換える。作り直すと、ここに出ない項目（移動手段など）が消える
-            if let index = updatedPlan.scheduleItems.firstIndex(where: { $0.id == existingItem.id }) {
-                var edited = updatedPlan.scheduleItems[index]
-                edited.time = composedDate
-                edited.title = title
-                edited.placeId = selectedPlaceId
-                edited.note = note.isEmpty ? nil : note
-                updatedPlan.scheduleItems[index] = edited
-            }
-        } else {
-            // 新規追加モード
-            let newItem = PlanScheduleItem(
-                time: composedDate,
-                title: title,
-                placeId: selectedPlaceId,
-                note: note.isEmpty ? nil : note
-            )
-            updatedPlan.scheduleItems.append(newItem)
+        // 途中でやめたときに残らないよう、保存のときだけ反映する。移動の予定は場所を使わない
+        if !isMove {
+            let usedNewPlaces = addedPlaces.filter { $0.id == selectedPlaceId }
+            updatedPlan.places.append(contentsOf: usedNewPlaces)
         }
+
+        // 直すときは、この画面で直せる項目だけ書き換える。作り直すと、ここに出ない項目（移動手段など）が消える
+        var item = scheduleItem.flatMap { existing in updatedPlan.scheduleItems.first { $0.id == existing.id } }
+            ?? PlanScheduleItem(time: composedDate, title: "")
+        item.time = composedDate
+        item.note = note.isEmpty ? nil : note
+        if isMove {
+            item.apply(move: moveInput.move, title: title)
+        } else {
+            item.move = nil
+            item.title = title
+            item.placeId = selectedPlaceId
+        }
+        item.isTimeUndecided = isUndecided ? true : nil
+
+        // 選んだ日の予定を並べ直す。未定の予定は選んだ位置に入れ、ほかの未定の予定も位置を付け直す
+        let otherDays = updatedPlan.scheduleItems.filter { $0.id != item.id && updatedPlan.dayNumber(for: $0) != selectedDay }
+        let sameDay = updatedPlan.scheduleItems.filter { $0.id != item.id && updatedPlan.dayNumber(for: $0) == selectedDay }
+        let placedDay: [PlanScheduleItem]
+        if isUndecided {
+            placedDay = PlanScheduleUndecided.inserting(item, after: anchorID, into: sameDay)
+        } else {
+            placedDay = PlanScheduleUndecided.normalized((sameDay + [item]).sorted(by: PlanScheduleItem.chronologically))
+        }
+        updatedPlan.scheduleItems = otherDays + placedDay
 
         onSave(updatedPlan)
         dismiss()

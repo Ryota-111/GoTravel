@@ -330,7 +330,8 @@ struct PlanDetailView: View {
         if !Calendar.current.isDate(plan.startDate, inSameDayAs: plan.endDate) {
             text += " 〜 " + DateFormatter.japaneseDate.string(from: plan.endDate)
         }
-        if let first = plan.scheduleItems.min(by: { $0.time < $1.time }) {
+        // 時間未定の予定は「から」に使わない
+        if let first = plan.scheduleItems.filter({ !$0.hasUndecidedTime }).min(by: { $0.time < $1.time }) {
             text += " · " + DateFormatter.japaneseTime.string(from: first.time) + " から"
         }
         return text
@@ -354,7 +355,8 @@ struct PlanDetailView: View {
                 HStack(alignment: .lastTextBaseline, spacing: 14) {
                     // 終わりは主役ではないので、開始時刻の右に小さく添える
                     HStack(alignment: .lastTextBaseline, spacing: 6) {
-                        Text(plan.time.map { DateFormatter.japaneseTime.string(from: $0) } ?? "終日")
+                        // 時刻の無い日常の予定は「時間未定」（3.5。前は「終日」）
+                        Text(plan.time.map { DateFormatter.japaneseTime.string(from: $0) } ?? "時間未定")
                             .font(.system(size: 44, weight: .heavy, design: .rounded))
                             .foregroundColor(planColor)
                             .monospacedDigit()
@@ -1763,12 +1765,13 @@ struct PlanDetailView: View {
     private func scheduleItemRow(item: PlanScheduleItem, isLast: Bool, state: ScheduleRowState) -> some View {
         HStack(alignment: .top, spacing: 0) {
             // 時刻は塗らず等幅で右に揃える。レールを読ませるため
-            Text(formatTime(item.time))
+            // 時間未定の予定は「未定」（3.5）
+            Text(item.hasUndecidedTime ? ScheduleUndecided.label : formatTime(item.time))
                 .font(.system(size: 13, weight: .bold))
                 .monospacedDigit()
                 .lineLimit(1)
                 .minimumScaleFactor(0.7)
-                .foregroundColor(state == .past
+                .foregroundColor(state == .past || item.hasUndecidedTime
                                  ? themeManager.currentTheme.secondaryText.opacity(0.6)
                                  : themeManager.currentTheme.secondaryText)
                 .frame(width: 46, alignment: .trailing)
@@ -1799,7 +1802,12 @@ struct PlanDetailView: View {
                     .font(.body.weight(.semibold))
                     .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
 
-                if let placeId = item.placeId,
+                // 移動の予定（3.5）：乗り物と発着地・便
+                if let move = item.move {
+                    scheduleMoveLines(move, showsRoute: !item.hasDefaultMoveTitle)
+                }
+
+                if item.move == nil, let placeId = item.placeId,
                    let place = plan.places.first(where: { $0.id == placeId }) {
                     HStack(spacing: 4) {
                         Image(systemName: "mappin.circle.fill")
@@ -1842,6 +1850,27 @@ struct PlanDetailView: View {
             }
         }
         .padding(.vertical, 8)
+    }
+
+    /// 移動の予定の添え書き。「🚃 梅田 → 京都」と「阪急 特急 · 3号線 · 座席 5A」。
+    /// 名前が自動の「梅田 → 京都」のままなら、発着地は2度出さない
+    private func scheduleMoveLines(_ move: ScheduleMove, showsRoute: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 3) {
+            HStack(spacing: 4) {
+                Image(systemName: move.transportMode.systemImage)
+                    .font(.caption)
+                    .foregroundColor(planColor.opacity(0.8))
+                Text(showsRoute ? (move.routeText ?? move.transportMode.title) : move.transportMode.title)
+                    .font(.caption)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+            if let detail = move.detailText {
+                Text(detail)
+                    .font(.caption)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .lineLimit(2)
+            }
+        }
     }
 
     /// レールの点。過ぎた分は塗り、次の1件は光らせ、これからは中を抜く
@@ -1908,7 +1937,8 @@ struct PlanDetailView: View {
         guard Calendar.current.isDateInToday(dayDate) else { return nil }
 
         let nowMinutes = minutesOfDay(Date())
-        return items.firstIndex { minutesOfDay($0.time) >= nowMinutes }
+        // 時間未定の予定は「次」にしない
+        return items.firstIndex { !$0.hasUndecidedTime && minutesOfDay($0.time) >= nowMinutes }
     }
 
     private func scheduleRowState(index: Int, nowIndex: Int?) -> ScheduleRowState {
@@ -1924,7 +1954,8 @@ struct PlanDetailView: View {
         let grouped = Dictionary(grouping: plan.scheduleItems) { plan.dayNumber(for: $0) }
 
         return grouped.keys.sorted().map { day in
-            let items = (grouped[day] ?? []).sorted { minutesOfDay($0.time) < minutesOfDay($1.time) }
+            // 時間未定の予定は入れた位置に来る（3.5）
+            let items = (grouped[day] ?? []).sorted(by: PlanScheduleItem.chronologically)
             return (day, items)
         }
     }

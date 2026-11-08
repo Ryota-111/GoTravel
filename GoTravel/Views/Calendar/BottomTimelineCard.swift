@@ -490,9 +490,9 @@ struct TimelineItemCard: View {
 
         switch type {
         case .dailyPlan:
-            // 日常プランは時刻を表示。時刻を入れていない（終日の）予定は、並べるために
-            // その日の 0:00 を持っているだけなので「00:00」と出さない
-            guard hasTime else { return "終日" }
+            // 日常プランは時刻を表示。時刻を入れていない（時間未定の）予定は、並べるために
+            // その日の 0:00 を持っているだけなので「00:00」と出さない（3.5。前は「終日」）
+            guard hasTime else { return "時間未定" }
             formatter.dateFormat = "HH:mm"
         case .anniversary:
             // 記念日は時刻を持たない

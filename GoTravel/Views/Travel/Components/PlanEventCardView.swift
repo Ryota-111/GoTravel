@@ -243,7 +243,7 @@ struct PlanEventCardView: View {
 
                 ForEach(todayItems.prefix(Self.foldedLineLimit)) { item in
                     HStack(spacing: 8) {
-                        Text(DateFormatter.japaneseTime.string(from: item.time))
+                        Text(item.timeText)
                             .font(.system(size: 11, weight: .semibold))
                             .monospacedDigit()
                             .foregroundColor(mainColor)
@@ -278,7 +278,7 @@ struct PlanEventCardView: View {
 
         return plan.scheduleItems
             .filter { plan.dayNumber(for: $0) == todayNumber }
-            .sorted { $0.time < $1.time }
+            .sorted(by: PlanScheduleItem.chronologically)
     }
 
     // MARK: - 日付タイル
@@ -340,6 +340,9 @@ struct PlanEventCardView: View {
 
         if let timeText = plan.timeRangeText {
             parts.append(timeText)
+        } else if plan.planType == .daily {
+            // 時刻の無い日常の予定（3.5）
+            parts.append("時間未定")
         }
 
         if !plan.places.isEmpty {
