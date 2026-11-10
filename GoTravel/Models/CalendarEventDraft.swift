@@ -186,12 +186,15 @@ enum CalendarEventBuilder {
         // おでかけのスケジュール（日時を持っている）
         for item in plan.scheduleItems {
             let linked = item.placeId.flatMap { id in plan.places.first { $0.id == id } }
+            // 時間未定の予定（3.5）は、旅行計画と同じく、その日の終日の予定として入れる。時刻は並ぶ位置でしかない
+            let undecided = item.hasUndecidedTime
+            let dayStart = calendar.startOfDay(for: item.time)
             drafts.append(CalendarEventDraft(
                 key: "item:\(item.id)",
                 title: item.title,
-                start: item.time,
-                end: item.time.addingTimeInterval(defaultDuration),
-                isAllDay: false,
+                start: undecided ? dayStart : item.time,
+                end: undecided ? dayStart : item.time.addingTimeInterval(defaultDuration),
+                isAllDay: undecided,
                 timeZone: calendar.timeZone,
                 location: linked.map { joinedLocation($0.name, $0.address) } ?? nil,
                 latitude: linked?.latitude,
