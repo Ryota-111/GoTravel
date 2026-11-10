@@ -17,6 +17,8 @@ struct PlaceImportView: View {
     var onNext: (() -> Void)? = nil
     /// 送られたものを捨てる（受け取り箱から開いたときだけ）
     var onDiscard: (() -> Void)? = nil
+    /// 共有で届いたものの印（受け取り箱のファイル名）。同じスクリーンショットでお試しを二度使わないため
+    var trialItem: String? = nil
 
     @EnvironmentObject private var authVM: AuthViewModel
     @StateObject private var places = PlacesViewModel()
@@ -387,7 +389,7 @@ struct PlaceImportView: View {
         }
         if proStore.isPurchased {
             screenshotAccess = .pro
-        } else if PlaceScreenshotTrial.consume() {
+        } else if PlaceScreenshotTrial.consume(item: trialItem) {
             screenshotAccess = .trial(remaining: PlaceScreenshotTrial.remaining())
         } else {
             screenshotAccess = .locked
@@ -437,7 +439,8 @@ struct SharedPlaceInboxView: View {
             PlaceImportView(sources: [Self.source(of: current)].compactMap { $0 },
                             nextTitle: items.count > 1 ? "次へ（あと\(items.count - 1)件）" : "完了",
                             onNext: { finish(current) },
-                            onDiscard: { finish(current) })
+                            onDiscard: { finish(current) },
+                            trialItem: current.url.lastPathComponent)
                 .id(current.id)
         }
     }

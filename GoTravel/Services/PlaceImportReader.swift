@@ -185,6 +185,9 @@ enum PlaceLinkParser {
     }
 
     /// 文章の中のリンク
+    /// 1回に読みに行くリンクの数
+    static let maxLinksToRead = 3
+
     static func urls(in text: String) -> [URL] {
         guard let detector = try? NSDataDetector(types: NSTextCheckingResult.CheckingType.link.rawValue) else { return [] }
         return detector.matches(in: text, range: NSRange(text.startIndex..., in: text)).compactMap(\.url)
@@ -328,7 +331,12 @@ enum PlaceImportReader {
         let lines = PlaceLinkParser.lines(in: text)
         let urls = PlaceLinkParser.urls(in: text)
 
-        for original in urls {
+        // 読みに行くリンクは3つまで（地図のリンクを先に）。メールの本文やリンク集を送られても待たせない。
+        // 見つかったら、そこでやめる
+        let mapLinks = urls.filter { PlaceLinkParser.needsExpansion($0) || PlaceLinkParser.hint(from: $0) != nil }
+        let otherLinks = urls.filter { url in !mapLinks.contains(url) && !PlaceLinkParser.isSocialPost(url) }
+        for original in (mapLinks + otherLinks).prefix(PlaceLinkParser.maxLinksToRead) {
+            if !results.isEmpty { break }
             let url = PlaceLinkParser.needsExpansion(original) ? (await expand(original) ?? original) : original
             let link = original.absoluteString
             if let hint = PlaceLinkParser.hint(from: url) {
@@ -484,9 +492,21 @@ enum PlaceImportReader {
         guard ["http", "https"].contains(url.scheme?.lowercased() ?? "") else { return nil }
         var request = URLRequest(url: url, timeoutInterval: 10)
         request.setValue("ja,en;q=0.8", forHTTPHeaderField: "Accept-Language")
-        guard let (data, _) = try? await URLSession.shared.data(for: request) else { return nil }
-        let html = String(decoding: data.prefix(200_000), as: UTF8.self)
-        return title(fromHTML: html)
+        // ページ全部は落とさない。題名は頭のほう（<head> の中）にあるので、そこまで読んだらやめる
+        guard let (bytes, _) = try? await URLSession.shared.bytes(for: request) else { return nil }
+        var data = Data()
+        data.reserveCapacity(64_000)
+        do {
+            for try await byte in bytes {
+                data.append(byte)
+                if data.count >= 200_000 { break }
+                // 「</head>」まで来たら足りる（1KB ごとに確かめる）
+                if data.count % 1024 == 0, data.range(of: Data("</head>".utf8)) != nil { break }
+            }
+        } catch {
+            if data.isEmpty { return nil }
+        }
+        return title(fromHTML: String(decoding: data, as: UTF8.self))
     }
 
     static func title(fromHTML html: String) -> String? {
@@ -520,16 +540,26 @@ enum PlaceImportReader {
 nonisolated enum PlaceScreenshotTrial {
     static let limit = 3
     static let storageKey = "placeScreenshotTrialUsed"
+    /// お試しを使ったもの（共有で届いたスクリーンショット）。同じものをもう一度開いても数えない
+    static let usedItemsKey = "placeScreenshotTrialItems"
 
     static func remaining(in defaults: UserDefaults = .standard) -> Int {
         max(0, limit - defaults.integer(forKey: storageKey))
     }
 
-    /// 1回使う。使えたら true（残りが無ければ false で、数は増やさない）
+    /// 1回使う。使えたら true（残りが無ければ false で、数は増やさない）。
+    /// `item` を渡すと、同じものでもう使っていれば数えずに true を返す
+    /// （「あとで」で閉じた共有のスクリーンショットは、次に開いたときにまた出るため）
     @discardableResult
-    static func consume(in defaults: UserDefaults = .standard) -> Bool {
+    static func consume(item: String? = nil, in defaults: UserDefaults = .standard) -> Bool {
+        var used = defaults.stringArray(forKey: usedItemsKey) ?? []
+        if let item, used.contains(item) { return true }
         guard remaining(in: defaults) > 0 else { return false }
         defaults.set(defaults.integer(forKey: storageKey) + 1, forKey: storageKey)
+        if let item {
+            used.append(item)
+            defaults.set(Array(used.suffix(20)), forKey: usedItemsKey)
+        }
         return true
     }
 }
