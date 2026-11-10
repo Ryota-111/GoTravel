@@ -66,12 +66,15 @@ enum PlanScheduleUndecided {
         var result = ordered
         var anchorTime: Date?
         var runLength = 0
+        /// 前にも後ろにも時刻のある予定が無いとき、続いている未定の予定で共有する分（1件目の分）
+        var runBase: Date?
 
         for index in result.indices {
             let item = result[index]
             guard item.hasUndecidedTime else {
                 anchorTime = item.time
                 runLength = 0
+                runBase = nil
                 continue
             }
             runLength += 1
@@ -80,7 +83,11 @@ enum PlanScheduleUndecided {
                 ?? result[index...].first { !$0.hasUndecidedTime }.map { next in
                     max(next.time.addingTimeInterval(-60), Calendar.current.startOfDay(for: next.time))
                 }
+                // その日が全部「時間未定」：1件目の分にそろえ、選んだ並びを秒で残す
+                // （1件ずつ自分の時刻を使うと、作った時刻の順に並び直ってしまう）
+                ?? runBase
                 ?? item.time
+            if runBase == nil { runBase = base }
             let minute = Calendar.current.dateInterval(of: .minute, for: base)?.start ?? base
             result[index].time = minute.addingTimeInterval(TimeInterval(min(runLength, 59)))
         }

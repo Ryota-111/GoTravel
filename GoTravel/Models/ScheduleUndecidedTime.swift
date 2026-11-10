@@ -45,12 +45,15 @@ enum ScheduleUndecided {
         var result = ordered
         var anchor: ScheduleItem?
         var runLength = 0
+        /// 前にも後ろにも時刻のある予定が無いとき、続いている未定の予定で共有する基準（1件目）
+        var runBase: ScheduleItem?
 
         for index in result.indices {
             let item = result[index]
             guard item.hasUndecidedTime else {
                 anchor = item
                 runLength = 0
+                runBase = nil
                 continue
             }
             runLength += 1
@@ -61,6 +64,9 @@ enum ScheduleUndecided {
                     earlier.time = next.time.addingTimeInterval(-60)
                     return earlier
                 }
+                // その日が全部「時間未定」：1件目の分にそろえ、選んだ並びを秒で残す
+                ?? runBase
+            if runBase == nil { runBase = base ?? item }
             result[index] = placed(item, after: base, offset: runLength)
         }
         return result

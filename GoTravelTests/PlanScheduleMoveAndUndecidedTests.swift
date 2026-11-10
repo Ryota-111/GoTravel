@@ -39,6 +39,21 @@ struct PlanScheduleMoveAndUndecidedTests {
         #expect(placed[1].time == at(9, 59, 2))
     }
 
+    @Test("その日が全部「時間未定」でも、作った時刻ではなく選んだ並びのまま")
+    func allUndecidedKeepsChosenOrder() {
+        // 作った時刻がばらばら（新しい予定の時刻は、作った時の時刻から始まる）
+        var a = item("A", 14, 23, undecided: true)
+        a.time = at(14, 23, 1)
+        var b = item("B", 15, 10, undecided: true)
+        b.time = at(15, 10, 2)
+        let front = PlanScheduleUndecided.inserting(item("C", 16, 0), after: nil, into: [a, b])
+        #expect(front.map(\.id) == ["C", "A", "B"])
+        #expect(front.sorted(by: PlanScheduleItem.chronologically).map(\.id) == ["C", "A", "B"])
+
+        let middle = PlanScheduleUndecided.inserting(item("C", 16, 0), after: "A", into: [a, b])
+        #expect(middle.sorted(by: PlanScheduleItem.chronologically).map(\.id) == ["A", "C", "B"])
+    }
+
     @Test("同じ分なら、時刻のある予定が先。未定どうしは秒の順")
     func ordering() {
         var undecided = item("未定", 10, 0, undecided: true)
