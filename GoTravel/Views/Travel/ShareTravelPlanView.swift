@@ -22,11 +22,24 @@ struct ShareTravelPlanView: View {
     @State private var showRename = false
     @State private var renameText = ""
     @State private var renameFailed = false
-    /// ウェブでも見られるようにしているか（3.5、`SharedWebPage`）。開いたときは覚え書きの値で出し、共有レコードで確かめ直す
-    @State private var webPageEnabled = false
+    /// ウェブで見る用の合言葉（3.5、`SharedWebPage`）。nil ならオフ。開いたときは覚え書きの値で出し、共有レコードで確かめ直す
+    @State private var webToken: String?
     @State private var isUpdatingWebPage = false
+    /// 切り替えるたびに増やす。確かめ直しの結果が、そのあとの切り替えを古い値で上書きしないように使う
+    @State private var webPageGeneration = 0
+    /// 共有をやめる途中（先にウェブのページを止めている）
+    @State private var isStoppingSharing = false
+    @State private var stopSharingError: String?
     @State private var webPageError: String?
     @State private var showWebLinkCopied = false
+
+    private var webPageEnabled: Bool { webToken != nil }
+
+    /// ウェブで見るリンク。共有コードは入れない（見る用の合言葉だけ）
+    private var webPageURL: URL? {
+        guard let planId = currentPlan.id, let webToken else { return nil }
+        return SharedWebPage.url(planId: planId, token: webToken)
+    }
 
     /// ViewModelから常に最新のプランを参照する
     /// （`plan`はシート表示時点のコピーなので、コード生成やメンバー参加が反映されない）
@@ -42,7 +55,7 @@ struct ShareTravelPlanView: View {
 
         共有コード: \(shareCode)
         """
-        if webPageEnabled, let url = SharedWebPage.url(for: shareCode) {
+        if let url = webPageURL {
             message += "\n\nアプリが無くても（Androidでも）、ここから見られます：\n\(url.absoluteString)"
         }
         return message
@@ -116,6 +129,12 @@ struct ShareTravelPlanView: View {
             } message: {
                 Text("通信環境をご確認のうえ、もう一度お試しください。")
             }
+            .alert("共有をやめられませんでした", isPresented: Binding(
+                get: { stopSharingError != nil }, set: { if !$0 { stopSharingError = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("ウェブで見るページを止められなかったため、共有はそのままです。" + (stopSharingError ?? ""))
+            }
             .alert("ウェブで見る設定を変えられませんでした", isPresented: Binding(
                 get: { webPageError != nil }, set: { if !$0 { webPageError = nil } })) {
                 Button("OK", role: .cancel) {}
@@ -134,7 +153,7 @@ struct ShareTravelPlanView: View {
                 shareCode = code
             }
             if let planId = currentPlan.id {
-                webPageEnabled = SharedWebPage.cachedEnabled(planId: planId)
+                webToken = SharedWebPage.cachedToken(planId: planId)
             }
         }
         .task(id: shareCode) { await refreshWebPageState() }
@@ -169,7 +188,7 @@ struct ShareTravelPlanView: View {
                     .foregroundColor(themeManager.currentTheme.dark.opacity(0.75))
             }
 
-            if webPageEnabled, let url = SharedWebPage.url(for: shareCode) {
+            if let url = webPageURL {
                 Text(url.absoluteString)
                     .font(.system(.footnote, design: .monospaced))
                     .foregroundColor(themeManager.currentTheme.dark)
@@ -219,23 +238,27 @@ struct ShareTravelPlanView: View {
 
     /// 共有レコードの値で確かめ直す（ほかの端末で変えていることもある）
     private func refreshWebPageState() async {
-        guard !shareCode.isEmpty, let planId = currentPlan.id,
-              let enabled = try? await CloudKitService.shared.sharedWebPageEnabled(planId: planId) else { return }
-        webPageEnabled = enabled
-        SharedWebPage.cache(enabled, planId: planId)
+        guard !shareCode.isEmpty, let planId = currentPlan.id else { return }
+        let generation = webPageGeneration
+        guard let token = try? await CloudKitService.shared.sharedWebPageToken(planId: planId) else { return }
+        // 読んでいる間に切り替えていたら、その結果のほうが新しいので捨てる
+        guard generation == webPageGeneration, !isUpdatingWebPage else { return }
+        webToken = token
+        SharedWebPage.cache(token: token, planId: planId)
     }
 
     private func setWebPage(_ enabled: Bool) {
-        guard canChangeWebPage, !isUpdatingWebPage, let planId = currentPlan.id else { return }
-        let previous = webPageEnabled
-        webPageEnabled = enabled
+        guard canChangeWebPage, !isUpdatingWebPage, enabled != webPageEnabled, let planId = currentPlan.id else { return }
+        let previous = webToken
+        webPageGeneration += 1
         isUpdatingWebPage = true
         Task {
             do {
-                try await CloudKitService.shared.setSharedWebPageEnabled(enabled, planId: planId)
-                SharedWebPage.cache(enabled, planId: planId)
+                let token = try await CloudKitService.shared.setSharedWebPageEnabled(enabled, planId: planId)
+                webToken = token
+                SharedWebPage.cache(token: token, planId: planId)
             } catch {
-                webPageEnabled = previous
+                webToken = previous
                 webPageError = Self.publishErrorText(for: error)
             }
             isUpdatingWebPage = false
@@ -367,16 +390,21 @@ struct ShareTravelPlanView: View {
             if let userId = authVM.userId, currentPlan.isOwner(userId: userId) {
                 Button(action: { showStopSharingConfirmation = true }) {
                     HStack {
-                        Image(systemName: "person.2.slash")
-                            .font(.subheadline)
+                        if isStoppingSharing {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "person.2.slash")
+                                .font(.subheadline)
+                        }
 
-                        Text("共有を停止")
+                        Text(isStoppingSharing ? "ウェブのページを止めています…" : "共有を停止")
                             .font(.subheadline.weight(.medium))
                     }
                     .foregroundColor(themeManager.currentTheme.error)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
                 }
+                .disabled(isStoppingSharing)
             }
         }
         .padding()
@@ -570,12 +598,27 @@ struct ShareTravelPlanView: View {
     }
 
     private func stopSharing() {
-        guard let planId = currentPlan.id, let userId = authVM.userId else { return }
-        viewModel.stopSharing(planId: planId, userId: userId)
-        shareCode = ""
-        // 共有レコードごと消えるので、ウェブでも見られなくなる
-        webPageEnabled = false
-        SharedWebPage.cache(false, planId: planId)
+        guard let planId = currentPlan.id, let userId = authVM.userId, !isStoppingSharing else { return }
+        Task {
+            // ウェブで見られるようにしていたら、先にウェブのページを止めて、止まったのを確かめる。
+            // 共有レコードの削除は待たずに進むので、削除に失敗するとウェブで見え続けてしまうため
+            if webPageEnabled {
+                isStoppingSharing = true
+                webPageGeneration += 1
+                do {
+                    try await CloudKitService.shared.setSharedWebPageEnabled(false, planId: planId)
+                } catch {
+                    isStoppingSharing = false
+                    stopSharingError = Self.publishErrorText(for: error)
+                    return
+                }
+                isStoppingSharing = false
+            }
+            viewModel.stopSharing(planId: planId, userId: userId)
+            shareCode = ""
+            webToken = nil
+            SharedWebPage.cache(token: nil, planId: planId)
+        }
     }
 
     private func copyShareCode() {

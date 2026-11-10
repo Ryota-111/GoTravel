@@ -5,10 +5,23 @@ import Foundation
 /// 共有した旅行計画をウェブで見る（3.5）
 struct SharedWebPageTests {
 
-    @Test("見るページの URL は公式サイトの /s/<共有コード>")
+    @Test("見るページの URL は /v/<計画のID>/<見る用の合言葉>。共有コード（参加の合言葉）は入れない")
     func url() {
-        #expect(SharedWebPage.url(for: "TRAVEL-AB12CD34", baseURL: SharedWebPage.productionBaseURL)?.absoluteString
-                == "https://travory-web.pages.dev/s/TRAVEL-AB12CD34")
+        #expect(SharedWebPage.url(planId: "PLAN-1", token: "abc", baseURL: SharedWebPage.productionBaseURL)?.absoluteString
+                == "https://travory-web.pages.dev/v/PLAN-1/abc")
+    }
+
+    @Test("見る用の合言葉は毎回ちがう英数字24文字")
+    func token() {
+        let a = SharedWebPage.newToken()
+        let b = SharedWebPage.newToken()
+        #expect(a.count == 24)
+        #expect(a != b)
+        #expect(a.allSatisfy { $0.isLetter || $0.isNumber })
+        #expect(SharedWebPage.token(enabled: NSNumber(value: 1), token: "abc") == "abc")
+        #expect(SharedWebPage.token(enabled: NSNumber(value: 0), token: "abc") == nil)
+        #expect(SharedWebPage.token(enabled: NSNumber(value: 1), token: nil) == nil)
+        #expect(SharedWebPage.token(enabled: NSNumber(value: 1), token: "") == nil)
     }
 
     @Test("Xcode から動かした版は、Development を読むテスト用のサイトを開く")
@@ -33,8 +46,10 @@ struct SharedWebPageTests {
     func cache() throws {
         let defaults = try #require(UserDefaults(suiteName: "SharedWebPageTests"))
         defaults.removePersistentDomain(forName: "SharedWebPageTests")
-        SharedWebPage.cache(true, planId: "a", defaults: defaults)
-        #expect(SharedWebPage.cachedEnabled(planId: "a", defaults: defaults))
-        #expect(!SharedWebPage.cachedEnabled(planId: "b", defaults: defaults))
+        SharedWebPage.cache(token: "t1", planId: "a", defaults: defaults)
+        #expect(SharedWebPage.cachedToken(planId: "a", defaults: defaults) == "t1")
+        #expect(SharedWebPage.cachedToken(planId: "b", defaults: defaults) == nil)
+        SharedWebPage.cache(token: nil, planId: "a", defaults: defaults)
+        #expect(SharedWebPage.cachedToken(planId: "a", defaults: defaults) == nil)
     }
 }
