@@ -15,6 +15,24 @@ enum AddressLookup {
         return format(placemark.postalAddress)
     }
 
+    /// 調べられなかった理由が「その場所に住所が無い」ではないとき（通信できない・回数の上限・途中で止めた）
+    struct Unavailable: Error {}
+
+    /// 住所を引く。住所が無い場所なら nil、通信できない・Apple の回数の上限に当たったときは `Unavailable` を投げる
+    /// （あとで調べ直せるように、「住所が無い」と分けるため）
+    static func lookup(latitude: Double, longitude: Double) async throws -> String? {
+        let location = CLLocation(latitude: latitude, longitude: longitude)
+        do {
+            let placemark = try await CLGeocoder()
+                .reverseGeocodeLocation(location, preferredLocale: Locale(identifier: "ja_JP")).first
+            return format(placemark?.postalAddress)
+        } catch let error as CLError where error.code == .geocodeFoundNoResult || error.code == .geocodeFoundPartialResult {
+            return nil
+        } catch {
+            throw Unavailable()
+        }
+    }
+
     /// 住所を1行にする。国名は付けない（どの国かは、たいてい名前と旅行先から分かる）
     static func format(_ postal: CNPostalAddress?) -> String? {
         guard let postal else { return nil }
