@@ -751,6 +751,8 @@ struct PlacesListView: View {
             }
             .padding(.horizontal, 20)
         }
+        // 横に流れる札が、画面の端の時計や電波の列（iPhone Duo の外側の画面）の下に潜らないようにする
+        .clipped()
     }
 
     /// 県の絞り込み（3.1）。場所のある県だけを北から順に出す

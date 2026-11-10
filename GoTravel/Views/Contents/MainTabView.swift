@@ -2,7 +2,17 @@ import SwiftUI
 import MapKit
 
 struct MainTabView: View {
-    @State private var selectedTab: Int = 0
+    @State private var selectedTab: Int = MainTabView.initialTab
+
+    /// 最初に開くタブ。ふだんは「計画」。
+    /// 開発用のビルドだけ、起動引数 `-TravoryInitialTab 2` で別のタブから始められる（シミュレーターで画面を撮るため）
+    private static var initialTab: Int {
+        #if DEBUG
+        return min(max(UserDefaults.standard.integer(forKey: "TravoryInitialTab"), 0), 3)
+        #else
+        return 0
+        #endif
+    }
     @State private var showICloudAlert = false
     @State private var hasCheckedICloud = false
     @State private var whatsNew: WhatsNew?
@@ -184,6 +194,8 @@ struct MainTabView: View {
     }
 
     private func checkICloudStatus() async {
+        // データを残さないデモ（`-TravoryEmptyDataMode`）では iCloud を使わないので知らせない
+        if CoreDataManager.isEmptyDataMode { return }
         let isAvailable = await CloudKitService.shared.isICloudAvailable()
         if !isAvailable {
             showICloudAlert = true
