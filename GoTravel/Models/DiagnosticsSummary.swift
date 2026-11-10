@@ -17,6 +17,16 @@ enum DiagnosticsSummary {
     /// 1回に送る文の長さの上限（CloudKit の1件の大きさに余裕を持たせる）
     static let maxLength = 12_000
 
+    /// いま動いているアプリの版とビルド番号。1日分の計測には版が入っていないことがあるので、
+    /// ビルド番号が同じならこれで補う（3.5）
+    typealias AppVersion = (version: String, build: String)
+    static var currentApp: AppVersion? {
+        let info = Bundle.main.infoDictionary
+        guard let version = info?["CFBundleShortVersionString"] as? String,
+              let build = info?["CFBundleVersion"] as? String else { return nil }
+        return (version, build)
+    }
+
     // MARK: 落ちた・固まった（MXDiagnosticPayload）
 
     /// 診断の JSON から、落ちた・固まったことをまとめた文。何も無ければ nil
@@ -28,7 +38,13 @@ enum DiagnosticsSummary {
             let meta = crash["diagnosticMetaData"] as? [String: Any] ?? [:]
             var lines = ["■ 落ちた", versionLine(meta)]
             if let type = meta["exceptionType"] { lines.append("例外の種類: \(type)  コード: \(meta["exceptionCode"] ?? "-")  シグナル: \(meta["signal"] ?? "-")") }
-            if let reason = meta["terminationReason"] as? String { lines.append("理由: \(reason)") }
+            if let reason = meta["terminationReason"] as? String {
+                // 固まって止められたのが裏にいるときなら、使っている人の画面には出ていない（3.5）
+                if reason.contains("WatchdogVisibility: Background") {
+                    lines.append("※ 裏にいるときに止められた（画面には出ていない）")
+                }
+                lines.append("理由: \(reason)")
+            }
             if let message = (crash["exceptionReason"] as? [String: Any])?["composedMessage"] as? String {
                 lines.append("例外: \(message)")
             }
@@ -50,9 +66,13 @@ enum DiagnosticsSummary {
 
     // MARK: 止められた回数（MXMetricPayload）
 
-    /// 1日分の計測の JSON から、ふつうでない終わり方（メモリ不足で止められた・落ちた・固まって止められた）の回数。
+    /// 1日分の計測の JSON から、ふつうでない終わり方（メモリ上限・落ちた・固まって止められた）の回数。
     /// ふつうの終わり方しか無ければ nil
-    static func exits(fromJSON data: Data) -> String? {
+    ///
+    /// **裏にいるときにメモリ不足で止められたのは数えない（3.5）。** iOS がほかのアプリのためにメモリを空けただけで、
+    /// どのアプリにも起きる。使っている人は気づかず、次に開くと最初から起動するだけ。
+    /// 3.4 ではこれも送っていたので、落ちていないのに「落ちた報告」が並んでしまった
+    static func exits(fromJSON data: Data, currentApp: AppVersion? = currentApp) -> String? {
         guard let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
               let exits = root["applicationExitMetrics"] as? [String: Any] else { return nil }
         var lines: [String] = []
@@ -61,7 +81,8 @@ enum DiagnosticsSummary {
             let abnormal = counts
                 .compactMap { key, value -> (String, Int)? in
                     guard let count = (value as? NSNumber)?.intValue, count > 0,
-                          !key.localizedCaseInsensitiveContains("Normal") else { return nil }
+                          !key.localizedCaseInsensitiveContains("Normal"),
+                          !(scope == "backgroundExitData" && key.contains("MemoryPressure")) else { return nil }
                     return (exitLabel(key), count)
                 }
                 .sorted { $0.0 < $1.0 }
@@ -70,14 +91,17 @@ enum DiagnosticsSummary {
         }
         guard !lines.isEmpty else { return nil }
         let meta = root["metaData"] as? [String: Any] ?? [:]
-        return (["■ ふつうでない終わり方（1日分）", versionLine(meta)] + lines).joined(separator: "\n")
+        return (["■ ふつうでない終わり方（1日分）", versionLine(meta, currentApp: currentApp)] + lines).joined(separator: "\n")
     }
 
     // MARK: - Helpers
 
-    private static func versionLine(_ meta: [String: Any]) -> String {
-        let app = meta["appVersion"] as? String ?? "?"
+    /// 版が無くてもビルド番号がいまのアプリと同じなら、いまの版を入れる（3.4 では「?（30）」になっていた）
+    private static func versionLine(_ meta: [String: Any], currentApp: AppVersion? = nil) -> String {
         let build = meta["appBuildVersion"] as? String ?? "?"
+        let app = meta["appVersion"] as? String
+            ?? (currentApp?.build == build ? currentApp?.version : nil)
+            ?? "?"
         let os = meta["osVersion"] as? String ?? "?"
         let device = meta["deviceType"] as? String ?? "?"
         return "版: \(app)（\(build)） / \(os) / \(device)"
