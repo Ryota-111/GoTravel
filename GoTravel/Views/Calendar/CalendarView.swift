@@ -1210,6 +1210,8 @@ private struct DayCellGestures: ViewModifier {
 
     func body(content: Content) -> some View {
         content
+            // マス全体で受ける。付けないと、数字や点の描かれたところしか押せない
+            .contentShape(Rectangle())
             .onTapGesture { onSelect(date) }
             // 長押しで、これまでの予定からその日に置ける。
             // 「またジム」「また同じ店」を毎回打ち直さずに済ませるため。
