@@ -240,7 +240,15 @@ struct ShareTravelPlanView: View {
     private func refreshWebPageState() async {
         guard !shareCode.isEmpty, let planId = currentPlan.id else { return }
         let generation = webPageGeneration
-        guard let token = try? await CloudKitService.shared.sharedWebPageToken(planId: planId) else { return }
+        // 読めなかったとき（通信できないなど）だけ、手元の値のままにする。
+        // 「オフになっている」も nil で返るので、`try?` でまとめると、ほかの端末でオフにしたあとも
+        // 古いリンクを出し続けてしまう
+        let token: String?
+        do {
+            token = try await CloudKitService.shared.sharedWebPageToken(planId: planId)
+        } catch {
+            return
+        }
         // 読んでいる間に切り替えていたら、その結果のほうが新しいので捨てる
         guard generation == webPageGeneration, !isUpdatingWebPage else { return }
         webToken = token
@@ -600,20 +608,19 @@ struct ShareTravelPlanView: View {
     private func stopSharing() {
         guard let planId = currentPlan.id, let userId = authVM.userId, !isStoppingSharing else { return }
         Task {
-            // ウェブで見られるようにしていたら、先にウェブのページを止めて、止まったのを確かめる。
-            // 共有レコードの削除は待たずに進むので、削除に失敗するとウェブで見え続けてしまうため
-            if webPageEnabled {
-                isStoppingSharing = true
-                webPageGeneration += 1
-                do {
-                    try await CloudKitService.shared.setSharedWebPageEnabled(false, planId: planId)
-                } catch {
-                    isStoppingSharing = false
-                    stopSharingError = Self.publishErrorText(for: error)
-                    return
-                }
+            // 先にウェブのページを止めて、止まったのを確かめる。
+            // 共有レコードの削除は待たずに進むので、削除に失敗するとウェブで見え続けてしまうため。
+            // この端末でオフに見えていても止める（ほかの端末でオンにしていて、まだ読めていないことがある）
+            isStoppingSharing = true
+            webPageGeneration += 1
+            do {
+                try await CloudKitService.shared.setSharedWebPageEnabled(false, planId: planId)
+            } catch {
                 isStoppingSharing = false
+                stopSharingError = Self.publishErrorText(for: error)
+                return
             }
+            isStoppingSharing = false
             viewModel.stopSharing(planId: planId, userId: userId)
             shareCode = ""
             webToken = nil
