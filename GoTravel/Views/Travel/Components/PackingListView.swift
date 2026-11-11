@@ -15,8 +15,14 @@ struct PackingListView: View {
     var kind: PackingItem.Kind = .packing
 
     @State private var newItemName: String = ""
-    /// お土産の「誰に」。使わない種類では欄ごと出さない
+    /// お土産のメモ。使わない種類では欄ごと出さない
     @State private var newItemNote: String = ""
+    /// お土産を渡す相手（3.5）。続けて同じ人のぶんを足すことが多いので、足したあとも残す
+    @State private var newItemRecipient: String = ""
+    /// 閉じている相手（`SouvenirGroup.id`）
+    @State private var collapsedRecipients: Set<String> = []
+    /// ドラッグしたお土産を、いま重ねている相手（`SouvenirGroup.id`）
+    @State private var dropTargetRecipient: String?
     /// お土産を「自分だけ」で足すか（共有中の旅行でだけ選べる。はじめは「みんな」）
     @State private var newItemIsPrivate = false
     /// 「よく使う持ち物」で選択中のもの。まとめて追加するまで保持する
@@ -45,6 +51,13 @@ struct PackingListView: View {
             return currentPlan?.isShared == true && newItemIsPrivate ? authVM.userId : nil
         }
         return kind.isSharedWithMembers ? nil : authVM.userId
+    }
+
+    /// よく使うものから足すときの渡す相手。相手の欄に書いてあればその人のぶんにする
+    private var presetRecipient: String? {
+        guard kind.usesRecipient else { return nil }
+        let trimmed = newItemRecipient.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
 
     private var presets: [String] {
@@ -183,7 +196,12 @@ struct PackingListView: View {
         VStack(spacing: 8) {
             addNameRow
 
-            // お土産だけ「誰に」を書ける。買う前に決めておくと店で迷わない
+            // お土産は渡す相手を書ける（3.5）。相手ごとにまとめて出す
+            if kind.usesRecipient {
+                recipientField
+            }
+
+            // お土産だけメモを書ける
             if kind.usesNote {
                 TextField(kind.notePlaceholder, text: $newItemNote)
                     .font(.system(size: 13))
@@ -239,6 +257,65 @@ struct PackingListView: View {
         }
     }
 
+    /// 渡す相手の欄と、これまでに書いた相手の候補
+    private var recipientField: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Image(systemName: "person.fill")
+                    .font(.system(size: 12))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                TextField("渡す相手（例: お母さん・会社）", text: $newItemRecipient)
+                    .font(.system(size: 13))
+                    .submitLabel(.done)
+                    .onSubmit(addItem)
+                    .foregroundColor(textColor)
+                if !newItemRecipient.isEmpty {
+                    Button {
+                        newItemRecipient = ""
+                    } label: {
+                        Image(systemName: "xmark.circle.fill")
+                            .foregroundColor(themeManager.currentTheme.secondaryText.opacity(0.6))
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel("渡す相手を消す")
+                }
+            }
+            .padding(.horizontal, 14)
+            .padding(.vertical, 9)
+            .background(
+                RoundedRectangle(cornerRadius: 12)
+                    .fill(cardFill)
+                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(cardStroke, lineWidth: 1))
+            )
+
+            // 書いたことのある相手を選べるようにする（同じ人の名前を毎回打たなくて済む）
+            let recipients = SouvenirGrouping.suggestedRecipients(items)
+            if !recipients.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 6) {
+                        ForEach(recipients, id: \.self) { name in
+                            let isSelected = newItemRecipient.trimmingCharacters(in: .whitespaces) == name
+                            Button {
+                                newItemRecipient = isSelected ? "" : name
+                            } label: {
+                                Text(name)
+                                    .font(.caption)
+                                    .lineLimit(1)
+                                    .foregroundColor(isSelected ? ThemePreset.readableText(on: accent) : accent)
+                                    .padding(.horizontal, 10)
+                                    .padding(.vertical, 6)
+                                    .background(Capsule().fill(isSelected ? accent : accent.opacity(0.12)))
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+                        }
+                    }
+                }
+                .clipped()
+            }
+        }
+    }
+
     private var trimmedNewItemName: String {
         newItemName.trimmingCharacters(in: .whitespacesAndNewlines)
     }
@@ -267,7 +344,144 @@ struct PackingListView: View {
 
     // MARK: - 一覧
 
+    @ViewBuilder
     private var itemsList: some View {
+        if kind.usesRecipient && SouvenirGrouping.usesGroups(items) {
+            groupedList
+        } else {
+            flatList
+        }
+    }
+
+    /// 渡す相手ごとにまとめた一覧（3.5）。相手の行を押すと開け閉めできる。
+    /// お土産を長押しして、ほかの相手のまとまり（閉じていても見出しでよい）へドラッグすると移せる
+    private var groupedList: some View {
+        VStack(spacing: 10) {
+            ForEach(SouvenirGrouping.groups(items)) { group in
+                VStack(spacing: 8) {
+                    groupHeader(group)
+                    if !collapsedRecipients.contains(group.id) {
+                        ForEach(group.items) { item in
+                            PackingItemRow(item: item, planId: plan.id ?? "")
+                                .environmentObject(viewModel)
+                                .environmentObject(authVM)
+                                .padding(.leading, 14)
+                                .draggable(item.id) {
+                                    Text(item.name)
+                                        .font(.system(size: 15, weight: .semibold))
+                                        .padding(.horizontal, 14)
+                                        .padding(.vertical, 10)
+                                        .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+                                }
+                                .transition(.opacity.combined(with: .move(edge: .top)))
+                        }
+                    }
+                }
+                .padding(4)
+                .background(
+                    RoundedRectangle(cornerRadius: 14)
+                        .fill(dropTargetRecipient == group.id ? accent.opacity(0.10) : Color.clear)
+                        .overlay(
+                            RoundedRectangle(cornerRadius: 14)
+                                .stroke(dropTargetRecipient == group.id ? accent.opacity(0.6) : Color.clear,
+                                        style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
+                        )
+                )
+                .dropDestination(for: String.self) { ids, _ in
+                    dropTargetRecipient = nil
+                    return moveSouvenirs(ids, to: group.recipient)
+                } isTargeted: { targeted in
+                    if targeted {
+                        dropTargetRecipient = group.id
+                    } else if dropTargetRecipient == group.id {
+                        dropTargetRecipient = nil
+                    }
+                }
+            }
+        }
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: items.map(\.isChecked))
+    }
+
+    /// ドラッグで落としたお土産を、その相手へ移す。この旅行のお土産でなければ何もしない
+    private func moveSouvenirs(_ ids: [String], to recipient: String?) -> Bool {
+        let known = Set(items.map(\.id))
+        let moving = ids.filter { known.contains($0) }
+        guard !moving.isEmpty, let userId = authVM.userId,
+              var updatedPlan = currentPlan ?? Optional(plan) else { return false }
+        // もうその相手のものだけなら何もしない
+        let alreadyThere = items.filter { moving.contains($0.id) }
+            .allSatisfy { SouvenirGrouping.recipient(of: $0) == recipient }
+        guard !alreadyThere else { return false }
+        updatedPlan.assignSouvenirs(moving, to: recipient)
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
+            viewModel.update(updatedPlan, userId: userId)
+            if let recipient { collapsedRecipients.remove(recipient) } else { collapsedRecipients.remove("") }
+        }
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+        return true
+    }
+
+    private func groupHeader(_ group: SouvenirGroup) -> some View {
+        let isCollapsed = collapsedRecipients.contains(group.id)
+        let isDone = group.checkedCount == group.items.count
+        return HStack(spacing: 8) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    if isCollapsed {
+                        collapsedRecipients.remove(group.id)
+                    } else {
+                        collapsedRecipients.insert(group.id)
+                    }
+                }
+            } label: {
+                HStack(spacing: 8) {
+                    Image(systemName: "chevron.right")
+                        .font(.system(size: 11, weight: .bold))
+                        .rotationEffect(.degrees(isCollapsed ? 0 : 90))
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .frame(width: 14)
+                    Image(systemName: group.recipient == nil ? "questionmark.circle" : "person.fill")
+                        .font(.system(size: 12))
+                        .foregroundColor(accent)
+                    Text(group.recipient ?? "相手なし")
+                        .font(.system(size: 15, weight: .semibold))
+                        .foregroundColor(textColor)
+                        .lineLimit(1)
+                    Spacer(minLength: 4)
+                    if isDone {
+                        Image(systemName: "checkmark.circle.fill")
+                            .font(.system(size: 12))
+                            .foregroundColor(themeManager.currentTheme.success)
+                    }
+                    Text("\(group.checkedCount)/\(group.items.count)")
+                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .foregroundColor(isDone ? themeManager.currentTheme.success : themeManager.currentTheme.secondaryText)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("\(group.recipient ?? "相手なし")、\(group.items.count)個中\(group.checkedCount)個買った"))
+            .accessibilityHint(isCollapsed ? "開く" : "閉じる")
+
+            // この人に渡すものを足す。相手の欄に名前を入れて、名前の欄に移る
+            Button {
+                newItemRecipient = group.recipient ?? ""
+                isInputFocused = true
+            } label: {
+                Image(systemName: "plus.circle")
+                    .font(.system(size: 17))
+                    .foregroundColor(accent)
+                    .frame(width: 30, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(Text("\(group.recipient ?? "相手なし")に渡すものを足す"))
+        }
+        .padding(.horizontal, 6)
+        .padding(.top, 4)
+    }
+
+    private var flatList: some View {
         VStack(spacing: 8) {
             ForEach(sortedItems) { item in
                 PackingItemRow(item: item, planId: plan.id ?? "")
@@ -371,7 +585,7 @@ struct PackingListView: View {
         // Set は順番を持たないので、候補に並んでいる順で足す
         for name in presets where selectedPresets.contains(name) {
             updatedPlan.packingItems.append(
-                PackingItem(name: name, kind: kind, ownerId: newItemOwnerId)
+                PackingItem(name: name, kind: kind, recipient: presetRecipient, ownerId: newItemOwnerId)
             )
         }
 
@@ -395,15 +609,17 @@ struct PackingListView: View {
         guard let userId = authVM.userId,
               var updatedPlan = currentPlan ?? Optional(plan) else { return }
 
-        let existingNames = Set(items.map(\.name))
+        // お土産は相手が違えば別のもの（`SouvenirGrouping.importKey`）
+        var existingKeys = Set(items.map(SouvenirGrouping.importKey(of:)))
         var added = 0
 
-        for item in incoming where !existingNames.contains(item.name) {
+        for item in incoming where existingKeys.insert(SouvenirGrouping.importKey(of: item)).inserted {
             updatedPlan.packingItems.append(
                 PackingItem(name: item.name,
                             isChecked: false,
                             kind: kind,
                             note: item.note,
+                            recipient: item.recipient,
                             ownerId: newItemOwnerId)
             )
             added += 1
@@ -431,12 +647,17 @@ struct PackingListView: View {
         guard var updatedPlan = currentPlan ?? Optional(plan) else { return }
 
         let note = newItemNote.trimmingCharacters(in: .whitespacesAndNewlines)
+        let recipient = kind.usesRecipient
+            ? newItemRecipient.trimmingCharacters(in: .whitespacesAndNewlines) : ""
         updatedPlan.packingItems.append(
             PackingItem(name: trimmed,
                         kind: kind,
                         note: note.isEmpty ? nil : note,
+                        recipient: recipient.isEmpty ? nil : recipient,
                         ownerId: newItemOwnerId)
         )
+        // 足した相手が閉じていたら開く（足したものが見えないと、足せたか分からない）
+        collapsedRecipients.remove(recipient)
 
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             if let userId = authVM.userId {
@@ -502,6 +723,7 @@ struct PackingItemRow: View {
     @State private var showsEditor = false
     @State private var editingName = ""
     @State private var editingNote = ""
+    @State private var editingRecipient = ""
 
     private var currentPlan: TravelPlan? {
         viewModel.travelPlans.first(where: { $0.id == planId })
@@ -534,7 +756,7 @@ struct PackingItemRow: View {
                     .lineLimit(2)
                     .multilineTextAlignment(.leading)
 
-                // お土産の「誰に」。入っているときだけ出す
+                // お土産のメモ（3.4 までは「誰に」もここ）。入っているときだけ出す
                 if let note = item.note, !note.isEmpty {
                     Text(note)
                         .font(.system(size: 12))
@@ -557,6 +779,7 @@ struct PackingItemRow: View {
             // チェックの丸は左端なので、右端なら間違って押しにくい（予約や旅行計画のカードと同じ形）
             Menu {
                 Button("編集", systemImage: "pencil", action: startEditing)
+                duplicateMenu
                 if showsVisibilityChoice {
                     visibilityButton
                 }
@@ -598,17 +821,64 @@ struct PackingItemRow: View {
         .accessibilityAction(named: "切り替える", toggleCheck)
         .contextMenu {
             Button("編集", systemImage: "pencil", action: startEditing)
+            duplicateMenu
             Button("削除", systemImage: "trash", role: .destructive, action: deleteItem)
         }
         .alert("\(item.kind.title)を編集", isPresented: $showsEditor) {
             TextField("名前", text: $editingName)
-            // お土産は「誰に」、ほかもメモがあれば書き換えられるようにする
+            if item.kind.usesRecipient {
+                TextField("渡す相手", text: $editingRecipient)
+            }
+            // お土産はメモ、ほかもメモがあれば書き換えられるようにする
             if item.kind.usesNote || !(item.note ?? "").isEmpty {
                 TextField(item.kind.usesNote ? item.kind.notePlaceholder : "メモ", text: $editingNote)
             }
             Button("キャンセル", role: .cancel) {}
             Button("保存", action: saveEdit)
         }
+    }
+
+    // MARK: 複製（3.5）
+
+    /// お土産は「同じ相手に」か「ほかの相手に」を選べる（同じお菓子を何人かに買うとき）。
+    /// ほかのリストは、すぐ下に同じものを足す
+    @ViewBuilder
+    private var duplicateMenu: some View {
+        if item.kind.usesRecipient {
+            let current = SouvenirGrouping.recipient(of: item)
+            let others = SouvenirGrouping.suggestedRecipients(visibleSouvenirs).filter { $0 != current }
+            Menu {
+                Button("同じ相手に") { duplicate(to: .none) }
+                if !others.isEmpty || current != nil {
+                    Section("ほかの相手に") {
+                        ForEach(others, id: \.self) { name in
+                            Button("\(name)へ") { duplicate(to: .some(name)) }
+                        }
+                        if current != nil {
+                            Button("相手なし") { duplicate(to: .some(nil)) }
+                        }
+                    }
+                }
+            } label: {
+                Label("複製", systemImage: "plus.square.on.square")
+            }
+        } else {
+            Button("複製", systemImage: "plus.square.on.square") { duplicate(to: .none) }
+        }
+    }
+
+    /// この旅行の、自分に見えるお土産（複製先の相手の候補に使う）
+    private var visibleSouvenirs: [PackingItem] {
+        (currentPlan?.packingItems ?? []).filter { $0.kind == .souvenir && $0.isVisible(to: authVM.userId) }
+    }
+
+    private func duplicate(to recipient: String??) {
+        guard var updatedPlan = currentPlan, let userId = authVM.userId else { return }
+        updatedPlan.duplicatePackingItem(item.id, recipient: recipient)
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
+            viewModel.update(updatedPlan, userId: userId)
+        }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     /// 共有中の旅行のお土産で、「みんな」と「自分だけ」を切り替えられるか
@@ -639,6 +909,7 @@ struct PackingItemRow: View {
     private func startEditing() {
         editingName = item.name
         editingNote = item.note ?? ""
+        editingRecipient = item.recipient ?? ""
         showsEditor = true
     }
 
@@ -652,6 +923,10 @@ struct PackingItemRow: View {
         let note = editingNote.trimmingCharacters(in: .whitespacesAndNewlines)
         updatedPlan.packingItems[index].name = name
         updatedPlan.packingItems[index].note = note.isEmpty ? nil : note
+        if item.kind.usesRecipient {
+            let recipient = editingRecipient.trimmingCharacters(in: .whitespacesAndNewlines)
+            updatedPlan.packingItems[index].recipient = recipient.isEmpty ? nil : recipient
+        }
         viewModel.update(updatedPlan, userId: userId)
     }
 

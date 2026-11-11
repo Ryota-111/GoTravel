@@ -61,10 +61,14 @@ struct PackingItem: Identifiable, Codable {
             }
         }
 
-        /// 補足を入れる欄を出すか。お土産は「誰に」を書けると実用的
+        /// 補足を入れる欄を出すか。お土産は渡すものごとにメモを書ける
         var usesNote: Bool { self == .souvenir }
 
-        var notePlaceholder: String { "誰に・メモ" }
+        var notePlaceholder: String { "メモ" }
+
+        /// 渡す相手ごとにまとめるか（3.5、ご要望から）。
+        /// 「お母さん」「会社」の下に、その人に渡すものを並べて、相手ごとに開け閉めできる
+        var usesRecipient: Bool { self == .souvenir }
 
         /// 同行者と分け合うリストか。
         ///
@@ -94,8 +98,14 @@ struct PackingItem: Identifiable, Codable {
     var name: String
     var isChecked: Bool
     var kind: Kind
-    /// 一言の補足。お土産の「誰に」に使う
+    /// 一言の補足。お土産のメモに使う（3.4 までは「誰に」もここに書いていた）
     var note: String?
+
+    /// お土産を渡す相手（「お母さん」「会社」など）。無ければ相手を決めていない（3.5）。
+    ///
+    /// 一覧はこれで相手ごとにまとめる。旅行の JSON の中の項目なので、CloudKit のスキーマ変更は要らない。
+    /// 古い版が書き換えると消えて、相手の無いお土産に戻る
+    var recipient: String?
 
     /// この項目の持ち主。
     ///
@@ -104,6 +114,15 @@ struct PackingItem: Identifiable, Codable {
     /// 値が入っているものは**その人だけのもの**で、共有レコードには載らない
     /// （`CloudKitService.publishSharedTravelPlan` が落とす）。
     var ownerId: String?
+
+    /// 渡す相手とメモを1行に（「お母さんへ ・ 小さめのもの」）。どちらも無ければ nil。
+    /// 相手ごとにまとめない所（しおり・前の旅行から取り込む画面）で使う
+    var recipientAndNote: String? {
+        let parts = [recipient.map { "\($0)へ" }, note]
+            .compactMap { $0?.trimmingCharacters(in: .whitespacesAndNewlines) }
+            .filter { !$0.isEmpty }
+        return parts.isEmpty ? nil : parts.joined(separator: " ・ ")
+    }
 
     /// 自分に見えてよい項目か
     func isVisible(to userId: String?) -> Bool {
@@ -116,17 +135,19 @@ struct PackingItem: Identifiable, Codable {
          isChecked: Bool = false,
          kind: Kind = .packing,
          note: String? = nil,
+         recipient: String? = nil,
          ownerId: String? = nil) {
         self.id = id
         self.name = name
         self.isChecked = isChecked
         self.kind = kind
         self.note = note
+        self.recipient = recipient
         self.ownerId = ownerId
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, isChecked, kind, note, ownerId
+        case id, name, isChecked, kind, note, recipient, ownerId
     }
 
     /// `kind` と `note` を足す前に保存されたデータには、そのキーが無い。
@@ -138,13 +159,126 @@ struct PackingItem: Identifiable, Codable {
         isChecked = try container.decodeIfPresent(Bool.self, forKey: .isChecked) ?? false
         kind = try container.decodeIfPresent(Kind.self, forKey: .kind) ?? .packing
         note = try container.decodeIfPresent(String.self, forKey: .note)
+        recipient = try container.decodeIfPresent(String.self, forKey: .recipient)
         // 持ち主を持たせる前の項目は「みんなのもの」として扱う。
         // 既に同行者に見えていたものを、後から隠すほうが混乱する
         ownerId = try container.decodeIfPresent(String.self, forKey: .ownerId)
     }
 }
 
+// MARK: - お土産を渡す相手ごとにまとめる（3.5）
+
+/// お土産の、渡す相手ひとり分のまとまり
+struct SouvenirGroup: Identifiable, Equatable {
+    /// 渡す相手。nil は「相手なし」
+    let recipient: String?
+    let items: [PackingItem]
+
+    var id: String { recipient ?? "" }
+    var checkedCount: Int { items.filter(\.isChecked).count }
+
+    static func == (lhs: SouvenirGroup, rhs: SouvenirGroup) -> Bool {
+        lhs.recipient == rhs.recipient && lhs.items.map(\.id) == rhs.items.map(\.id)
+    }
+}
+
+enum SouvenirGrouping {
+    /// 前後の空白を落とした相手。空なら nil（相手なし）
+    static func recipient(of item: PackingItem) -> String? {
+        cleaned(item.recipient)
+    }
+
+    static func cleaned(_ recipient: String?) -> String? {
+        let trimmed = recipient?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    /// 相手ごとのまとまり。相手は最初に出てきた順、「相手なし」はいちばん下。
+    /// 中は、まだ買っていないものを上に（リストの並び順はそのまま）
+    static func groups(_ items: [PackingItem]) -> [SouvenirGroup] {
+        var order: [String?] = []
+        var byRecipient: [String: [PackingItem]] = [:]
+        for item in items {
+            let key = recipient(of: item)
+            if byRecipient[key ?? ""] == nil, key != nil { order.append(key) }
+            byRecipient[key ?? "", default: []].append(item)
+        }
+        if byRecipient[""] != nil { order.append(nil) }
+        return order.map { key in
+            let members = byRecipient[key ?? ""] ?? []
+            let sorted = members.filter { !$0.isChecked } + members.filter(\.isChecked)
+            return SouvenirGroup(recipient: key, items: sorted)
+        }
+    }
+
+    /// 入っている相手（出てきた順、重ねない）。追加の欄の候補に使う
+    static func recipients(_ items: [PackingItem]) -> [String] {
+        var seen = Set<String>()
+        return items.compactMap(recipient(of:)).filter { seen.insert($0).inserted }
+    }
+
+    /// 相手の候補のはじめの分。まだ誰も書いていなくても、押すだけで選べるように
+    static let starterRecipients = ["家族", "職場", "友人", "自分用"]
+
+    /// 追加の欄に出す相手の候補。書いたことのある相手を先に、まだ使っていないはじめの候補をあとに
+    static func suggestedRecipients(_ items: [PackingItem]) -> [String] {
+        let used = recipients(items)
+        return used + starterRecipients.filter { !used.contains($0) }
+    }
+
+    /// 前の旅行から取り込むときに「もう入っている」とみなす鍵。
+    /// お土産は相手が違えば別のもの（お母さんにも会社にも「白い恋人」）
+    static func importKey(of item: PackingItem) -> String {
+        item.kind.usesRecipient ? "\(item.name)\u{1F}\(recipient(of: item) ?? "")" : item.name
+    }
+
+    /// 相手ごとにまとめて出すか。相手を1つも書いていなければ、今までどおり1列に並べる
+    static func usesGroups(_ items: [PackingItem]) -> Bool {
+        items.contains { recipient(of: $0) != nil }
+    }
+}
+
 extension TravelPlan {
+    /// お土産を別の相手へ移す（3.5、ドラッグで移すとき）。移したものは、その相手のいちばん下に並ぶ。
+    /// `recipient` が nil なら「相手なし」へ
+    mutating func assignSouvenirs(_ ids: [String], to recipient: String?) {
+        let wanted = Set(ids)
+        let target = SouvenirGrouping.cleaned(recipient)
+        var moving = packingItems.filter { wanted.contains($0.id) && $0.kind == .souvenir }
+        guard !moving.isEmpty else { return }
+        for index in moving.indices { moving[index].recipient = target }
+        let movingIDs = Set(moving.map(\.id))
+        packingItems.removeAll { movingIDs.contains($0.id) }
+        insertSouvenirs(moving, atEndOf: target)
+    }
+
+    /// 項目を複製する（3.5）。チェックは外す。
+    /// お土産で相手を指定すれば、その相手のいちばん下に入る（「白い恋人」を会社にも）。
+    /// 指定しなければ（`recipient` が `.none`）、元のすぐ下に入る。戻り値は新しい項目の id
+    @discardableResult
+    mutating func duplicatePackingItem(_ id: String, recipient: String?? = .none) -> String? {
+        guard let index = packingItems.firstIndex(where: { $0.id == id }) else { return nil }
+        var copy = packingItems[index]
+        copy.id = UUID().uuidString
+        copy.isChecked = false
+        if case .some(let newRecipient) = recipient, copy.kind == .souvenir {
+            let target = SouvenirGrouping.cleaned(newRecipient)
+            copy.recipient = target
+            insertSouvenirs([copy], atEndOf: target)
+        } else {
+            packingItems.insert(copy, at: index + 1)
+        }
+        return copy.id
+    }
+
+    /// お土産を、その相手の最後の項目のすぐ後ろに入れる。相手の項目が無ければいちばん後ろ
+    private mutating func insertSouvenirs(_ items: [PackingItem], atEndOf recipient: String?) {
+        let last = packingItems.lastIndex {
+            $0.kind == .souvenir && SouvenirGrouping.recipient(of: $0) == recipient
+        }
+        packingItems.insert(contentsOf: items, at: last.map { $0 + 1 } ?? packingItems.endIndex)
+    }
+
     /// リストの項目を、渡した順に並べ直す（持ち物・お土産・やりたいことのどれか1つ）。
     ///
     /// 3つのリストは1つの配列に混ざって入っているので、渡した項目が入っていた位置だけを
