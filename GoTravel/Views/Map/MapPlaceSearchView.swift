@@ -35,6 +35,8 @@ struct MapPlaceSearchView: View {
     @State private var visibleRegion: MKCoordinateRegion?
     @State private var searchText = ""
     @State private var results: [MKMapItem] = []
+    /// 候補の欄の中身の高さ。1件の高さを決め打ちすると、文字の大きさによって下に空白が出た
+    @State private var resultContentHeight: CGFloat = 0
     @State private var selectedResult: MKMapItem?
     /// 地図の上で押したもの（検索結果のピン、または地図に初めから出ている施設）
     @State private var mapSelection: MapSelection<MKMapItem>?
@@ -202,12 +204,18 @@ struct MapPlaceSearchView: View {
                         .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    Divider().padding(.leading, 56)
+                    // 線は候補と候補のあいだだけ。最後の下には引かない
+                    if result != results.last {
+                        Divider().padding(.leading, 56)
+                    }
                 }
             }
+            .onGeometryChange(for: CGFloat.self) { $0.size.height } action: { resultContentHeight = $0 }
         }
+        .scrollBounceBehavior(.basedOnSize)
         .background(Color(.systemBackground))
-        .frame(height: min(CGFloat(results.count) * 65, 300))
+        // 中身の高さに合わせる（多いときは 300 までで、そこから先はスクロール）
+        .frame(height: min(resultContentHeight > 0 ? resultContentHeight : CGFloat(results.count) * 65, 300))
     }
 
     // MARK: - 下

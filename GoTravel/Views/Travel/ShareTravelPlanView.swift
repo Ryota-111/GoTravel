@@ -22,6 +22,24 @@ struct ShareTravelPlanView: View {
     @State private var showRename = false
     @State private var renameText = ""
     @State private var renameFailed = false
+    /// ウェブで見る用の合言葉（3.5、`SharedWebPage`）。nil ならオフ。開いたときは覚え書きの値で出し、共有レコードで確かめ直す
+    @State private var webToken: String?
+    @State private var isUpdatingWebPage = false
+    /// 切り替えるたびに増やす。確かめ直しの結果が、そのあとの切り替えを古い値で上書きしないように使う
+    @State private var webPageGeneration = 0
+    /// 共有をやめる途中（先にウェブのページを止めている）
+    @State private var isStoppingSharing = false
+    @State private var stopSharingError: String?
+    @State private var webPageError: String?
+    @State private var showWebLinkCopied = false
+
+    private var webPageEnabled: Bool { webToken != nil }
+
+    /// ウェブで見るリンク。共有コードは入れない（見る用の合言葉だけ）
+    private var webPageURL: URL? {
+        guard let planId = currentPlan.id, let webToken else { return nil }
+        return SharedWebPage.url(planId: planId, token: webToken)
+    }
 
     /// ViewModelから常に最新のプランを参照する
     /// （`plan`はシート表示時点のコピーなので、コード生成やメンバー参加が反映されない）
@@ -29,14 +47,24 @@ struct ShareTravelPlanView: View {
         viewModel.travelPlans.first(where: { $0.id == plan.id }) ?? plan
     }
 
-    /// 招待メッセージ（共有シートで送る本文）
+    /// 招待メッセージ（共有シートで送る本文）。ウェブで見られるなら、そのリンクも添える
     private var inviteMessage: String {
-        """
+        var message = """
         「\(currentPlan.title)」の旅行計画に招待します！
         Travoryアプリの「共有に参加」から、この共有コードを入力してください。
 
         共有コード: \(shareCode)
         """
+        if let url = webPageURL {
+            message += "\n\nアプリが無くても（Androidでも）、ここから見られます：\n\(url.absoluteString)"
+        }
+        return message
+    }
+
+    /// ウェブで見る設定を変えられるのは、計画を作った人だけ
+    private var canChangeWebPage: Bool {
+        guard let userId = authVM.userId else { return false }
+        return currentPlan.isOwner(userId: userId)
     }
 
     var body: some View {
@@ -62,6 +90,7 @@ struct ShareTravelPlanView: View {
 
                         if !shareCode.isEmpty {
                             shareCodeSection
+                            webPageSection
                         } else {
                             generateCodeButton
                         }
@@ -100,6 +129,18 @@ struct ShareTravelPlanView: View {
             } message: {
                 Text("通信環境をご確認のうえ、もう一度お試しください。")
             }
+            .alert("共有をやめられませんでした", isPresented: Binding(
+                get: { stopSharingError != nil }, set: { if !$0 { stopSharingError = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text("ウェブで見るページを止められなかったため、共有はそのままです。" + (stopSharingError ?? ""))
+            }
+            .alert("ウェブで見る設定を変えられませんでした", isPresented: Binding(
+                get: { webPageError != nil }, set: { if !$0 { webPageError = nil } })) {
+                Button("OK", role: .cancel) {}
+            } message: {
+                Text(webPageError ?? "")
+            }
             .alert("共有コードを発行できませんでした", isPresented: $showPublishError) {
                 Button("OK", role: .cancel) {}
             } message: {
@@ -111,6 +152,124 @@ struct ShareTravelPlanView: View {
             if let code = currentPlan.shareCode {
                 shareCode = code
             }
+            if let planId = currentPlan.id {
+                webToken = SharedWebPage.cachedToken(planId: planId)
+            }
+        }
+        .task(id: shareCode) { await refreshWebPageState() }
+    }
+
+    // MARK: - Web Page Section（3.5）
+    /// ウェブでも見られるようにする。オンにすると、リンクを開いた人がアプリ無しで（Android でも）見られる
+    private var webPageSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Toggle(isOn: Binding(get: { webPageEnabled }, set: { setWebPage($0) })) {
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("ウェブでも見られるようにする")
+                        .font(.headline)
+                        .foregroundColor(themeManager.currentTheme.dark)
+                    Text("リンクを開いた人は、アプリが無くても（Androidでも）ブラウザで見られます。見るだけで、直すことはできません。")
+                        .font(.caption)
+                        .foregroundColor(themeManager.currentTheme.dark.opacity(0.75))
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            }
+            .tint(themeManager.currentTheme.success)
+            .disabled(!canChangeWebPage || isUpdatingWebPage)
+
+            if isUpdatingWebPage {
+                ProgressView()
+                    .frame(maxWidth: .infinity)
+            }
+
+            if !canChangeWebPage {
+                Text("ウェブで見る設定は、計画を作った人が変えられます。")
+                    .font(.caption)
+                    .foregroundColor(themeManager.currentTheme.dark.opacity(0.75))
+            }
+
+            if let url = webPageURL {
+                Text(url.absoluteString)
+                    .font(.system(.footnote, design: .monospaced))
+                    .foregroundColor(themeManager.currentTheme.dark)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 10).fill(themeManager.currentTheme.light.opacity(0.3)))
+                    .textSelection(.enabled)
+
+                HStack(spacing: 10) {
+                    Button {
+                        UIPasteboard.general.url = url
+                        showWebLinkCopied = true
+                        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { showWebLinkCopied = false }
+                    } label: {
+                        Label(showWebLinkCopied ? "コピーしました" : "リンクをコピー",
+                              systemImage: showWebLinkCopied ? "checkmark.circle.fill" : "link")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(themeManager.currentTheme.light.opacity(0.3)))
+                    }
+                    ShareLink(item: url, message: Text("「\(currentPlan.title)」の旅行計画")) {
+                        Label("リンクを送る", systemImage: "square.and.arrow.up")
+                            .font(.subheadline.weight(.semibold))
+                            .frame(maxWidth: .infinity)
+                            .padding(.vertical, 10)
+                            .background(RoundedRectangle(cornerRadius: 10).fill(themeManager.currentTheme.light.opacity(0.3)))
+                    }
+                }
+                .foregroundColor(themeManager.currentTheme.dark)
+
+                Text("リンクを知っている人は誰でも見られます。予約番号やメモも見えるので、送る相手に気をつけてください。")
+                    .font(.caption2)
+                    .foregroundColor(themeManager.currentTheme.dark.opacity(0.75))
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+        .padding()
+        .background(
+            RoundedRectangle(cornerRadius: 16)
+                .fill(themeManager.currentTheme.accent2)
+        )
+        .shadow(color: themeManager.currentTheme.accent1.opacity(0.1), radius: 10, x: 0, y: 5)
+    }
+
+    /// 共有レコードの値で確かめ直す（ほかの端末で変えていることもある）
+    private func refreshWebPageState() async {
+        guard !shareCode.isEmpty, let planId = currentPlan.id else { return }
+        let generation = webPageGeneration
+        // 読めなかったとき（通信できないなど）だけ、手元の値のままにする。
+        // 「オフになっている」も nil で返るので、`try?` でまとめると、ほかの端末でオフにしたあとも
+        // 古いリンクを出し続けてしまう
+        let token: String?
+        do {
+            token = try await CloudKitService.shared.sharedWebPageToken(planId: planId)
+        } catch {
+            return
+        }
+        // 読んでいる間に切り替えていたら、その結果のほうが新しいので捨てる
+        guard generation == webPageGeneration, !isUpdatingWebPage else { return }
+        webToken = token
+        SharedWebPage.cache(token: token, planId: planId)
+    }
+
+    private func setWebPage(_ enabled: Bool) {
+        guard canChangeWebPage, !isUpdatingWebPage, enabled != webPageEnabled, let planId = currentPlan.id else { return }
+        let previous = webToken
+        webPageGeneration += 1
+        isUpdatingWebPage = true
+        Task {
+            do {
+                let token = try await CloudKitService.shared.setSharedWebPageEnabled(enabled, planId: planId)
+                webToken = token
+                SharedWebPage.cache(token: token, planId: planId)
+            } catch {
+                webToken = previous
+                webPageError = Self.publishErrorText(for: error)
+            }
+            isUpdatingWebPage = false
         }
     }
 
@@ -239,16 +398,21 @@ struct ShareTravelPlanView: View {
             if let userId = authVM.userId, currentPlan.isOwner(userId: userId) {
                 Button(action: { showStopSharingConfirmation = true }) {
                     HStack {
-                        Image(systemName: "person.2.slash")
-                            .font(.subheadline)
+                        if isStoppingSharing {
+                            ProgressView()
+                        } else {
+                            Image(systemName: "person.2.slash")
+                                .font(.subheadline)
+                        }
 
-                        Text("共有を停止")
+                        Text(isStoppingSharing ? "ウェブのページを止めています…" : "共有を停止")
                             .font(.subheadline.weight(.medium))
                     }
                     .foregroundColor(themeManager.currentTheme.error)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 10)
                 }
+                .disabled(isStoppingSharing)
             }
         }
         .padding()
@@ -385,6 +549,7 @@ struct ShareTravelPlanView: View {
                 InfoRow(icon: "checkmark.circle", text: "コードを入力したユーザーが計画に参加できます")
                 InfoRow(icon: "checkmark.circle", text: "全員がスケジュールを編集できます")
                 InfoRow(icon: "checkmark.circle", text: "変更内容は自動的に同期されます")
+                InfoRow(icon: "checkmark.circle", text: "オンにすると、アプリの無い人（Android）もウェブで見られます")
             }
         }
         .padding()
@@ -441,9 +606,26 @@ struct ShareTravelPlanView: View {
     }
 
     private func stopSharing() {
-        guard let planId = currentPlan.id, let userId = authVM.userId else { return }
-        viewModel.stopSharing(planId: planId, userId: userId)
-        shareCode = ""
+        guard let planId = currentPlan.id, let userId = authVM.userId, !isStoppingSharing else { return }
+        Task {
+            // 先にウェブのページを止めて、止まったのを確かめる。
+            // 共有レコードの削除は待たずに進むので、削除に失敗するとウェブで見え続けてしまうため。
+            // この端末でオフに見えていても止める（ほかの端末でオンにしていて、まだ読めていないことがある）
+            isStoppingSharing = true
+            webPageGeneration += 1
+            do {
+                try await CloudKitService.shared.setSharedWebPageEnabled(false, planId: planId)
+            } catch {
+                isStoppingSharing = false
+                stopSharingError = Self.publishErrorText(for: error)
+                return
+            }
+            isStoppingSharing = false
+            viewModel.stopSharing(planId: planId, userId: userId)
+            shareCode = ""
+            webToken = nil
+            SharedWebPage.cache(token: nil, planId: planId)
+        }
     }
 
     private func copyShareCode() {

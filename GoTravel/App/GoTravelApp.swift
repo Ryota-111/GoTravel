@@ -14,6 +14,9 @@ struct GoTravelApp: App {
 
         NotificationService.shared.requestAuthorization { _ in }
 
+        // 前回の退会で、通信できずに片付けきれなかった共有レコードがあれば続ける
+        AccountDeletionCleanup.resumeIfNeeded()
+
         // 旅行中のライブアクティビティの「更新」ボタン。押されるとアプリが裏で起き、ここで入れた処理が動く
         TravelLiveActivity.registerRefresher()
 
@@ -35,6 +38,8 @@ struct GoTravelApp: App {
                 .preferredColorScheme(preferredScheme)
                 // 「Travory で開く」で .ics が届いたとき（カレンダーの画面で確かめてから入れる）
                 .onOpenURL { url in
+                    // travory://shared は共有メニューから切り替えてきたとき。
+                    // 受け取り箱は、アプリが前に出たときに MainTabView が見るので、ここでは何もしない
                     guard url.isFileURL, url.pathExtension.lowercased() == "ics" else { return }
                     ICSImportInbox.shared.open(url)
                 }

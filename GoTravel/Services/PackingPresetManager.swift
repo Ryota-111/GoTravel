@@ -36,7 +36,8 @@ final class PackingPresetManager: NSObject, ObservableObject {
     static let defaults: [PackingItem.Kind: [String]] = [
         .packing: ["充電器", "モバイルバッテリー", "常備薬", "歯ブラシ",
                    "着替え", "洗面用具", "傘", "身分証", "現金"],
-        .souvenir: ["家族へ", "職場へ", "友人へ", "自分用", "お菓子", "ご当地限定"],
+        // 3.4 までは「家族へ」「職場へ」のような相手が入っていた。相手は別の欄になったので、物の名前にした（3.5）
+        .souvenir: ["お菓子", "ご当地限定", "名産品", "地酒", "雑貨", "キーホルダー"],
         .wish: ["名物を食べる", "温泉に入る", "景色を見に行く",
                 "写真を撮る", "地元の店をのぞく", "何もしない時間"]
     ]
@@ -50,6 +51,37 @@ final class PackingPresetManager: NSObject, ObservableObject {
 
         setupFetchedResultsController(userId: userId)
         seedDefaultsIfNeeded(userId: userId)
+        renameSouvenirRecipientPresetsIfNeeded()
+    }
+
+    /// 3.4 までの、相手の名前になっていたお土産の候補（「家族へ」など）を、物の名前に置き換える（3.5）。
+    ///
+    /// お土産に「渡す相手」の欄ができたので、候補は渡す物の名前にする。
+    /// **消して足すのではなく、名前を書き換える。** 2台で同時に動いても同じ記録を同じ名前にするだけなので、
+    /// 同期したあとに候補が2つずつ並ばない。同じ名前の候補がもうあれば、古いほうは消す
+    static let legacySouvenirRenames: [(from: String, to: String)] = [
+        ("家族へ", "名産品"), ("職場へ", "地酒"), ("友人へ", "雑貨"), ("自分用", "キーホルダー")
+    ]
+
+    private func renameSouvenirRecipientPresetsIfNeeded() {
+        guard !CoreDataManager.isEmptyDataMode else { return }
+        let doneKey = "SouvenirPresetsRenamed_v35"
+        guard !UserDefaults.standard.bool(forKey: doneKey) else { return }
+
+        var changed = false
+        for (from, to) in Self.legacySouvenirRenames {
+            guard let preset = presets(for: .souvenir).first(where: { $0.name == from }),
+                  let entity = try? PackingPresetEntity.fetchById(id: preset.id, context: context) else { continue }
+            if names(for: .souvenir).contains(to) {
+                context.delete(entity)
+            } else {
+                entity.name = to
+            }
+            changed = true
+            updatePresets()
+        }
+        if changed { CoreDataManager.shared.saveContext() }
+        UserDefaults.standard.set(true, forKey: doneKey)
     }
 
     private func setupFetchedResultsController(userId: String) {

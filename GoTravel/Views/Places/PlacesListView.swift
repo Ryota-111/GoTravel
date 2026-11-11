@@ -1,5 +1,6 @@
 import SwiftUI
 import MapKit
+import PhotosUI
 
 struct PlacesListView: View {
 
@@ -28,12 +29,23 @@ struct PlacesListView: View {
     @Environment(\.colorScheme) var colorScheme
     @Environment(\.scenePhase) var scenePhase
 
+    /// 「行きたい」と「行った」のどちらを見ているか（3.5）。閉じても覚えておく
+    @AppStorage("placesListMode") private var listModeRaw = PlaceListMode.wish.rawValue
+    /// 「＋」のメニューから開くもの（3.5）
+    @State private var showsMapSearch = false
+    @State private var showsScreenshotPicker = false
+    @State private var screenshotItems: [PhotosPickerItem] = []
+    @State private var importPresentation: PlaceImportPresentation?
+    @State private var showsNothingToPaste = false
+
     /// 地図の長押しで場所を追加する導線。マップ画面と同じ処理を使う
     @StateObject private var placePicker = MapPlacePicker()
 
     // MARK: - Computed Properties
+    private var listMode: PlaceListMode { PlaceListMode(rawValue: listModeRaw) ?? .wish }
+
     private var filteredPlaces: [VisitedPlace] {
-        var places = vm.places
+        var places = vm.places.filter { listMode.includes($0) }
         if selectedCategoryId != Self.allCategoryId {
             places = places.filter { $0.categoryId == selectedCategoryId }
         }
@@ -85,6 +97,9 @@ struct PlacesListView: View {
                     // 見出しと絞り込みは一覧と同じ幅にそろえる（iPad・Mac の広い画面だけ。iPhone は今までどおり）
                     planEventsTitleSection
                         .readableWidth(WideLayout.galleryWidth)
+                    // 行きたい・行った（3.5）
+                    listModePicker
+                        .readableWidth(WideLayout.galleryWidth)
                     // 地図でもカテゴリーと県で絞り込めるように、切り替えの上に置く
                     eventTypeSelectionSection
                         .readableWidth(WideLayout.galleryWidth)
@@ -108,6 +123,22 @@ struct PlacesListView: View {
         .sheet(isPresented: $showManageCategories) {
             ManageCategoriesView()
         }
+        // スクリーンショット・コピーしたリンクから場所を探す（3.5）
+        .sheet(item: $importPresentation) { presentation in
+            PlaceImportView(sources: presentation.sources)
+                .environmentObject(authVM)
+        }
+        .photosPicker(isPresented: $showsScreenshotPicker, selection: $screenshotItems, maxSelectionCount: 5,
+                      matching: .images)
+        .onChange(of: screenshotItems) { _, items in
+            guard !items.isEmpty else { return }
+            Task { await openScreenshots(items) }
+        }
+        .alert("コピーしたリンクや文字がありません", isPresented: $showsNothingToPaste) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Google マップや食べログなどで「リンクをコピー」してから、もう一度お試しください。")
+        }
         .sheet(isPresented: $placePicker.isPresentingSheet, onDismiss: { placePicker.clearPin() }) {
             if let coordinate = placePicker.coordinate {
                 SavePlaceView(vm: {
@@ -117,6 +148,11 @@ struct PlacesListView: View {
                 }())
                 .environmentObject(authVM)
             }
+        }
+        // 住所の無い場所（前の「地図で探す」で保存したもの）に、位置から調べた住所を入れる（3.5）
+        .task(id: vm.places.count) {
+            guard let userId = authVM.userId else { return }
+            await PlaceAddressBackfill.fill(vm.places, userId: userId, using: vm)
         }
         // 住所から県が分からない場所は、緯度・経度から調べて覚える（旅の記録と同じ仕組み）
         .task(id: vm.places.count) {
@@ -136,9 +172,24 @@ struct PlacesListView: View {
     /// 追加ボタン。
     /// リストの末尾に置くと件数が増えるほど遠ざかるため、内容に左右されない右下に浮かせる
     private var addPlaceFloatingButton: some View {
-        NavigationLink(destination: MapHomeView()) {
+        // 地図で探すだけでなく、見つけた場所をそのまま入れられるようにする（3.5）
+        Menu {
+            Button { showsMapSearch = true } label: {
+                Label("地図で探す", systemImage: "map")
+            }
+            Button { showsScreenshotPicker = true } label: {
+                Label("スクリーンショットから", systemImage: "camera.viewfinder")
+            }
+            Button(action: pasteLink) {
+                Label("コピーしたリンクから", systemImage: "doc.on.clipboard")
+            }
+        } label: {
             FloatingAddButtonLabel()
         }
+        .background(
+            NavigationLink(destination: MapHomeView(), isActive: $showsMapSearch) { EmptyView() }
+                .hidden()
+        )
         .padding(.trailing, FloatingAddButtonLabel.margin)
         .padding(.bottom, FloatingAddButtonLabel.margin)
         .accessibilityLabel(Text("場所を追加"))
@@ -182,14 +233,17 @@ struct PlacesListView: View {
                     .frame(width: 100, height: 100)
                     .foregroundColor(secondaryTextColor)
 
-                Text(vm.places.isEmpty ? "まだ保存された場所はありません" : "選んだカテゴリ・県の場所はありません")
+                Text(emptyTitle)
                     .font(.headline)
                     .foregroundColor(textColor)
+                    .multilineTextAlignment(.center)
 
                 // 以前は「マップをタップ」と案内していたが、その操作は存在しなかった
-                Text(vm.places.isEmpty ? "マップで検索するか、地図を長押しして場所を追加できます" : "別のカテゴリや県を選ぶか、場所を追加しましょう")
+                Text(emptyMessage)
                     .font(.subheadline)
                     .foregroundColor(secondaryTextColor)
+                    .multilineTextAlignment(.center)
+                    .fixedSize(horizontal: false, vertical: true)
 
                 NavigationLink(destination: MapHomeView()) {
                     Text("場所を追加")
@@ -262,10 +316,10 @@ struct PlacesListView: View {
             HStack(spacing: 12) {
                 placeThumbnail(place, category: category, accent: accent)
 
-                VStack(alignment: .leading, spacing: 6) {
+                VStack(alignment: .leading, spacing: 4) {
                     HStack(alignment: .top, spacing: 6) {
                         Text(place.title)
-                            .font(.system(size: 16, weight: .semibold))
+                            .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(textColor)
                             .lineLimit(2)
                             .multilineTextAlignment(.leading)
@@ -281,14 +335,14 @@ struct PlacesListView: View {
 
                     // 日付の無い場所は「いつか行きたい」（3.1、ご要望から）
                     Label(formattedDate(place), systemImage: place.visitedAt == nil ? "sparkles" : "calendar")
-                        .font(.system(size: 12))
+                        .font(.system(size: 11))
                         .foregroundColor(secondaryTextColor)
                         .lineLimit(1)
 
                     // 同じ名前の店が複数あっても見分けられるように住所を出す
                     if let address = place.address, !address.isEmpty {
                         Label(address, systemImage: "mappin.and.ellipse")
-                            .font(.system(size: 12))
+                            .font(.system(size: 11))
                             .foregroundColor(secondaryTextColor)
                             .lineLimit(1)
                     }
@@ -345,6 +399,16 @@ struct PlacesListView: View {
     /// 予定カードと同じ44ptの「⋯」に揃える
     private func placeMenuButton(place: VisitedPlace) -> some View {
         Menu {
+            // 行ったら「行った」へ、行きたいへ戻す（3.5）
+            if place.visitedAt == nil {
+                Button { setVisited(place, true) } label: {
+                    Label("行った！にする", systemImage: "checkmark.circle")
+                }
+            } else {
+                Button { setVisited(place, false) } label: {
+                    Label("行きたいに戻す", systemImage: "sparkles")
+                }
+            }
             deleteButton(place: place)
         } label: {
             Image(systemName: "ellipsis")
@@ -409,6 +473,77 @@ struct PlacesListView: View {
         .padding(.horizontal, 20)
         .padding(.top, 10)
         .padding(.bottom, 6)
+    }
+
+    // MARK: - 行きたい・行った（3.5）
+
+    private var listModePicker: some View {
+        Picker("見る場所", selection: Binding(
+            get: { listMode },
+            set: { newValue in
+                withAnimation(.easeInOut(duration: 0.2)) {
+                    listModeRaw = newValue.rawValue
+                    selectedPlace = nil
+                }
+            }
+        )) {
+            ForEach(PlaceListMode.allCases) { mode in
+                Text("\(mode.title)  \(vm.places.filter(mode.includes).count)").tag(mode)
+            }
+        }
+        .pickerStyle(.segmented)
+        .padding(.horizontal, 20)
+        .padding(.bottom, 8)
+    }
+
+    private var emptyTitle: String {
+        if vm.places.contains(where: listMode.includes) { return "選んだカテゴリ・県の場所はありません" }
+        switch listMode {
+        case .wish: return "行きたい場所はまだありません"
+        case .visited: return "行った場所はまだありません"
+        }
+    }
+
+    private var emptyMessage: String {
+        if vm.places.contains(where: listMode.includes) { return "別のカテゴリや県を選ぶか、場所を追加しましょう" }
+        switch listMode {
+        case .wish:
+            return "Google マップや食べログで見つけた場所は「共有」から Travory へ、Instagram・TikTok はスクリーンショットを「＋」から入れられます"
+        case .visited:
+            return "行きたい場所の「⋯」から「行った！」にすると、ここに移ります"
+        }
+    }
+
+    private func setVisited(_ place: VisitedPlace, _ visited: Bool) {
+        guard let userId = authVM.userId else { return }
+        var updated = place
+        updated.visitedAt = visited ? Date() : nil
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+        vm.update(updated, userId: userId)
+    }
+
+    // MARK: - スクリーンショット・リンクから（3.5）
+
+    private func pasteLink() {
+        let board = UIPasteboard.general
+        let text = board.url?.absoluteString ?? board.string
+        guard let text, !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            showsNothingToPaste = true
+            return
+        }
+        importPresentation = PlaceImportPresentation(sources: [.text(text)])
+    }
+
+    private func openScreenshots(_ items: [PhotosPickerItem]) async {
+        var images: [UIImage] = []
+        for item in items {
+            if let data = try? await item.loadTransferable(type: Data.self), let image = UIImage(data: data) {
+                images.append(image)
+            }
+        }
+        screenshotItems = []
+        guard !images.isEmpty else { return }
+        importPresentation = PlaceImportPresentation(sources: images.map { .image($0) })
     }
 
     // MARK: - Map View
@@ -616,6 +751,8 @@ struct PlacesListView: View {
             }
             .padding(.horizontal, 20)
         }
+        // 横に流れる札が、画面の端の時計や電波の列（iPhone Duo の外側の画面）の下に潜らないようにする
+        .clipped()
     }
 
     /// 県の絞り込み（3.1）。場所のある県だけを北から順に出す
@@ -732,4 +869,32 @@ struct PlacesListView: View {
     }
 }
 
+// MARK: - 行きたい・行った（3.5）
 
+/// 保存した場所の見方。訪問日の無い場所が「行きたい」、ある場所が「行った」
+enum PlaceListMode: String, CaseIterable, Identifiable {
+    case wish
+    case visited
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .wish: return "行きたい"
+        case .visited: return "行った"
+        }
+    }
+
+    func includes(_ place: VisitedPlace) -> Bool {
+        switch self {
+        case .wish: return place.visitedAt == nil
+        case .visited: return place.visitedAt != nil
+        }
+    }
+}
+
+/// 場所を探す画面を出すときの中身（sheet(item:) で出すために包む）
+struct PlaceImportPresentation: Identifiable {
+    let id = UUID()
+    let sources: [PlaceImportView.Source]
+}

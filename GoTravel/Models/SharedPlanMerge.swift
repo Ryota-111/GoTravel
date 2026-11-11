@@ -305,6 +305,7 @@ enum SharedPlanMerge {
             && lhs.isChecked == rhs.isChecked
             && lhs.kind == rhs.kind
             && lhs.note == rhs.note
+            && lhs.recipient == rhs.recipient
             && lhs.ownerId == rhs.ownerId
     }
 

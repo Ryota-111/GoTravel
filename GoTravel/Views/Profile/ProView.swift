@@ -51,6 +51,7 @@ struct ProView: View {
 
                 // 予約メールの取り込みを先頭に置く（Pro の目玉）
                 featureReservationEmail
+                featurePlaceScreenshot
                 featureBooklet
                 featureThemes
                 featurePhotoSync
@@ -215,6 +216,7 @@ struct ProView: View {
             DigestLookShowcase()
             bullet("色味は「フィルム」「あたたかい」「すっきり」「白黒」。形は縦長に加えて、投稿向けの正方形と、テレビで見る横長。")
             bullet("右下と最後の「Travory」の印が入らず、場所の名前の代わりに好きな文字も入れられます。")
+            bullet("文字の書体も「明朝」「丸ゴシック」「エレガント」「タイプライター」から選べます。")
             bullet("動画を作るのは無料です。題名と行程の地図のカード、トリミング、1コマの長さも、無料でお使いいただけます。")
             bullet("撮り直しは要りません。カメラロールから自動で選び、自分で選び直すこともできます。動画は iPhone の中だけで作ります。")
         }
@@ -237,6 +239,25 @@ struct ProView: View {
             bullet("同じApple Accountの端末どうしで、同じ写真が見られます。")
             bullet("預け先はお客様のiCloudです。開発者が見ることはできません。")
             bullet("ご購入いただいた時点で、それまでに保存した写真もまとめてお預かりします。")
+        }
+        .padding(16)
+        .themedCard()
+    }
+
+    // MARK: - 入っているもの：スクリーンショットから行きたい場所を保存（3.5）
+
+    private var featurePlaceScreenshot: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            featureHeading(
+                icon: "text.viewfinder",
+                title: "SNSのスクショから、行きたい場所を保存",
+                detail: "Instagram や TikTok で見つけたお店・景色の投稿をスクリーンショットして送ると、"
+                      + "写っている店名や「📍」の場所を読み取り、地図で探して見せます。押すだけで「行きたい場所」に入ります。"
+            )
+            bullet("場所保存の「＋」→「スクリーンショットから」で、5枚までまとめて読めます。写真アプリの共有メニューから「Travory」を選んでも送れます。")
+            bullet("違う場所が出たときは、読み取った言葉を押して探し直せます。")
+            bullet("画像はこの iPhone の中だけで読み取り、どこにも送りません。")
+            bullet("買う前に\(PlaceScreenshotTrial.limit)回まで試せます。地図で探す・Google マップなどのリンクを共有して保存するのは、これまでどおり無料です。")
         }
         .padding(16)
         .themedCard()

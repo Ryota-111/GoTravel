@@ -35,6 +35,8 @@ enum PhotoFolder: String {
     case albums
     /// Documents/JapanPhotos。日本全国フォトマップの、都道府県ごとの写真
     case japanPhotos
+    /// Documents/ScheduleAttachments。旅行の予定に添付した画像・PDF（3.5、`ScheduleAttachmentStore`）
+    case scheduleAttachments
 }
 
 // MARK: - Fetch Request

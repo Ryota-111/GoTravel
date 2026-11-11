@@ -2,7 +2,17 @@ import SwiftUI
 import MapKit
 
 struct MainTabView: View {
-    @State private var selectedTab: Int = 0
+    @State private var selectedTab: Int = MainTabView.initialTab
+
+    /// 最初に開くタブ。ふだんは「計画」。
+    /// 開発用のビルドだけ、起動引数 `-TravoryInitialTab 2` で別のタブから始められる（シミュレーターで画面を撮るため）
+    private static var initialTab: Int {
+        #if DEBUG
+        return min(max(UserDefaults.standard.integer(forKey: "TravoryInitialTab"), 0), 3)
+        #else
+        return 0
+        #endif
+    }
     @State private var showICloudAlert = false
     @State private var hasCheckedICloud = false
     @State private var whatsNew: WhatsNew?
@@ -11,6 +21,8 @@ struct MainTabView: View {
     /// 一度見せたもの。「あとで」で閉じたあと、アプリに戻るたびに出し直さない
     /// （新しく送られたものがあるときだけ出す。次に起動したときは、残っていればまた出す）
     @State private var shownSharedImports: Set<URL> = []
+    /// 共有メニューから「行きたい場所として送る」で届いたもの（3.5）
+    @State private var sharedPlaces: SharedImportsPresentation?
     @StateObject private var plansViewModel = PlansViewModel()
     @StateObject private var travelPlanViewModel = TravelPlanViewModel()
     @ObservedObject private var icsInbox = ICSImportInbox.shared
@@ -145,20 +157,33 @@ struct MainTabView: View {
         .sheet(item: $whatsNew, onDismiss: checkSharedImports) { content in
             WhatsNewView(content: content)
         }
-        .sheet(item: $sharedImports) { presentation in
+        // 予約の受け取り箱を閉じてから、場所の受け取り箱を見る（シートは1枚ずつ）
+        .sheet(item: $sharedImports, onDismiss: checkSharedImports) { presentation in
             SharedImportInboxView(items: presentation.items)
                 .environmentObject(travelPlanViewModel)
+                .environmentObject(authVM)
+        }
+        .sheet(item: $sharedPlaces) { presentation in
+            SharedPlaceInboxView(items: presentation.items)
                 .environmentObject(authVM)
         }
     }
 
     /// 共有メニューから送られたものがあれば、どの旅行に入れるか聞く
     private func checkSharedImports() {
-        guard whatsNew == nil, sharedImports == nil, authVM.userId != nil else { return }
+        guard whatsNew == nil, sharedImports == nil, sharedPlaces == nil, authVM.userId != nil else { return }
         let items = SharedImportInbox.pendingItems()
-        guard items.contains(where: { !shownSharedImports.contains($0.url) }) else { return }
-        shownSharedImports.formUnion(items.map(\.url))
-        sharedImports = SharedImportsPresentation(items: items)
+        if items.contains(where: { !shownSharedImports.contains($0.url) }) {
+            shownSharedImports.formUnion(items.map(\.url))
+            sharedImports = SharedImportsPresentation(items: items)
+            return
+        }
+        // 行きたい場所として送られたもの（3.5）
+        let places = SharedImportInbox.pendingItems(in: SharedImportInbox.placeFolderName)
+        if places.contains(where: { !shownSharedImports.contains($0.url) }) {
+            shownSharedImports.formUnion(places.map(\.url))
+            sharedPlaces = SharedImportsPresentation(items: places)
+        }
     }
 
     private func updateWidgetSnapshot() {
@@ -169,6 +194,8 @@ struct MainTabView: View {
     }
 
     private func checkICloudStatus() async {
+        // データを残さないデモ（`-TravoryEmptyDataMode`）では iCloud を使わないので知らせない
+        if CoreDataManager.isEmptyDataMode { return }
         let isAvailable = await CloudKitService.shared.isICloudAvailable()
         if !isAvailable {
             showICloudAlert = true

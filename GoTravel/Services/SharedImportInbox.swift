@@ -13,6 +13,8 @@ import Foundation
 enum SharedImportInbox {
 
     static let folderName = "SharedImportInbox"
+    /// 「行きたい場所として送る」を選んだもの（3.5）。予約とは別の箱に置く。置き方の決まりは同じ
+    static let placeFolderName = "SharedPlaceInbox"
 
     /// 1週間たっても取り込まれなかったものは捨てる（送ったことを忘れた予約が、いつまでも出続けないように）
     static let expiry: TimeInterval = 7 * 24 * 60 * 60
@@ -30,15 +32,18 @@ enum SharedImportInbox {
         var id: URL { url }
     }
 
-    static var folder: URL? {
+    static var folder: URL? { folder(named: folderName) }
+
+    static func folder(named name: String) -> URL? {
         FileManager.default
             .containerURL(forSecurityApplicationGroupIdentifier: WidgetDataStore.appGroupId)?
-            .appendingPathComponent(folderName, isDirectory: true)
+            .appendingPathComponent(name, isDirectory: true)
     }
 
     /// まだ取り込んでいないもの（古い順）。期限の切れたものはここで捨てる
-    static func pendingItems(now: Date = Date()) -> [Item] {
-        guard let folder,
+    /// - Parameter folderName: 予約（既定）か、場所（`placeFolderName`）か
+    static func pendingItems(in folderName: String = folderName, now: Date = Date()) -> [Item] {
+        guard let folder = folder(named: folderName),
               let urls = try? FileManager.default.contentsOfDirectory(at: folder, includingPropertiesForKeys: nil) else { return [] }
 
         var items: [Item] = []

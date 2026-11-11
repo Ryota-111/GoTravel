@@ -346,7 +346,7 @@ struct BookletPageView: View {
                     .font(p.font(11))
                     .foregroundColor(p.ink)
                     .lineLimit(1)
-                if let note = item.note, !note.isEmpty {
+                if let note = item.recipientAndNote {
                     Text(note)
                         .font(p.font(9))
                         .foregroundColor(p.subInk)

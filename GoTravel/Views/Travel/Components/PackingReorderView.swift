@@ -26,7 +26,7 @@ struct PackingReorderView: View {
                                                                 : themeManager.currentTheme.secondaryText)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(item.name)
-                                if let note = item.note, !note.isEmpty {
+                                if let note = item.recipientAndNote {
                                     Text(note)
                                         .font(.caption)
                                         .foregroundColor(themeManager.currentTheme.secondaryText)

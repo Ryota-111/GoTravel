@@ -201,17 +201,17 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
 
         // 画像を保存（新しい画像がある場合）
         if let image = image {
-            // 古い画像を削除
-            if let oldFileName = plan.localImageFileName {
-                try? FileManager.removeDocumentFile(named: oldFileName)
-            }
-
             // 新しい画像を保存
             let fileName = "travel_plan_\(UUID().uuidString).jpg"
             if let imageData = image.storedPhotoData() {
                 do {
                     try FileManager.saveImageDataToDocuments(data: imageData, named: fileName)
                     planToSave.localImageFileName = fileName
+                    // 古い画像は、新しい画像を書けてから消す。
+                    // 先に消すと、書けなかったときに写真が無いのにファイル名だけ残る
+                    if let oldFileName = plan.localImageFileName {
+                        try? FileManager.removeDocumentFile(named: oldFileName)
+                    }
                     // 共有した旅行なら、次に送るときに写真も載せる（全員がこの写真になる）
                     SharedCoverPhoto.markChanged(planId: planId)
                 } catch {

@@ -75,6 +75,8 @@ struct CalendarView: View {
     @State private var showsJoin = false
     /// 「カレンダーを共有できます」の案内を閉じたか（1回だけ出す）
     @AppStorage("calendarShareTipDismissed") private var shareTipDismissed = false
+    /// 月の見せ方（3.5）。点（今まで）か、マスに予定の名前が並ぶタイルか。閉じても覚えておく
+    @AppStorage("calendarDisplayStyle") private var displayStyleRaw = CalendarDisplayStyle.dots.rawValue
     /// Travory の予定（予定と旅行計画）を出すか。カレンダーの上の出どころのボタンで切り替える
     @AppStorage("calendarShowsTravory") private var showsTravory = true
     /// カレンダーの一覧（題名を押すと出る）と、閉じたあとに行うこと
@@ -159,7 +161,8 @@ struct CalendarView: View {
                     selectedDate: selectedDate,
                     timelineItems: dailyTimeline,
                     isExpanded: $isTimelineExpanded,
-                    onAddPlan: { showAddSheet = true }
+                    onAddPlan: { showAddSheet = true },
+                    collapsedFraction: displayStyle == .tiles ? 0.25 : 0.35
                 )
                 .environmentObject(viewModel)
                 .environmentObject(travelViewModel)
@@ -192,6 +195,8 @@ struct CalendarView: View {
 
                 ToolbarItem(placement: .navigationBarTrailing) {
                     HStack(spacing: 14) {
+                        displayStyleMenu
+
                         // タグで絞り込む。選んでいる間は塗りつぶしのアイコンにする
                         Button {
                             showsTagFilter = true
@@ -811,13 +816,19 @@ struct CalendarView: View {
                 }
             }
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 7), spacing: 12) {
+            let isTiles = displayStyle == .tiles
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: isTiles ? 5 : 8), count: 7),
+                      spacing: isTiles ? 5 : 12) {
                 ForEach(Array(daysInMonth.enumerated()), id: \.offset) { _, date in
                     if let date = date {
-                        calendarDayCell(date: date)
+                        if isTiles {
+                            tileDayCell(date: date)
+                        } else {
+                            calendarDayCell(date: date)
+                        }
                     } else {
                         Color.clear
-                            .frame(height: 50)
+                            .frame(height: isTiles ? Self.tileHeight : 50)
                     }
                 }
             }
@@ -892,19 +903,147 @@ struct CalendarView: View {
             }
             .frame(height: 4)
         }
-        .contentShape(Rectangle())
-        .onTapGesture {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                selectedDate = date
+        .modifier(DayCellGestures(date: date, onSelect: selectDay, onLongPress: { historyTarget = HistoryTarget(date: $0) }))
+    }
+
+    private func selectDay(_ date: Date) {
+        withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            selectedDate = date
+        }
+    }
+
+    // MARK: - タイルの表示（3.5）
+    //
+    // 点だけでは「何の予定か」は日を押すまで分からない。マスに予定の名前を並べ、月を見渡すだけで
+    // 中身まで分かるようにする。予定が多い日ほど枠を濃く太く、過ぎた日は薄くする
+
+    private var displayStyle: CalendarDisplayStyle {
+        CalendarDisplayStyle(rawValue: displayStyleRaw) ?? .dots
+    }
+
+    /// 見せ方の切り替え（右上）。押すたびに、点とタイルが入れ替わる。
+    /// アイコンは今の見せ方を出す
+    private var displayStyleMenu: some View {
+        Button {
+            UISelectionFeedbackGenerator().selectionChanged()
+            withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                displayStyleRaw = (displayStyle == .dots ? CalendarDisplayStyle.tiles : .dots).rawValue
             }
+        } label: {
+            Image(systemName: displayStyle.systemImage)
+                .font(.title3)
+                .foregroundColor(themeManager.currentTheme.secondary)
+                .contentTransition(.symbolEffect(.replace))
         }
-        // 長押しで、これまでの予定からその日に置ける。
-        // 「またジム」「また同じ店」を毎回打ち直さずに済ませるため。
-        // 月をめくる横スワイプとは競合しない（長押しは指が動くと成立しない）
-        .onLongPressGesture(minimumDuration: 0.45) {
-            UIImpactFeedbackGenerator(style: .medium).impactOccurred()
-            historyTarget = HistoryTarget(date: date)
+        .accessibilityLabel("カレンダーの表示")
+        .accessibilityValue(displayStyle.title)
+        .accessibilityHint(displayStyle == .dots ? "押すと、予定の名前で見ます" : "押すと、点で見ます")
+    }
+
+    /// タイルの高さ。予定の名前を3行まで入れる
+    static let tileHeight: CGFloat = 64
+
+    private func tileDayCell(date: Date) -> some View {
+        let entries = tileEntries(for: date)
+        let isSelected = calendar.isDate(date, inSameDayAs: selectedDate)
+        let isToday = calendar.isDateInToday(date)
+        let isPast = calendar.startOfDay(for: date) < calendar.startOfDay(for: Date())
+        let dayNumber = calendar.component(.day, from: date)
+        let theme = themeManager.currentTheme
+        let textColor = colorScheme == .dark ? theme.accent2 : theme.accent1
+        // 4件以上は2件と「+n」にする
+        let shown = entries.count > 3 ? Array(entries.prefix(2)) : entries
+        let density = min(entries.count, 3)
+
+        return VStack(alignment: .leading, spacing: 2) {
+            Text("\(dayNumber)")
+                .font(.system(size: 13, weight: .heavy))
+                .monospacedDigit()
+                .foregroundColor(isToday ? ThemePreset.readableText(on: theme.secondary) : textColor)
+                .padding(.horizontal, isToday ? 5 : 0)
+                .background {
+                    if isToday { Capsule().fill(theme.secondary) }
+                }
+                .padding(.bottom, 1)
+
+            ForEach(shown) { entry in
+                HStack(spacing: 2) {
+                    RoundedRectangle(cornerRadius: 1)
+                        .fill(entry.color)
+                        .frame(width: 2, height: 9)
+                    Text(entry.title)
+                        .font(.system(size: 8.5, weight: .medium))
+                        .foregroundColor(textColor.opacity(0.85))
+                        .lineLimit(1)
+                }
+            }
+
+            if entries.count > shown.count {
+                Text("+\(entries.count - shown.count)")
+                    .font(.system(size: 8.5, weight: .bold))
+                    .foregroundColor(theme.secondaryText)
+            }
+
+            Spacer(minLength: 0)
         }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 5)
+        .frame(maxWidth: .infinity, minHeight: Self.tileHeight, maxHeight: Self.tileHeight, alignment: .topLeading)
+        .background(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(entries.isEmpty
+                      ? theme.elevatedSurface(for: colorScheme).opacity(0.55)
+                      : theme.elevatedSurface(for: colorScheme))
+        )
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .strokeBorder(
+                    isSelected ? theme.secondary : textColor.opacity(0.10 + 0.14 * Double(density)),
+                    lineWidth: isSelected ? 2.5 : 1 + 0.5 * CGFloat(density)
+                )
+        )
+        .opacity(isPast && !isSelected ? 0.5 : 1)
+        .contentShape(Rectangle())
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(tileAccessibilityLabel(date: date, entries: entries))
+        .accessibilityAddTraits(isSelected ? [.isButton, .isSelected] : .isButton)
+        .modifier(DayCellGestures(date: date, onSelect: selectDay, onLongPress: { historyTarget = HistoryTarget(date: $0) }))
+    }
+
+    private func tileAccessibilityLabel(date: Date, entries: [CalendarTileEntry]) -> String {
+        let day = DateFormatter.japaneseDate.string(from: date)
+        return entries.isEmpty ? "\(day)、予定なし" : "\(day)、\(entries.map(\.title).joined(separator: "、"))"
+    }
+
+    /// その日のマスに出す予定。旅行・記念日・時刻の無い予定を先に、時刻のある予定は時刻の順
+    private func tileEntries(for date: Date) -> [CalendarTileEntry] {
+        let theme = themeManager.currentTheme
+        var entries: [CalendarTileEntry] = []
+
+        for travel in visibleTravelPlans where isDateInTravelPlanRange(date: date, travelPlan: travel) {
+            entries.append(CalendarTileEntry(id: "travel:\(travel.id)", title: travel.title,
+                                             color: theme.travelColor, order: -2))
+        }
+
+        for plan in visiblePlans where isDateInPlanRange(date: date, plan: plan) {
+            let color = tagManager.tags(for: plan.tagIDs).first?.color ?? plan.planType.color(theme)
+            let order = plan.planType == .daily ? (plan.time.map(minutesOfDay) ?? -1) : -1
+            entries.append(CalendarTileEntry(id: "plan:\(plan.id)", title: plan.title, color: color, order: order))
+        }
+
+        for event in visibleExternalEvents where event.occurs(on: date, calendar: calendar) {
+            let timed = !event.isAllDay && calendar.isDate(event.start, inSameDayAs: date)
+            entries.append(CalendarTileEntry(id: "external:\(event.id)", title: event.title,
+                                             color: event.color.map { Color(cgColor: $0) } ?? theme.secondaryText,
+                                             order: timed ? minutesOfDay(event.start) : -1))
+        }
+
+        return entries.sorted { $0.order < $1.order }
+    }
+
+    private func minutesOfDay(_ date: Date) -> Int {
+        let parts = calendar.dateComponents([.hour, .minute], from: date)
+        return (parts.hour ?? 0) * 60 + (parts.minute ?? 0)
     }
 
     /// 履歴から作る。選ばれた予定を、長押しした日付で作り直す
@@ -1028,3 +1167,58 @@ struct CalendarView: View {
 //#Preview {
 //    CalendarView()
 //}
+
+// MARK: - カレンダーの見せ方（3.5）
+
+enum CalendarDisplayStyle: String, CaseIterable, Identifiable {
+    /// 日付の下に点（今まで）
+    case dots
+    /// マスに予定の名前を並べる
+    case tiles
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .dots: return "点で見る"
+        case .tiles: return "予定の名前で見る"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .dots: return "circle.grid.3x3"
+        case .tiles: return "square.grid.3x3"
+        }
+    }
+}
+
+/// タイルの1行（予定の名前と色）
+struct CalendarTileEntry: Identifiable {
+    let id: String
+    let title: String
+    let color: Color
+    /// 並び。-2 旅行、-1 時刻の無い予定、0 以上はその日の分
+    let order: Int
+}
+
+/// 日のマスを押す・長押しする
+private struct DayCellGestures: ViewModifier {
+    let date: Date
+    let onSelect: (Date) -> Void
+    let onLongPress: (Date) -> Void
+
+    func body(content: Content) -> some View {
+        content
+            // マス全体で受ける。付けないと、数字や点の描かれたところしか押せない
+            .contentShape(Rectangle())
+            .onTapGesture { onSelect(date) }
+            // 長押しで、これまでの予定からその日に置ける。
+            // 「またジム」「また同じ店」を毎回打ち直さずに済ませるため。
+            // 月をめくる横スワイプとは競合しない（長押しは指が動くと成立しない）
+            .onLongPressGesture(minimumDuration: 0.45) {
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+                onLongPress(date)
+            }
+    }
+}

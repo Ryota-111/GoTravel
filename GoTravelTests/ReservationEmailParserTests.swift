@@ -22,6 +22,18 @@ struct ReservationEmailParserTests {
         #expect(ReservationEmailParser.normalized("ＡＮＡ１２３便　ホテル") == "ANA123便 ホテル")
     }
 
+    @Test("アラビア語やタイ語の数字も半角にする（`\\d` には一致するのに `Int()` で読めず、落ちていた）")
+    func normalizesOtherDigits() {
+        #expect(ReservationEmailParser.normalized("١٢/١٠/٢٠٢٦ ١٤:٣٠") == "12/10/2026 14:30")
+        #expect(ReservationEmailParser.normalized("๒๐๒๖") == "2026")
+        // 漢数字や丸数字は数字の並びではないので触らない
+        #expect(ReservationEmailParser.normalized("三泊 ①") == "三泊 ①")
+
+        // 半角にしないまま渡すと落ちていた形でも、読み取りまで通る
+        let drafts = ReservationEmailParser.parse("Check-in: ١٢/١٠/2026 ١٤:٣٠", referenceDate: today)
+        #expect(!drafts.isEmpty)
+    }
+
     @Test("予約番号は、ラベルと同じ行でも次の行でも拾う")
     func confirmationNumbers() {
         #expect(ReservationEmailParser.confirmationNumber(in: "予約番号：AB12CD") == "AB12CD")

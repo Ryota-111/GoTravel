@@ -33,6 +33,11 @@ enum TravelPlanBackupStore {
         try? data.write(to: url ?? fileURL, options: [.atomic, .completeFileProtection])
     }
 
+    /// 控えを消す（退会のとき。退会した人の旅行計画を端末に残さない）
+    static func remove(at url: URL? = nil) {
+        try? FileManager.default.removeItem(at: url ?? fileURL)
+    }
+
     /// この人の控え。別の人の控えは見せない（同じ端末で別の Apple ID にサインインした場合）
     static func load(userId: String, from url: URL? = nil) -> Backup? {
         guard let data = try? Data(contentsOf: url ?? fileURL),

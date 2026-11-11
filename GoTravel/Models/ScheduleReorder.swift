@@ -9,6 +9,11 @@ import Foundation
 // 9:00・11:00・14:00 の3件で②を先頭に動かすと、②が 9:00、①が 11:00 になる。
 // 終わりの時刻は、それぞれの予定の長さを保ったまま一緒に動かす
 
+extension ScheduleItem {
+    /// 別の日へ移せる予定か（3.5）。予約から作った予定は、予約の画面で日付を直す
+    var canMoveToAnotherDay: Bool { reservationId == nil }
+}
+
 extension TravelPlan {
     /// その日の行程を `newOrder`（予定の id）の順に並べ替える。
     ///
@@ -90,6 +95,40 @@ extension TravelPlan {
         for moved in movedItems where moved.reservationId != nil {
             updated.syncReservation(fromScheduleItem: moved)
         }
+        return updated
+    }
+
+    /// 予定を別の日へ移す（3.5、ご要望から）。
+    ///
+    /// 「1日目に行けなかった場所を2日目に回す」とき、消して入れ直さなくて済むように。
+    /// **時:分はそのまま、日付だけ移す日に合わせる**（日にちの並び替えと同じずらし方）。
+    /// 時間未定の予定は、移した日の並びに合わせて位置を付け直す。移す日と同じ日にある予定は動かさない。
+    ///
+    /// **予約から作った予定は動かさない**（`canMoveToAnotherDay`）。飛行機は出発と到着の2件に分かれていて、
+    /// 片方だけ動かすと予約と食い違う。日付は予約の画面で直してもらう
+    func movingItems(_ ids: Set<String>, toDay targetNumber: Int) -> TravelPlan {
+        guard let targetIndex = daySchedules.firstIndex(where: { $0.dayNumber == targetNumber }) else { return self }
+        var updated = self
+        var moved: [ScheduleItem] = []
+
+        for dayIndex in updated.daySchedules.indices where dayIndex != targetIndex {
+            let day = updated.daySchedules[dayIndex]
+            let leaving = day.scheduleItems.filter { ids.contains($0.id) && $0.canMoveToAnotherDay }
+            guard !leaving.isEmpty else { continue }
+            let leavingIDs = Set(leaving.map(\.id))
+            let offset = Self.dayDifference(from: day.date, to: daySchedules[targetIndex].date)
+            updated.daySchedules[dayIndex].scheduleItems.removeAll { leavingIDs.contains($0.id) }
+            moved += leaving.map { Self.shifting($0, byDays: offset) }
+        }
+        guard !moved.isEmpty else { return self }
+
+        var target = updated.daySchedules[targetIndex].scheduleItems + moved
+        if moved.contains(where: \.hasUndecidedTime) {
+            let pinned = target.filter { $0.isPinned == true }
+            let ordered = target.filter { $0.isPinned != true }.sorted(by: ScheduleItem.chronologically)
+            target = pinned + ScheduleUndecided.normalized(ordered)
+        }
+        updated.daySchedules[targetIndex].scheduleItems = target
         return updated
     }
 

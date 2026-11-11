@@ -38,6 +38,8 @@ struct AddPlanView: View {
     /// 終わりの時間は任意。付けた人だけが持つ
     @State private var hasDailyEndTime: Bool = false
     @State private var dailyEndTime: Date = Date()
+    /// 時間未定（3.5）。時刻を入れずに日付だけで作る。カレンダーでは時刻の無い予定として先頭に並ぶ
+    @State private var isDailyTimeUndecided: Bool = false
     @State private var description: String = ""
     @State private var linkURL: String = ""
     @State private var recurrence: PlanRecurrence = .none
@@ -713,9 +715,21 @@ struct AddPlanView: View {
                     .background(uiAccentColor.opacity(0.08))
                     .padding(.leading, 16)
 
-                dateField(.dailyTime, label: "始まり", date: $dailyTime, components: .hourAndMinute)
+                Divider()
+                    .background(uiAccentColor.opacity(0.08))
+                    .padding(.leading, 16)
 
-                if hasDailyEndTime {
+                dailyUndecidedToggle
+
+                if !isDailyTimeUndecided {
+                    Divider()
+                        .background(uiAccentColor.opacity(0.08))
+                        .padding(.leading, 16)
+
+                    dateField(.dailyTime, label: "始まり", date: $dailyTime, components: .hourAndMinute)
+                }
+
+                if hasDailyEndTime && !isDailyTimeUndecided {
                     Divider()
                         .background(uiAccentColor.opacity(0.08))
                         .padding(.leading, 16)
@@ -741,7 +755,7 @@ struct AddPlanView: View {
             .shadow(color: colorScheme == .dark ? .clear : Color.black.opacity(0.06), radius: 12, x: 0, y: 5)
             .padding(.horizontal, 20)
 
-            if !hasDailyEndTime {
+            if !hasDailyEndTime && !isDailyTimeUndecided {
                 addEndTimeButton
             }
 
@@ -752,6 +766,33 @@ struct AddPlanView: View {
 
             Spacer()
         }
+    }
+
+    /// 時間未定のスイッチ（3.5）。「行く日は決めたけど、時間はまだ」という用事のため
+    private var dailyUndecidedToggle: some View {
+        Toggle(isOn: Binding(
+            get: { isDailyTimeUndecided },
+            set: { newValue in
+                withAnimation(.spring(response: 0.35, dampingFraction: 0.85)) {
+                    isDailyTimeUndecided = newValue
+                    if newValue, expandedField == .dailyTime || expandedField == .dailyEndTime {
+                        expandedField = nil
+                    }
+                }
+            }
+        )) {
+            VStack(alignment: .leading, spacing: 3) {
+                Text("時間未定")
+                    .font(.system(size: 15, weight: .bold))
+                    .foregroundColor(uiAccentColor)
+                Text("時間を決めずに、日付だけで入れます")
+                    .font(.system(size: 12))
+                    .foregroundColor(uiAccentColor.opacity(0.5))
+            }
+        }
+        .tint(effectivePlanColor)
+        .padding(.horizontal, 16)
+        .padding(.vertical, 14)
     }
 
     /// 終わりの時間を足す口。
@@ -1117,6 +1158,9 @@ struct AddPlanView: View {
             : today
         dailyDate = today
 
+        // 時刻の無い日常の予定は、時間未定のまま引き継ぐ
+        isDailyTimeUndecided = source.planType == .daily && source.time == nil
+
         // 時刻は時分だけ引き継ぎ、今日の日付上に組み立て直す
         if let previousTime = source.time {
             let components = calendar.dateComponents([.hour, .minute], from: previousTime)
@@ -1202,8 +1246,8 @@ struct AddPlanView: View {
                 endDate: dailyDate,
                 places: places,
                 planType: .daily,
-                time: dailyTime,
-                endTime: hasDailyEndTime ? dailyEndTime : nil,
+                time: isDailyTimeUndecided ? nil : dailyTime,
+                endTime: hasDailyEndTime && !isDailyTimeUndecided ? dailyEndTime : nil,
                 description: trimmedDescription,
                 linkURL: normalizedLinkURL(),
                 tagIDs: selectedTagIDs,

@@ -726,6 +726,7 @@ struct TravelPlanDetailView: View {
         }
         if let userId = authVM.userId {
             viewModel.update(updatedPlan, userId: userId)
+            ScheduleAttachmentStore.shared.removeAll(for: [item.id])
         }
     }
 
@@ -985,6 +986,9 @@ struct TravelPlanDetailView: View {
                 if let linkURL = item.linkURL {
                     LinkChip(rawURL: linkURL, tint: themeManager.currentTheme.info)
                 }
+
+                // 添付（3.5）。押すとその場で開く
+                ScheduleAttachmentChips(itemId: item.id, tint: themeManager.currentTheme.info)
             }
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1016,6 +1020,10 @@ struct TravelPlanDetailView: View {
                     } label: {
                         Label("一番上に固定", systemImage: "pin")
                     }
+                }
+                // 行けなかった場所を次の日に回す（3.5、ご要望から）。予約から作った予定は予約の画面で直す
+                if !arrival && item.canMoveToAnotherDay {
+                    moveToDayMenu(itemIDs: [item.id], plan: plan)
                 }
                 Button(role: .destructive) {
                     deleteScheduleItem(item, from: plan)
@@ -1129,6 +1137,16 @@ struct TravelPlanDetailView: View {
 
             Spacer()
 
+            // 選んだ予定をまとめて別の日へ（予約から作った予定は動かさない）
+            let movableIDs = Set(selectedVisibleItems(plan: plan).filter(\.canMoveToAnotherDay).map(\.id))
+            moveToDayMenu(itemIDs: movableIDs, plan: plan, title: "別の日へ")
+                .font(.subheadline.weight(.semibold))
+                .foregroundColor(movableIDs.isEmpty
+                                 ? themeManager.currentTheme.secondaryText.opacity(0.5)
+                                 : scheduleAccentColor)
+                .disabled(movableIDs.isEmpty)
+                .padding(.trailing, 14)
+
             Button {
                 showBulkItemDeleteConfirmation = true
             } label: {
@@ -1156,6 +1174,7 @@ struct TravelPlanDetailView: View {
         if let dayIndex = updatedPlan.daySchedules.firstIndex(where: { $0.dayNumber == selectedDay }) {
             updatedPlan.daySchedules[dayIndex].scheduleItems.removeAll { ids.contains($0.id) }
         }
+        ScheduleAttachmentStore.shared.removeAll(for: ids)
         withAnimation(.easeInOut(duration: 0.2)) {
             viewModel.update(updatedPlan, userId: userId)
             selectedItemIDs = []
@@ -1312,6 +1331,44 @@ struct TravelPlanDetailView: View {
         withAnimation(.easeInOut(duration: 0.2)) {
             viewModel.update(updatedPlan, userId: userId)
         }
+    }
+
+    // MARK: - 別の日へ移す（3.5）
+
+    /// 移す先の日を選ぶメニュー。いま見ている日は出さない
+    @ViewBuilder
+    private func moveToDayMenu(itemIDs: Set<String>, plan: TravelPlan, title: String = "別の日へ移す") -> some View {
+        let days = plan.daySchedules
+            .filter { $0.dayNumber != selectedDay }
+            .sorted { $0.dayNumber < $1.dayNumber }
+        if !days.isEmpty {
+            Menu {
+                ForEach(days) { day in
+                    Button("Day \(day.dayNumber)　\(Self.moveDayFormatter.string(from: day.date))") {
+                        moveItems(itemIDs, toDay: day.dayNumber, in: plan)
+                    }
+                }
+            } label: {
+                Label(title, systemImage: "calendar")
+            }
+        }
+    }
+
+    private static let moveDayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "ja_JP")
+        formatter.dateFormat = "M/d(E)"
+        return formatter
+    }()
+
+    private func moveItems(_ ids: Set<String>, toDay dayNumber: Int, in plan: TravelPlan) {
+        guard let userId = authVM.userId else { return }
+        let updatedPlan = plan.movingItems(ids, toDay: dayNumber)
+        withAnimation(.easeInOut(duration: 0.25)) {
+            viewModel.update(updatedPlan, userId: userId)
+            selectedItemIDs.subtract(ids)
+        }
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 
     private func togglePin(_ item: ScheduleItem, in plan: TravelPlan) {

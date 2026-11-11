@@ -189,27 +189,17 @@ struct SavePlaceView: View {
     private var dateSection: some View {
         sectionCard {
             VStack(alignment: .leading, spacing: 10) {
-                sectionLabel("訪問日（任意）", icon: "calendar")
+                sectionLabel("行きたい・行った", icon: "calendar")
 
-                // 訪問日を設定するかどうかのトグル
-                HStack {
-                    Image(systemName: "calendar.circle")
-                        .foregroundColor(themeManager.currentTheme.xprimary.opacity(0.8))
-                        .frame(width: 24)
-                    Text("訪問日を設定")
-                        .font(.subheadline)
-                        .foregroundColor(accentColor)
-                    Spacer()
-                    Toggle("", isOn: Binding(
-                        get: { vm.visitedAt != nil },
-                        set: { vm.visitedAt = $0 ? Date() : nil }
-                    ))
-                    .labelsHidden()
-                    .tint(themeManager.currentTheme.xprimary)
+                // 行きたい場所か、行った場所か（3.5）。行った場所だけが日付を持つ
+                Picker("行きたい・行った", selection: Binding(
+                    get: { vm.visitedAt != nil },
+                    set: { vm.visitedAt = $0 ? (vm.visitedAt ?? Date()) : nil }
+                )) {
+                    Text("行きたい").tag(false)
+                    Text("行った").tag(true)
                 }
-                .padding(14)
-                .background(fieldBg)
-                .cornerRadius(12)
+                .pickerStyle(.segmented)
 
                 // トグルON時のみDatePickerを表示
                 if let date = vm.visitedAt {
@@ -217,7 +207,7 @@ struct SavePlaceView: View {
                         Image(systemName: "calendar.badge.checkmark")
                             .foregroundColor(themeManager.currentTheme.xprimary.opacity(0.8))
                             .frame(width: 24)
-                        Text("日付")
+                        Text("行った日")
                             .font(.subheadline)
                             .foregroundColor(accentColor)
                         Spacer()

@@ -234,7 +234,8 @@ struct OnboardingPageView: View {
         // テーマのページと同じく、収まらないときだけスクロールさせる（Mac の窓・小さい iPhone・大きい文字）
         GeometryReader { proxy in
             ScrollView(.vertical, showsIndicators: false) {
-                content
+                // 背の低い画面（iPhone Duo の外側の画面など）では、絵と余白を小さくして1画面に収める
+                content(compact: proxy.size.height < 560)
                     .frame(maxWidth: .infinity, minHeight: proxy.size.height)
             }
             .scrollBounceBehavior(.basedOnSize)
@@ -249,27 +250,27 @@ struct OnboardingPageView: View {
         }
     }
 
-    private var content: some View {
-        VStack(spacing: 30) {
-            Spacer(minLength: 16)
+    private func content(compact: Bool) -> some View {
+        VStack(spacing: compact ? 14 : 30) {
+            Spacer(minLength: compact ? 8 : 16)
 
             // Icon
             ZStack {
                 Circle()
                     .fill(Color.white.opacity(0.2))
-                    .frame(width: 160, height: 160)
+                    .frame(width: compact ? 100 : 160, height: compact ? 100 : 160)
                     .blur(radius: 20)
 
                 Circle()
                     .fill(Color.white.opacity(0.15))
-                    .frame(width: 140, height: 140)
+                    .frame(width: compact ? 88 : 140, height: compact ? 88 : 140)
                     .overlay(
                         Circle()
                             .stroke(Color.white.opacity(0.3), lineWidth: 2)
                     )
 
                 Image(systemName: page.icon)
-                    .font(.system(size: 70, weight: .light))
+                    .font(.system(size: compact ? 44 : 70, weight: .light))
                     .foregroundColor(.white)
             }
             .scaleEffect(animateIcon ? 1.0 : 0.8)
@@ -277,7 +278,7 @@ struct OnboardingPageView: View {
 
             // Title
             Text(page.title)
-                .font(.system(size: 32, weight: .bold, design: .rounded))
+                .font(.system(size: compact ? 26 : 32, weight: .bold, design: .rounded))
                 .foregroundColor(.white)
                 .multilineTextAlignment(.center)
                 .opacity(animateContent ? 1.0 : 0.0)
@@ -285,7 +286,7 @@ struct OnboardingPageView: View {
 
             // Description
             Text(page.description)
-                .font(.system(size: 17, weight: .medium))
+                .font(.system(size: compact ? 15 : 17, weight: .medium))
                 .foregroundColor(.white.opacity(0.9))
                 .multilineTextAlignment(.center)
                 .padding(.horizontal, 40)
@@ -293,7 +294,7 @@ struct OnboardingPageView: View {
                 .offset(y: animateContent ? 0 : 20)
 
             // Features
-            VStack(spacing: 15) {
+            VStack(spacing: compact ? 8 : 15) {
                 ForEach(Array(page.features.enumerated()), id: \.offset) { index, feature in
                     HStack(spacing: 12) {
                         Image(systemName: "checkmark.circle.fill")
@@ -307,7 +308,7 @@ struct OnboardingPageView: View {
                         Spacer()
                     }
                     .padding(.horizontal, 20)
-                    .padding(.vertical, 12)
+                    .padding(.vertical, compact ? 9 : 12)
                     .background(
                         RoundedRectangle(cornerRadius: 12)
                             .fill(Color.white.opacity(0.15))
@@ -322,9 +323,9 @@ struct OnboardingPageView: View {
                 }
             }
             .padding(.horizontal, 30)
-            .padding(.top, 10)
+            .padding(.top, compact ? 0 : 10)
 
-            Spacer(minLength: 16)
+            Spacer(minLength: compact ? 8 : 16)
         }
     }
 }

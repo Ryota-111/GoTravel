@@ -6,6 +6,8 @@ struct BottomTimelineCard: View {
     let timelineItems: [CalendarTimelineItem]
     @Binding var isExpanded: Bool
     var onAddPlan: () -> Void = {}
+    /// 閉じているときの高さ（画面の高さに対する割合）。タイルの表示では、マスに予定の名前が出るので低くする（3.5）
+    var collapsedFraction: CGFloat = 0.35
 
     @EnvironmentObject var plansViewModel: PlansViewModel
     @EnvironmentObject var travelViewModel: TravelPlanViewModel
@@ -55,7 +57,7 @@ struct BottomTimelineCard: View {
     }
 
     private func minHeight(for geometry: GeometryProxy) -> CGFloat {
-        geometry.size.height * 0.35
+        geometry.size.height * collapsedFraction
     }
 
     private func maxHeight(for geometry: GeometryProxy) -> CGFloat {
@@ -490,9 +492,9 @@ struct TimelineItemCard: View {
 
         switch type {
         case .dailyPlan:
-            // 日常プランは時刻を表示。時刻を入れていない（終日の）予定は、並べるために
-            // その日の 0:00 を持っているだけなので「00:00」と出さない
-            guard hasTime else { return "終日" }
+            // 日常プランは時刻を表示。時刻を入れていない（時間未定の）予定は、並べるために
+            // その日の 0:00 を持っているだけなので「00:00」と出さない（3.5。前は「終日」）
+            guard hasTime else { return "時間未定" }
             formatter.dateFormat = "HH:mm"
         case .anniversary:
             // 記念日は時刻を持たない

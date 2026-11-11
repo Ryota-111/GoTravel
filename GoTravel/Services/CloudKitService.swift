@@ -893,6 +893,47 @@ final class CloudKitService {
         }
     }
 
+    /// ウェブで見る用の合言葉（3.5、`SharedWebPage`）。オフ・共有レコードが無ければ nil
+    func sharedWebPageToken(planId: String) async throws -> String? {
+        let recordID = CKRecord.ID(recordName: "shared_\(planId)")
+        do {
+            let record = try await publicDatabase.record(for: recordID)
+            return SharedWebPage.token(enabled: record[SharedWebPage.fieldKey], token: record[SharedWebPage.tokenKey])
+        } catch let ckError as CKError where ckError.code == .unknownItem {
+            return nil
+        }
+    }
+
+    /// ウェブで見られるようにする・やめる（3.5）。この2項目だけを書く（ほかの項目は触らない）。
+    /// オンにするたびに見る用の合言葉を作り直し、それを返す。オフにすると合言葉を消し、nil を返す
+    @discardableResult
+    func setSharedWebPageEnabled(_ enabled: Bool, planId: String) async throws -> String? {
+        let recordID = CKRecord.ID(recordName: "shared_\(planId)")
+        let token = enabled ? SharedWebPage.newToken() : nil
+        func apply(_ record: CKRecord) {
+            record[SharedWebPage.fieldKey] = enabled ? 1 : 0
+            record[SharedWebPage.tokenKey] = token
+        }
+        do {
+            let record = try await publicDatabase.record(for: recordID)
+            apply(record)
+            _ = try await publicDatabase.save(record)
+        } catch let ckError as CKError where ckError.code == .serverRecordChanged {
+            // ほかの人が同時に直していたら、新しいほうに書き直す
+            guard let serverRecord = ckError.serverRecord else { throw ckError }
+            apply(serverRecord)
+            _ = try await publicDatabase.save(serverRecord)
+        } catch let ckError as CKError where !enabled && ckError.code == .unknownItem {
+            // 共有レコードがもう無ければ、ウェブでも見られない
+            return nil
+        } catch {
+            Self.logShareFailure(error, planId: planId, phase: "webPage")
+            throw error
+        }
+        Self.shareLogger.notice("ウェブで見る=\(enabled, privacy: .public) env=\(Self.environmentHint, privacy: .public) planId=\(planId, privacy: .public)")
+        return token
+    }
+
     /// 共有コードでパブリックDBから共有プランを検索
     /// 1件だけ取りに行く。旅行計画の画面から更新を押したときに使う。
     ///
@@ -988,6 +1029,46 @@ final class CloudKitService {
               let data = json.data(using: .utf8),
               let names = try? JSONDecoder().decode([String: String].self, from: data) else { return [:] }
         return names
+    }
+
+    /// 共有レコードから自分だけを外す（退会のとき）。メンバーの一覧と表示名から消す。
+    ///
+    /// **計画の中身には触らない。** 手元の計画を送り直す形にすると、まだ取り込んでいない
+    /// 他の人の編集を古い内容で上書きしてしまう。
+    /// 自分が持ち主のレコードだったときは、レコードごと消す。もう無ければ何もしない
+    func removeSharedMember(planId: String, userId: String) async throws {
+        let recordID = CKRecord.ID(recordName: "shared_\(planId)")
+
+        var attempt = 0
+        while true {
+            let record: CKRecord
+            do {
+                record = try await publicDatabase.record(for: recordID)
+            } catch let ckError as CKError where ckError.code == .unknownItem {
+                return
+            }
+
+            // 持ち主のIDは ownerId、無い古いレコードでは userId（公開レコードの userId は常に持ち主）
+            let ownerId = (record["ownerId"] as? String) ?? (record["userId"] as? String)
+            if ownerId == userId {
+                try await deleteSharedTravelPlan(planId: planId)
+                return
+            }
+
+            let members = (record["sharedWith"] as? [String] ?? []).filter { $0 != userId }
+            record["sharedWith"] = members.isEmpty ? nil : members
+            var names = Self.memberNames(in: record)
+            if names.removeValue(forKey: userId) != nil, let data = try? JSONEncoder().encode(names) {
+                record["memberNamesJSON"] = String(data: data, encoding: .utf8)
+            }
+
+            do {
+                _ = try await publicDatabase.save(record)
+                return
+            } catch let ckError as CKError where ckError.code == .serverRecordChanged && attempt < 2 {
+                attempt += 1
+            }
+        }
     }
 
     /// 自分の表示名を書く。戻り値は書いたあとの名前の一覧。

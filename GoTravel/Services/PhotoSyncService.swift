@@ -168,6 +168,18 @@ final class PhotoSyncService: ObservableObject {
         }
     }
 
+    /// 預けてあるファイル名（このフォルダ・この人の分）。ほかの端末で足した添付を一覧に出すのに使う。
+    /// 預けられない状態（Pro でない など）なら空
+    func storedFileNames(in folder: PhotoFolder) -> Set<String> {
+        guard isActive, let userId else { return [] }
+        let context = CoreDataManager.shared.viewContext
+        var names = Set<String>()
+        context.performAndWait {
+            names = (try? PhotoAssetEntity.fetchStoredFileNames(folder: folder, userId: userId, context: context)) ?? []
+        }
+        return names
+    }
+
     // MARK: - 取り戻す
 
     /// ローカルにファイルが無ければ、預けてあるものから書き戻す。
@@ -226,7 +238,7 @@ final class PhotoSyncService: ObservableObject {
         CoreDataManager.shared.performBackgroundTask { [weak self] context in
             var added = 0
 
-            for folder in [PhotoFolder.documents, .albums, .japanPhotos] {
+            for folder in [PhotoFolder.documents, .albums, .japanPhotos, .scheduleAttachments] {
                 guard
                     let stored = try? PhotoAssetEntity.fetchStoredFileNames(
                         folder: folder, userId: userId, context: context
@@ -277,7 +289,7 @@ final class PhotoSyncService: ObservableObject {
         )
 
         return (contents ?? [])
-            .filter { ["jpg", "jpeg", "png", "heic"].contains($0.pathExtension.lowercased()) }
+            .filter { folder.fileExtensions.contains($0.pathExtension.lowercased()) }
             .map { $0.lastPathComponent }
     }
 }
@@ -294,6 +306,16 @@ extension PhotoFolder {
             return subdirectory(of: documents, named: "Albums")
         case .japanPhotos:
             return subdirectory(of: documents, named: "JapanPhotos")
+        case .scheduleAttachments:
+            return subdirectory(of: documents, named: "ScheduleAttachments")
+        }
+    }
+
+    /// 預ける対象のファイルの拡張子。添付は PDF も預ける
+    var fileExtensions: Set<String> {
+        switch self {
+        case .scheduleAttachments: return ["jpg", "jpeg", "png", "heic", "pdf"]
+        default: return ["jpg", "jpeg", "png", "heic"]
         }
     }
 

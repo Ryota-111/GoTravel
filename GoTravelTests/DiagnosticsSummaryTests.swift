@@ -69,11 +69,71 @@ struct DiagnosticsSummaryTests {
         #expect(!text.contains("12"))
     }
 
+    @Test("「Abnormal」は「Normal」を含むが、ふつうの終わり方ではない")
+    func abnormalExitsAreReported() throws {
+        let payload: [String: Any] = ["applicationExitMetrics": [
+            "foregroundExitData": ["cumulativeAbnormalExitCount": 2, "cumulativeNormalAppExitCount": 10]
+        ]]
+        let text = try #require(DiagnosticsSummary.exits(fromJSON: json(payload)))
+        #expect(text.contains("落ちた（そのほか） 2回"))
+        #expect(!text.contains("10"))
+    }
+
     @Test("ふつうの終わり方しか無ければ送らない")
     func onlyNormalExits() {
         let payload: [String: Any] = ["applicationExitMetrics": [
             "foregroundExitData": ["cumulativeNormalAppExitCount": 5]
         ]]
         #expect(DiagnosticsSummary.exits(fromJSON: json(payload)) == nil)
+    }
+
+    @Test("裏にいるときにメモリ不足で止められただけなら送らない（3.5）")
+    func backgroundMemoryPressureOnly() {
+        let payload: [String: Any] = ["applicationExitMetrics": [
+            "backgroundExitData": ["cumulativeMemoryPressureExitCount": 3, "cumulativeNormalAppExitCount": 4]
+        ]]
+        #expect(DiagnosticsSummary.exits(fromJSON: json(payload)) == nil)
+    }
+
+    @Test("裏でメモリ不足以外の止められ方があれば、それだけを送る（3.5）")
+    func backgroundOtherExits() throws {
+        let payload: [String: Any] = ["applicationExitMetrics": [
+            "backgroundExitData": ["cumulativeMemoryPressureExitCount": 1,
+                                   "cumulativeBackgroundTaskAssertionTimeoutExitCount": 2]
+        ]]
+        let text = try #require(DiagnosticsSummary.exits(fromJSON: json(payload)))
+        #expect(text.contains("裏での処理が長すぎて止められた 2回"))
+        #expect(!text.contains("メモリ不足"))
+    }
+
+    @Test("画面に出ているときのメモリ不足は送る（3.5）")
+    func foregroundMemoryPressure() throws {
+        let payload: [String: Any] = ["applicationExitMetrics": [
+            "foregroundExitData": ["cumulativeMemoryPressureExitCount": 1]
+        ]]
+        let text = try #require(DiagnosticsSummary.exits(fromJSON: json(payload)))
+        #expect(text.contains("画面に出ているとき: メモリ不足で止められた 1回"))
+    }
+
+    @Test("1日分の計測に版が無ければ、ビルド番号が同じときだけいまの版で補う（3.5）")
+    func versionFallback() throws {
+        let exits: [String: Any] = ["foregroundExitData": ["cumulativeAppWatchdogExitCount": 1]]
+        let same: [String: Any] = ["metaData": ["appBuildVersion": "31"], "applicationExitMetrics": exits]
+        let sameText = try #require(DiagnosticsSummary.exits(fromJSON: json(same), currentApp: ("3.5", "31")))
+        #expect(sameText.contains("版: 3.5（31）"))
+
+        let older: [String: Any] = ["metaData": ["appBuildVersion": "30"], "applicationExitMetrics": exits]
+        let olderText = try #require(DiagnosticsSummary.exits(fromJSON: json(older), currentApp: ("3.5", "31")))
+        #expect(olderText.contains("版: ?（30）"), "前のビルドの計測に、いまの版を入れない")
+    }
+
+    @Test("裏にいるときに固まって止められたら、画面には出ていないと書き添える（3.5）")
+    func backgroundWatchdog() throws {
+        let payload: [String: Any] = ["crashDiagnostics": [[
+            "diagnosticMetaData": ["appVersion": "3.4", "appBuildVersion": "30", "exceptionType": 10, "signal": 9,
+                                   "terminationReason": "scene-update watchdog transgression\nWatchdogVisibility: Background\n"]
+        ]]]
+        let text = try #require(DiagnosticsSummary.diagnostics(fromJSON: json(payload)))
+        #expect(text.contains("※ 裏にいるときに止められた"))
     }
 }

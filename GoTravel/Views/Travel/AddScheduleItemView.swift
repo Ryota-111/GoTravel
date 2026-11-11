@@ -34,6 +34,9 @@ struct AddScheduleItemView: View {
     @State private var endTime = Date()
     @State private var notes = ""
     @State private var linkURL = ""
+    /// これから作る予定の id。添付（3.5）は保存より先に足すので、先に決めておく
+    @State private var draftItemId = UUID().uuidString
+    @State private var didAddItem = false
     /// 「移動」の予定にするか（3.4）。乗り物・出発地・到着地・便を入れる
     @State private var isMove = false
     @State private var moveInput = MoveInput()
@@ -99,6 +102,12 @@ struct AddScheduleItemView: View {
     var body: some View {
         // iPad・Mac の広い画面では、入力欄を読みやすい幅にそろえる（iPhone では何もしない）
         editorBody.readableFormWidth()
+            // 作らずに閉じたら、この画面で足した添付を片付ける（どの予定にも付かないまま残るため）
+            .onDisappear {
+                if !didAddItem {
+                    ScheduleAttachmentStore.shared.removeAll(for: [draftItemId])
+                }
+            }
     }
 
     @ViewBuilder private var editorBody: some View {
@@ -117,6 +126,7 @@ struct AddScheduleItemView: View {
                         timeSection
                         if !isMove { locationSection }
                         optionalSection
+                        attachmentSection
                     }
                     .padding(.horizontal, 20)
                     .padding(.top, 20)
@@ -376,6 +386,17 @@ struct AddScheduleItemView: View {
     }
 
     // MARK: - Optional Section
+    /// 添付（3.5）。足す・外すはその場で反映する
+    private var attachmentSection: some View {
+        sectionCard {
+            ScheduleAttachmentsEditor(itemId: draftItemId,
+                                      accent: travelColor,
+                                      textColor: textColor,
+                                      secondaryText: themeManager.currentTheme.secondaryText,
+                                      fieldBackground: fieldBg)
+        }
+    }
+
     private var optionalSection: some View {
         sectionCard {
             VStack(alignment: .leading, spacing: 12) {
@@ -565,6 +586,7 @@ struct AddScheduleItemView: View {
             // 割り勘（3.1）：共有した旅行で金額を入れたら、入れた人が払ったことにする（費用の画面で直せる）
             paidBy: basePlan.isShared && (costs.cost ?? 0) > 0 ? userId : nil
         )
+        newItem.id = draftItemId
         // 移動（3.4）：名前が無ければ「梅田 → 京都」にし、場所には出発地を入れる
         if isMove {
             newItem.apply(move: moveInput.move, title: title)
@@ -595,6 +617,7 @@ struct AddScheduleItemView: View {
         }
 
         viewModel.update(updatedPlan, userId: userId)
+        didAddItem = true
         presentationMode.wrappedValue.dismiss()
     }
 
