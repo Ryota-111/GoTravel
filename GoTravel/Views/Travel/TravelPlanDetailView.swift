@@ -726,6 +726,7 @@ struct TravelPlanDetailView: View {
         }
         if let userId = authVM.userId {
             viewModel.update(updatedPlan, userId: userId)
+            ScheduleAttachmentStore.shared.removeAll(for: [item.id])
         }
     }
 
@@ -985,6 +986,9 @@ struct TravelPlanDetailView: View {
                 if let linkURL = item.linkURL {
                     LinkChip(rawURL: linkURL, tint: themeManager.currentTheme.info)
                 }
+
+                // 添付（3.5）。押すとその場で開く
+                ScheduleAttachmentChips(itemId: item.id, tint: themeManager.currentTheme.info)
             }
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -1170,6 +1174,7 @@ struct TravelPlanDetailView: View {
         if let dayIndex = updatedPlan.daySchedules.firstIndex(where: { $0.dayNumber == selectedDay }) {
             updatedPlan.daySchedules[dayIndex].scheduleItems.removeAll { ids.contains($0.id) }
         }
+        ScheduleAttachmentStore.shared.removeAll(for: ids)
         withAnimation(.easeInOut(duration: 0.2)) {
             viewModel.update(updatedPlan, userId: userId)
             selectedItemIDs = []

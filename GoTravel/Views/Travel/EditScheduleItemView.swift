@@ -172,6 +172,7 @@ struct EditScheduleItemView: View {
                         timeSection
                         if !isMove { locationSection }
                         optionalSection
+                        attachmentSection
                         deleteRow
                     }
                     .padding(.horizontal, 20)
@@ -464,6 +465,17 @@ struct EditScheduleItemView: View {
     }
 
     // MARK: - Optional Section
+    /// 添付（3.5）。足す・外すはその場で反映する
+    private var attachmentSection: some View {
+        sectionCard {
+            ScheduleAttachmentsEditor(itemId: item.id,
+                                      accent: travelColor,
+                                      textColor: textColor,
+                                      secondaryText: themeManager.currentTheme.secondaryText,
+                                      fieldBackground: fieldBg)
+        }
+    }
+
     private var optionalSection: some View {
         sectionCard {
             VStack(alignment: .leading, spacing: 12) {
@@ -767,6 +779,7 @@ struct EditScheduleItemView: View {
         }
 
         viewModel.update(updatedPlan, userId: userId)
+        ScheduleAttachmentStore.shared.removeAll(for: [item.id])
         presentationMode.wrappedValue.dismiss()
     }
 
