@@ -69,6 +69,16 @@ struct DiagnosticsSummaryTests {
         #expect(!text.contains("12"))
     }
 
+    @Test("「Abnormal」は「Normal」を含むが、ふつうの終わり方ではない")
+    func abnormalExitsAreReported() throws {
+        let payload: [String: Any] = ["applicationExitMetrics": [
+            "foregroundExitData": ["cumulativeAbnormalExitCount": 2, "cumulativeNormalAppExitCount": 10]
+        ]]
+        let text = try #require(DiagnosticsSummary.exits(fromJSON: json(payload)))
+        #expect(text.contains("落ちた（そのほか） 2回"))
+        #expect(!text.contains("10"))
+    }
+
     @Test("ふつうの終わり方しか無ければ送らない")
     func onlyNormalExits() {
         let payload: [String: Any] = ["applicationExitMetrics": [

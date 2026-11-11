@@ -81,7 +81,8 @@ enum DiagnosticsSummary {
             let abnormal = counts
                 .compactMap { key, value -> (String, Int)? in
                     guard let count = (value as? NSNumber)?.intValue, count > 0,
-                          !key.localizedCaseInsensitiveContains("Normal"),
+                          // 「Normal」を含むかで見ると「Abnormal」まで外れるので、頭で見る
+                          !key.hasPrefix("cumulativeNormal"),
                           !(scope == "backgroundExitData" && key.contains("MemoryPressure")) else { return nil }
                     return (exitLabel(key), count)
                 }
