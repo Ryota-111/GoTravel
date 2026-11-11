@@ -142,7 +142,15 @@ enum ReservationEmailParser {
             case 0x3000:
                 scalars.append(" ")
             default:
-                scalars.append(scalar)
+                // アラビア語やタイ語などの数字（٢٠٢٦、๒๐๒๖）も半角にする。
+                // 正規表現の `\d` はこれらにも一致するが、`Int()` は半角しか読めないので、
+                // そのまま進むと日付を数に直すところで落ちる
+                if !scalar.isASCII, scalar.properties.numericType == .decimal,
+                   let value = scalar.properties.numericValue, (0...9).contains(value) {
+                    scalars.append(Unicode.Scalar(UInt8(0x30 + Int(value))))
+                } else {
+                    scalars.append(scalar)
+                }
             }
         }
         return String(scalars)

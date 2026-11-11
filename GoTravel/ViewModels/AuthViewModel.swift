@@ -126,6 +126,14 @@ final class AuthViewModel: ObservableObject {
 
         // Core Data上のユーザーデータを削除（CloudKitへも削除が同期される）
         if let userId = userId {
+            let context = CoreDataManager.shared.viewContext
+            // 共有した旅行計画・カテゴリはパブリックDBにあり、下の削除では消えない。
+            // 消す前に控えておき、あとで片付ける（`AccountDeletionCleanup`）
+            let sharedRecords = AccountDeletionCleanup.collectSharedRecords(userId: userId, context: context)
+            // 写真のファイル名は Core Data にあるので、消す前に写真を片付ける
+            AccountDeletionCleanup.removeLocalFiles(userId: userId, context: context)
+            defer { AccountDeletionCleanup.start(sharedRecords) }
+
             // アルバムは写真ファイルも消す必要があるため専用の処理を通す
             AlbumManager.shared.deleteAllData(userId: userId)
             PlaceCategoryManager.shared.deleteAllData(userId: userId)
@@ -154,6 +162,10 @@ final class AuthViewModel: ObservableObject {
 
             // プロフィールデータを削除
             self.userDefaults.removeObject(forKey: "profile_v1")
+
+            // 消した旅行の通知が鳴ったり、ウィジェットに出続けたりしないようにする。
+            // 画面がログインに切り替わったあと（一覧が空になったあと）に行う
+            AccountDeletionCleanup.clearDeviceTraces()
         }
     }
 }

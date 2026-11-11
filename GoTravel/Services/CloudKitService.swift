@@ -1031,6 +1031,46 @@ final class CloudKitService {
         return names
     }
 
+    /// 共有レコードから自分だけを外す（退会のとき）。メンバーの一覧と表示名から消す。
+    ///
+    /// **計画の中身には触らない。** 手元の計画を送り直す形にすると、まだ取り込んでいない
+    /// 他の人の編集を古い内容で上書きしてしまう。
+    /// 自分が持ち主のレコードだったときは、レコードごと消す。もう無ければ何もしない
+    func removeSharedMember(planId: String, userId: String) async throws {
+        let recordID = CKRecord.ID(recordName: "shared_\(planId)")
+
+        var attempt = 0
+        while true {
+            let record: CKRecord
+            do {
+                record = try await publicDatabase.record(for: recordID)
+            } catch let ckError as CKError where ckError.code == .unknownItem {
+                return
+            }
+
+            // 持ち主のIDは ownerId、無い古いレコードでは userId（公開レコードの userId は常に持ち主）
+            let ownerId = (record["ownerId"] as? String) ?? (record["userId"] as? String)
+            if ownerId == userId {
+                try await deleteSharedTravelPlan(planId: planId)
+                return
+            }
+
+            let members = (record["sharedWith"] as? [String] ?? []).filter { $0 != userId }
+            record["sharedWith"] = members.isEmpty ? nil : members
+            var names = Self.memberNames(in: record)
+            if names.removeValue(forKey: userId) != nil, let data = try? JSONEncoder().encode(names) {
+                record["memberNamesJSON"] = String(data: data, encoding: .utf8)
+            }
+
+            do {
+                _ = try await publicDatabase.save(record)
+                return
+            } catch let ckError as CKError where ckError.code == .serverRecordChanged && attempt < 2 {
+                attempt += 1
+            }
+        }
+    }
+
     /// 自分の表示名を書く。戻り値は書いたあとの名前の一覧。
     /// 同時に他の人が書いて競合したら、取り直して書き直す
     @discardableResult

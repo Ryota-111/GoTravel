@@ -14,6 +14,9 @@ struct GoTravelApp: App {
 
         NotificationService.shared.requestAuthorization { _ in }
 
+        // 前回の退会で、通信できずに片付けきれなかった共有レコードがあれば続ける
+        AccountDeletionCleanup.resumeIfNeeded()
+
         // 旅行中のライブアクティビティの「更新」ボタン。押されるとアプリが裏で起き、ここで入れた処理が動く
         TravelLiveActivity.registerRefresher()
 

@@ -123,17 +123,17 @@ final class PlacesViewModel: NSObject, ObservableObject {
 
         // 画像を保存（新しい画像がある場合）
         if let image = image {
-            // 古い画像を削除
-            if let oldFileName = place.localPhotoFileName {
-                try? FileManager.removeDocumentFile(named: oldFileName)
-            }
-
             // 新しい画像を保存
             let fileName = "visited_place_\(UUID().uuidString).jpg"
             if let imageData = image.storedPhotoData() {
                 do {
                     try FileManager.saveImageDataToDocuments(data: imageData, named: fileName)
                     placeToSave.localPhotoFileName = fileName
+                    // 古い画像は、新しい画像を書けてから消す。
+                    // 先に消すと、書けなかったときに写真が無いのにファイル名だけ残る
+                    if let oldFileName = place.localPhotoFileName {
+                        try? FileManager.removeDocumentFile(named: oldFileName)
+                    }
                 } catch {
                 }
             }
