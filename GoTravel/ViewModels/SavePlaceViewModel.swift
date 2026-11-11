@@ -37,10 +37,9 @@ final class SavePlaceViewModel: ObservableObject {
         // Core Dataに保存
 
         Task { @MainActor in
-            var address = self.address
-            if address?.isEmpty ?? true {
-                address = await AddressLookup.address(latitude: coord.latitude, longitude: coord.longitude)
-            }
+            // 住所が無くても、調べるのを待たずに保存する。通信の遅い旅先で保存が終わらず、
+            // 閉じたあとに保存されてしまうため。住所は場所保存の画面を開いたときに入る（`PlaceAddressBackfill`）
+            let address = self.address
             let place = VisitedPlace(
                 title: title,
                 notes: notes,
