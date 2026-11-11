@@ -128,7 +128,9 @@ enum PlaceLinkParser {
     /// 「道の駅 〇〇町」のような名前を住所と見ないよう、番地の数字があるものだけにする
     static func isAddressLike(_ text: String) -> Bool {
         let trimmed = text.trimmingCharacters(in: .whitespaces)
-        if trimmed.hasPrefix("日本") || trimmed.hasPrefix("〒") || trimmed.hasPrefix("Japan") { return true }
+        if trimmed.hasPrefix("〒") { return true }
+        // 「日本、〒…」「Japan, 〒…」。国名だけか、区切りが続くときだけ（「日本武道館」「Japan Rail Cafe」は名前）
+        if trimmed.range(of: #"^(日本|Japan)\s*([、,，]|$)"#, options: .regularExpression) != nil { return true }
         if trimmed.range(of: #"[0-9０-９]{3}[-ー－−‐]{1}[0-9０-９]{4}"#, options: .regularExpression) != nil { return true }
         guard trimmed.contains(where: \.isNumber) else { return false }
         // 「京橋１丁目7−１」「銀座4-6-16」「中町12番地」のような番地（都道府県や市区町村が無くても）
@@ -341,10 +343,14 @@ enum PlaceImportReader {
             let link = original.absoluteString
             if let hint = PlaceLinkParser.hint(from: url) {
                 // 共有の文章の名前の行（Google マップの共有は「名前／住所／リンク」）を、リンクの中の名前より先に使う。
-                // 住所の行は名前にしない
+                // 住所の行は名前にしない。
+                // ただし文章の行は「今度ここ行こう」のようなひとことのこともあるので、
+                // それで見つからなければリンクの中の名前でも探す
                 let textName = lines.first { PlaceLinkParser.isPlausible($0) && !PlaceLinkParser.isAddressLike($0) }
                 let textAddress = lines.first(where: PlaceLinkParser.isAddressLike).map(PlaceLinkParser.cleanAddress)
-                results += await resolve(name: textName ?? hint.name, address: hint.address ?? textAddress,
+                var names: [String] = []
+                for name in [textName, hint.name].compactMap({ $0 }) where !names.contains(name) { names.append(name) }
+                results += await resolve(names: names, address: hint.address ?? textAddress,
                                          latitude: hint.latitude, longitude: hint.longitude, link: link)
             } else if !PlaceLinkParser.isSocialPost(url), let title = await pageTitle(of: url),
                       let name = PlaceLinkParser.name(fromPageTitle: title) {
@@ -393,13 +399,15 @@ enum PlaceImportReader {
         return found.filter { !PlaceLinkParser.isAddressLike($0.name) } + found.filter { PlaceLinkParser.isAddressLike($0.name) }
     }
 
-    private static func resolve(name: String?, address: String?, latitude: Double?, longitude: Double?,
+    /// `names` は探す順（文章の行、リンクの中の名前）。どれでも見つからず、送られた名前のまま出すときは
+    /// 最後のもの（リンクの中の名前があればそれ）を使う
+    private static func resolve(names: [String], address: String?, latitude: Double?, longitude: Double?,
                                 link: String) async -> [PlaceImportCandidate] {
         if let latitude, let longitude {
             let here = CLLocationCoordinate2D(latitude: latitude, longitude: longitude)
             // 位置が分かっていれば、その近くで名前を探し、いちばん近いものを使う（住所とカテゴリーが分かる）
             let location = CLLocation(latitude: latitude, longitude: longitude)
-            if let name {
+            for name in names {
                 let found = await search(name, near: here, link: link).filter { !PlaceLinkParser.isAddressLike($0.name) }
                 if let nearest = found.min(by: {
                     CLLocation(latitude: $0.latitude, longitude: $0.longitude).distance(from: location)
@@ -409,29 +417,35 @@ enum PlaceImportReader {
                 }
             }
             // 名前が分からなければ、その位置にある店や場所の名前を使う
-            if name == nil {
+            if names.isEmpty {
                 let nearby = await nearbyPointsOfInterest(to: location, link: link)
                 if !nearby.isEmpty { return nearby }
             }
-            return [PlaceImportCandidate(name: name ?? "地図の場所", address: address, latitude: latitude,
+            return [PlaceImportCandidate(name: names.last ?? "地図の場所", address: address, latitude: latitude,
                                          longitude: longitude, categoryId: "sightseeing", linkURL: link)]
         }
-        if let name, let address,
+        if let fallbackName = names.last, let address,
            let anchor = await search(PlaceLinkParser.streetAddress(address), link: link).first {
             // 住所の位置の近くで名前を探す
             let location = CLLocation(latitude: anchor.latitude, longitude: anchor.longitude)
-            let found = await search(name, near: anchor.coordinate, link: link).filter {
-                !PlaceLinkParser.isAddressLike($0.name)
-                    && CLLocation(latitude: $0.latitude, longitude: $0.longitude).distance(from: location) < 300
+            for name in names {
+                let found = await search(name, near: anchor.coordinate, link: link).filter {
+                    !PlaceLinkParser.isAddressLike($0.name)
+                        && CLLocation(latitude: $0.latitude, longitude: $0.longitude).distance(from: location) < 300
+                }
+                if !found.isEmpty { return found }
             }
-            if !found.isEmpty { return found }
             // Apple の地図に載っていない場所は、送られた名前のまま住所の位置で保存できるようにする。近くの場所も並べる
-            let named = PlaceImportCandidate(name: name, address: address, latitude: anchor.latitude,
+            let named = PlaceImportCandidate(name: fallbackName, address: address, latitude: anchor.latitude,
                                              longitude: anchor.longitude, categoryId: "sightseeing", linkURL: link)
             return [named] + (await nearbyPointsOfInterest(to: location, link: link))
         }
-        if let name {
-            return await search([name, address].compactMap { $0 }.joined(separator: " "), link: link)
+        if !names.isEmpty {
+            for name in names {
+                let found = await search([name, address].compactMap { $0 }.joined(separator: " "), link: link)
+                if !found.isEmpty { return found }
+            }
+            return []
         }
         if let address {
             // 住所しか分からないときは、その住所にある店や場所を並べる（住所そのものを名前にしない）
@@ -479,11 +493,13 @@ enum PlaceImportReader {
         return candidates.filter { seen.insert($0.id).inserted }
     }
 
-    /// 短いリンクを開いて、行き着いたリンクを返す
+    /// 短いリンクを開いて、行き着いたリンクを返す。
+    /// 知りたいのは行き先だけなので、ページの中身は落とさない（地図のページは数MBある）
     static func expand(_ url: URL) async -> URL? {
         var request = URLRequest(url: url, timeoutInterval: 10)
         request.httpMethod = "GET"
-        guard let (_, response) = try? await URLSession.shared.data(for: request) else { return nil }
+        guard let (bytes, response) = try? await URLSession.shared.bytes(for: request) else { return nil }
+        bytes.task.cancel()
         return response.url
     }
 

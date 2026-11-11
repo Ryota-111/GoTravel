@@ -52,6 +52,12 @@ struct PlaceLinkParserTests {
         #expect(!PlaceLinkParser.isAddressLike("スターバックス コーヒー 渋谷スクランブルスクエア店"))
         #expect(!PlaceLinkParser.isAddressLike("道の駅 南伊豆町"))
         #expect(!PlaceLinkParser.isAddressLike("東京タワー"))
+        // 「日本」「Japan」で始まる名前は住所ではない（区切りが続くときだけ住所）
+        #expect(!PlaceLinkParser.isAddressLike("日本科学未来館"))
+        #expect(!PlaceLinkParser.isAddressLike("日本橋高島屋"))
+        #expect(!PlaceLinkParser.isAddressLike("Japan Rail Cafe"))
+        #expect(PlaceLinkParser.isAddressLike("日本、東京都渋谷区"))
+        #expect(PlaceLinkParser.isAddressLike("Japan, Tokyo"))
         #expect(PlaceLinkParser.splitNameAndAddress("東京タワー").name == "東京タワー")
     }
 
