@@ -1,5 +1,6 @@
 import Testing
 import Foundation
+import CloudKit
 @testable import GoTravel
 
 /// 退会のときに、パブリックDBの共有レコードをどう片付けるかの振り分け。
@@ -61,5 +62,54 @@ struct AccountDeletionCleanupTests {
 
         let data = try JSONEncoder().encode(records)
         #expect(try JSONDecoder().decode(AccountDeletionCleanup.SharedRecords.self, from: data) == records)
+    }
+
+    private func records(_ userId: String, owned: [String] = [], joined: [String] = [], attempts: Int = 0)
+        -> AccountDeletionCleanup.SharedRecords {
+        var records = AccountDeletionCleanup.SharedRecords(userId: userId)
+        records.ownedTravelPlanIds = owned
+        records.joinedTravelPlanIds = joined
+        records.attempts = attempts
+        return records
+    }
+
+    @Test("前の退会の分が残っているところへ足しても、前の分を消さない")
+    func mergeKeepsEarlierRecords() {
+        let pending = [records("me", owned: ["a"], attempts: 3)]
+
+        let sameUser = AccountDeletionCleanup.merged(pending, adding: records("me", owned: ["a", "b"], joined: ["c"]))
+        #expect(sameUser == [records("me", owned: ["a", "b"], joined: ["c"])])
+
+        let otherUser = AccountDeletionCleanup.merged(pending, adding: records("you", owned: ["x"]))
+        #expect(otherUser == [records("me", owned: ["a"], attempts: 3), records("you", owned: ["x"])])
+    }
+
+    @Test("片付いたものだけを控えから外す。片付けている間に足された分は残す")
+    func settleRemovesOnlyFinished() {
+        let tried = records("me", owned: ["a", "b"])
+        // 片付けている間に "c" が足された
+        let pending = [records("me", owned: ["a", "b", "c"]), records("you", owned: ["x"])]
+
+        let after = AccountDeletionCleanup.settled(pending, tried: tried, remaining: records("me", owned: ["b"]),
+                                                   countsAsAttempt: false)
+        #expect(after == [records("me", owned: ["b", "c"]), records("you", owned: ["x"])])
+
+        let done = AccountDeletionCleanup.settled([tried], tried: tried, remaining: records("me"), countsAsAttempt: false)
+        #expect(done.isEmpty)
+    }
+
+    @Test("通信できなかっただけの回は数えない。それ以外の失敗は5回で諦める")
+    func attemptsCountOnlyRealFailures() {
+        let tried = records("me", owned: ["a"], attempts: AccountDeletionCleanup.maxAttempts - 1)
+
+        let offline = AccountDeletionCleanup.settled([tried], tried: tried, remaining: tried, countsAsAttempt: false)
+        #expect(offline == [tried])
+
+        let refused = AccountDeletionCleanup.settled([tried], tried: tried, remaining: tried, countsAsAttempt: true)
+        #expect(refused.isEmpty)
+
+        #expect(AccountDeletionCleanup.isTemporary(URLError(.notConnectedToInternet)))
+        #expect(AccountDeletionCleanup.isTemporary(CKError(.networkUnavailable)))
+        #expect(!AccountDeletionCleanup.isTemporary(CKError(.permissionFailure)))
     }
 }

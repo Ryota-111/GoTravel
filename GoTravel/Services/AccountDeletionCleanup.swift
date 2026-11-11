@@ -1,5 +1,6 @@
 import Foundation
 import CoreData
+import CloudKit
 import UserNotifications
 import WidgetKit
 
@@ -30,7 +31,7 @@ enum AccountDeletionCleanup {
         var ownedCategoryIds: [String] = []
         /// 参加していたカテゴリ。自分だけを外す
         var joinedCategoryIds: [String] = []
-        /// 片付けを試した回数。通信できないまま退会したときは、次の起動で続きをする
+        /// 通信のせいではない失敗で、片付けきれなかった回数
         var attempts = 0
 
         var isEmpty: Bool {
@@ -78,39 +79,103 @@ enum AccountDeletionCleanup {
         return sharedRecords(travelPlans: plans, categories: categories, userId: userId)
     }
 
-    private static let pendingKey = "AccountDeletionPendingSharedCleanup_v1"
-    /// これだけ試しても片付かなければ諦める（権限が無いなど、何度やっても通らない場合）
-    private static let maxAttempts = 5
+    private static let pendingKey = "AccountDeletionPendingSharedCleanup_v2"
+    /// これだけ試しても片付かなければ諦める（権限が無いなど、何度やっても通らない場合）。
+    /// 通信できなかっただけの回は数えない
+    static let maxAttempts = 5
+    /// 片付けは1つずつ動かす。同時に動くと、片方の書き戻しがもう片方の控えを消す
+    private static var isRunning = false
+    private static var runAgain = false
 
     /// 共有レコードを片付け始める。終わらなかった分は覚えておき、次の起動で続ける
     static func start(_ records: SharedRecords) {
         guard !records.isEmpty, !CoreDataManager.isEmptyDataMode else { return }
-        savePending(records)
+        // 前の退会の分が残っていても消さずに足す
+        savePending(merged(loadPending(), adding: records))
         Task { await runPending() }
     }
 
     /// アプリの起動時に呼ぶ。前回の退会で片付けきれなかった分があれば続ける
     static func resumeIfNeeded() {
-        guard loadPending() != nil else { return }
+        guard !loadPending().isEmpty else { return }
         Task { await runPending() }
     }
 
     private static func runPending() async {
-        guard var records = loadPending() else { return }
-        records.attempts += 1
-        // 先に回数を書く。途中でアプリが終わっても、いつまでも繰り返さない
-        savePending(records)
+        guard !isRunning else {
+            runAgain = true
+            return
+        }
+        isRunning = true
+        defer { isRunning = false }
 
-        let remaining = await remove(records)
-        if remaining.isEmpty || remaining.attempts >= maxAttempts {
-            UserDefaults.standard.removeObject(forKey: pendingKey)
+        repeat {
+            runAgain = false
+            for batch in loadPending() {
+                let result = await remove(batch)
+                // 片付けている間に足された分があるので、読み直してから書き戻す
+                savePending(settled(loadPending(), tried: batch, remaining: result.remaining,
+                                    countsAsAttempt: result.countsAsAttempt))
+            }
+        } while runAgain
+    }
+
+    /// 控えに新しい分を足す。同じ人の分は1つにまとめる
+    nonisolated static func merged(_ pending: [SharedRecords], adding records: SharedRecords) -> [SharedRecords] {
+        guard !records.isEmpty else { return pending }
+        var pending = pending
+        guard let index = pending.firstIndex(where: { $0.userId == records.userId }) else {
+            return pending + [records]
+        }
+        func union(_ lhs: [String], _ rhs: [String]) -> [String] { lhs + rhs.filter { !lhs.contains($0) } }
+        pending[index].ownedTravelPlanIds = union(pending[index].ownedTravelPlanIds, records.ownedTravelPlanIds)
+        pending[index].joinedTravelPlanIds = union(pending[index].joinedTravelPlanIds, records.joinedTravelPlanIds)
+        pending[index].ownedCategoryIds = union(pending[index].ownedCategoryIds, records.ownedCategoryIds)
+        pending[index].joinedCategoryIds = union(pending[index].joinedCategoryIds, records.joinedCategoryIds)
+        // 新しい分が入ったので、数え直す
+        pending[index].attempts = 0
+        return pending
+    }
+
+    /// 1回片付けたあとの控え。`tried` のうち片付いたものだけを外す
+    /// （片付けている間に足された分は、そのまま残す）
+    nonisolated static func settled(_ pending: [SharedRecords], tried: SharedRecords, remaining: SharedRecords,
+                                    countsAsAttempt: Bool) -> [SharedRecords] {
+        var pending = pending
+        guard let index = pending.firstIndex(where: { $0.userId == tried.userId }) else { return pending }
+        func keep(_ current: [String], _ tried: [String], _ remaining: [String]) -> [String] {
+            current.filter { !tried.contains($0) || remaining.contains($0) }
+        }
+        var entry = pending[index]
+        entry.ownedTravelPlanIds = keep(entry.ownedTravelPlanIds, tried.ownedTravelPlanIds, remaining.ownedTravelPlanIds)
+        entry.joinedTravelPlanIds = keep(entry.joinedTravelPlanIds, tried.joinedTravelPlanIds, remaining.joinedTravelPlanIds)
+        entry.ownedCategoryIds = keep(entry.ownedCategoryIds, tried.ownedCategoryIds, remaining.ownedCategoryIds)
+        entry.joinedCategoryIds = keep(entry.joinedCategoryIds, tried.joinedCategoryIds, remaining.joinedCategoryIds)
+        if countsAsAttempt { entry.attempts += 1 }
+        if entry.isEmpty || entry.attempts >= maxAttempts {
+            pending.remove(at: index)
         } else {
-            savePending(remaining)
+            pending[index] = entry
+        }
+        return pending
+    }
+
+    /// 通信できなかっただけの失敗か。これは何度でもやり直す（圏外のまま5回起動しただけで諦めない）
+    nonisolated static func isTemporary(_ error: Error) -> Bool {
+        if error is URLError { return true }
+        guard let ckError = error as? CKError else { return false }
+        switch ckError.code {
+        case .networkUnavailable, .networkFailure, .serviceUnavailable, .requestRateLimited, .zoneBusy,
+             .notAuthenticated, .accountTemporarilyUnavailable:
+            return true
+        default:
+            return false
         }
     }
 
-    /// 1件ずつ片付ける。戻り値は片付けられなかった分
-    private static func remove(_ records: SharedRecords) async -> SharedRecords {
+    /// 1件ずつ片付ける。`remaining` は片付けられなかった分。
+    /// `countsAsAttempt` は、通信のせいではない失敗があったとき
+    private static func remove(_ records: SharedRecords) async -> (remaining: SharedRecords, countsAsAttempt: Bool) {
         let cloud = CloudKitService.shared
         let userId = records.userId
         var remaining = records
@@ -118,12 +183,14 @@ enum AccountDeletionCleanup {
         remaining.joinedTravelPlanIds = []
         remaining.ownedCategoryIds = []
         remaining.joinedCategoryIds = []
+        var countsAsAttempt = false
 
         for planId in records.ownedTravelPlanIds {
             do {
                 try await cloud.deleteSharedTravelPlan(planId: planId)
             } catch {
                 remaining.ownedTravelPlanIds.append(planId)
+                if !isTemporary(error) { countsAsAttempt = true }
             }
         }
 
@@ -132,6 +199,7 @@ enum AccountDeletionCleanup {
                 try await cloud.removeSharedMember(planId: planId, userId: userId)
             } catch {
                 remaining.joinedTravelPlanIds.append(planId)
+                if !isTemporary(error) { countsAsAttempt = true }
             }
         }
 
@@ -140,6 +208,7 @@ enum AccountDeletionCleanup {
                 try await removeOwnedCategory(categoryId: categoryId)
             } catch {
                 remaining.ownedCategoryIds.append(categoryId)
+                if !isTemporary(error) { countsAsAttempt = true }
             }
         }
 
@@ -155,10 +224,11 @@ enum AccountDeletionCleanup {
                 }
             } catch {
                 remaining.joinedCategoryIds.append(categoryId)
+                if !isTemporary(error) { countsAsAttempt = true }
             }
         }
 
-        return remaining
+        return (remaining, countsAsAttempt)
     }
 
     /// 持ち主としてカテゴリの共有を消す。
@@ -174,13 +244,16 @@ enum AccountDeletionCleanup {
         }
     }
 
-    private static func loadPending() -> SharedRecords? {
-        guard let data = UserDefaults.standard.data(forKey: pendingKey) else { return nil }
-        return try? JSONDecoder().decode(SharedRecords.self, from: data)
+    private static func loadPending() -> [SharedRecords] {
+        guard let data = UserDefaults.standard.data(forKey: pendingKey) else { return [] }
+        return (try? JSONDecoder().decode([SharedRecords].self, from: data)) ?? []
     }
 
-    private static func savePending(_ records: SharedRecords) {
-        guard let data = try? JSONEncoder().encode(records) else { return }
+    private static func savePending(_ pending: [SharedRecords]) {
+        guard !pending.isEmpty, let data = try? JSONEncoder().encode(pending) else {
+            UserDefaults.standard.removeObject(forKey: pendingKey)
+            return
+        }
         UserDefaults.standard.set(data, forKey: pendingKey)
     }
 
