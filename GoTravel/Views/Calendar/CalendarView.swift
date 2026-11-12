@@ -439,7 +439,7 @@ struct CalendarView: View {
             .buttonStyle(.plain)
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 16).fill(themeManager.currentTheme.secondary.opacity(0.08)))
+        .background(RoundedRectangle(cornerRadius: AppRadius.large).fill(themeManager.currentTheme.secondary.opacity(0.08)))
     }
 
     /// タグで絞っているときの表示。「✕」で絞り込みをやめる
@@ -990,13 +990,13 @@ struct CalendarView: View {
         .padding(.vertical, 5)
         .frame(maxWidth: .infinity, minHeight: Self.tileHeight, maxHeight: Self.tileHeight, alignment: .topLeading)
         .background(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                 .fill(entries.isEmpty
                       ? theme.elevatedSurface(for: colorScheme).opacity(0.55)
                       : theme.elevatedSurface(for: colorScheme))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                 .strokeBorder(
                     isSelected ? theme.secondary : textColor.opacity(0.10 + 0.14 * Double(density)),
                     lineWidth: isSelected ? 2.5 : 1 + 0.5 * CGFloat(density)

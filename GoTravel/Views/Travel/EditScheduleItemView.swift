@@ -255,9 +255,9 @@ struct EditScheduleItemView: View {
                     .foregroundColor(textColor)
                     .padding(14)
                     .background(fieldBg)
-                    .cornerRadius(12)
+                    .cornerRadius(AppRadius.medium)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: AppRadius.medium)
                             .stroke(
                                 title.isEmpty && !isMove
                                     ? themeManager.currentTheme.error.opacity(0.4)
@@ -363,7 +363,7 @@ struct EditScheduleItemView: View {
                 .tint(travelColor)
                 .padding(14)
                 .background(fieldBg)
-                .cornerRadius(12)
+                .cornerRadius(AppRadius.medium)
                 }
             }
         }
@@ -430,7 +430,7 @@ struct EditScheduleItemView: View {
                     }
                     .padding(14)
                     .background(fieldBg)
-                    .cornerRadius(12)
+                    .cornerRadius(AppRadius.medium)
                 } else {
                     Button(action: { showLocationMethodSheet = true }) {
                         HStack(spacing: 12) {
@@ -456,8 +456,8 @@ struct EditScheduleItemView: View {
                         }
                         .padding(14)
                         .background(fieldBg)
-                        .cornerRadius(12)
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(travelColor.opacity(0.2), lineWidth: 1))
+                        .cornerRadius(AppRadius.medium)
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.medium).stroke(travelColor.opacity(0.2), lineWidth: 1))
                     }
                 }
             }
@@ -499,7 +499,7 @@ struct EditScheduleItemView: View {
                     .foregroundColor(textColor)
                     .padding(14)
                     .background(fieldBg)
-                    .cornerRadius(12)
+                    .cornerRadius(AppRadius.medium)
 
                 if let diff = costDifference {
                     let unit = costInput.currencyCode
@@ -538,7 +538,7 @@ struct EditScheduleItemView: View {
                     }
                     .padding(12)
                     .background(fieldBg)
-                    .cornerRadius(12)
+                    .cornerRadius(AppRadius.medium)
                 }
 
                 Divider()
@@ -554,7 +554,7 @@ struct EditScheduleItemView: View {
                 }
                 .padding(14)
                 .background(fieldBg)
-                .cornerRadius(12)
+                .cornerRadius(AppRadius.medium)
             }
         }
     }
@@ -571,7 +571,7 @@ struct EditScheduleItemView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .fill(themeManager.currentTheme.error.opacity(0.08))
             )
         }
@@ -591,7 +591,7 @@ struct EditScheduleItemView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .fill(canSave ? travelColor : themeManager.currentTheme.secondaryText)
                     .shadow(color: travelColor.opacity(canSave ? 0.4 : 0), radius: 8, x: 0, y: 4)
             )
@@ -686,7 +686,7 @@ struct EditScheduleItemView: View {
         }
         .padding(12)
         .background(fieldBg)
-        .cornerRadius(12)
+        .cornerRadius(AppRadius.medium)
     }
 
     /// 目的地が海外なら、現地時間・日本時間の切り替えを出す。
@@ -846,7 +846,7 @@ struct EditScheduleItemView: View {
         Button(action: action) {
             HStack(spacing: 16) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: AppRadius.medium)
                         .fill(color.opacity(disabled ? 0.06 : 0.12))
                         .frame(width: 46, height: 46)
                     Image(systemName: icon)
@@ -868,11 +868,11 @@ struct EditScheduleItemView: View {
             }
             .padding(14)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .fill(colorScheme == .dark
                           ? themeManager.currentTheme.secondaryBackgroundDark
                           : themeManager.currentTheme.secondaryBackgroundLight)
-                    .shadow(color: themeManager.currentTheme.shadow, radius: 4, x: 0, y: 2)
+                    .shadow(color: themeManager.currentTheme.effectiveShadow, radius: 4, x: 0, y: 2)
             )
         }
         .buttonStyle(PlainButtonStyle())

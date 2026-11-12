@@ -328,7 +328,7 @@ struct ProView: View {
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(12)
-            .background(RoundedRectangle(cornerRadius: 10).fill(theme.secondaryText.opacity(0.08)))
+            .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(theme.secondaryText.opacity(0.08)))
 
             Image(systemName: "arrow.down")
                 .font(.caption.bold())
@@ -364,9 +364,9 @@ struct ProView: View {
             }
             .padding(12)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: AppRadius.medium)
                     .fill(accent.opacity(0.06))
-                    .overlay(RoundedRectangle(cornerRadius: 10).stroke(accent.opacity(0.35), lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.medium).stroke(accent.opacity(0.35), lineWidth: 1))
             )
         }
         .accessibilityElement(children: .ignore)

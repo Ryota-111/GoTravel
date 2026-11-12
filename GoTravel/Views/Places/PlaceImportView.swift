@@ -144,13 +144,13 @@ struct PlaceImportView: View {
                                 .lineLimit(4)
                                 .frame(width: sources.count == 1 ? nil : 220, alignment: .leading)
                                 .padding(12)
-                                .background(cardFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+                                .background(cardFill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
                         case .image(let image):
                             Image(uiImage: image)
                                 .resizable()
                                 .scaledToFill()
                                 .frame(width: 72, height: 128)
-                                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                                .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
                         }
                     }
                 }
@@ -170,7 +170,7 @@ struct PlaceImportView: View {
             }
         }
         .frame(height: 190)
-        .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
         .allowsHitTesting(true)
     }
 
@@ -241,9 +241,9 @@ struct PlaceImportView: View {
             .accessibilityLabel(saved ? "\(candidate.name)は保存済み" : "\(candidate.name)を行きたい場所に保存")
         }
         .padding(12)
-        .background(cardFill, in: RoundedRectangle(cornerRadius: 14, style: .continuous))
+        .background(cardFill, in: RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
         .overlay(
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
                 .strokeBorder(selected ? accent : .clear, lineWidth: 2)
         )
         .contentShape(Rectangle())
@@ -276,12 +276,12 @@ struct PlaceImportView: View {
                     .foregroundColor(ThemePreset.readableText(on: accent))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(accent))
+                    .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(accent))
             }
             .buttonStyle(.plain)
         }
         .padding(16)
-        .background(cardFill, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+        .background(cardFill, in: RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
     }
 
     /// お試しで読んだときの一言
@@ -305,7 +305,7 @@ struct PlaceImportView: View {
                     .foregroundColor(secondaryText)
             }
             .padding(12)
-            .background(cardFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(cardFill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
         }
         .buttonStyle(.plain)
     }
@@ -351,7 +351,7 @@ struct PlaceImportView: View {
                 if isSearching { ProgressView() }
             }
             .padding(12)
-            .background(cardFill, in: RoundedRectangle(cornerRadius: 12, style: .continuous))
+            .background(cardFill, in: RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
         }
     }
 

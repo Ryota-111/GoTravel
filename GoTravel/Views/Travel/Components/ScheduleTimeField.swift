@@ -63,7 +63,7 @@ struct ScheduleTimeField: View {
             }
             .padding(14)
             .background(fieldBackground)
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.medium)
 
             if ScheduleClock.offersZoneChoice(choices, selected: timeZone, at: time, countsRecents: countsRecents) {
                 ScheduleZoneMenu(
@@ -172,7 +172,7 @@ struct ScheduleZoneMenu: View {
                 }
                 .padding(14)
                 .background(fieldBackground)
-                .cornerRadius(12)
+                .cornerRadius(AppRadius.medium)
             }
 
             Text(note ?? caption)
@@ -410,7 +410,7 @@ struct ScheduleEndTimeField: View {
         }
         .padding(14)
         .background(fieldBackground)
-        .cornerRadius(12)
+        .cornerRadius(AppRadius.medium)
     }
 
     private var endZoneMenu: some View {
@@ -461,7 +461,7 @@ struct ScheduleEndTimeField: View {
                 }
                 .padding(14)
                 .background(fieldBackground)
-                .cornerRadius(12)
+                .cornerRadius(AppRadius.medium)
             }
 
             Text(caption)

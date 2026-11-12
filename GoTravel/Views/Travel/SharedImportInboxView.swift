@@ -128,12 +128,12 @@ struct SharedImportInboxView: View {
                             .scaledToFit()
                             .frame(maxHeight: 220)
                             .frame(maxWidth: .infinity)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.small))
                     }
                 }
             }
             .padding(12)
-            .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+            .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(cardFill))
         }
     }
 
@@ -193,7 +193,7 @@ struct SharedImportInboxView: View {
                     .foregroundColor(themeManager.currentTheme.secondaryText)
             }
             .padding(14)
-            .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+            .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(cardFill))
         }
         .buttonStyle(.plain)
     }
@@ -224,7 +224,7 @@ struct SharedImportInboxView: View {
                     .foregroundColor(ThemePreset.readableText(on: accent))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(accent))
+                    .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(accent))
             }
             .buttonStyle(.plain)
         }

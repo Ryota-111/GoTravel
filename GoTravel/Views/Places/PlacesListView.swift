@@ -292,7 +292,7 @@ struct PlacesListView: View {
                     .frame(maxWidth: .infinity)
                     .padding()
                     .background(themeManager.currentTheme.accent2.opacity(0.2))
-                    .cornerRadius(15)
+                    .cornerRadius(AppRadius.large)
                 }
                 .padding(.top, 10)
             }
@@ -377,7 +377,7 @@ struct PlacesListView: View {
     /// 保存した写真は詳細でしか見えていなかった。一覧でも出すと、
     /// 名前を読まなくてもどの場所か分かる
     private func placeThumbnail(_ place: VisitedPlace, category: CustomPlaceCategory, accent: Color) -> some View {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
+        RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
             .fill(accent.opacity(colorScheme == .dark ? 0.24 : 0.14))
             .frame(width: 84, height: 72)
             .overlay {
@@ -392,7 +392,7 @@ struct PlacesListView: View {
                         .foregroundColor(accent)
                 }
             }
-            .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
     }
 
     /// 長押しの contextMenu だけでは削除できることに気づけない。
@@ -700,7 +700,7 @@ struct PlacesListView: View {
                     .padding(.vertical, 13)
                     .background(themeManager.currentTheme.xprimary)
                     .foregroundStyle(.white)
-                    .cornerRadius(14)
+                    .cornerRadius(AppRadius.large)
             }
             .buttonStyle(PlainButtonStyle())
             .padding(.horizontal, 20)

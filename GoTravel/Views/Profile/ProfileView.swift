@@ -404,7 +404,7 @@ struct GlassMenuCard: View {
                     RoundedRectangle(cornerRadius: 24)
                         .stroke(themeManager.currentTheme.cardBorder, lineWidth: 1.5)
                 )
-                .shadow(color: themeManager.currentTheme.shadow, radius: 15, x: 0, y: 8)
+                .shadow(color: themeManager.currentTheme.effectiveShadow, radius: 15, x: 0, y: 8)
 
             HStack(spacing: 18) {
                 // Gradient Icon
@@ -480,12 +480,12 @@ struct ProfileMenuGroup<Content: View>: View {
                 }
             }
             .background(
-                RoundedRectangle(cornerRadius: 18)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .fill(themeManager.currentTheme.cardBackground2)
-                    .overlay(RoundedRectangle(cornerRadius: 18).stroke(themeManager.currentTheme.cardBorder, lineWidth: 1))
-                    .shadow(color: themeManager.currentTheme.shadow, radius: 10, x: 0, y: 4)
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.large).stroke(themeManager.currentTheme.cardBorder, lineWidth: 1))
+                    .shadow(color: themeManager.currentTheme.effectiveShadow, radius: 10, x: 0, y: 4)
             )
-            .clipShape(RoundedRectangle(cornerRadius: 18))
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.large))
         }
     }
 }
@@ -508,7 +508,7 @@ struct ProfileMenuRow: View {
                 .font(.system(size: 15, weight: .semibold))
                 .foregroundColor(.white)
                 .frame(width: 30, height: 30)
-                .background(RoundedRectangle(cornerRadius: 8).fill(color.gradient))
+                .background(RoundedRectangle(cornerRadius: AppRadius.small).fill(color.gradient))
             // 文字の色は、行の地（半透明のカード）の明るさから決める。
             // デフォルトカラーのダークモードではカードが明るい灰色になるので、黒い文字になる
             Text(title)
@@ -655,11 +655,11 @@ struct ProfileEditView: View {
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: AppRadius.medium)
                             .fill(themeManager.currentTheme.cardBackground2)
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: AppRadius.medium)
                             .stroke(themeManager.currentTheme.xprimary.opacity(0.3), lineWidth: 1)
                     )
             }
@@ -683,22 +683,22 @@ struct ProfileEditView: View {
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: AppRadius.medium)
                             .fill(themeManager.currentTheme.cardBackground2)
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: AppRadius.medium)
                             .stroke(themeManager.currentTheme.xprimary.opacity(0.3), lineWidth: 1)
                     )
             }
         }
         .padding()
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .fill(themeManager.currentTheme.cardBackground2)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .stroke(
                     LinearGradient(
                         gradient: Gradient(colors: [
@@ -735,11 +735,11 @@ struct ProfileEditView: View {
         }
         .padding()
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .fill(themeManager.currentTheme.xprimary.opacity(0.1))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .stroke(themeManager.currentTheme.xprimary.opacity(0.3), lineWidth: 1)
         )
         .opacity(animateContent ? 1 : 0)
@@ -781,7 +781,7 @@ struct ProfileEditView: View {
                     Circle()
                         .stroke(themeManager.currentTheme.cardBorder, lineWidth: 3)
                 )
-                .shadow(color: themeManager.currentTheme.shadow, radius: 15, x: 0, y: 8)
+                .shadow(color: themeManager.currentTheme.effectiveShadow, radius: 15, x: 0, y: 8)
 
                 Menu {
                     Button("写真を選択") { showImagePicker = true }
@@ -809,11 +809,11 @@ struct ProfileEditView: View {
         .frame(maxWidth: .infinity)
         .padding(.vertical, 20)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .fill(themeManager.currentTheme.cardBackground2)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .stroke(
                     LinearGradient(
                         gradient: Gradient(colors: [
@@ -893,11 +893,11 @@ struct AccountActionView: View {
                             }
                             .padding()
                             .background(
-                                RoundedRectangle(cornerRadius: 16)
+                                RoundedRectangle(cornerRadius: AppRadius.large)
                                     .fill(themeManager.currentTheme.cardBackground2)
                             )
                             .overlay(
-                                RoundedRectangle(cornerRadius: 16)
+                                RoundedRectangle(cornerRadius: AppRadius.large)
                                     .stroke(Color.orange.opacity(0.3), lineWidth: 1)
                             )
                         }
@@ -921,11 +921,11 @@ struct AccountActionView: View {
                         }
                         .padding()
                         .background(
-                            RoundedRectangle(cornerRadius: 16)
+                            RoundedRectangle(cornerRadius: AppRadius.large)
                                 .fill(Color.red.opacity(0.1))
                         )
                         .overlay(
-                            RoundedRectangle(cornerRadius: 16)
+                            RoundedRectangle(cornerRadius: AppRadius.large)
                                 .stroke(Color.red.opacity(0.3), lineWidth: 1)
                         )
                         .opacity(animateButtons ? 1 : 0)
@@ -1260,14 +1260,14 @@ struct AppSettingView: View {
                         }
                         .padding()
                         .background(
-                            RoundedRectangle(cornerRadius: 16)
+                            RoundedRectangle(cornerRadius: AppRadius.large)
                                 .fill(themeManager.currentTheme.cardBackground2)
                         )
                         .overlay(
-                            RoundedRectangle(cornerRadius: 16)
+                            RoundedRectangle(cornerRadius: AppRadius.large)
                                 .stroke(themeManager.currentTheme.cardBorder, lineWidth: 1)
                         )
-                        .shadow(color: themeManager.currentTheme.shadow, radius: 10, x: 0, y: 5)
+                        .shadow(color: themeManager.currentTheme.effectiveShadow, radius: 10, x: 0, y: 5)
                     }
                     .padding(.horizontal)
                     .opacity(animateCards ? 1 : 0)
@@ -1401,11 +1401,11 @@ struct AppSettingView: View {
             }
             .padding()
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .fill(themeManager.currentTheme.cardBackground2)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .stroke(themeManager.currentTheme.cardBorder, lineWidth: 1)
             )
         }
@@ -1599,11 +1599,11 @@ struct HelpCard: View {
         }
         .padding()
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .fill(themeManager.currentTheme.cardBackground2)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .stroke(color.opacity(0.3), lineWidth: 1)
         )
         .shadow(color: color.opacity(0.2), radius: 10, x: 0, y: 5)
@@ -1645,8 +1645,8 @@ struct DiagnosticsSharingCard: View {
                 .fixedSize(horizontal: false, vertical: true)
         }
         .padding()
-        .background(RoundedRectangle(cornerRadius: 16).fill(themeManager.currentTheme.cardBackground2))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(Color.gray.opacity(0.3), lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: AppRadius.large).fill(themeManager.currentTheme.cardBackground2))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.large).stroke(Color.gray.opacity(0.3), lineWidth: 1))
         .shadow(color: Color.gray.opacity(0.2), radius: 10, x: 0, y: 5)
         .onChange(of: isEnabled) { _, enabled in
             // オフにしたら、送れずに取っておいた分も捨てる
@@ -1807,11 +1807,11 @@ struct UserGuideView: View {
         }
         .padding()
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .fill(themeManager.currentTheme.cardBackground2)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .stroke(Color.yellow.opacity(0.3), lineWidth: 1)
         )
     }
@@ -1890,11 +1890,11 @@ struct GuideSectionCard: View {
         }
         .padding()
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .fill(themeManager.currentTheme.cardBackground2)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .stroke(section.color.opacity(0.3), lineWidth: 1)
         )
     }

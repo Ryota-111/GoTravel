@@ -131,7 +131,7 @@ struct ScheduleAttachmentsEditor: View {
         }
         .padding(8)
         .background(fieldBackground)
-        .cornerRadius(10)
+        .cornerRadius(AppRadius.medium)
     }
 
     private func open(_ attachment: ScheduleAttachment) {
@@ -234,7 +234,7 @@ private struct AttachmentThumbnail: View {
 
     var body: some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 8).fill(tint.opacity(0.12))
+            RoundedRectangle(cornerRadius: AppRadius.small).fill(tint.opacity(0.12))
             if let image {
                 Image(uiImage: image)
                     .resizable()
@@ -246,7 +246,7 @@ private struct AttachmentThumbnail: View {
             }
         }
         .frame(width: size, height: size)
-        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.small))
         .task(id: attachment.fileName) {
             guard !attachment.isPDF else { return }
             let path = attachment.localURL.path

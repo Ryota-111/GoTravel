@@ -54,8 +54,8 @@ struct DestinationSuggestionList: View {
                     }
                 }
             }
-            .background(RoundedRectangle(cornerRadius: 12).fill(background))
-            .overlay(RoundedRectangle(cornerRadius: 12).stroke(tint.opacity(0.2), lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(background))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.medium).stroke(tint.opacity(0.2), lineWidth: 1))
         }
     }
 }

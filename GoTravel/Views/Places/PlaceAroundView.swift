@@ -47,7 +47,7 @@ struct LocationPreview: View {
                                   badgePosition: .topLeading)
                 .frame(maxWidth: .infinity)
                 .frame(height: 200)
-                .cornerRadius(8)
+                .cornerRadius(AppRadius.small)
                 .overlay(alignment: .bottomTrailing) {
                     HStack {
                         Image(systemName: "tram.fill")
@@ -57,7 +57,7 @@ struct LocationPreview: View {
                     .foregroundStyle(.white)
                     .padding(8)
                     .background(.ultraThinMaterial)
-                    .cornerRadius(8)
+                    .cornerRadius(AppRadius.small)
                     .padding(8)
                 }
             }
@@ -71,7 +71,7 @@ struct LocationPreview: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 200)
-            .cornerRadius(8)
+            .cornerRadius(AppRadius.small)
         }
         .padding()
         .background(Color(.systemBackground))
@@ -116,7 +116,7 @@ struct PlaceAroundView: View {
                         LocationPreview(
                             stationPoint: .constant(location))
                         .frame(height: 320)
-                        .clipShape(RoundedRectangle(cornerRadius: 10))
+                        .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium))
                     }
                 }
                 .listStyle(.inset)
@@ -137,7 +137,7 @@ struct PlaceAroundView: View {
                             LocationPreview(
                                 stationPoint: .constant(item))
                             .frame(height: 128)
-                            .clipShape(RoundedRectangle(cornerRadius: 10))
+                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium))
                             .padding()
                             .background(.thinMaterial)
                         }

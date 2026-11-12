@@ -99,7 +99,7 @@ struct AlbumEditorView: View {
     private var previewCard: some View {
         VStack(spacing: 12) {
             ZStack {
-                RoundedRectangle(cornerRadius: 18)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .fill(
                         LinearGradient(
                             colors: [selectedColor, selectedColor.opacity(0.6)],
@@ -141,9 +141,9 @@ struct AlbumEditorView: View {
                 .font(.body)
                 .foregroundColor(accentColor)
                 .padding(16)
-                .background(fieldBackground, in: RoundedRectangle(cornerRadius: 14))
+                .background(fieldBackground, in: RoundedRectangle(cornerRadius: AppRadius.large))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: AppRadius.large)
                         .stroke(selectedColor.opacity(0.25), lineWidth: 1)
                 )
         }
@@ -179,7 +179,7 @@ struct AlbumEditorView: View {
                 }
             }
             .padding(16)
-            .background(fieldBackground, in: RoundedRectangle(cornerRadius: 14))
+            .background(fieldBackground, in: RoundedRectangle(cornerRadius: AppRadius.large))
         }
     }
 
@@ -200,7 +200,7 @@ struct AlbumEditorView: View {
                             .frame(maxWidth: .infinity)
                             .frame(height: 50)
                             .background(
-                                RoundedRectangle(cornerRadius: 12)
+                                RoundedRectangle(cornerRadius: AppRadius.medium)
                                     .fill(icon == selectedIcon ? selectedColor : selectedColor.opacity(0.12))
                             )
                     }
@@ -208,7 +208,7 @@ struct AlbumEditorView: View {
                 }
             }
             .padding(16)
-            .background(fieldBackground, in: RoundedRectangle(cornerRadius: 14))
+            .background(fieldBackground, in: RoundedRectangle(cornerRadius: AppRadius.large))
         }
     }
 

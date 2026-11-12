@@ -113,7 +113,7 @@ struct CurrencyCostFields: View {
         }
         .padding(14)
         .background(fieldBackground)
-        .cornerRadius(12)
+        .cornerRadius(AppRadius.medium)
     }
 
     /// 円は「円」、外貨と円以外の旅行の通貨は通貨コードで出す
@@ -176,7 +176,7 @@ struct CurrencyCostFields: View {
             }
             .padding(14)
             .background(fieldBackground)
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.medium)
 
             Text(conversionNote)
                 .font(.caption)

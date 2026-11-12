@@ -48,6 +48,6 @@ struct NextDayToggle: View {
         .tint(tint)
         .padding(12)
         .background(fieldBackground)
-        .cornerRadius(12)
+        .cornerRadius(AppRadius.medium)
     }
 }

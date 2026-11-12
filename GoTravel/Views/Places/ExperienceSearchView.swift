@@ -92,7 +92,7 @@ struct ExperienceSearchView: View {
                 .fixedSize(horizontal: false, vertical: true)
                 .padding(10)
                 .frame(maxWidth: .infinity, alignment: .leading)
-                .background(RoundedRectangle(cornerRadius: 10).fill(cardFill))
+                .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(cardFill))
         }
     }
 
@@ -129,7 +129,7 @@ struct ExperienceSearchView: View {
                     .foregroundColor(themeManager.currentTheme.secondaryText)
             }
             .padding(14)
-            .background(RoundedRectangle(cornerRadius: 16).fill(cardFill))
+            .background(RoundedRectangle(cornerRadius: AppRadius.large).fill(cardFill))
         }
         .buttonStyle(.plain)
         .disabled(isResolvingLocation)
@@ -168,7 +168,7 @@ struct ExperienceSearchView: View {
                         .minimumScaleFactor(0.7)
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 10)
-                        .background(RoundedRectangle(cornerRadius: 10).fill(cardFill))
+                        .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(cardFill))
                 }
                 .buttonStyle(.plain)
             }

@@ -49,7 +49,7 @@ struct TripMemoView: View {
                     .padding(.vertical, 12)
                     .foregroundColor(accent)
                     .background(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: AppRadius.large)
                             .strokeBorder(accent.opacity(0.5), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
                     )
             }
@@ -104,9 +104,9 @@ struct TripMemoView: View {
         }
         .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .fill(cardFill)
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(textColor.opacity(0.12), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.large).stroke(textColor.opacity(0.12), lineWidth: 1))
         )
     }
 

@@ -67,9 +67,9 @@ struct AppIconPicker: View {
                             Image(option.previewAsset)
                                 .resizable()
                                 .frame(width: 60, height: 60)
-                                .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+                                .clipShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                    RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
                                         .stroke(themeManager.currentTheme.actionFill, lineWidth: current == option ? 3 : 0)
                                 )
                                 .overlay(alignment: .bottomTrailing) {
@@ -94,8 +94,8 @@ struct AppIconPicker: View {
             }
         }
         .padding(16)
-        .background(RoundedRectangle(cornerRadius: 16).fill(themeManager.currentTheme.cardBackground2))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(themeManager.currentTheme.cardBorder, lineWidth: 1))
+        .background(RoundedRectangle(cornerRadius: AppRadius.large).fill(themeManager.currentTheme.cardBackground2))
+        .overlay(RoundedRectangle(cornerRadius: AppRadius.large).stroke(themeManager.currentTheme.cardBorder, lineWidth: 1))
         .sheet(isPresented: $showsPro) {
             NavigationStack {
                 ProView()

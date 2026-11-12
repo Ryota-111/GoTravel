@@ -643,10 +643,10 @@ struct TravelPlanDetailView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 36)
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .fill(scheduleAccentColor.opacity(0.04))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: AppRadius.large)
                             .stroke(scheduleAccentColor.opacity(0.2), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
                     )
             )
@@ -1040,7 +1040,7 @@ struct TravelPlanDetailView: View {
             }
             .padding(.horizontal, state == .now ? 12 : 0)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
                     .fill(state == .now ? AnyShapeStyle(timelineCardSurface) : AnyShapeStyle(Color.clear))
                     .shadow(
                         color: state == .now && colorScheme != .dark ? Color.black.opacity(0.08) : .clear,
@@ -1288,7 +1288,7 @@ struct TravelPlanDetailView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 10)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: AppRadius.medium)
                     .fill(scheduleAccentColor.opacity(0.08))
             )
         }
@@ -1656,9 +1656,9 @@ struct TravelPlanDetailView: View {
             }
             .padding(16)
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .fill(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
-                    .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
+                    .shadow(color: themeManager.currentTheme.effectiveShadow, radius: 6, x: 0, y: 2)
             )
         }
         .buttonStyle(PlainButtonStyle())
@@ -1903,7 +1903,7 @@ struct TravelPlanDetailView: View {
         }
         .frame(height: Self.tabBarHeight)
         .background(tabBarBackground)
-        .shadow(color: themeManager.currentTheme.shadow, radius: 4, y: 2)
+        .shadow(color: themeManager.currentTheme.effectiveShadow, radius: 4, y: 2)
     }
 
     private var tabButtons: some View {
@@ -1983,7 +1983,7 @@ struct TravelPlanDetailView: View {
                             .padding(.horizontal, 12)
                             .padding(.vertical, 10)
                             .background(
-                                RoundedRectangle(cornerRadius: 12)
+                                RoundedRectangle(cornerRadius: AppRadius.medium)
                                     .fill(isSelected ? scheduleAccentColor : (colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight))
                                     .shadow(color: isSelected ? scheduleAccentColor.opacity(0.3) : themeManager.currentTheme.shadow, radius: isSelected ? 6 : 3, x: 0, y: 2)
                             )
@@ -2044,7 +2044,7 @@ struct TravelPlanDetailView: View {
                 .padding(.vertical, 8)
         }
         .background(tabBarBackground)
-        .shadow(color: themeManager.currentTheme.shadow, radius: 4, y: 2)
+        .shadow(color: themeManager.currentTheme.effectiveShadow, radius: 4, y: 2)
         // 帯ぜんぶの位置と大きさを覚えておく。2つのことに使う。
         // ・地図の操作と Day タブの横スクロールを、タブ切り替えの対象から外す
         // ・ピンを押して予定へ送るとき、この帯の下に出す
@@ -2118,7 +2118,7 @@ struct TravelPlanDetailView: View {
                             }
                             .id(item.id)
                             .background(
-                                RoundedRectangle(cornerRadius: 10)
+                                RoundedRectangle(cornerRadius: AppRadius.medium)
                                     .fill(focusedItemID == item.id
                                           ? scheduleAccentColor.opacity(0.10)
                                           : Color.clear)
@@ -2265,7 +2265,7 @@ struct TravelPlanDetailView: View {
                     }
                     .padding(14)
                     .background(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: AppRadius.large)
                             .fill(colorScheme == .dark
                                   ? themeManager.currentTheme.secondaryBackgroundDark
                                   : themeManager.currentTheme.secondaryBackgroundLight)
@@ -2427,7 +2427,7 @@ struct TravelPlanDetailView: View {
         .padding(.vertical, 6)
         .padding(.horizontal, 7)
         .background(
-            RoundedRectangle(cornerRadius: 12, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                 // 今日の1枚だけ薄く敷いて、何日目にいるか分かるようにする
                 .fill(isToday ? scheduleAccentColor.opacity(colorScheme == .dark ? 0.20 : 0.10) : Color.clear)
         )
@@ -2642,11 +2642,11 @@ struct TravelPlanDetailView: View {
         }
         .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .fill(scheduleAccentColor.opacity(0.06))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .stroke(scheduleAccentColor.opacity(0.25), lineWidth: 1)
         )
         .transition(.opacity)
@@ -2668,7 +2668,7 @@ struct TravelPlanDetailView: View {
             .padding(.vertical, 10)
             .background(primary ? scheduleAccentColor : scheduleAccentColor.opacity(0.12))
             .foregroundColor(primary ? .white : scheduleAccentColor)
-            .cornerRadius(10)
+            .cornerRadius(AppRadius.medium)
         }
         .buttonStyle(PlainButtonStyle())
     }
@@ -2723,7 +2723,7 @@ struct TravelPlanDetailView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 9)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: AppRadius.medium)
                     .fill(scheduleAccentColor.opacity(0.06))
             )
         }
@@ -2828,7 +2828,7 @@ struct TravelPlanDetailView: View {
             // 塗りは置かない。写真をそのまま見せる代わりに、
             // 枠と文字の影だけで明るい写真から浮かせる
             .overlay(
-                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                     .strokeBorder(Color.white.opacity(0.5), lineWidth: 1)
             )
             // ミシン目。破線を引くより、粒を並べたほうが端の切れ方が揃う

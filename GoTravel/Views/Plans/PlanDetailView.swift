@@ -482,7 +482,7 @@ struct PlanDetailView: View {
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
             .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
                     .fill(cardSurface)
             )
             .shadow(color: colorScheme == .dark ? .clear : Color.black.opacity(0.05), radius: 10, x: 0, y: 4)
@@ -500,7 +500,7 @@ struct PlanDetailView: View {
         if let place = plan.places.first {
             HStack(spacing: 12) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 13, style: .continuous)
+                    RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                         .fill(planColor.opacity(colorScheme == .dark ? 0.24 : 0.14))
                         .frame(width: 44, height: 44)
                     Image(systemName: "mappin.and.ellipse")
@@ -540,7 +540,7 @@ struct PlanDetailView: View {
             }
             .padding(14)
             .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
                     .fill(cardSurface)
             )
             .shadow(color: colorScheme == .dark ? .clear : Color.black.opacity(0.05), radius: 10, x: 0, y: 4)
@@ -548,7 +548,7 @@ struct PlanDetailView: View {
             Button(action: enterEditMode) {
                 HStack(spacing: 12) {
                     ZStack {
-                        RoundedRectangle(cornerRadius: 13, style: .continuous)
+                        RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                             .fill(planColor.opacity(colorScheme == .dark ? 0.22 : 0.12))
                             .frame(width: 44, height: 44)
                         Image(systemName: "mappin.and.ellipse")
@@ -574,7 +574,7 @@ struct PlanDetailView: View {
                 }
                 .padding(14)
                 .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
                         .strokeBorder(
                             themeManager.currentTheme.secondaryText.opacity(0.3),
                             style: StrokeStyle(lineWidth: 1.5, dash: [7, 5])
@@ -650,7 +650,7 @@ struct PlanDetailView: View {
             .frame(maxWidth: .infinity)
             .frame(height: 76)
             .background(
-                RoundedRectangle(cornerRadius: 18, style: .continuous)
+                RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
                     .fill(isOn
                           ? AnyShapeStyle(planColor.opacity(colorScheme == .dark ? 0.22 : 0.12))
                           : AnyShapeStyle(colorScheme == .dark
@@ -706,7 +706,7 @@ struct PlanDetailView: View {
             )
         }
         .background(
-            RoundedRectangle(cornerRadius: 18, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
                 .fill(cardSurface)
         )
         .shadow(color: colorScheme == .dark ? .clear : Color.black.opacity(0.05), radius: 10, x: 0, y: 4)
@@ -849,11 +849,11 @@ struct PlanDetailView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 11)
             .background(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: AppRadius.medium)
                     .fill(isSelected ? btnColor : btnColor.opacity(0.1))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: AppRadius.medium)
                     .stroke(isSelected ? Color.clear : btnColor.opacity(0.35), lineWidth: 1.5)
             )
         }
@@ -876,7 +876,7 @@ struct PlanDetailView: View {
         }
         .padding(14)
         .background(editFieldBg)
-        .cornerRadius(12)
+        .cornerRadius(AppRadius.medium)
     }
 
     /// 始まりと終わりで同じ行を使う
@@ -904,7 +904,7 @@ struct PlanDetailView: View {
         }
         .padding(14)
         .background(editFieldBg)
-        .cornerRadius(12)
+        .cornerRadius(AppRadius.medium)
     }
 
     /// まだ設定していない時刻を足す口
@@ -923,7 +923,7 @@ struct PlanDetailView: View {
             }
             .padding(14)
             .background(editFieldBg)
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.medium)
         }
     }
 
@@ -956,9 +956,9 @@ struct PlanDetailView: View {
                             .foregroundColor(editTextColor)
                             .padding(14)
                             .background(editFieldBg)
-                            .cornerRadius(12)
+                            .cornerRadius(AppRadius.medium)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 12)
+                                RoundedRectangle(cornerRadius: AppRadius.medium)
                                     .stroke(
                                         editedTitle.isEmpty
                                             ? themeManager.currentTheme.error.opacity(0.5)
@@ -1026,7 +1026,7 @@ struct PlanDetailView: View {
                                             .frame(maxWidth: .infinity)
                                             .frame(height: 42)
                                             .background(
-                                                RoundedRectangle(cornerRadius: 12, style: .continuous)
+                                                RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                                                     .fill(editedRecurrence == rule
                                                           ? AnyShapeStyle(ThemePreset.readableTint(planColor, on: .white))
                                                           : AnyShapeStyle(editFieldBg))
@@ -1075,8 +1075,8 @@ struct PlanDetailView: View {
                         }
                         .padding(14)
                         .background(editFieldBg)
-                        .cornerRadius(12)
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(planColor.opacity(0.2), lineWidth: 1))
+                        .cornerRadius(AppRadius.medium)
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.medium).stroke(planColor.opacity(0.2), lineWidth: 1))
                     }
                 }
 
@@ -1095,8 +1095,8 @@ struct PlanDetailView: View {
                             }
                             .padding(14)
                             .background(editFieldBg)
-                            .cornerRadius(12)
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(planColor.opacity(0.2), lineWidth: 1))
+                            .cornerRadius(AppRadius.medium)
+                            .overlay(RoundedRectangle(cornerRadius: AppRadius.medium).stroke(planColor.opacity(0.2), lineWidth: 1))
                         }
                     }
                 }
@@ -1118,7 +1118,7 @@ struct PlanDetailView: View {
                             .frame(maxWidth: .infinity)
                             .padding(18)
                             .background(editFieldBg)
-                            .cornerRadius(12)
+                            .cornerRadius(AppRadius.medium)
                         } else {
                             VStack(spacing: 8) {
                                 ForEach(editedPlaces) { place in
@@ -1147,7 +1147,7 @@ struct PlanDetailView: View {
                                     }
                                     .padding(12)
                                     .background(editFieldBg)
-                                    .cornerRadius(12)
+                                    .cornerRadius(AppRadius.medium)
                                 }
                             }
                         }
@@ -1159,7 +1159,7 @@ struct PlanDetailView: View {
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 12)
                                 .background(ThemePreset.readableTint(planColor, on: .white))
-                                .cornerRadius(12)
+                                .cornerRadius(AppRadius.medium)
                         }
                     }
                 }
@@ -1186,7 +1186,7 @@ struct PlanDetailView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(
-                            RoundedRectangle(cornerRadius: 14)
+                            RoundedRectangle(cornerRadius: AppRadius.large)
                                 .fill(themeManager.currentTheme.error)
                                 .shadow(color: themeManager.currentTheme.error.opacity(0.3), radius: 8, x: 0, y: 4)
                         )
@@ -1258,7 +1258,7 @@ struct PlanDetailView: View {
                     .resizable()
                     .scaledToFill()
                     .frame(width: 56, height: 56)
-                    .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
 
                 Text("設定済み")
                     .font(.subheadline)
@@ -1379,7 +1379,7 @@ struct PlanDetailView: View {
 //                .frame(maxWidth: .infinity)
 //                .padding(.vertical, 16)
 //                .background(
-//                    RoundedRectangle(cornerRadius: 12)
+//                    RoundedRectangle(cornerRadius: AppRadius.medium)
 //                        .fill(
 //                            LinearGradient(
 //                                gradient: Gradient(colors: [
@@ -1391,7 +1391,7 @@ struct PlanDetailView: View {
 //                            )
 //                        )
 //                        .overlay(
-//                            RoundedRectangle(cornerRadius: 12)
+//                            RoundedRectangle(cornerRadius: AppRadius.medium)
 //                                .stroke(planColor, lineWidth: 2)
 //                        )
 //                )
@@ -1600,8 +1600,8 @@ struct PlanDetailView: View {
                 }
                 // 300ptは旅行計画の地図と同じ大きさで、当日の確認には過剰だった
                 .frame(height: 160)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
-                .contentShape(RoundedRectangle(cornerRadius: 16))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.large))
+                .contentShape(RoundedRectangle(cornerRadius: AppRadius.large))
                 .onTapGesture { showsFullMap = true }
                 .accessibilityAddTraits(.isButton)
                 .accessibilityHint(Text("地図を全画面で開きます"))
@@ -2077,7 +2077,7 @@ struct PlanDetailView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 10)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: AppRadius.medium)
                     // 選んでいる1件だけ塗る。他は面を持たせない
                     .fill(isCurrent ? typeColor.opacity(colorScheme == .dark ? 0.20 : 0.10) : Color.clear)
             )

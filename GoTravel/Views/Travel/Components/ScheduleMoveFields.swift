@@ -181,7 +181,7 @@ struct ScheduleMoveFields: View {
         }
         .padding(14)
         .background(fieldBackground)
-        .cornerRadius(12)
+        .cornerRadius(AppRadius.medium)
     }
 
     private func detailField(_ label: String, text: Binding<String>, placeholder: String, icon: String) -> some View {
@@ -198,7 +198,7 @@ struct ScheduleMoveFields: View {
             }
             .padding(12)
             .background(fieldBackground)
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.medium)
         }
         .frame(maxWidth: .infinity)
     }
@@ -298,7 +298,7 @@ struct UndecidedTimeFields: View {
             .tint(tint)
             .padding(14)
             .background(fieldBackground)
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.medium)
 
             if isUndecided {
                 positionMenu
@@ -334,7 +334,7 @@ struct UndecidedTimeFields: View {
             }
             .padding(14)
             .background(fieldBackground)
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.medium)
         }
     }
 
@@ -375,7 +375,7 @@ struct ReservationNumberField: View {
             }
             .padding(12)
             .background(fieldBackground)
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.medium)
             Text(isLinked
                  ? "予約とつながっています。ここで直した時刻・発着地・便は、予約にも入ります"
                  : "入れると予約の一覧にも入ります。時刻・発着地・便はそのまま引き継ぎます")

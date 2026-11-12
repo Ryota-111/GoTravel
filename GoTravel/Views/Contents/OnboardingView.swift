@@ -139,9 +139,9 @@ struct OnboardingView: View {
                                     endPoint: .bottomTrailing
                                 )
                             )
-                            .cornerRadius(16)
+                            .cornerRadius(AppRadius.large)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 16)
+                                RoundedRectangle(cornerRadius: AppRadius.large)
                                     .stroke(Color.white.opacity(0.4), lineWidth: 1.5)
                             )
                             .shadow(color: Color.white.opacity(0.2), radius: 10, x: 0, y: 5)
@@ -174,9 +174,9 @@ struct OnboardingView: View {
                                     endPoint: .bottomTrailing
                                 )
                             )
-                            .cornerRadius(16)
+                            .cornerRadius(AppRadius.large)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 16)
+                                RoundedRectangle(cornerRadius: AppRadius.large)
                                     .stroke(Color.white.opacity(0.4), lineWidth: 1.5)
                             )
                         }
@@ -310,10 +310,10 @@ struct OnboardingPageView: View {
                     .padding(.horizontal, 20)
                     .padding(.vertical, compact ? 9 : 12)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: AppRadius.medium)
                             .fill(Color.white.opacity(0.15))
                             .overlay(
-                                RoundedRectangle(cornerRadius: 12)
+                                RoundedRectangle(cornerRadius: AppRadius.medium)
                                     .stroke(Color.white.opacity(0.2), lineWidth: 1)
                             )
                     )
@@ -349,9 +349,9 @@ private struct OnboardingThemeCard: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 12)
-        .background(RoundedRectangle(cornerRadius: 10).fill(preset.backgroundLight))
+        .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(preset.backgroundLight))
         .overlay(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: AppRadius.medium)
                 .stroke(Color.white.opacity(0.6), lineWidth: 1)
         )
     }
@@ -382,11 +382,11 @@ private struct OnboardingThemeCard: View {
             }
             .padding(14)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .fill(Color.white.opacity(isSelected ? 0.28 : 0.14))
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .stroke(Color.white.opacity(isSelected ? 0.85 : 0.25), lineWidth: isSelected ? 2 : 1)
             )
         }

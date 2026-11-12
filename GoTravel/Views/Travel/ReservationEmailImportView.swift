@@ -146,7 +146,7 @@ struct ReservationEmailImportView: View {
                         .allowsHitTesting(false)
                 }
             }
-            .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+            .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(cardFill))
 
             if foundNothing {
                 Label("予約の内容が見つかりませんでした。本文全体を貼り付けているか確かめてください。",
@@ -171,7 +171,7 @@ struct ReservationEmailImportView: View {
                     .foregroundColor(ThemePreset.readableText(on: accent))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(accent))
+                    .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(accent))
             }
             .buttonStyle(.plain)
             .disabled(!canRead)

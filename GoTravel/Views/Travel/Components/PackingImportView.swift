@@ -215,7 +215,7 @@ private struct PackingImportItemsView: View {
                     .foregroundColor(selected.isEmpty ? theme.secondaryText : ThemePreset.readableText(on: theme.actionFill))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(RoundedRectangle(cornerRadius: 14)
+                    .background(RoundedRectangle(cornerRadius: AppRadius.large)
                         .fill(selected.isEmpty ? theme.actionFill.opacity(0.12) : theme.actionFill))
             }
             .buttonStyle(.plain)

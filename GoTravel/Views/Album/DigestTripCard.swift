@@ -70,8 +70,8 @@ struct DigestTripCard: View {
                     .foregroundColor(.white)
                     .padding(12)
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
-                .contentShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
+                .contentShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
                 .onTapGesture(perform: onOpen)
                 .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
                 .accessibilityElement(children: .contain)

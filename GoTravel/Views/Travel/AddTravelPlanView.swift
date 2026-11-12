@@ -251,7 +251,7 @@ struct AddTravelPlanView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 58)
                 .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
                         .fill(canProceed ? AnyShapeStyle(filledTripColor) : AnyShapeStyle(uiAccentColor.opacity(0.08)))
                 )
                 .shadow(color: canProceed ? tripColor.opacity(colorScheme == .dark ? 0 : 0.32) : .clear,

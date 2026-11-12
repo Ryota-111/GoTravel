@@ -94,7 +94,7 @@ struct DuplicateTravelPlanView: View {
                 .foregroundColor(textColor)
                 .autocorrectionDisabled()
                 .padding(14)
-                .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+                .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(cardFill))
         }
     }
 
@@ -123,7 +123,7 @@ struct DuplicateTravelPlanView: View {
                 }
             }
             .padding(14)
-            .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+            .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(cardFill))
         }
     }
 
@@ -141,7 +141,7 @@ struct DuplicateTravelPlanView: View {
                 Divider().padding(.leading, 14)
                 toggleRow("予約", count: plan.reservations.count, isOn: $includeReservations)
             }
-            .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+            .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(cardFill))
         }
     }
 

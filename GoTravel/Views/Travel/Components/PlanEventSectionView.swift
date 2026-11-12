@@ -27,7 +27,7 @@ struct PlanEventSectionView: View {
                         .padding(.horizontal, 8)
                         .padding(.vertical, 2)
                         .background(
-                            RoundedRectangle(cornerRadius: 7, style: .continuous)
+                            RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
                                 .fill(themeManager.currentTheme.secondaryText.opacity(colorScheme == .dark ? 0.18 : 0.10))
                         )
                 }

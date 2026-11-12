@@ -206,9 +206,9 @@ struct AddScheduleItemView: View {
                     .foregroundColor(textColor)
                     .padding(14)
                     .background(fieldBg)
-                    .cornerRadius(12)
+                    .cornerRadius(AppRadius.medium)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: AppRadius.medium)
                             .stroke(
                                 title.isEmpty && !isMove
                                     ? themeManager.currentTheme.error.opacity(0.4)
@@ -351,7 +351,7 @@ struct AddScheduleItemView: View {
                     }
                     .padding(14)
                     .background(fieldBg)
-                    .cornerRadius(12)
+                    .cornerRadius(AppRadius.medium)
                 } else {
                     Button(action: { showLocationMethodSheet = true }) {
                         HStack(spacing: 12) {
@@ -377,8 +377,8 @@ struct AddScheduleItemView: View {
                         }
                         .padding(14)
                         .background(fieldBg)
-                        .cornerRadius(12)
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(travelColor.opacity(0.2), lineWidth: 1))
+                        .cornerRadius(AppRadius.medium)
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.medium).stroke(travelColor.opacity(0.2), lineWidth: 1))
                     }
                 }
             }
@@ -419,7 +419,7 @@ struct AddScheduleItemView: View {
                     .foregroundColor(textColor)
                     .padding(14)
                     .background(fieldBg)
-                    .cornerRadius(12)
+                    .cornerRadius(AppRadius.medium)
 
                 Divider()
 
@@ -449,7 +449,7 @@ struct AddScheduleItemView: View {
                     }
                     .padding(12)
                     .background(fieldBg)
-                    .cornerRadius(12)
+                    .cornerRadius(AppRadius.medium)
                 }
 
                 Divider()
@@ -465,7 +465,7 @@ struct AddScheduleItemView: View {
                 }
                 .padding(14)
                 .background(fieldBg)
-                .cornerRadius(12)
+                .cornerRadius(AppRadius.medium)
             }
         }
     }
@@ -482,7 +482,7 @@ struct AddScheduleItemView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .fill(canAdd ? travelColor : themeManager.currentTheme.secondaryText)
                     .shadow(color: travelColor.opacity(canAdd ? 0.4 : 0), radius: 8, x: 0, y: 4)
             )
@@ -700,7 +700,7 @@ struct AddScheduleItemView: View {
         Button(action: action) {
             HStack(spacing: 16) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: AppRadius.medium)
                         .fill(color.opacity(disabled ? 0.06 : 0.12))
                         .frame(width: 46, height: 46)
                     Image(systemName: icon)
@@ -722,11 +722,11 @@ struct AddScheduleItemView: View {
             }
             .padding(14)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .fill(colorScheme == .dark
                           ? themeManager.currentTheme.secondaryBackgroundDark
                           : themeManager.currentTheme.secondaryBackgroundLight)
-                    .shadow(color: themeManager.currentTheme.shadow, radius: 4, x: 0, y: 2)
+                    .shadow(color: themeManager.currentTheme.effectiveShadow, radius: 4, x: 0, y: 2)
             )
         }
         .buttonStyle(PlainButtonStyle())

@@ -158,7 +158,7 @@ struct PackingListView: View {
         .padding(.vertical, 8)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: AppRadius.medium)
                 .fill(themeManager.currentTheme.secondaryText.opacity(0.08))
         )
     }
@@ -172,6 +172,8 @@ struct PackingListView: View {
                 Text("\(checkedCount)")
                     .font(.system(size: 24, weight: .bold, design: .rounded))
                     .foregroundColor(checkedCount == items.count ? themeManager.currentTheme.success : accent)
+                    // 数が入れ替わるのではなく、めくれて変わる
+                    .contentTransition(.numericText(value: Double(checkedCount)))
                 Text("/ \(items.count)")
                     .font(.subheadline)
                     .foregroundColor(themeManager.currentTheme.secondaryText)
@@ -182,12 +184,16 @@ struct PackingListView: View {
                     Label(kind.doneLabel, systemImage: "checkmark.circle.fill")
                         .font(.caption.weight(.semibold))
                         .foregroundColor(themeManager.currentTheme.success)
+                        .transition(.scale(scale: 0.6).combined(with: .opacity))
                 }
             }
 
             ProgressView(value: Double(checkedCount), total: Double(max(items.count, 1)))
                 .tint(checkedCount == items.count ? themeManager.currentTheme.success : accent)
         }
+        .animation(.snappy, value: checkedCount)
+        // 全部そろった瞬間だけ、手に伝える
+        .sensoryFeedback(trigger: checkedCount == items.count) { _, isDone in isDone && !items.isEmpty ? .success : nil }
     }
 
     // MARK: - 追加
@@ -211,9 +217,9 @@ struct PackingListView: View {
                     .padding(.horizontal, 14)
                     .padding(.vertical, 9)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: AppRadius.medium)
                             .fill(cardFill)
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(cardStroke, lineWidth: 1))
+                            .overlay(RoundedRectangle(cornerRadius: AppRadius.medium).stroke(cardStroke, lineWidth: 1))
                     )
             }
 
@@ -240,9 +246,9 @@ struct PackingListView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 11)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: AppRadius.medium)
                         .fill(cardFill)
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(cardStroke, lineWidth: 1))
+                        .overlay(RoundedRectangle(cornerRadius: AppRadius.medium).stroke(cardStroke, lineWidth: 1))
                 )
 
             Button(action: addItem) {
@@ -283,9 +289,9 @@ struct PackingListView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 9)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: AppRadius.medium)
                     .fill(cardFill)
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(cardStroke, lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.medium).stroke(cardStroke, lineWidth: 1))
             )
 
             // 書いたことのある相手を選べるようにする（同じ人の名前を毎回打たなくて済む）
@@ -371,7 +377,7 @@ struct PackingListView: View {
                                         .font(.system(size: 15, weight: .semibold))
                                         .padding(.horizontal, 14)
                                         .padding(.vertical, 10)
-                                        .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+                                        .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(cardFill))
                                 }
                                 .transition(.opacity.combined(with: .move(edge: .top)))
                         }
@@ -379,10 +385,10 @@ struct PackingListView: View {
                 }
                 .padding(4)
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: AppRadius.large)
                         .fill(dropTargetRecipient == group.id ? accent.opacity(0.10) : Color.clear)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 14)
+                            RoundedRectangle(cornerRadius: AppRadius.large)
                                 .stroke(dropTargetRecipient == group.id ? accent.opacity(0.6) : Color.clear,
                                         style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
                         )
@@ -512,9 +518,9 @@ struct PackingListView: View {
         .frame(maxWidth: .infinity)
         .padding(18)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .fill(cardFill)
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(cardStroke, lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.large).stroke(cardStroke, lineWidth: 1))
         )
     }
 
@@ -564,7 +570,7 @@ struct PackingListView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: AppRadius.medium)
                             .fill(selectedPresets.isEmpty ? accent.opacity(0.10) : accent)
                     )
             }
@@ -798,10 +804,10 @@ struct PackingItemRow: View {
         .padding(.trailing, 6)
         .padding(.vertical, 12)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: AppRadius.medium)
                 .fill(cardFill)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: AppRadius.medium)
                         .stroke(item.isChecked ? themeManager.currentTheme.success.opacity(0.35) : cardStroke, lineWidth: 1)
                 )
         )
@@ -945,8 +951,10 @@ struct PackingItemRow: View {
                 Image(systemName: "checkmark")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(ThemePreset.readableText(on: themeManager.currentTheme.success))
+                    .transition(.scale(scale: 0.3).combined(with: .opacity))
             }
         }
+        .animation(.spring(response: 0.3, dampingFraction: 0.55), value: item.isChecked)
     }
 
     // MARK: - Actions

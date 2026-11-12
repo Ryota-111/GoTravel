@@ -189,12 +189,12 @@ struct CreateAlbumView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .fill(isSelected
                           ? themeManager.currentTheme.xprimary.opacity(0.1)
                           : accentColor.opacity(0.04))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 14)
+                        RoundedRectangle(cornerRadius: AppRadius.large)
                             .stroke(isSelected
                                     ? themeManager.currentTheme.xprimary
                                     : accentColor.opacity(0.15),
@@ -215,9 +215,9 @@ struct CreateAlbumView: View {
                     .foregroundColor(accentColor)
                     .padding(14)
                     .background(fieldBg)
-                    .cornerRadius(12)
+                    .cornerRadius(AppRadius.medium)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: AppRadius.medium)
                             .stroke(
                                 albumTitle.isEmpty
                                     ? themeManager.currentTheme.error.opacity(0.35)
@@ -288,10 +288,10 @@ struct CreateAlbumView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 12)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: AppRadius.medium)
                     .fill(isSelected ? type.defaultCoverColor.opacity(0.08) : accentColor.opacity(0.04))
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: AppRadius.medium)
                             .stroke(isSelected ? type.defaultCoverColor : Color.clear, lineWidth: 1.5)
                     )
             )
@@ -374,10 +374,10 @@ struct CreateAlbumView: View {
             }
             .padding(14)
             .background(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: AppRadius.medium)
                     .fill(isSelected ? planColor.opacity(0.08) : fieldBg)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: AppRadius.medium)
                             .stroke(isSelected ? planColor : accentColor.opacity(0.1), lineWidth: 1.5)
                     )
             )
@@ -398,7 +398,7 @@ struct CreateAlbumView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .fill(canCreate
                           ? themeManager.currentTheme.xprimary
                           : themeManager.currentTheme.secondaryText)
@@ -420,9 +420,9 @@ struct CreateAlbumView: View {
         content()
             .padding(16)
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .fill(cardBg)
-                    .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
+                    .shadow(color: themeManager.currentTheme.effectiveShadow, radius: 6, x: 0, y: 2)
             )
     }
 

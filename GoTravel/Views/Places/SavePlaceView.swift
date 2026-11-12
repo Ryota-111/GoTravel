@@ -118,13 +118,13 @@ struct SavePlaceView: View {
                 .tint(themeManager.currentTheme.error)
         }
         .frame(height: 160)
-        .cornerRadius(16)
+        .cornerRadius(AppRadius.large)
         .allowsHitTesting(false)
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .stroke(themeManager.currentTheme.xprimary.opacity(0.2), lineWidth: 1)
         )
-        .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
+        .shadow(color: themeManager.currentTheme.effectiveShadow, radius: 6, x: 0, y: 2)
     }
 
     // MARK: - Title Section
@@ -137,9 +137,9 @@ struct SavePlaceView: View {
                     .foregroundColor(accentColor)
                     .padding(14)
                     .background(fieldBg)
-                    .cornerRadius(12)
+                    .cornerRadius(AppRadius.medium)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: AppRadius.medium)
                             .stroke(
                                 vm.title.isEmpty
                                     ? themeManager.currentTheme.error.opacity(0.4)
@@ -221,7 +221,7 @@ struct SavePlaceView: View {
                     }
                     .padding(14)
                     .background(fieldBg)
-                    .cornerRadius(12)
+                    .cornerRadius(AppRadius.medium)
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
@@ -242,8 +242,8 @@ struct SavePlaceView: View {
                     .autocorrectionDisabled()
                     .padding(14)
                     .background(fieldBg)
-                    .cornerRadius(12)
-                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(themeManager.currentTheme.xprimary.opacity(0.15), lineWidth: 1))
+                    .cornerRadius(AppRadius.medium)
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.medium).stroke(themeManager.currentTheme.xprimary.opacity(0.15), lineWidth: 1))
             }
         }
     }
@@ -269,8 +269,8 @@ struct SavePlaceView: View {
                 }
                 .padding(14)
                 .background(fieldBg)
-                .cornerRadius(12)
-                .overlay(RoundedRectangle(cornerRadius: 12).stroke(themeManager.currentTheme.xprimary.opacity(0.15), lineWidth: 1))
+                .cornerRadius(AppRadius.medium)
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.medium).stroke(themeManager.currentTheme.xprimary.opacity(0.15), lineWidth: 1))
             }
         }
     }
@@ -287,7 +287,7 @@ struct SavePlaceView: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(themeManager.currentTheme.error.opacity(0.08))
-        .cornerRadius(12)
+        .cornerRadius(AppRadius.medium)
     }
 
     // MARK: - Save Button
@@ -308,7 +308,7 @@ struct SavePlaceView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .fill(isSaveDisabled ? themeManager.currentTheme.secondaryText : themeManager.currentTheme.xprimary)
                     .shadow(color: themeManager.currentTheme.xprimary.opacity(isSaveDisabled ? 0 : 0.4), radius: 8, x: 0, y: 4)
             )
@@ -327,9 +327,9 @@ struct SavePlaceView: View {
         content()
             .padding(16)
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .fill(cardBg)
-                    .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
+                    .shadow(color: themeManager.currentTheme.effectiveShadow, radius: 6, x: 0, y: 2)
             )
     }
 

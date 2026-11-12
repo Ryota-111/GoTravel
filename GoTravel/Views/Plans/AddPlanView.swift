@@ -369,7 +369,7 @@ struct AddPlanView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 58)
                 .background(
-                    RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
                         .fill(canProceed ? AnyShapeStyle(filledPlanColor) : AnyShapeStyle(uiAccentColor.opacity(0.08)))
                 )
                 .shadow(
@@ -536,7 +536,7 @@ struct AddPlanView: View {
                             .frame(maxWidth: .infinity)
                             .frame(height: 44)
                             .background(
-                                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                                RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
                                     .fill(recurrence == rule
                                           ? AnyShapeStyle(filledPlanColor)
                                           : AnyShapeStyle(uiAccentColor.opacity(0.06)))
@@ -579,7 +579,7 @@ struct AddPlanView: View {
                 .padding(.horizontal, 18)
                 .padding(.vertical, 14)
                 .background(uiAccentColor.opacity(0.1))
-                .cornerRadius(16)
+                .cornerRadius(AppRadius.large)
             }
             .buttonStyle(PlainButtonStyle())
             .padding(.horizontal, 20)
@@ -617,7 +617,7 @@ struct AddPlanView: View {
             .padding(.vertical, 12)
             .frame(maxWidth: .infinity)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
                     .fill(isSelected ? AnyShapeStyle(cardColor) : AnyShapeStyle(uiAccentColor.opacity(0.05)))
             )
         }
@@ -957,7 +957,7 @@ struct AddPlanView: View {
                         .frame(maxWidth: .infinity)
                         .padding(24)
                         .background(uiAccentColor.opacity(0.07))
-                        .cornerRadius(16)
+                        .cornerRadius(AppRadius.large)
                     } else {
                         ForEach(places) { place in
                             placeRow(place)
@@ -971,7 +971,7 @@ struct AddPlanView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                             .background(effectivePlanColor.opacity(0.25))
-                            .cornerRadius(16)
+                            .cornerRadius(AppRadius.large)
                     }
                 }
                 .padding(.horizontal, 20)
@@ -1004,7 +1004,7 @@ struct AddPlanView: View {
         }
         .padding(16)
         .background(uiAccentColor.opacity(0.1))
-        .cornerRadius(16)
+        .cornerRadius(AppRadius.large)
     }
 
     // MARK: - Step 3: Description + Link (daily only, optional)
@@ -1035,7 +1035,7 @@ struct AddPlanView: View {
                 }
                 .padding(16)
                 .background(uiAccentColor.opacity(0.1))
-                .cornerRadius(16)
+                .cornerRadius(AppRadius.large)
                 .padding(.horizontal, 20)
 
                 HStack(spacing: 12) {
@@ -1054,7 +1054,7 @@ struct AddPlanView: View {
                 }
                 .padding(20)
                 .background(uiAccentColor.opacity(0.1))
-                .cornerRadius(16)
+                .cornerRadius(AppRadius.large)
                 .padding(.horizontal, 20)
 
                 Spacer(minLength: 20)
@@ -1097,7 +1097,7 @@ struct AddPlanView: View {
 
         return HStack(spacing: 14) {
             ZStack {
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: AppRadius.medium)
                     .fill(color.opacity(0.15))
                     .frame(width: 44, height: 44)
                 Image(systemName: entry.plan.planType.icon)
@@ -1130,7 +1130,7 @@ struct AddPlanView: View {
         }
         .padding(14)
         .background(uiAccentColor.opacity(0.1))
-        .cornerRadius(16)
+        .cornerRadius(AppRadius.large)
     }
 
     /// 履歴の内容をフォームに流し込み、日付ステップから再開する

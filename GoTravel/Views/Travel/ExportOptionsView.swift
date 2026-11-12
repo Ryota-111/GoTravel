@@ -179,7 +179,7 @@ struct ExportOptionsView: View {
                 .disabled(plan.items(of: .packing).isEmpty)
                 .opacity(plan.items(of: .packing).isEmpty ? 0.5 : 1)
         }
-        .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+        .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(cardFill))
     }
 
     private func toggleRow(_ label: String, detail: String, isOn: Binding<Bool>) -> some View {
@@ -217,7 +217,7 @@ struct ExportOptionsView: View {
                 .frame(maxWidth: .infinity)
                 .padding(.vertical, 14)
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: AppRadius.medium)
                         .fill(canExport ? accent : accent.opacity(0.10))
                 )
         }

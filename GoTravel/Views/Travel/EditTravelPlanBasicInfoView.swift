@@ -241,9 +241,9 @@ struct EditTravelPlanBasicInfoView: View {
                     .foregroundColor(textColor)
                     .padding(14)
                     .background(fieldBg)
-                    .cornerRadius(12)
+                    .cornerRadius(AppRadius.medium)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: AppRadius.medium)
                             .stroke(title.isEmpty ? themeManager.currentTheme.error.opacity(0.5) : travelColor.opacity(0.3), lineWidth: 1.5)
                     )
             }
@@ -280,9 +280,9 @@ struct EditTravelPlanBasicInfoView: View {
                     }
                     .padding(14)
                     .background(fieldBg)
-                    .cornerRadius(12)
+                    .cornerRadius(AppRadius.medium)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: AppRadius.medium)
                             .stroke(destination.isEmpty ? themeManager.currentTheme.error.opacity(0.5) : travelColor.opacity(0.3), lineWidth: 1.5)
                     )
 
@@ -354,7 +354,7 @@ struct EditTravelPlanBasicInfoView: View {
         }
         .padding(14)
         .background(fieldBg)
-        .cornerRadius(12)
+        .cornerRadius(AppRadius.medium)
     }
 
     // MARK: - Save Button
@@ -375,7 +375,7 @@ struct EditTravelPlanBasicInfoView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .fill(isFormValid ? travelColor : themeManager.currentTheme.secondaryText)
                     .shadow(color: travelColor.opacity(0.4), radius: 8, x: 0, y: 4)
             )

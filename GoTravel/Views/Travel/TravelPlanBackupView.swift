@@ -211,7 +211,7 @@ private struct BackupPlanDetailView: View {
                         .padding(.horizontal, 12)
                         .padding(.vertical, 10)
                         .background(
-                            RoundedRectangle(cornerRadius: 12)
+                            RoundedRectangle(cornerRadius: AppRadius.medium)
                                 .fill(isSelected ? palette.accent : palette.card)
                         )
                     }
@@ -324,7 +324,7 @@ private struct BackupPlanDetailView: View {
                     routeEnd(reservation.arrivalPlace, reservation.arrivalDate, reservation.arrivalTimeZone)
                 }
                 .padding(10)
-                .background(RoundedRectangle(cornerRadius: 10).fill(palette.accent.opacity(0.06)))
+                .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(palette.accent.opacity(0.06)))
             }
 
             if let location = reservation.location {
@@ -355,7 +355,7 @@ private struct BackupPlanDetailView: View {
                             .foregroundColor(palette.accent)
                     }
                     .padding(12)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(palette.accent.opacity(0.08)))
+                    .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(palette.accent.opacity(0.08)))
                 }
                 .buttonStyle(.plain)
             }
@@ -468,7 +468,7 @@ private struct BackupNotice: View {
         }
         .padding(12)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(RoundedRectangle(cornerRadius: 12).fill(palette.accent.opacity(0.12)))
+        .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(palette.accent.opacity(0.12)))
     }
 }
 
