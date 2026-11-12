@@ -19,10 +19,10 @@ final class ScreenTourTests: XCTestCase {
         try FileManager.default.createDirectory(at: directory!, withIntermediateDirectories: true)
     }
 
-    private func launch(tab: Int, extra: [String] = []) -> XCUIApplication {
+    private func launch(tab: Int, extra: [String] = [], onboarding: Bool = false) -> XCUIApplication {
         let app = XCUIApplication()
         app.launchArguments = ["-TravoryEmptyDataMode", "-TravoryDemoData",
-                               "-appleSignInUserId", "demo", "-hasCompletedOnboarding", "YES",
+                               "-appleSignInUserId", "demo", "-hasCompletedOnboarding", onboarding ? "NO" : "YES",
                                // お知らせや案内は、画面を隠すので出さない
                                "-lastShownWhatsNewVersion", Self.appVersion, "-TabSwipePromptState", "done",
                                "-TravoryInitialTab", "\(tab)"] + extra
@@ -63,6 +63,14 @@ final class ScreenTourTests: XCTestCase {
         let steps = (ProcessInfo.processInfo.environment["TOUR_STEPS"] ?? "tabs,travel,plan,place").split(separator: ",")
         let extra = (ProcessInfo.processInfo.environment["TOUR_ARGS"] ?? "").split(separator: " ").map(String.init)
 
+        if steps.contains("onboarding") {
+            // 最初の紹介画面を、最後のページまでめくる
+            let app = launch(tab: 0, extra: extra, onboarding: true)
+            shot("onboarding-1")
+            for page in 2...4 where tap(app, "次へ") {
+                shot("onboarding-\(page)")
+            }
+        }
         if steps.contains("tabs") {
             for tab in 0..<4 {
                 let app = launch(tab: tab, extra: extra)
