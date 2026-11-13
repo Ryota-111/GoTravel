@@ -301,7 +301,7 @@ struct PlanEventCardView: View {
         .padding(.vertical, 6)
         .frame(width: 46)
         .background(
-            RoundedRectangle(cornerRadius: 13, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                 .fill(isToday ? AnyShapeStyle(mainColor) : AnyShapeStyle(mainColor.opacity(colorScheme == .dark ? 0.22 : 0.12)))
         )
     }
@@ -372,7 +372,7 @@ struct PlanEventCardView: View {
                 .padding(.vertical, 2)
                 .background(
                     tag.color.opacity(colorScheme == .dark ? 0.24 : 0.14),
-                    in: RoundedRectangle(cornerRadius: 6)
+                    in: RoundedRectangle(cornerRadius: AppRadius.small)
                 )
 
             // 2つ目以降は数だけ。名前を全部出すと日付や時刻が押し出される

@@ -136,17 +136,17 @@ struct JoinTravelPlanView: View {
                 .foregroundColor(textColor)
                 .padding()
                 .background(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: AppRadius.medium)
                         .fill(textColor.opacity(0.08))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: AppRadius.medium)
                         .stroke(shareCode.isEmpty ? themeManager.currentTheme.cardBorder : themeManager.currentTheme.success.opacity(0.5), lineWidth: 2)
                 )
         }
         .padding()
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .fill(textColor.opacity(0.05))
         )
         .shadow(color: themeManager.currentTheme.accent1.opacity(0.3), radius: 10, x: 0, y: 5)
@@ -183,7 +183,7 @@ struct JoinTravelPlanView: View {
                     endPoint: .trailing
                 )
             )
-            .cornerRadius(15)
+            .cornerRadius(AppRadius.large)
             .shadow(color: themeManager.currentTheme.accent1.opacity(0.3), radius: 10, x: 0, y: 5)
         }
         .disabled(shareCode.isEmpty || isJoining)
@@ -208,11 +208,11 @@ struct JoinTravelPlanView: View {
         }
         .padding()
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .fill(textColor.opacity(0.06))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .stroke(textColor.opacity(0.15), lineWidth: 1)
         )
     }

@@ -21,6 +21,8 @@ struct EnjoyWorldView: View {
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
     @ObservedObject var tagManager = PlanTagManager.shared
+    /// 旅行計画のカードから詳細へ広がる遷移
+    @Namespace private var cardZoom
     @State private var selectedTab: TabType = .all
     @State private var selectedPlanFilter: PlanFilter = .all
     @State private var showManagePlanTags = false
@@ -216,7 +218,8 @@ struct EnjoyWorldView: View {
 
     // MARK: - Body
     var body: some View {
-        NavigationView {
+        // カードから詳細へ広がる遷移は NavigationStack でしか働かない
+        NavigationStack {
             VStack(alignment: .leading, spacing: 15) {
                 titleSection
                     .readableWidth(WideLayout.galleryWidth)
@@ -396,7 +399,6 @@ struct EnjoyWorldView: View {
                 }
             }
         }
-        .navigationViewStyle(.stack)
     }
 
     // MARK: - View Components
@@ -892,7 +894,7 @@ struct EnjoyWorldView: View {
                         .padding(.vertical, 9)
                         .background(addTravelTintColor)
                         .foregroundColor(.white)
-                        .cornerRadius(10)
+                        .cornerRadius(AppRadius.medium)
                 }
                 .buttonStyle(.plain)
                 Button("閉じる") {
@@ -1020,9 +1022,11 @@ struct EnjoyWorldView: View {
                         onDelete: {
                             planToDelete = plan
                             showDeleteConfirmation = true
-                        }
+                        },
+                        zoomNamespace: cardZoom
                     )
                     .environmentObject(travelPlanViewModel)
+                    .edgeScrollTransition(axis: .horizontal)
                     .transition(.asymmetric(
                         insertion: .scale(scale: 0.3).combined(with: .opacity),
                         removal: .opacity
@@ -1213,7 +1217,7 @@ struct EnjoyWorldView: View {
         }) {
             HStack(spacing: 12) {
                 ZStack {
-                    RoundedRectangle(cornerRadius: 11)
+                    RoundedRectangle(cornerRadius: AppRadius.medium)
                         .fill(
                             LinearGradient(
                                 colors: [addAccentColor, addAccentColor.opacity(0.65)],

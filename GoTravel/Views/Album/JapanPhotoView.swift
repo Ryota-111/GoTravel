@@ -247,13 +247,13 @@ struct PrefectureTile: View {
                         // 枠の大きさを先に決めて、その中で切り抜く（横長の写真が隣へはみ出さないように）
                         Image(uiImage: photo).resizable().scaledToFill()
                     } else {
-                        RoundedRectangle(cornerRadius: 12, style: .continuous)
+                        RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous)
                             .strokeBorder(ink.opacity(0.18), style: StrokeStyle(lineWidth: 1, dash: [4, 4]))
                             .overlay(Image(systemName: "plus").font(.footnote.weight(.semibold))
                                 .foregroundColor(ink.opacity(0.28)))
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
                 .overlay(alignment: .topTrailing) {
                     if photoCount > 1 {
                         Text("\(photoCount)枚")
@@ -661,7 +661,7 @@ struct PrefectureGalleryView: View {
                         themeManager.currentTheme.xprimary.opacity(0.08)
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 10))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium))
                 .opacity(isSelecting && !isSelected ? 0.75 : 1)
                 .overlay(alignment: .bottomTrailing) {
                     if isSelecting {
@@ -692,7 +692,7 @@ struct PrefectureGalleryView: View {
         Button {
             showPicker = true
         } label: {
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: AppRadius.medium)
                 .fill(themeManager.currentTheme.xprimary.opacity(0.08))
                 .aspectRatio(1, contentMode: .fit)
                 .overlay(
@@ -705,7 +705,7 @@ struct PrefectureGalleryView: View {
                     .foregroundColor(themeManager.currentTheme.xprimary.opacity(remaining > 0 ? 0.8 : 0.35))
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 10)
+                    RoundedRectangle(cornerRadius: AppRadius.medium)
                         .stroke(themeManager.currentTheme.xprimary.opacity(0.25),
                                 style: StrokeStyle(lineWidth: 1.2, dash: [6, 4]))
                 )
@@ -834,7 +834,7 @@ struct PhotoMapPhotoPreview: View {
                         Image(uiImage: image)
                             .resizable()
                             .aspectRatio(contentMode: .fit)
-                            .clipShape(RoundedRectangle(cornerRadius: 14))
+                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.large))
                     } else {
                         ProgressView()
                             .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -855,7 +855,7 @@ struct PhotoMapPhotoPreview: View {
                             .font(.headline)
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 14)
-                            .background(RoundedRectangle(cornerRadius: 14).fill(themeManager.currentTheme.xprimary))
+                            .background(RoundedRectangle(cornerRadius: AppRadius.large).fill(themeManager.currentTheme.xprimary))
                             .foregroundColor(.white)
                     }
                     .buttonStyle(.plain)
@@ -869,7 +869,7 @@ struct PhotoMapPhotoPreview: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 12)
                         .foregroundColor(themeManager.currentTheme.error)
-                        .background(RoundedRectangle(cornerRadius: 14).fill(themeManager.currentTheme.error.opacity(0.1)))
+                        .background(RoundedRectangle(cornerRadius: AppRadius.large).fill(themeManager.currentTheme.error.opacity(0.1)))
                 }
                 .buttonStyle(.plain)
             }

@@ -176,9 +176,9 @@ struct ScheduleItemEditorView: View {
                             .foregroundColor(textColor)
                             .padding(14)
                             .background(fieldBackground)
-                            .cornerRadius(12)
+                            .cornerRadius(AppRadius.medium)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 12)
+                                RoundedRectangle(cornerRadius: AppRadius.medium)
                                     .stroke(
                                         title.isEmpty && !isMove
                                             ? themeManager.currentTheme.error.opacity(0.5)
@@ -313,11 +313,11 @@ struct ScheduleItemEditorView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 9)
             .background {
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: AppRadius.medium)
                     .fill(isSelected ? AnyShapeStyle(fill) : AnyShapeStyle(fieldBackground))
             }
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: AppRadius.medium)
                     .stroke(isSelected ? Color.clear : themeManager.currentTheme.secondaryText.opacity(0.25), lineWidth: 1)
             )
         }
@@ -355,9 +355,9 @@ struct ScheduleItemEditorView: View {
             .font(.body)
             .padding(14)
             .background(fieldBackground)
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.medium)
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: AppRadius.medium)
                     .stroke(accentColor.opacity(0.2), lineWidth: 1)
             )
         }
@@ -414,9 +414,9 @@ struct ScheduleItemEditorView: View {
             .font(.body)
             .padding(14)
             .background(fieldBackground)
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.medium)
             .overlay(
-                RoundedRectangle(cornerRadius: 12)
+                RoundedRectangle(cornerRadius: AppRadius.medium)
                     .stroke(accentColor.opacity(0.2), lineWidth: 1)
             )
         }
@@ -443,9 +443,9 @@ struct ScheduleItemEditorView: View {
         }
         .padding(14)
         .background(fieldBackground)
-        .cornerRadius(12)
+        .cornerRadius(AppRadius.medium)
         .overlay(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: AppRadius.medium)
                 .stroke(accentColor.opacity(0.2), lineWidth: 1)
         )
     }

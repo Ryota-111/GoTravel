@@ -119,6 +119,22 @@ struct ThemedCard: ViewModifier {
     }
 }
 
+// MARK: - 角丸
+/// 画面に角丸の数値を直書きせず、ここから引く（3.6）。
+///
+/// 12・14・16 のような近い値が画面ごとに混ざっていたのを、テーマの3段階に揃える。
+/// 角を落としたテーマ（墨・レトロ）では、ホーム以外の画面も同じ角になる。
+/// 呼び出した時点の値を読むだけなので、テーマの切り替えに追従させたい View は
+/// `themeManager` を `@ObservedObject` で持っておくこと
+enum AppRadius {
+    /// チップ、小さなボタン（標準のテーマで 8）
+    static var small: CGFloat { ThemeManager.shared.currentTheme.radius(.small) }
+    /// 行、入力欄（標準のテーマで 12）
+    static var medium: CGFloat { ThemeManager.shared.currentTheme.radius(.medium) }
+    /// カード（標準のテーマで 16）
+    static var large: CGFloat { ThemeManager.shared.currentTheme.radius(.large) }
+}
+
 // MARK: - View Extension for Easy Theme Access
 // themedCard 以外は呼び出し時点の値を読むだけなので、
 // テーマ切り替えに追従させたい View 側は themeManager を @ObservedObject で持っておくこと。

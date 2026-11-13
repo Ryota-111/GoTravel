@@ -55,7 +55,7 @@ struct PlanCategoryPicker: View {
                 }
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
-                .background(RoundedRectangle(cornerRadius: 12).stroke(accentColor.opacity(0.2), lineWidth: 1))
+                .background(RoundedRectangle(cornerRadius: AppRadius.medium).stroke(accentColor.opacity(0.2), lineWidth: 1))
             }
             if let category = manager.category(for: categoryId), category.isShared {
                 Text("「\(category.name)」のメンバー全員（\(category.sharedWith.count)人）に表示されます")

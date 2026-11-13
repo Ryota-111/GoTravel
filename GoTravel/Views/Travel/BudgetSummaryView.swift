@@ -176,8 +176,8 @@ struct BudgetSummaryView: View {
                 }
             }
             .padding(.horizontal, 18)
-            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(paper))
-            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(rule, lineWidth: 1))
+            .background(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous).fill(paper))
+            .overlay(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous).stroke(rule, lineWidth: 1))
 
             Button { editing = .newExpense } label: {
                 Label("支出を足す", systemImage: "plus")
@@ -185,7 +185,7 @@ struct BudgetSummaryView: View {
                     .foregroundColor(tint)
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
-                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(rule, lineWidth: 1))
+                    .background(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous).stroke(rule, lineWidth: 1))
             }
             .buttonStyle(.plain)
 
@@ -283,6 +283,9 @@ struct BudgetSummaryView: View {
             Text(money(hasActual ? actualTotal : plannedTotal))
                 .font(.system(size: 36, weight: .semibold))
                 .monospacedDigit()
+                // 金額が変わったら、桁がめくれて変わる
+                .contentTransition(.numericText(value: hasActual ? actualTotal : plannedTotal))
+                .animation(.snappy, value: hasActual ? actualTotal : plannedTotal)
                 .foregroundColor(ink)
                 .lineLimit(1)
                 .minimumScaleFactor(0.6)

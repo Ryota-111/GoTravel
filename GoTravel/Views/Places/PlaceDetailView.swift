@@ -207,15 +207,15 @@ struct PlaceDetailView: View {
                         .padding(12)
                         .foregroundColor(textColor)
                         .background(colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight)
-                        .cornerRadius(10)
+                        .cornerRadius(AppRadius.medium)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 10)
+                            RoundedRectangle(cornerRadius: AppRadius.medium)
                                 .stroke(colorScheme == .dark ? themeManager.currentTheme.backgroundDark.opacity(0.5) : themeManager.currentTheme.backgroundLight.opacity(0.5), lineWidth: 1)
                         )
                 }
                 .padding(16)
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: AppRadius.large)
                         .fill(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
                         .shadow(color: themeManager.currentTheme.dark.opacity(0.05), radius: 8, x: 0, y: 2)
                 )
@@ -256,16 +256,16 @@ struct PlaceDetailView: View {
                         .font(.body)
                         .padding(12)
                         .background(colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight)
-                        .cornerRadius(10)
+                        .cornerRadius(AppRadius.medium)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 10)
+                            RoundedRectangle(cornerRadius: AppRadius.medium)
                                 .stroke(colorScheme == .dark ? themeManager.currentTheme.backgroundDark.opacity(0.5) : themeManager.currentTheme.backgroundLight.opacity(0.5), lineWidth: 1)
                         )
                     }
                 }
                 .padding(16)
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: AppRadius.large)
                         .fill(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
                         .shadow(color: themeManager.currentTheme.dark.opacity(0.05), radius: 8, x: 0, y: 2)
                 )
@@ -294,9 +294,9 @@ struct PlaceDetailView: View {
                         .frame(maxWidth: .infinity)
                         .padding(8)
                         .background(colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight)
-                        .cornerRadius(10)
+                        .cornerRadius(AppRadius.medium)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 10)
+                            RoundedRectangle(cornerRadius: AppRadius.medium)
                                 .stroke(colorScheme == .dark ? themeManager.currentTheme.backgroundDark.opacity(0.5) : themeManager.currentTheme.backgroundLight.opacity(0.5), lineWidth: 1)
                         )
                         .environment(\.colorScheme, isBackgroundDark() ? .dark : .light)
@@ -304,7 +304,7 @@ struct PlaceDetailView: View {
                 }
                 .padding(16)
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: AppRadius.large)
                         .fill(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
                         .shadow(color: themeManager.currentTheme.dark.opacity(0.05), radius: 8, x: 0, y: 2)
                 )
@@ -327,15 +327,15 @@ struct PlaceDetailView: View {
                     }
                     .padding(14)
                     .background(colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight)
-                    .cornerRadius(10)
+                    .cornerRadius(AppRadius.medium)
                 }
                 .padding(16)
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: AppRadius.large)
                         .fill(themeManager.currentTheme.cardBackground2)
                 )
                 .overlay(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: AppRadius.large)
                         .stroke(themeManager.currentTheme.xprimary.opacity(0.3), lineWidth: 1)
                 )
 
@@ -360,16 +360,16 @@ struct PlaceDetailView: View {
                             .padding(8)
                             .scrollContentBackground(.hidden)
                             .background(colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight)
-                            .cornerRadius(10)
+                            .cornerRadius(AppRadius.medium)
                             .overlay(
-                                RoundedRectangle(cornerRadius: 10)
+                                RoundedRectangle(cornerRadius: AppRadius.medium)
                                     .stroke(colorScheme == .dark ? themeManager.currentTheme.backgroundDark.opacity(0.5) : themeManager.currentTheme.backgroundLight.opacity(0.5), lineWidth: 1)
                             )
                     }
                 }
                 .padding(16)
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: AppRadius.large)
                         .fill(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
                         .shadow(color: themeManager.currentTheme.dark.opacity(0.05), radius: 8, x: 0, y: 2)
                 )
@@ -383,7 +383,7 @@ struct PlaceDetailView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 16)
                             .background(
-                                RoundedRectangle(cornerRadius: 12)
+                                RoundedRectangle(cornerRadius: AppRadius.medium)
                                     .fill(colorScheme == .dark ? themeManager.currentTheme.secondaryBackgroundDark : themeManager.currentTheme.secondaryBackgroundLight)
                             )
                     }
@@ -403,7 +403,7 @@ struct PlaceDetailView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 16)
                         .background(
-                            RoundedRectangle(cornerRadius: 12)
+                            RoundedRectangle(cornerRadius: AppRadius.medium)
                                 .fill(editedTitle.isEmpty ? themeManager.currentTheme.secondaryText : themeManager.currentTheme.info)
                                 .shadow(color: themeManager.currentTheme.info.opacity(0.3), radius: 8, x: 0, y: 4)
                         )
@@ -447,7 +447,7 @@ struct PlaceDetailView: View {
                 HStack(spacing: 8) {
                     // カテゴリーの色は一覧・地図と揃える
                     ZStack {
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: AppRadius.medium)
                             .fill(
                                 LinearGradient(
                                     colors: [category.color, category.color.opacity(0.65)],
@@ -660,7 +660,7 @@ struct PlaceDetailView: View {
                 .shadow(color: Color.black.opacity(0.3), radius: 8, x: 0, y: 4)
             }
         }
-        .cornerRadius(15)
+        .cornerRadius(AppRadius.large)
         .padding(.horizontal, 24)
         .padding(.vertical, 24)
     }
@@ -885,7 +885,7 @@ struct PlaceDetailView: View {
                     badgePosition: .topLeading
                 )
                 .frame(height: 300)
-                .clipShape(RoundedRectangle(cornerRadius: 16))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.large))
                 .overlay(alignment: .bottomTrailing) {
                     HStack(spacing: 6) {
                         Image(systemName: "mappin.circle.fill")
@@ -911,7 +911,7 @@ struct PlaceDetailView: View {
                 .frame(maxWidth: .infinity)
                 .frame(height: 200)
                 .background(
-                    RoundedRectangle(cornerRadius: 16)
+                    RoundedRectangle(cornerRadius: AppRadius.large)
                         .fill(Color(.tertiarySystemBackground))
                 )
             }
@@ -938,7 +938,7 @@ struct PlaceDetailView: View {
                     .tint(themeManager.currentTheme.accent1)
             }
             .frame(height: 300)
-            .clipShape(RoundedRectangle(cornerRadius: 16))
+            .clipShape(RoundedRectangle(cornerRadius: AppRadius.large))
             .overlay(alignment: .bottomTrailing) {
                 HStack(spacing: 6) {
                     Image(systemName: "mappin.circle.fill")

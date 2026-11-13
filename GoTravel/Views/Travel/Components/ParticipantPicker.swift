@@ -53,7 +53,7 @@ struct ParticipantPicker: View {
             }
             .padding(14)
             .background(fieldBackground)
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.medium)
         }
     }
 

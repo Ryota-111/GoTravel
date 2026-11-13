@@ -192,7 +192,7 @@ struct PhotoMapScanView: View {
         HStack(spacing: 12) {
             AssetThumbnail(localIdentifier: candidate.photos.first?.id)
                 .frame(width: 56, height: 56)
-                .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium, style: .continuous))
                 // もうフォトマップに写真がある県は、見本の右下に印を付ける
                 .overlay(alignment: .bottomTrailing) {
                     if inMap > 0 {
@@ -291,7 +291,7 @@ private struct PhotoMapScanPrefectureView: View {
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity)
                     .frame(height: 54)
-                    .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.accentColor))
+                    .background(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous).fill(Color.accentColor))
                 }
                 .disabled(isAdding)
                 .padding(.horizontal, 16)

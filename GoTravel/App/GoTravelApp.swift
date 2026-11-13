@@ -12,6 +12,11 @@ struct GoTravelApp: App {
         // Core Dataの初期化（CloudKitとの自動同期を有効化）
         _ = CoreDataManager.shared
 
+        #if DEBUG
+        // 画面を確かめるための見本データ（`-TravoryEmptyDataMode -TravoryDemoData` のときだけ）
+        DemoDataSeeder.seedIfRequested()
+        #endif
+
         NotificationService.shared.requestAuthorization { _ in }
 
         // 前回の退会で、通信できずに片付けきれなかった共有レコードがあれば続ける

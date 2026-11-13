@@ -74,9 +74,9 @@ struct WishPlacesSection: View {
         }
         .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .fill(cardFill)
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(textColor.opacity(0.12), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.large).stroke(textColor.opacity(0.12), lineWidth: 1))
         )
         .sheet(isPresented: $showsPicker) {
             SavedPlacePickerView(accentColor: accent, onSelect: { _ in },
@@ -194,7 +194,7 @@ struct WishPlacesSection: View {
         .padding(.vertical, 8)
         .padding(.horizontal, 6)
         .background(
-            RoundedRectangle(cornerRadius: 10)
+            RoundedRectangle(cornerRadius: AppRadius.medium)
                 .fill(isFocused ? TravelPlanMapView.wishColor.opacity(0.12) : Color.clear)
         )
         .contentShape(Rectangle())

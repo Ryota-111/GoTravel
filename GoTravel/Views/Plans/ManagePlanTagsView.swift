@@ -166,8 +166,8 @@ struct PlanTagEditorView: View {
                         TextField("例：仕事、遊び、家族", text: $name)
                             .padding(14)
                             .background(colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight)
-                            .cornerRadius(12)
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(selectedColor.opacity(0.4), lineWidth: 1.5))
+                            .cornerRadius(AppRadius.medium)
+                            .overlay(RoundedRectangle(cornerRadius: AppRadius.medium).stroke(selectedColor.opacity(0.4), lineWidth: 1.5))
 
                         if isDuplicateName {
                             Text("同じ名前のタグがあります")
@@ -226,7 +226,7 @@ struct PlanTagEditorView: View {
             .foregroundColor(.red)
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(Color.red.opacity(colorScheme == .dark ? 0.18 : 0.10), in: RoundedRectangle(cornerRadius: 12))
+            .background(Color.red.opacity(colorScheme == .dark ? 0.18 : 0.10), in: RoundedRectangle(cornerRadius: AppRadius.medium))
         }
         .padding(.horizontal, 20)
         .alert("このタグを削除しますか？", isPresented: $showDeleteConfirm) {

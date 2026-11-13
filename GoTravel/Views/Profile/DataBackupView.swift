@@ -98,7 +98,7 @@ struct DataBackupView: View {
             if isWorking {
                 ProgressView()
                     .padding(24)
-                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 14))
+                    .background(.regularMaterial, in: RoundedRectangle(cornerRadius: AppRadius.large))
             }
         }
         .task {

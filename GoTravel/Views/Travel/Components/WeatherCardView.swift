@@ -65,7 +65,7 @@ struct WeatherCardView: View {
         }
         .padding()
         .background(
-            RoundedRectangle(cornerRadius: 15)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .fill(Color.white.opacity(0.15))
         )
     }
@@ -91,7 +91,7 @@ struct WeatherLoadingView: View {
         }
         .padding()
         .background(
-            RoundedRectangle(cornerRadius: 15)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .fill(Color.white.opacity(0.15))
         )
     }
@@ -126,7 +126,7 @@ struct WeatherErrorView: View {
         }
         .padding()
         .background(
-            RoundedRectangle(cornerRadius: 15)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .fill(Color.white.opacity(0.15))
         )
     }

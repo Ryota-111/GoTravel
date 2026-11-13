@@ -10,6 +10,8 @@ struct AlbumHomeView: View {
     @Environment(\.colorScheme) var colorScheme
     @State private var showCreateAlbum = false
     @State private var selectedAlbum: Album?
+    /// アルバムのカードから中身へ広がる遷移
+    @Namespace private var albumZoom
     @State private var editingAlbum: Album?
 
     // 写真一覧と同じ操作感で、まとめて削除できるようにする
@@ -119,11 +121,14 @@ struct AlbumHomeView: View {
         }
         .fullScreenCover(item: $selectedAlbum) { album in
             // タイトル文字列ではなく種別で判定する
-            if album.isJapanPhotoMap {
-                JapanPhotoView(albumId: album.id)
-            } else {
-                AlbumDetailView(album: album)
+            Group {
+                if album.isJapanPhotoMap {
+                    JapanPhotoView(albumId: album.id)
+                } else {
+                    AlbumDetailView(album: album)
+                }
             }
+            .zoomDestination(id: album.id, in: albumZoom)
         }
         .confirmationDialog(deleteConfirmTitle, isPresented: $showDeleteConfirm, titleVisibility: .visible) {
             Button("削除", role: .destructive) { deleteSelectedAlbums() }
@@ -150,6 +155,7 @@ struct AlbumHomeView: View {
                         onDelete: { requestDelete(album) },
                         onStartSelection: { startSelection(with: album) }
                     )
+                    .zoomSource(id: album.id, in: albumZoom)
                 }
             }
             .padding(.horizontal, 16)
@@ -427,7 +433,7 @@ struct AlbumHomeView: View {
                 .padding(.horizontal, 28)
                 .padding(.vertical, 14)
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: AppRadius.large)
                         .fill(themeManager.currentTheme.xprimary)
                         .shadow(color: themeManager.currentTheme.xprimary.opacity(0.4), radius: 8, x: 0, y: 4)
                 )
@@ -507,9 +513,9 @@ struct AlbumCard: View {
             albumInfoSection
         }
         .background(cardBg)
-        .clipShape(RoundedRectangle(cornerRadius: 18))
+        .clipShape(RoundedRectangle(cornerRadius: AppRadius.large))
         .overlay(
-            RoundedRectangle(cornerRadius: 18)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .stroke(
                     isSelected ? resolvedCoverColor : resolvedCoverColor.opacity(0.3),
                     lineWidth: isSelected ? 3 : 1

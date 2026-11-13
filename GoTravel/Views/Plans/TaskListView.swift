@@ -189,10 +189,14 @@ struct TaskRow: View {
                         Image(systemName: "checkmark")
                             .font(.system(size: 12, weight: .bold))
                             .foregroundColor(task.priority.color)
+                            .transition(.scale(scale: 0.3).combined(with: .opacity))
                     }
                 }
+                .animation(.spring(response: 0.3, dampingFraction: 0.55), value: task.isCompleted)
             }
             .buttonStyle(PlainButtonStyle())
+            // 終わらせたときは「できた」、戻したときは軽く
+            .sensoryFeedback(trigger: task.isCompleted) { _, isCompleted in isCompleted ? .success : .impact(weight: .light) }
 
             VStack(alignment: .leading, spacing: 4) {
                 Text(task.title)
@@ -234,12 +238,12 @@ struct TaskRow: View {
         }
         .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .fill(cardBg)
                 .shadow(color: task.priority.color.opacity(task.isCompleted ? 0.05 : 0.1), radius: 4, x: 0, y: 2)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .stroke(task.priority.color.opacity(task.isCompleted ? 0.1 : 0.25), lineWidth: 1)
         )
         .opacity(task.isCompleted ? 0.6 : 1.0)
@@ -369,9 +373,9 @@ struct TaskEditView: View {
                     .foregroundColor(accentColor)
                     .padding(14)
                     .background(fieldBg)
-                    .cornerRadius(12)
+                    .cornerRadius(AppRadius.medium)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: AppRadius.medium)
                             .stroke(
                                 title.isEmpty
                                     ? themeManager.currentTheme.error.opacity(0.35)
@@ -409,9 +413,9 @@ struct TaskEditView: View {
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 12)
                             .background(
-                                RoundedRectangle(cornerRadius: 12)
+                                RoundedRectangle(cornerRadius: AppRadius.medium)
                                     .fill(isSelected ? p.color.opacity(0.08) : Color.clear)
-                                    .overlay(RoundedRectangle(cornerRadius: 12).stroke(isSelected ? p.color : p.color.opacity(0.2), lineWidth: 1.5))
+                                    .overlay(RoundedRectangle(cornerRadius: AppRadius.medium).stroke(isSelected ? p.color : p.color.opacity(0.2), lineWidth: 1.5))
                             )
                         }
                         .buttonStyle(PlainButtonStyle())
@@ -441,7 +445,7 @@ struct TaskEditView: View {
                 }
                 .padding(14)
                 .background(fieldBg)
-                .cornerRadius(12)
+                .cornerRadius(AppRadius.medium)
 
                 if hasDueDate {
                     HStack {
@@ -459,7 +463,7 @@ struct TaskEditView: View {
                     }
                     .padding(14)
                     .background(fieldBg)
-                    .cornerRadius(12)
+                    .cornerRadius(AppRadius.medium)
                     .transition(.opacity.combined(with: .move(edge: .top)))
                 }
             }
@@ -478,7 +482,7 @@ struct TaskEditView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .fill(canSave ? themeManager.currentTheme.xprimary : themeManager.currentTheme.secondaryText)
                     .shadow(color: themeManager.currentTheme.xprimary.opacity(canSave ? 0.4 : 0), radius: 8, x: 0, y: 4)
             )
@@ -505,9 +509,9 @@ struct TaskEditView: View {
         content()
             .padding(16)
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .fill(cardBg)
-                    .shadow(color: themeManager.currentTheme.shadow, radius: 6, x: 0, y: 2)
+                    .shadow(color: themeManager.currentTheme.effectiveShadow, radius: 6, x: 0, y: 2)
             )
     }
 

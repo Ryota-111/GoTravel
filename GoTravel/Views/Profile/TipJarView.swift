@@ -140,12 +140,12 @@ struct TipJarView: View {
         }
         .padding(16)
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .fill(cardBg)
                 .shadow(color: Color.pink.opacity(0.1), radius: 6, x: 0, y: 2)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .stroke(Color.pink.opacity(0.2), lineWidth: 1.5)
         )
     }
@@ -385,12 +385,12 @@ struct TipProductRow: View {
             }
             .padding(14)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .fill(cardBg)
                     .shadow(color: Color.pink.opacity(0.08), radius: 4, x: 0, y: 2)
             )
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .stroke(Color.pink.opacity(0.15), lineWidth: 1)
             )
         }

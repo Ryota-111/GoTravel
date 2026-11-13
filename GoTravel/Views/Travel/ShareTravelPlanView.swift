@@ -81,7 +81,7 @@ struct ShareTravelPlanView: View {
                                 .padding(.horizontal, 14)
                                 .padding(.vertical, 10)
                                 .background(
-                                    RoundedRectangle(cornerRadius: 12)
+                                    RoundedRectangle(cornerRadius: AppRadius.medium)
                                         .fill(themeManager.currentTheme.secondaryText.opacity(0.08))
                                 )
                         }
@@ -196,7 +196,7 @@ struct ShareTravelPlanView: View {
                     .minimumScaleFactor(0.7)
                     .padding(10)
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(RoundedRectangle(cornerRadius: 10).fill(themeManager.currentTheme.light.opacity(0.3)))
+                    .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(themeManager.currentTheme.light.opacity(0.3)))
                     .textSelection(.enabled)
 
                 HStack(spacing: 10) {
@@ -210,14 +210,14 @@ struct ShareTravelPlanView: View {
                             .font(.subheadline.weight(.semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
-                            .background(RoundedRectangle(cornerRadius: 10).fill(themeManager.currentTheme.light.opacity(0.3)))
+                            .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(themeManager.currentTheme.light.opacity(0.3)))
                     }
                     ShareLink(item: url, message: Text("「\(currentPlan.title)」の旅行計画")) {
                         Label("リンクを送る", systemImage: "square.and.arrow.up")
                             .font(.subheadline.weight(.semibold))
                             .frame(maxWidth: .infinity)
                             .padding(.vertical, 10)
-                            .background(RoundedRectangle(cornerRadius: 10).fill(themeManager.currentTheme.light.opacity(0.3)))
+                            .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(themeManager.currentTheme.light.opacity(0.3)))
                     }
                 }
                 .foregroundColor(themeManager.currentTheme.dark)
@@ -230,7 +230,7 @@ struct ShareTravelPlanView: View {
         }
         .padding()
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .fill(themeManager.currentTheme.accent2)
         )
         .shadow(color: themeManager.currentTheme.accent1.opacity(0.1), radius: 10, x: 0, y: 5)
@@ -326,7 +326,7 @@ struct ShareTravelPlanView: View {
                     endPoint: .trailing
                 )
             )
-            .cornerRadius(15)
+            .cornerRadius(AppRadius.large)
             .shadow(color: themeManager.currentTheme.accent1.opacity(0.3), radius: 10, x: 0, y: 5)
         }
         .disabled(isPublishing)
@@ -347,11 +347,11 @@ struct ShareTravelPlanView: View {
                     .padding()
                     .frame(maxWidth: .infinity)
                     .background(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: AppRadius.medium)
                             .fill(themeManager.currentTheme.accent2.opacity(0.1))
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 12)
+                        RoundedRectangle(cornerRadius: AppRadius.medium)
                             .stroke(themeManager.currentTheme.accent2.opacity(0.3), lineWidth: 2)
                     )
             }
@@ -369,7 +369,7 @@ struct ShareTravelPlanView: View {
                 .frame(maxWidth: .infinity)
                 .padding()
                 .background(showCopiedAlert ? themeManager.currentTheme.success : themeManager.currentTheme.light.opacity(0.3))
-                .cornerRadius(12)
+                .cornerRadius(AppRadius.medium)
             }
             .animation(.easeInOut(duration: 0.3), value: showCopiedAlert)
 
@@ -386,7 +386,7 @@ struct ShareTravelPlanView: View {
                 .frame(maxWidth: .infinity)
                 .padding()
                 .background(themeManager.currentTheme.light.opacity(0.3))
-                .cornerRadius(12)
+                .cornerRadius(AppRadius.medium)
             }
 
             // Shared Users
@@ -417,7 +417,7 @@ struct ShareTravelPlanView: View {
         }
         .padding()
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .fill(themeManager.currentTheme.accent2)
         )
         .shadow(color: themeManager.currentTheme.accent1.opacity(0.1), radius: 10, x: 0, y: 5)
@@ -445,7 +445,7 @@ struct ShareTravelPlanView: View {
                     .padding(.horizontal, 10)
                     .padding(.vertical, 4)
                     .background(themeManager.currentTheme.accent2.opacity(0.2))
-                    .cornerRadius(8)
+                    .cornerRadius(AppRadius.small)
             }
 
             // Member list
@@ -508,7 +508,7 @@ struct ShareTravelPlanView: View {
         .padding(.vertical, 6)
         .padding(.horizontal, 8)
         .background(themeManager.currentTheme.light.opacity(0.05))
-        .cornerRadius(8)
+        .cornerRadius(AppRadius.small)
     }
 
     /// 共有メンバーの名前。付いていなければ「自分」「メンバー2」のように出す。
@@ -554,11 +554,11 @@ struct ShareTravelPlanView: View {
         }
         .padding()
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .fill(themeManager.currentTheme.accent2.opacity(0.1))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .stroke(themeManager.currentTheme.accent2.opacity(0.3), lineWidth: 1)
         )
     }

@@ -1,5 +1,6 @@
 import SwiftUI
 import PhotosUI
+import UniformTypeIdentifiers
 
 /// 予約確認メールを貼り付けて、予約の下書きを作る画面。予約の編集画面から開く。
 ///
@@ -25,6 +26,10 @@ struct ReservationEmailImportView: View {
     @State private var pickedPhoto: PhotosPickerItem?
     @State private var isReadingImage = false
     @State private var imageReadFailed = false
+    /// e チケットや、メールを印刷した PDF（3.6）
+    @State private var showsPDFImporter = false
+    @State private var pdfReadFailed = false
+    @State private var showsGmailHelp = false
     @FocusState private var isTextFocused: Bool
 
     private var cardFill: Color {
@@ -63,6 +68,8 @@ struct ReservationEmailImportView: View {
                     } else {
                         imageReadFailed = true
                     }
+                case .pdf(let url):
+                    await readPDF(url)
                 case nil:
                     break
                 }
@@ -71,6 +78,13 @@ struct ReservationEmailImportView: View {
                 guard let item else { return }
                 pickedPhoto = nil
                 Task { await readImage(item) }
+            }
+            .fileImporter(isPresented: $showsPDFImporter, allowedContentTypes: [.pdf]) { result in
+                guard case .success(let url) = result else {
+                    pdfReadFailed = true
+                    return
+                }
+                Task { await readPDF(url) }
             }
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
@@ -85,41 +99,54 @@ struct ReservationEmailImportView: View {
         VStack(alignment: .leading, spacing: 14) {
             Text(kind.map { "\($0.label)の予約確認メールの本文を貼り付けるか、" }
                  ?? "予約確認メールの本文を貼り付けるか、")
-                + Text("予約の確認画面のスクリーンショットを選んでください。予約番号・日時・金額などを読み取って、入力欄に入れます。")
+                + Text("予約の確認画面のスクリーンショットや e チケットの PDF を選んでください。予約番号・日時・金額などを読み取って、入力欄に入れます。")
             .font(.system(size: 13))
             .foregroundColor(themeManager.currentTheme.secondaryText)
 
-            HStack(spacing: 10) {
-                PasteButton(payloadType: String.self) { strings in
-                    guard let pasted = strings.first else { return }
-                    Task { @MainActor in
-                        text = pasted
-                        foundNothing = false
-                    }
+            PasteButton(payloadType: String.self) { strings in
+                guard let pasted = strings.first else { return }
+                Task { @MainActor in
+                    text = pasted
+                    foundNothing = false
                 }
-                .tint(accent)
-                .labelStyle(.titleAndIcon)
+            }
+            .tint(accent)
+            .labelStyle(.titleAndIcon)
 
+            HStack(spacing: 10) {
                 // スクリーンショットや e チケットの画像から読む。
                 // 予約サイトのアプリの中だけで確認していて、メールが無い予約もあるため
                 PhotosPicker(selection: $pickedPhoto, matching: .images) {
-                    Label("写真から読み取る", systemImage: "photo")
-                        .font(.system(size: 15, weight: .medium))
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 7)
-                        .foregroundColor(accent)
-                        .background(Capsule().stroke(accent, lineWidth: 1))
+                    outlinedLabel("写真から読み取る", systemImage: "photo")
                 }
                 .disabled(isReadingImage)
+
+                // e チケットの PDF や、メールを PDF にしたもの（3.6）
+                Button {
+                    showsPDFImporter = true
+                } label: {
+                    outlinedLabel("PDFから読み取る", systemImage: "doc.richtext")
+                }
+                .buttonStyle(.plain)
+                .disabled(isReadingImage)
             }
+
+            gmailHelp
 
             if isReadingImage {
                 HStack(spacing: 8) {
                     ProgressView()
-                    Text("画像の文字を読み取っています…")
+                    Text("文字を読み取っています…")
                         .font(.system(size: 12))
                         .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
+            }
+            if pdfReadFailed {
+                Label("PDF から文字を読み取れませんでした。鍵のかかっていない PDF を選んでください。",
+                      systemImage: "exclamationmark.circle")
+                    .font(.system(size: 12))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
             }
             if imageReadFailed {
                 Label("画像から文字を読み取れませんでした。文字がはっきり写った画像を選んでください。",
@@ -138,7 +165,7 @@ struct ReservationEmailImportView: View {
                     .frame(minHeight: 220)
                     .padding(8)
                 if text.isEmpty {
-                    Text("ここにメールの本文を貼り付け（写真から読み取った文字もここに入ります）")
+                    Text("ここにメールの本文を貼り付け（写真や PDF から読み取った文字もここに入ります）")
                         .font(.system(size: 13))
                         .foregroundColor(themeManager.currentTheme.secondaryText)
                         .padding(.horizontal, 13)
@@ -146,7 +173,7 @@ struct ReservationEmailImportView: View {
                         .allowsHitTesting(false)
                 }
             }
-            .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+            .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(cardFill))
 
             if foundNothing {
                 Label("予約の内容が見つかりませんでした。本文全体を貼り付けているか確かめてください。",
@@ -171,18 +198,97 @@ struct ReservationEmailImportView: View {
                     .foregroundColor(ThemePreset.readableText(on: accent))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 14)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(accent))
+                    .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(accent))
             }
             .buttonStyle(.plain)
             .disabled(!canRead)
             .opacity(canRead ? 1 : 0.5)
 
-            Label("メールや画像の内容はこの端末の中だけで読み取ります。どこにも送りません。",
+            Label("メールや画像・PDF の内容はこの端末の中だけで読み取ります。どこにも送りません。",
                   systemImage: "lock")
                 .font(.system(size: 11))
                 .foregroundColor(themeManager.currentTheme.secondaryText)
                 .fixedSize(horizontal: false, vertical: true)
         }
+    }
+
+    private func outlinedLabel(_ title: String, systemImage: String) -> some View {
+        Label(title, systemImage: systemImage)
+            .font(.system(size: 15, weight: .medium))
+            .lineLimit(1)
+            .minimumScaleFactor(0.8)
+            .padding(.horizontal, 12)
+            .padding(.vertical, 7)
+            .foregroundColor(accent)
+            .background(Capsule().stroke(accent, lineWidth: 1))
+    }
+
+    /// Gmail アプリからの送り方（3.6、ご意見から）。
+    /// Gmail にはメール1通を丸ごと共有するボタンが無く、「印刷」から PDF にして共有する
+    private var gmailHelp: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Button {
+                withAnimation(.easeInOut(duration: 0.2)) { showsGmailHelp.toggle() }
+            } label: {
+                HStack(spacing: 6) {
+                    Image(systemName: "envelope")
+                    Text("Gmail のメールを送るには")
+                    Spacer(minLength: 0)
+                    Image(systemName: showsGmailHelp ? "chevron.up" : "chevron.down")
+                        .font(.system(size: 11, weight: .semibold))
+                }
+                .font(.system(size: 13, weight: .semibold))
+                .foregroundColor(accent)
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            if showsGmailHelp {
+                VStack(alignment: .leading, spacing: 6) {
+                    helpStep(1, "Gmail で予約確認メールを開き、メールの右上の「︙」から「印刷」を選ぶ")
+                    helpStep(2, "印刷の画面の右上にある共有ボタン（四角から矢印）を押す")
+                    helpStep(3, "「Travory」を選ぶ。次に Travory を開くと、どの旅行の予約か選んで取り込めます")
+                    Text("本文を長押しして選び、「共有」から「Travory」を選んでも送れます。")
+                        .font(.system(size: 12))
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 2)
+                }
+                .padding(12)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(cardFill))
+            }
+        }
+    }
+
+    private func helpStep(_ number: Int, _ text: String) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text("\(number)")
+                .font(.system(size: 11, weight: .bold))
+                .foregroundColor(ThemePreset.readableText(on: accent))
+                .frame(width: 18, height: 18)
+                .background(Circle().fill(accent))
+            Text(text)
+                .font(.system(size: 12))
+                .foregroundColor(textColor)
+                .fixedSize(horizontal: false, vertical: true)
+        }
+    }
+
+    /// PDF の文字を読んで入力欄に入れ、そのまま予約として読み取る（3.6）
+    private func readPDF(_ url: URL) async {
+        isReadingImage = true
+        imageReadFailed = false
+        pdfReadFailed = false
+        foundNothing = false
+        defer { isReadingImage = false }
+
+        guard let recognized = try? await ReservationPDFTextReader.text(at: url) else {
+            pdfReadFailed = true
+            return
+        }
+        text = recognized
+        await read()
     }
 
     /// 画像の文字を読んで入力欄に入れ、そのまま予約として読み取る。
@@ -199,6 +305,7 @@ struct ReservationEmailImportView: View {
     private func readImage(_ image: UIImage) async {
         isReadingImage = true
         imageReadFailed = false
+        pdfReadFailed = false
         foundNothing = false
         defer { isReadingImage = false }
 

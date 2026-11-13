@@ -462,7 +462,7 @@ struct TripStatsView: View {
                             VStack(alignment: .leading, spacing: 6) {
                                 Image(uiImage: image).resizable().scaledToFill()
                                     .frame(width: 120, height: 160)
-                                    .clipShape(RoundedRectangle(cornerRadius: 6, style: .continuous))
+                                    .clipShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
                                 Text(trip.title).font(.caption.weight(.semibold)).foregroundColor(ink).lineLimit(1)
                                 Text(DigestDateStyle.month(trip.startDate) + " " + String(Calendar.current.component(.year, from: trip.startDate)))
                                     .font(.system(size: 9, weight: .semibold).width(.expanded))
@@ -678,7 +678,7 @@ private struct TripStatsShareSheet: View {
                     Group {
                         if let image = images[page] {
                             Image(uiImage: image).resizable().scaledToFit()
-                                .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+                                .clipShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
                         } else {
                             ProgressView()
                         }

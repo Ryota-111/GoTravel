@@ -139,7 +139,7 @@ struct BottomTimelineCard: View {
             .frame(maxWidth: .infinity)
             .frame(height: 46)
             .background(
-                RoundedRectangle(cornerRadius: 16, style: .continuous)
+                RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
                     .strokeBorder(
                         themeManager.currentTheme.secondaryText.opacity(0.35),
                         style: StrokeStyle(lineWidth: 1.5, dash: [7, 5])
@@ -398,7 +398,7 @@ struct TimelineItemCard: View {
                 .padding(.vertical, 2)
                 .background(
                     tag.color.opacity(state == .past ? 0.08 : (colorScheme == .dark ? 0.24 : 0.14)),
-                    in: RoundedRectangle(cornerRadius: 6)
+                    in: RoundedRectangle(cornerRadius: AppRadius.small)
                 )
 
             if planTags.count > 1 {

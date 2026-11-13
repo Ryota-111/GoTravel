@@ -251,10 +251,10 @@ struct ReservationListView: View {
         .padding(14)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            RoundedRectangle(cornerRadius: 14)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .fill(cardFill)
                 // 白黒テーマは背景とカードの明るさがほぼ同じなので必ず枠を引く
-                .overlay(RoundedRectangle(cornerRadius: 14).stroke(textColor.opacity(0.12), lineWidth: 1))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.large).stroke(textColor.opacity(0.12), lineWidth: 1))
         )
 
     }
@@ -312,7 +312,7 @@ struct ReservationListView: View {
         .padding(.vertical, 10)
         .padding(.horizontal, 12)
         .frame(maxWidth: .infinity)
-        .background(RoundedRectangle(cornerRadius: 10).fill(accent.opacity(0.06)))
+        .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(accent.opacity(0.06)))
     }
 
     private func endpoint(place: String?, time: Date?, zone: TimeZone, alignment: HorizontalAlignment) -> some View {
@@ -397,7 +397,7 @@ struct ReservationListView: View {
                     .foregroundColor(copiedId == id ? themeManager.currentTheme.success : accent)
             }
             .padding(10)
-            .background(RoundedRectangle(cornerRadius: 10).fill(accent.opacity(0.08)))
+            .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(accent.opacity(0.08)))
         }
         .buttonStyle(.plain)
     }

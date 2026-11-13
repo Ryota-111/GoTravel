@@ -225,7 +225,7 @@ struct MapHomeView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 11)
             .background(Color(.systemBackground))
-            .cornerRadius(14)
+            .cornerRadius(AppRadius.large)
             .shadow(color: .black.opacity(0.08), radius: 8, x: 0, y: 2)
 
             if !inputText.isEmpty {
@@ -236,7 +236,7 @@ struct MapHomeView: View {
                         .padding(.horizontal, 14)
                         .padding(.vertical, 11)
                         .background(themeManager.currentTheme.xprimary)
-                        .cornerRadius(14)
+                        .cornerRadius(AppRadius.large)
                         .shadow(color: themeManager.currentTheme.xprimary.opacity(0.3), radius: 6, x: 0, y: 2)
                 }
                 .transition(.move(edge: .trailing).combined(with: .opacity))
@@ -340,7 +340,7 @@ struct MapHomeView: View {
                             .padding(.vertical, 13)
                             .background(themeManager.currentTheme.xprimary.opacity(0.1))
                             .foregroundStyle(themeManager.currentTheme.xprimary)
-                            .cornerRadius(14)
+                            .cornerRadius(AppRadius.large)
                     }
                     .mapNavigation($navigationTarget)
 
@@ -353,7 +353,7 @@ struct MapHomeView: View {
                             .padding(.vertical, 13)
                             .background(themeManager.currentTheme.xprimary)
                             .foregroundStyle(.white)
-                            .cornerRadius(14)
+                            .cornerRadius(AppRadius.large)
                             .shadow(color: themeManager.currentTheme.xprimary.opacity(0.3), radius: 6, x: 0, y: 3)
                     }
                 }
@@ -419,7 +419,7 @@ struct InfoChip: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(color)
-        .cornerRadius(12)
+        .cornerRadius(AppRadius.medium)
     }
 }
 

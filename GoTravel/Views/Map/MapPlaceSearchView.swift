@@ -152,7 +152,7 @@ struct MapPlaceSearchView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 11)
             .background(Color(.systemBackground))
-            .cornerRadius(12)
+            .cornerRadius(AppRadius.medium)
 
             // 検索で出ないときの逃げ道を、その場で伝える
             Text(searchFailed
@@ -267,7 +267,7 @@ struct MapPlaceSearchView: View {
                 .font(.headline)
                 .padding(12)
                 .background(Color(.systemBackground))
-                .cornerRadius(10)
+                .cornerRadius(AppRadius.medium)
             let name = pinName.trimmingCharacters(in: .whitespacesAndNewlines)
             chooseButton(enabled: !name.isEmpty) {
                 pick(PickedPlace(name: name, address: nil,
@@ -289,7 +289,7 @@ struct MapPlaceSearchView: View {
                 .padding(.vertical, 13)
                 .background(accent.opacity(enabled ? 1 : 0.4))
                 .foregroundColor(ThemePreset.readableText(on: accent))
-                .cornerRadius(12)
+                .cornerRadius(AppRadius.medium)
         }
         .disabled(!enabled)
     }

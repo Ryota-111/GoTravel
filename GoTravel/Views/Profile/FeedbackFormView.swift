@@ -30,9 +30,9 @@ private struct FeedbackKindButton: View {
             }
             .frame(maxWidth: .infinity)
             .padding(.vertical, 14)
-            .background(RoundedRectangle(cornerRadius: 14).fill(background))
+            .background(RoundedRectangle(cornerRadius: AppRadius.large).fill(background))
             .overlay(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .stroke(border, lineWidth: isSelected ? 2 : 1)
             )
             .foregroundColor(isSelected ? accent : inactive)
@@ -183,10 +183,10 @@ struct FeedbackFormView: View {
                 .padding(.vertical, 10)
                 .frame(height: 190)
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: AppRadius.large)
                         .fill(cardFill)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 14)
+                            RoundedRectangle(cornerRadius: AppRadius.large)
                                 .stroke(Color.gray.opacity(0.25), lineWidth: 1)
                         )
                 )
@@ -217,10 +217,10 @@ struct FeedbackFormView: View {
                 .padding(.horizontal, 16)
                 .padding(.vertical, 14)
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
+                    RoundedRectangle(cornerRadius: AppRadius.large)
                         .fill(cardFill)
                         .overlay(
-                            RoundedRectangle(cornerRadius: 14)
+                            RoundedRectangle(cornerRadius: AppRadius.large)
                                 .stroke(Color.gray.opacity(0.25), lineWidth: 1)
                         )
                 )
@@ -246,7 +246,7 @@ struct FeedbackFormView: View {
         }
         .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: AppRadius.medium)
                 .fill(cardFill)
         )
     }
@@ -284,7 +284,7 @@ struct FeedbackFormView: View {
         }
         .padding(14)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: AppRadius.medium)
                 .fill(cardFill)
         )
     }
@@ -302,7 +302,7 @@ struct FeedbackFormView: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 16)
             .background(
-                RoundedRectangle(cornerRadius: 16)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .fill(themeManager.currentTheme.actionFill)
             )
             .foregroundColor(.white)
@@ -339,7 +339,7 @@ struct FeedbackFormView: View {
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 16)
                     .background(
-                        RoundedRectangle(cornerRadius: 16)
+                        RoundedRectangle(cornerRadius: AppRadius.large)
                             .fill(themeManager.currentTheme.actionFill)
                     )
                     .foregroundColor(.white)

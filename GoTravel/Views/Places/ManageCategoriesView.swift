@@ -107,7 +107,7 @@ struct ManageCategoriesView: View {
     /// ここが灰色のままでは選んだ結果を確かめられない
     private func categoryChip(_ category: CustomPlaceCategory) -> some View {
         ZStack {
-            RoundedRectangle(cornerRadius: 9, style: .continuous)
+            RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
                 .fill(category.color.opacity(colorScheme == .dark ? 0.26 : 0.16))
                 .frame(width: 32, height: 32)
 
@@ -169,8 +169,8 @@ struct CategoryEditorView: View {
                         TextField("例：カフェ、公園", text: $name)
                             .padding(14)
                             .background(colorScheme == .dark ? themeManager.currentTheme.backgroundDark : themeManager.currentTheme.backgroundLight)
-                            .cornerRadius(12)
-                            .overlay(RoundedRectangle(cornerRadius: 12).stroke(selectedColor.opacity(0.4), lineWidth: 1.5))
+                            .cornerRadius(AppRadius.medium)
+                            .overlay(RoundedRectangle(cornerRadius: AppRadius.medium).stroke(selectedColor.opacity(0.4), lineWidth: 1.5))
                     }
                     .padding(.horizontal, 20)
 
@@ -209,7 +209,7 @@ struct CategoryEditorView: View {
     private var preview: some View {
         HStack(spacing: 12) {
             ZStack {
-                RoundedRectangle(cornerRadius: 14, style: .continuous)
+                RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
                     .fill(selectedColor.opacity(colorScheme == .dark ? 0.26 : 0.16))
                     .frame(width: 56, height: 56)
 
@@ -223,7 +223,7 @@ struct CategoryEditorView: View {
                 .foregroundColor(selectedColor)
                 .padding(.horizontal, 8)
                 .padding(.vertical, 3)
-                .background(selectedColor.opacity(colorScheme == .dark ? 0.24 : 0.14), in: RoundedRectangle(cornerRadius: 7))
+                .background(selectedColor.opacity(colorScheme == .dark ? 0.24 : 0.14), in: RoundedRectangle(cornerRadius: AppRadius.small))
 
             Spacer()
         }
@@ -274,10 +274,10 @@ struct CategoryEditorView: View {
                 ForEach(icons, id: \.self) { icon in
                     Button(action: { selectedIcon = icon }) {
                         ZStack {
-                            RoundedRectangle(cornerRadius: 10)
+                            RoundedRectangle(cornerRadius: AppRadius.medium)
                                 .fill(selectedIcon == icon ? selectedColor.opacity(0.18) : Color.clear)
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 10)
+                                    RoundedRectangle(cornerRadius: AppRadius.medium)
                                         .stroke(selectedIcon == icon ? selectedColor : themeManager.currentTheme.secondaryText.opacity(0.3), lineWidth: 1.5)
                                 )
                             Image(systemName: icon)

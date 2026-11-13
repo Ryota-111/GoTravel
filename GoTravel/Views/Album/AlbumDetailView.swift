@@ -265,7 +265,7 @@ struct AlbumDetailView: View {
                             endPoint: .trailing
                         )
                     )
-                    .cornerRadius(15)
+                    .cornerRadius(AppRadius.large)
                     .shadow(color: albumColor.opacity(0.5), radius: 10, x: 0, y: 5)
             }
             .buttonStyle(PlainButtonStyle())
@@ -383,9 +383,9 @@ struct PhotoThumbnail: View {
                             )
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: 12))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium))
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: AppRadius.medium)
                         .stroke(isSelected ? albumColor : albumColor.opacity(0.3), lineWidth: isSelected ? 3 : 1)
                 )
                 // 選択中は少し縮めて、選ばれていることが一目で分かるようにする
@@ -472,13 +472,13 @@ struct StatCard: View {
         .frame(maxWidth: .infinity)
         .padding()
         .background(
-            RoundedRectangle(cornerRadius: 15)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .fill(colorScheme == .dark
                       ? themeManager.currentTheme.secondaryBackgroundDark
                       : themeManager.currentTheme.backgroundLight)
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 15)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .stroke(color.opacity(0.3), lineWidth: 1)
         )
     }

@@ -106,10 +106,10 @@ struct ScheduleItemPickerView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 12)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: AppRadius.medium)
                 .fill(cardFill)
                 .overlay(
-                    RoundedRectangle(cornerRadius: 12)
+                    RoundedRectangle(cornerRadius: AppRadius.medium)
                         .stroke(textColor.opacity(0.12), lineWidth: 1)
                 )
         )

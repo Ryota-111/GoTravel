@@ -622,7 +622,7 @@ struct TravelPlanMapView: View {
         }
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 18))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: AppRadius.large))
     }
 
     // MARK: - Scope Selector
@@ -684,7 +684,7 @@ struct TravelPlanMapView: View {
         .padding(.horizontal, 12)
         .padding(.vertical, 7)
         .frame(maxWidth: .infinity, alignment: .leading)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 12))
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: AppRadius.medium))
     }
 
     private var emptyOverlay: some View {
@@ -746,7 +746,7 @@ struct TravelPlanMapView: View {
                     .padding(.vertical, 12)
                     .background(primaryColor)
                     .foregroundStyle(.white)
-                    .cornerRadius(12)
+                    .cornerRadius(AppRadius.medium)
             }
             .buttonStyle(PlainButtonStyle())
             .padding(.horizontal, 20)
@@ -859,7 +859,7 @@ struct TravelPlanMapView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(10)
-        .background(color.opacity(0.07), in: RoundedRectangle(cornerRadius: 12))
+        .background(color.opacity(0.07), in: RoundedRectangle(cornerRadius: AppRadius.medium))
     }
 
     // MARK: - Camera

@@ -7,21 +7,28 @@ struct TravelPlanCard: View {
     @ObservedObject var themeManager = ThemeManager.shared
     let plan: TravelPlan
     let onDelete: () -> Void
+    /// カードから詳細へ広がる遷移の名前空間。渡さなければ、ふつうの遷移
+    var zoomNamespace: Namespace.ID? = nil
 
     @State private var showDuplicateSheet = false
 
     private var theme: ThemePreset { themeManager.currentTheme }
 
     var body: some View {
-        NavigationLink(destination: TravelPlanDetailView(plan: plan).environmentObject(viewModel)) {
+        NavigationLink(destination: TravelPlanDetailView(plan: plan).environmentObject(viewModel)
+            .zoomDestination(id: plan.id ?? plan.title, in: zoomNamespace)) {
             // 見た目の切り替えはテーマ名ではなく decor トークンで決める。
             // 意匠を持つテーマが増えても、増えるのはここの case だけ
-            switch theme.style.decor {
-            case .ticket: ticketBody
-            case .plain:  plainBody
+            Group {
+                switch theme.style.decor {
+                case .ticket: ticketBody
+                case .plain:  plainBody
+                }
             }
+            .zoomSource(id: plan.id ?? plan.title, in: zoomNamespace)
         }
-        .buttonStyle(PlainButtonStyle())
+        // 押したときに少し沈む（押せた手ごたえ）
+        .buttonStyle(ScaleButtonStyle())
         .sheet(isPresented: $showDuplicateSheet) {
             DuplicateTravelPlanView(plan: plan)
                 .environmentObject(viewModel)

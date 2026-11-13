@@ -236,7 +236,7 @@ struct ReservationEditorView: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 12).fill(accent.opacity(0.12)))
+        .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(accent.opacity(0.12)))
     }
 
     /// 入力欄を予約の内容で埋める。開いたときと、メールから取り込んだときに使う
@@ -293,7 +293,7 @@ struct ReservationEditorView: View {
             // 差し色を薄く敷いた上なので、読める濃さに寄せた差し色を使う
             .foregroundColor(themeManager.currentTheme.tintedLabel(on: cardFill))
             .padding(14)
-            .background(RoundedRectangle(cornerRadius: 12).fill(accent.opacity(0.12)))
+            .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(accent.opacity(0.12)))
         }
         .buttonStyle(.plain)
     }
@@ -342,7 +342,7 @@ struct ReservationEditorView: View {
             }
             .padding(14)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .stroke(accent.opacity(0.35), style: StrokeStyle(lineWidth: 1, dash: [5, 4]))
             )
             .contentShape(Rectangle())
@@ -402,7 +402,7 @@ struct ReservationEditorView: View {
             // 差し色を薄く敷いた上なので、読める濃さに寄せた差し色を使う
             .foregroundColor(themeManager.currentTheme.tintedLabel(on: cardFill))
             .padding(14)
-            .background(RoundedRectangle(cornerRadius: 12).fill(accent.opacity(0.12)))
+            .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(accent.opacity(0.12)))
         }
         .buttonStyle(.plain)
     }
@@ -464,9 +464,9 @@ struct ReservationEditorView: View {
             }
             .padding(16)
             .background(
-                RoundedRectangle(cornerRadius: 14)
+                RoundedRectangle(cornerRadius: AppRadius.large)
                     .fill(cardFill)
-                    .overlay(RoundedRectangle(cornerRadius: 14).stroke(cardStroke, lineWidth: 1))
+                    .overlay(RoundedRectangle(cornerRadius: AppRadius.large).stroke(cardStroke, lineWidth: 1))
             )
         } else {
             itineraryNote(icon: "exclamationmark.circle",
@@ -487,7 +487,7 @@ struct ReservationEditorView: View {
         .padding(.horizontal, 14)
         .padding(.vertical, 11)
         .background(
-            RoundedRectangle(cornerRadius: 12)
+            RoundedRectangle(cornerRadius: AppRadius.medium)
                 .fill(themeManager.currentTheme.secondaryText.opacity(0.08))
         )
     }
@@ -614,7 +614,7 @@ struct ReservationEditorView: View {
                     .accessibilityLabel(Text("場所を消す"))
                 }
                 .padding(14)
-                .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+                .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(cardFill))
             } else {
                 Button {
                     placeTarget = .main
@@ -624,7 +624,7 @@ struct ReservationEditorView: View {
                         .foregroundColor(accent)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(14)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+                        .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(cardFill))
                 }
                 .buttonStyle(.plain)
             }
@@ -666,7 +666,7 @@ struct ReservationEditorView: View {
                 .accessibilityLabel(Text("\(label)を地図で選ぶ"))
             }
             .padding(14)
-            .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+            .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(cardFill))
         }
     }
 
@@ -804,7 +804,7 @@ struct ReservationEditorView: View {
             }
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+        .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(cardFill))
     }
 
     private var isFlight: Bool { reservation.kind == .flight }
@@ -883,7 +883,7 @@ struct ReservationEditorView: View {
             }
         }
         .padding(14)
-        .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+        .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(cardFill))
         // 始まりを現地時間・日本時間で切り替えたら、終わりも同じ時計に付け替える。
         // 付け替えないと、終わりの時:分だけ時差の分ずれて見える
         .onChange(of: dateZone) { oldZone, newZone in
@@ -997,7 +997,7 @@ struct ReservationEditorView: View {
             .textInputAutocapitalization(.characters)
             .foregroundColor(textColor)
             .padding(14)
-            .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+            .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(cardFill))
 
             Text("旅行中に一番探すものなので、控えておくと安心です。")
                 .font(.caption2)
@@ -1046,7 +1046,7 @@ struct ReservationEditorView: View {
                 .lineLimit(2...8)
                 .foregroundColor(textColor)
                 .padding(14)
-                .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+                .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(cardFill))
             }
 
             field(label: "リンク", text: Binding(
@@ -1066,7 +1066,7 @@ struct ReservationEditorView: View {
                 .foregroundColor(textColor)
                 .autocorrectionDisabled()
                 .padding(14)
-                .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+                .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(cardFill))
         }
     }
 
@@ -1171,9 +1171,9 @@ private struct ReservationKindButton: View {
             .frame(maxWidth: .infinity)
             .padding(.vertical, 10)
             .foregroundColor(isSelected ? accent : textColor)
-            .background(RoundedRectangle(cornerRadius: 10).fill(isSelected ? accent.opacity(0.16) : fill))
+            .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(isSelected ? accent.opacity(0.16) : fill))
             .overlay(
-                RoundedRectangle(cornerRadius: 10)
+                RoundedRectangle(cornerRadius: AppRadius.medium)
                     .stroke(isSelected ? accent : Color.clear, lineWidth: 1.5)
             )
         }

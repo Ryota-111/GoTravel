@@ -131,7 +131,7 @@ struct WhatsNewView: View {
             }
         }
         .padding(18)
-        .background(RoundedRectangle(cornerRadius: 16).fill(cardFill))
+        .background(RoundedRectangle(cornerRadius: AppRadius.large).fill(cardFill))
     }
 
     // MARK: - Message
@@ -154,12 +154,12 @@ struct WhatsNewView: View {
         // accent の薄塗りだけだと背景が透けて文字色を保証できないため
         // カードを敷いた上に色味を重ねる
         .background(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .fill(cardFill)
-                .overlay(RoundedRectangle(cornerRadius: 16).fill(accent.opacity(0.1)))
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.large).fill(accent.opacity(0.1)))
         )
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
+            RoundedRectangle(cornerRadius: AppRadius.large)
                 .stroke(accent.opacity(0.3), lineWidth: 1)
         )
     }
@@ -177,7 +177,7 @@ struct WhatsNewView: View {
                 .foregroundColor(ThemePreset.readableText(on: accent))
                 .frame(maxWidth: .infinity)
                 .padding()
-                .background(RoundedRectangle(cornerRadius: 14).fill(accent))
+                .background(RoundedRectangle(cornerRadius: AppRadius.large).fill(accent))
             }
 
             Button(action: { dismiss() }) {

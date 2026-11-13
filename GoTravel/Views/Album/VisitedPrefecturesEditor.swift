@@ -177,7 +177,7 @@ struct VisitedPrefectureScanList: View {
         return HStack(spacing: 12) {
             AssetThumbnail(localIdentifier: candidate.photos.first?.id)
                 .frame(width: 48, height: 48)
-                .clipShape(RoundedRectangle(cornerRadius: 9, style: .continuous))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
             VStack(alignment: .leading, spacing: 3) {
                 Text(candidate.prefecture.name).font(.body.weight(.semibold))
                 Text("\(candidate.photos.count)枚・\(PhotoPrefectureScan.yearsText(candidate.years))")

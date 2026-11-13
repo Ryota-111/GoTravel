@@ -10,6 +10,8 @@ import Combine
 /// アプリとの共有フォルダ（App Group）に置くだけにする。
 /// 3.5 から、地図や店のリンク・Instagram などのスクリーンショットを「行きたい場所」としても送れる。
 /// どちらとして送るかは、ここで選んでもらう（予約と場所は、アプリで続ける画面が違うため）
+/// 3.6 から PDF も受け取る。Gmail アプリはメール1通を「印刷 → 共有」で PDF にしか出せないため。
+/// PDF は予約としてだけ送る（選ぶ画面は出さない）。中の文字はアプリで読む（拡張は使えるメモリが少ない）
 /// どの旅行の予約なのかはここでは分からず、読み取った内容も保存前に確かめて
 /// もらいたいので、続きは次にアプリを開いたときに聞く（アプリの `SharedImportInbox`）
 final class ShareViewController: UIViewController {
@@ -33,6 +35,8 @@ final class ShareViewController: UIViewController {
     /// 受け取ったもの。どちらとして送るか選ばれるまで持っておく
     private var texts: [String] = []
     private var images: [Data] = []
+    /// 受け取った PDF を、この拡張の一時フォルダに写したもの（元のファイルは受け取りが終わると消える）
+    private var pdfs: [URL] = []
 
     private func receive() async {
         let items = extensionContext?.inputItems as? [NSExtensionItem] ?? []
@@ -40,12 +44,19 @@ final class ShareViewController: UIViewController {
         for item in items {
             var textsOfItem: [String] = []
             for provider in item.attachments ?? [] {
-                if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier),
+                if provider.hasItemConformingToTypeIdentifier(UTType.pdf.identifier) {
+                    if let url = await loadPDF(provider) { pdfs.append(url) }
+                } else if provider.hasItemConformingToTypeIdentifier(UTType.image.identifier),
                    let data = await loadImageData(provider) {
                     images.append(data)
                 } else if provider.hasItemConformingToTypeIdentifier(UTType.url.identifier),
                           let url = await loadURL(provider) {
-                    textsOfItem.append(url.absoluteString)
+                    // 「ファイル」アプリなどからは、PDF がファイルの場所として届くことがある
+                    if url.isFileURL {
+                        if url.pathExtension.lowercased() == "pdf", let copy = Self.copyToTemporary(url) { pdfs.append(copy) }
+                    } else {
+                        textsOfItem.append(url.absoluteString)
+                    }
                 } else if provider.hasItemConformingToTypeIdentifier(UTType.plainText.identifier),
                           let text = await loadText(provider) {
                     textsOfItem.append(text)
@@ -59,8 +70,13 @@ final class ShareViewController: UIViewController {
             if !textsOfItem.isEmpty { texts.append(textsOfItem.joined(separator: "\n")) }
         }
 
-        guard !texts.isEmpty || !images.isEmpty else {
+        guard !texts.isEmpty || !images.isEmpty || !pdfs.isEmpty else {
             state.result = .nothing
+            return
+        }
+        // PDF だけなら、予約として送る（場所として送る使い方は無い）
+        if texts.isEmpty && images.isEmpty {
+            save(as: .reservation)
             return
         }
         state.suggestsPlace = Self.looksLikePlace(texts)
@@ -79,6 +95,8 @@ final class ShareViewController: UIViewController {
         var saved = false
         for text in texts where ShareInboxWriter.save(text: text, kind: kind) { saved = true }
         for data in images where ShareInboxWriter.save(imageData: data, kind: kind) { saved = true }
+        // PDF はいつも予約の箱へ
+        for url in pdfs where ShareInboxWriter.save(pdfAt: url) { saved = true }
         state.savedKind = kind
         state.result = saved ? .saved : .nothing
         if saved { openApp() }
@@ -98,6 +116,30 @@ final class ShareViewController: UIViewController {
                 return
             }
             responder = current.next
+        }
+    }
+
+    /// PDF を一時フォルダに写す。大きすぎる PDF（20MB より大きい）は受け取らない
+    private func loadPDF(_ provider: NSItemProvider) async -> URL? {
+        await withCheckedContinuation { continuation in
+            provider.loadFileRepresentation(forTypeIdentifier: UTType.pdf.identifier) { url, _ in
+                // 渡された場所は、この中を抜けると消されるので、ここで写す
+                continuation.resume(returning: url.flatMap { Self.copyToTemporary($0) })
+            }
+        }
+    }
+
+    private static func copyToTemporary(_ url: URL) -> URL? {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
+        let size = (try? url.resourceValues(forKeys: [.fileSizeKey]).fileSize) ?? 0
+        guard size <= ShareInboxWriter.maxPDFBytes else { return nil }
+        let copy = FileManager.default.temporaryDirectory.appendingPathComponent("\(UUID().uuidString).pdf")
+        do {
+            try FileManager.default.copyItem(at: url, to: copy)
+            return copy
+        } catch {
+            return nil
         }
     }
 
@@ -154,10 +196,11 @@ final class ShareViewController: UIViewController {
 
 /// アプリの `SharedImportInbox` と同じ決まりで置く。**どちらかを変えたら、もう片方も揃えること**
 /// - App Group の `SharedImportInbox/` フォルダに、1件1ファイル
-/// - 本文は `.txt`（UTF-8）、画像は `.jpg`
+/// - 本文は `.txt`（UTF-8）、画像は `.jpg`、PDF は `.pdf`（3.6。予約の箱にだけ置く）
 /// - ファイル名は `<送った時刻のミリ秒>-<UUID>.<拡張子>`
 enum ShareInboxWriter {
     static let appGroupId = "group.com.gmail.taismryotasis.Travory"
+    static let maxPDFBytes = 20 * 1024 * 1024
 
     /// 予約として送るか、行きたい場所として送るか（3.5）。箱を分ける
     enum Kind {
@@ -182,13 +225,32 @@ enum ShareInboxWriter {
         write(imageData, extension: "jpg", kind: kind)
     }
 
-    private static func write(_ data: Data, extension ext: String, kind: Kind) -> Bool {
-        guard let container = FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupId) else { return false }
-        let folder = container.appendingPathComponent(kind.folderName, isDirectory: true)
+    /// 一時フォルダに写した PDF を、受け取り箱へ移す
+    static func save(pdfAt url: URL) -> Bool {
+        guard let folder = folder(for: .reservation) else { return false }
         do {
             try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
-            let millis = Int64(Date().timeIntervalSince1970 * 1000)
-            try data.write(to: folder.appendingPathComponent("\(millis)-\(UUID().uuidString).\(ext)"), options: .atomic)
+            try FileManager.default.moveItem(at: url, to: folder.appendingPathComponent(newFileName(extension: "pdf")))
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private static func folder(for kind: Kind) -> URL? {
+        FileManager.default.containerURL(forSecurityApplicationGroupIdentifier: appGroupId)?
+            .appendingPathComponent(kind.folderName, isDirectory: true)
+    }
+
+    private static func newFileName(extension ext: String) -> String {
+        "\(Int64(Date().timeIntervalSince1970 * 1000))-\(UUID().uuidString).\(ext)"
+    }
+
+    private static func write(_ data: Data, extension ext: String, kind: Kind) -> Bool {
+        guard let folder = folder(for: kind) else { return false }
+        do {
+            try FileManager.default.createDirectory(at: folder, withIntermediateDirectories: true)
+            try data.write(to: folder.appendingPathComponent(newFileName(extension: ext)), options: .atomic)
             return true
         } catch {
             return false
@@ -255,7 +317,7 @@ private struct ShareView: View {
                     .foregroundStyle(.secondary)
                 Text("送れる本文や画像がありませんでした")
                     .font(.headline)
-                Text("地図や店のリンク、予約確認メールの本文、スクリーンショットを共有してください。")
+                Text("地図や店のリンク、予約確認メールの本文、スクリーンショット、PDF（20MB まで）を共有してください。")
                     .font(.subheadline)
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
@@ -284,7 +346,7 @@ private struct ShareView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(kind == .place ? "行きたい場所として送る" : "予約として送る")
                         .font(.headline)
-                    Text(kind == .place ? "地図・お店のリンク、Instagram・TikTok のスクショ" : "予約確認メール、予約画面のスクショ")
+                    Text(kind == .place ? "地図・お店のリンク、Instagram・TikTok のスクショ" : "予約確認メール、予約画面のスクショ、PDF")
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }

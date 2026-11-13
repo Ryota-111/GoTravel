@@ -128,12 +128,44 @@ struct SharedImportInboxView: View {
                             .scaledToFit()
                             .frame(maxHeight: 220)
                             .frame(maxWidth: .infinity)
-                            .clipShape(RoundedRectangle(cornerRadius: 8))
+                            .clipShape(RoundedRectangle(cornerRadius: AppRadius.small))
                     }
+                case .pdf(let url):
+                    pdfPreview(url)
                 }
             }
             .padding(12)
-            .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+            .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(cardFill))
+        }
+    }
+
+    /// 送られた PDF（3.6）。1ページ目の絵とページ数
+    private func pdfPreview(_ url: URL) -> some View {
+        HStack(spacing: 12) {
+            if let thumbnail = ReservationPDFTextReader.thumbnail(at: url, side: 240) {
+                Image(uiImage: thumbnail)
+                    .resizable()
+                    .scaledToFit()
+                    .frame(maxWidth: 90, maxHeight: 120)
+                    .overlay(RoundedRectangle(cornerRadius: 4).stroke(themeManager.currentTheme.secondaryText.opacity(0.3)))
+            } else {
+                Image(systemName: "doc.richtext")
+                    .font(.system(size: 36))
+                    .foregroundColor(accent)
+                    .frame(width: 60)
+            }
+            VStack(alignment: .leading, spacing: 4) {
+                Text("PDF")
+                    .font(.system(size: 14, weight: .semibold))
+                    .foregroundColor(textColor)
+                let pages = ReservationPDFTextReader.pageCount(at: url)
+                if pages > 0 {
+                    Text("\(pages)ページ")
+                        .font(.system(size: 12))
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                }
+            }
+            Spacer(minLength: 0)
         }
     }
 
@@ -193,7 +225,7 @@ struct SharedImportInboxView: View {
                     .foregroundColor(themeManager.currentTheme.secondaryText)
             }
             .padding(14)
-            .background(RoundedRectangle(cornerRadius: 12).fill(cardFill))
+            .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(cardFill))
         }
         .buttonStyle(.plain)
     }
@@ -224,7 +256,7 @@ struct SharedImportInboxView: View {
                     .foregroundColor(ThemePreset.readableText(on: accent))
                     .frame(maxWidth: .infinity)
                     .padding(.vertical, 12)
-                    .background(RoundedRectangle(cornerRadius: 12).fill(accent))
+                    .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(accent))
             }
             .buttonStyle(.plain)
         }

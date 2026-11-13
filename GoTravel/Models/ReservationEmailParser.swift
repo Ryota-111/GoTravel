@@ -99,7 +99,7 @@ enum ReservationEmailParser {
     /// 円以外（ドル・ユーロ）は、予算が円なので読まない
     static func paidAmount(in text: String) -> Double? {
         let ns = text as NSString
-        let amount = #"^[^\n]{0,30}?(?:\n[^\n]{0,30}?)?(?:[¥￥]\s?([\d,]+)|([\d,]+)\s?円|JPY\s?([\d,]+))"#
+        let amount = #"^[^\n]{0,30}?(?:\n[^\n]{0,30}?)?(?:[¥￥]\s?([\d,]+)|([\d,]+)\s?円|JPY\s?([\d,]+)|·\s?(\d{1,3}(?:,\d{3})+|\d{3,})(?=\s?[(（\n]|\s*\z))"#
         guard let amountRegex = try? NSRegularExpression(pattern: amount, options: [.caseInsensitive]) else { return nil }
 
         for label in amountLabels {
@@ -118,7 +118,8 @@ enum ReservationEmailParser {
                 let rest = ns.substring(from: searchStart)
                 let restNS = rest as NSString
                 guard let match = amountRegex.firstMatch(in: rest, range: NSRange(location: 0, length: restNS.length)) else { continue }
-                for group in 1...3 {
+                // 4つ目は、写真から読んだ文字で「¥」が「·」に化けたもの（「Total·4,000(inc.tax)」）
+                for group in 1...4 {
                     let range = match.range(at: group)
                     guard range.location != NSNotFound else { continue }
                     let digits = restNS.substring(with: range).replacingOccurrences(of: ",", with: "")
@@ -174,6 +175,16 @@ enum ReservationEmailParser {
                 let merged = zip(header, values).map { "\($0)：\($1)" }
                 lines.replaceSubrange(index...(index + 1), with: merged)
                 index += merged.count
+            } else if header.count >= 2, header.count == values.count,
+                      header.allSatisfy({ $0.contains(where: \.isNumber) }),
+                      values.allSatisfy({ cell in
+                          !cell.contains(where: \.isNumber) && reservationLabelWords.contains { cell.lowercased().contains($0) }
+                      }) {
+                // 逆の並び：値の行の下にラベルの行が来る（「July 07, 2024  July 09, 2024」の下に
+                // 「Check-In  Check-Out」）。ラベルが予約の言葉のときだけ直す
+                let merged = zip(values, header).map { "\($0)：\($1)" }
+                lines.replaceSubrange(index...(index + 1), with: merged)
+                index += merged.count
             } else {
                 index += 1
             }
@@ -200,8 +211,11 @@ enum ReservationEmailParser {
         let flightCount = flightNumbers(in: text).count
         let trainCount = trainNames(in: text).count
 
+        // 便名があるなら、「eチケット」「itinerary」は航空券の控えのこと（入場のチケットではない）
+        let eTicket = flightCount > 0 ? score(["eチケット", "electronic ticket", "e-ticket", "itinerary", "航空券"]) : 0
+
         let scores: [(Reservation.Kind, Int)] = [
-            (.flight, flightCount * 3 + score(["便名", "搭乗", "フライト", "航空", "空港", "flight", "boarding", "airline", "airport"])),
+            (.flight, flightCount * 3 + eTicket + score(["便名", "搭乗", "フライト", "航空", "空港", "flight", "boarding", "airline", "airport"])),
             (.train, trainCount * 3 + score(["新幹線", "号車", "乗車", "列車", "えきねっと", "スマートex", "ex予約"])),
             (.hotel, score(["チェックイン", "チェックアウト", "宿泊", "ご宿泊", "泊", "check-in", "check-out", "check in", "hotel", "night", "accommodation", "airbnb"])),
             (.rentalCar, score(["レンタカー", "貸出", "貸渡", "返却", "車種", "rent a car", "rental car", "car rental", "pick-up", "drop-off", "vehicle"])),
@@ -228,10 +242,31 @@ enum ReservationEmailParser {
         // 「【確認番号】」のように閉じ括弧が挟まる書き方もある
         let pattern = confirmationLabel + #"\s*[】\])）]?\s*[:：]?\s*\n?\s*([A-Za-z0-9][A-Za-z0-9-]{3,})"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return nil }
-        let range = NSRange(text.startIndex..., in: text)
-        guard let match = regex.firstMatch(in: text, range: range),
-              let valueRange = Range(match.range(at: 1), in: text) else { return nil }
-        return String(text[valueRange])
+        let ns = text as NSString
+        let range = NSRange(location: 0, length: ns.length)
+        // ラベルの後ろが番号らしくなければ、次に出てくるラベルを見る
+        // （「Confirmation number will be sent…」の「will」を番号にしない）
+        for match in regex.matches(in: text, range: range) {
+            let value = ns.substring(with: match.range(at: 1))
+            if looksLikeCode(value) { return value }
+        }
+
+        // 「Booking confirmation」の見出しだけの行の次に、番号だけの行が来る書き方
+        let heading = #"(?m)^[ \t]*(?:booking|reservation) confirmation[ \t]*\n[ \t]*([A-Za-z0-9][A-Za-z0-9-]{3,})[ \t]*$"#
+        if let headingRegex = try? NSRegularExpression(pattern: heading, options: [.caseInsensitive]) {
+            for match in headingRegex.matches(in: text, range: range) {
+                let value = ns.substring(with: match.range(at: 1))
+                if looksLikeCode(value) { return value }
+            }
+        }
+        return nil
+    }
+
+    /// 番号らしい並びか。数字を含むか、大文字だけの5文字以上（「KXJHLM」のような航空券の予約番号）
+    private static func looksLikeCode(_ value: String) -> Bool {
+        if value.contains(where: \.isNumber) { return true }
+        let letters = value.filter(\.isLetter)
+        return letters.count >= 5 && letters.allSatisfy(\.isUppercase)
     }
 
     // MARK: - 日時
@@ -321,6 +356,10 @@ enum ReservationEmailParser {
             (#"(\d{1,2})(?:st|nd|rd|th)?\s+"# + monthName + #",?\s+(20\d{2})"#, { m in
                 (Int(ns.substring(with: m.range(at: 3))), monthNumber(ns.substring(with: m.range(at: 2))), Int(ns.substring(with: m.range(at: 1)))!)
             }),
+            // 05MAR2025（航空券の控えの書き方。空白なしで続ける）
+            (#"(?<![A-Za-z0-9])(\d{2})(JAN|FEB|MAR|APR|MAY|JUN|JUL|AUG|SEP|OCT|NOV|DEC)(20\d{2})(?![A-Za-z0-9])"#, { m in
+                (Int(ns.substring(with: m.range(at: 3))), monthNumber(ns.substring(with: m.range(at: 2))), Int(ns.substring(with: m.range(at: 1)))!)
+            }),
             // Oct 6 / Mon, Oct 6（年なし）
             (monthName + #"\s+(\d{1,2})(?:st|nd|rd|th)?(?![\d:])"#, { m in
                 (nil, monthNumber(ns.substring(with: m.range(at: 1))), Int(ns.substring(with: m.range(at: 2)))!)
@@ -367,6 +406,16 @@ enum ReservationEmailParser {
                }() {
                 components.hour = time.hour
                 components.minute = time.minute
+            }
+            // 航空券の控えは「05MAR2025 WED 0730」のように、時刻も区切りなしの4桁で書く
+            if components.hour == nil, date.range.length == 9,
+               ns.substring(with: date.range).allSatisfy({ $0.isLetter || $0.isNumber }) {
+                let lineEnd = NSMaxRange(ns.lineRange(for: date.range))
+                let rest = ns.substring(with: NSRange(location: dateEnd, length: min(20, lineEnd - dateEnd)))
+                if let found = rest.range(of: #"(?<![\d:])([01]\d|2[0-3])[0-5]\d(?![\d:])"#, options: .regularExpression) {
+                    components.hour = Int(rest[found].prefix(2))
+                    components.minute = Int(rest[found].suffix(2))
+                }
             }
             return DateTimeEvent(position: date.range.location, components: components, guessedYear: guessed,
                                  isAdministrative: isAdministrative(date.range, in: ns))
@@ -635,7 +684,7 @@ enum ReservationEmailParser {
 
     // MARK: - 新幹線
 
-    private static let trainNamePattern = #"(のぞみ|ひかり|こだま|はやぶさ|はやて|やまびこ|なすの|つばさ|こまち|かがやき|はくたか|あさま|とき|たにがわ|みずほ|さくら|つばめ|かもめ)\s?(\d{1,3})\s?号"#
+    private static let trainNamePattern = #"(のぞみ|ひかり|こだま|はやぶさ|はやて|やまびこ|なすの|つばさ|こまち|かがやき|はくたか|あさま|とき|たにがわ|みずほ|さくら|つばめ|リレーかもめ|かもめ|ひたち|ときわ|あずさ|かいじ|サフィール踊り子|踊り子|成田エクスプレス|サンダーバード|しらさぎ|ひだ|しなの|南紀|くろしお|はるか|こうのとり|きのさき|やくも|しおかぜ|いしづち|南風|うずしお|ソニック|にちりん|きりしま|ゆふいんの森|ゆふ|かささぎ|みどり|ハウステンボス|スーパーはくと|北斗|すずらん|カムイ|ライラック|おおぞら|とかち|宗谷|いなほ|つがる)\s?(\d{1,3})\s?号"#
 
     static func trainNames(in text: String) -> [String] {
         let ns = text as NSString
@@ -848,13 +897,16 @@ enum ReservationEmailParser {
 
         let dateWords = ["ご来店日時", "来店日時", "予約日時", "ご利用日時", "利用日", "予約日", "受取り日", "受取日",
                          "受け取り日", "イベント開催日", "開催日", "公演日", "入園日", "来場日", "日時", "日程",
-                         "reservation date", "date of visit", "visit date", "event date", "date & time", "date and time",
+                         "reservation date", "date of event", "date of visit", "visit date", "event date", "date & time", "date and time",
                          "when:", "date:"]
         // 「時間」だけでは探さない。「受付時間 10:00AM」のような営業時間まで拾うため
         let timeWords = ["入店目安時間", "入場時間", "入店時間", "開始時間", "開始時刻", "予約時間", "受取り時間",
                          "受取時間", "受け取り時間", "来店時間", "集合時間", "開演",
                          "start time", "reservation time", "arrival time", "entry time", "time slot", "meeting time", "time:"]
         let dateEvent = event(after: dateWords, in: text, events: events) ?? events.first
+        if draft.title.isEmpty, let dateEvent {
+            draft.title = nameLine(afterDateAt: dateEvent.position, in: text) ?? ""
+        }
         if var start = dateEvent?.components {
             // 時刻のラベルがあれば、日付の近くの時刻より優先する
             // （「開催日 6月5日 [開店時間]11:00」より「入店目安時間 12:00」が自分の時刻）
@@ -866,6 +918,24 @@ enum ReservationEmailParser {
             draft.guessedYear = dateEvent?.guessedYear ?? false
         }
         return draft
+    }
+
+    /// 日付だけの行のすぐ下にある、名前らしい短い行（「2025年10月3日 (金)」の下の「東京ディズニーランド」）。
+    /// ラベルの無い文面で、施設の名前を拾うため。数字や句読点のある行は説明や値段なので使わない
+    private static func nameLine(afterDateAt position: Int, in text: String) -> String? {
+        let ns = text as NSString
+        let lineRange = ns.lineRange(for: NSRange(location: position, length: 0))
+        let line = ns.substring(with: lineRange)
+        let dateOnly = #"^\s*(?:20\d{2}\s*年\s*)?\d{1,2}\s*月\s*\d{1,2}\s*日\s*(?:[(（]\s*[月火水木金土日祝・]+\s*[)）])?\s*$"#
+        guard line.range(of: dateOnly, options: .regularExpression) != nil, NSMaxRange(lineRange) < ns.length else { return nil }
+
+        let next = ns.substring(with: ns.lineRange(for: NSRange(location: NSMaxRange(lineRange), length: 0)))
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+        // 「京」「万」も `isNumber` では数になるので、半角の数字だけを見る（「東京…」を弾かないように）
+        guard (2...25).contains(next.count), !next.contains(where: { $0.isASCII && $0.isNumber }),
+              !next.contains(where: { ":：。、,¥￥\t".contains($0) }),
+              !next.hasSuffix("様") else { return nil }
+        return next
     }
 
     private static func nights(in text: String) -> Int? {
