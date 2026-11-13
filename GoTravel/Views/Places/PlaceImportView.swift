@@ -1,4 +1,5 @@
 import SwiftUI
+import PDFKit
 import MapKit
 
 /// 送られたリンク・文章・スクリーンショットから場所を探し、選んで「行きたい場所」に保存する画面（3.5）。
@@ -455,6 +456,11 @@ struct SharedPlaceInboxView: View {
         switch item.content {
         case .text(let text): return .text(text)
         case .image(let url): return UIImage(contentsOfFile: url.path).map { .image($0) }
+        // PDF は予約の箱にしか置かないが、届いたときは中の文字から場所を探す
+        case .pdf(let url):
+            guard let document = PDFDocument(url: url) else { return nil }
+            let text = ReservationPDFTextReader.embeddedText(of: document)
+            return text.isEmpty ? nil : .text(text)
         }
     }
 }

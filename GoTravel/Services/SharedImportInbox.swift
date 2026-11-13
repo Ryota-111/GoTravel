@@ -8,7 +8,7 @@ import Foundation
 ///
 /// **置き方の決まり（拡張の `ShareInboxWriter` と揃えること）**
 /// - App Group の `SharedImportInbox/` フォルダに、1件1ファイルで置く
-/// - 本文は `.txt`（UTF-8）、画像は `.jpg`
+/// - 本文は `.txt`（UTF-8）、画像は `.jpg`、PDF は `.pdf`（3.6。予約の箱にだけ置く）
 /// - ファイル名は `<送った時刻のミリ秒>-<UUID>.<拡張子>`。古い順に並べるのに使う
 enum SharedImportInbox {
 
@@ -23,6 +23,8 @@ enum SharedImportInbox {
         enum Content: Equatable {
             case text(String)
             case image(URL)
+            /// メールを印刷した PDF（Gmail から）や e チケット（3.6）
+            case pdf(URL)
         }
 
         let url: URL
@@ -60,6 +62,8 @@ enum SharedImportInbox {
                 items.append(Item(url: url, sentAt: sentAt, content: .text(text)))
             case "jpg", "jpeg", "png":
                 items.append(Item(url: url, sentAt: sentAt, content: .image(url)))
+            case "pdf":
+                items.append(Item(url: url, sentAt: sentAt, content: .pdf(url)))
             default:
                 continue
             }

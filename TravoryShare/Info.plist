@@ -6,17 +6,26 @@
 	<dict>
 		<key>NSExtensionAttributes</key>
 		<dict>
-			<!-- 予約確認メールの本文（選んだ文字）・スクリーンショット1枚・リンク1つ（地図や店のページ。3.5）を受け取る。
-			     何でも受け取ると、関係の無い共有の場面にまで Travory が並んでしまう -->
+			<!-- 予約確認メールの本文（選んだ文字）・スクリーンショット1枚・リンク1つ（地図や店のページ。3.5）・
+			     PDF 1つ（Gmail の「印刷」から共有したメールや e チケット。3.6）を受け取る。
+			     何でも受け取ると、関係の無い共有の場面にまで Travory が並んでしまう。
+			     PDF は決まったキーが無い（File は種類を問わず受け取る）ので、条件の式で書く -->
 			<key>NSExtensionActivationRule</key>
-			<dict>
-				<key>NSExtensionActivationSupportsText</key>
-				<true/>
-				<key>NSExtensionActivationSupportsImageWithMaxCount</key>
-				<integer>1</integer>
-				<key>NSExtensionActivationSupportsWebURLWithMaxCount</key>
-				<integer>1</integer>
-			</dict>
+			<string>SUBQUERY (
+    extensionItems, $item,
+    SUBQUERY ($item.attachments, $a,
+        ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "com.adobe.pdf"
+        OR ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.image"
+        OR ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.url"
+        OR ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.text"
+    ).@count &gt;= 1
+    AND SUBQUERY ($item.attachments, $a,
+        ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "public.image"
+    ).@count &lt;= 1
+    AND SUBQUERY ($item.attachments, $a,
+        ANY $a.registeredTypeIdentifiers UTI-CONFORMS-TO "com.adobe.pdf"
+    ).@count &lt;= 1
+).@count &gt;= 1</string>
 		</dict>
 		<key>NSExtensionPrincipalClass</key>
 		<string>$(PRODUCT_MODULE_NAME).ShareViewController</string>
