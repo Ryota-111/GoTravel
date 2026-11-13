@@ -83,6 +83,26 @@ struct WhatsNew: Identifiable {
 
     private static let all: [WhatsNew] = [
         WhatsNew(
+            version: "3.6",
+            items: [
+                Item(
+                    icon: "envelope.fill",
+                    title: "Gmail のメールや PDF から予約を取り込めます",
+                    detail: "Gmail で予約確認メールを開き、右上の「…」（点が縦に3つ並んだボタン）から「印刷」→ 右上の共有ボタン →「Travory」と選ぶと、メールを丸ごと送れます。予約を取り込む画面の「PDFから読み取る」から、eチケットの PDF も読み取れます。取り込む画面の「Gmail のメールを送るには」に送り方を載せています。PDF もこの端末の中だけで読み取り、どこにも送りません（Travory Pro の機能です）。ご要望をいただいて追加しました。"
+                ),
+                Item(
+                    icon: "text.viewfinder",
+                    title: "予約の読み取りが、もっと正確になりました",
+                    detail: "英語の航空券の控え（eチケット・itinerary）、日付の下に「Check-In」「Check-Out」が並ぶ宿の確認、スクリーンショットから読んだ金額などを、直さずに入れられることが増えました。在来線の特急の名前も読めるようにしました。"
+                ),
+                Item(
+                    icon: "sparkles",
+                    title: "動きと見た目を整えました",
+                    detail: "旅行計画やアルバムのカードを押すと、カードから広がるように開きます。持ち物のチェックや合計の金額にも、小さな動きを付けました。「視差効果を減らす」をオンにしているときは動きを控えます。はじめての方への紹介画面も新しくしました。"
+                )
+            ]
+        ),
+        WhatsNew(
             version: "3.5",
             items: [
                 Item(
