@@ -250,3 +250,105 @@ extension ReservationEmailParserTests {
         #expect(draft.title == "ビストロ月")
     }
 }
+
+// MARK: - 写真や控えの書き方（3.6）
+
+extension ReservationEmailParserTests {
+    @Test("値の行の下にラベルの行が来る表でも、チェックインとチェックアウトを読む")
+    func labelsBelowValues() throws {
+        let text = """
+        Your reservation is confirmed!
+        Confirmation Number: VJ0069
+        Sunday,\tTuesday,
+        July 07, 2026\tJuly 09, 2026
+        Check-In\tCheck-Out
+        Room Type\t1 Double Standard
+        Hotel Address\tGravity Hotel
+        """
+        let draft = try #require(ReservationEmailParser.parse(text, referenceDate: today).first)
+
+        #expect(draft.kind == .hotel)
+        #expect(ymdhm(draft.start) == "2026-07-07")
+        #expect(ymdhm(draft.end) == "2026-07-09")
+    }
+
+    @Test("ラベルの後ろが番号らしくなければ使わない。見出しだけの行の次の番号は拾う")
+    func confirmationNumberLooksLikeCode() {
+        #expect(ReservationEmailParser.confirmationNumber(in: "Your confirmation number will be sent later.") == nil)
+        #expect(ReservationEmailParser.confirmationNumber(
+            in: "Confirmation number will follow.\nBooking reference: KXJHLM") == "KXJHLM")
+        #expect(ReservationEmailParser.confirmationNumber(in: "Booking confirmation\n8356693431\nDear guest,") == "8356693431")
+        // 文の中の「booking confirmation」は見出しではない
+        #expect(ReservationEmailParser.confirmationNumber(in: "This is your booking confirmation\nThank you for 2026") == nil)
+    }
+
+    @Test("写真から読んで「¥」が「·」に化けた合計も読む（小計は使わない）")
+    func amountWithMisreadYen() {
+        #expect(ReservationEmailParser.paidAmount(in: "Subtotal ¥3,500（inc.tax）\nTotal·4,000(inc.tax)") == 4000)
+        // 箇条書きの点のあとの、金額でない数は読まない
+        #expect(ReservationEmailParser.paidAmount(in: "合計\n· 2名さま") == nil)
+    }
+
+    @Test("航空券の控え：05MAR2026 と 0730 の書き方、入場のチケットと取り違えない")
+    func eTicketItinerary() throws {
+        let text = """
+        eチケットお客様控 ELECTRONIC TICKET ITINERARY/RECEIPT
+        TICKET NUMBER 2052423282534\t発行日：\t31JAN2026
+        旅程表 ITINERARY
+        OSAKA (ITAMI)\tNH8014\t05MAR2026 THU\t0730\tOK
+        TOKYO (HANEDA)\t05MAR2026 THU\t0845
+        """
+        let draft = try #require(ReservationEmailParser.parse(text, referenceDate: today).first)
+
+        #expect(draft.kind == .flight)
+        #expect(draft.transportNumber == "NH8014")
+        #expect(ymdhm(draft.start) == "2026-03-05 07:30")
+        #expect(ymdhm(draft.arrival) == "2026-03-05 08:45")
+        #expect(draft.departurePlace == "伊丹空港")
+        #expect(draft.arrivalPlace == "羽田空港")
+    }
+
+    @Test("ラベルの無いチケットは、日付だけの行のすぐ下を名前にする（説明や値段の行は使わない）")
+    func ticketTitleBelowDate() throws {
+        let text = """
+        受付番号\tA123456789
+        受付日時\t2026年10月2日 (金) 19:45
+        パークチケット
+        1デーパスポート
+        2026年10月3日 (土)
+        東京ディズニーランド
+        大人 ¥9,900 ×1枚\t¥9,900
+        """
+        let draft = try #require(ReservationEmailParser.parse(text, referenceDate: today).first)
+        #expect(draft.title == "東京ディズニーランド")
+        #expect(ymdhm(draft.start) == "2026-10-03")
+
+        let noName = ReservationEmailParser.parse("入場チケット\n2026年10月3日 (土)\n大人 2枚 ¥9,900", referenceDate: today).first
+        #expect(noName?.title == "")
+    }
+
+    @Test("英語の手紙：手紙の日付ではなく「Date of Event」を使う")
+    func dateOfEvent() throws {
+        let text = """
+        November 12, 2026
+        Event Details:
+        • Date of Event: June 25, 2027
+        • Start Time: 5:00 PM
+        """
+        let draft = try #require(ReservationEmailParser.parse(text, referenceDate: today).first)
+        #expect(ymdhm(draft.start) == "2027-06-25 17:00")
+    }
+
+    @Test("在来線の特急も列車として読む")
+    func limitedExpress() throws {
+        let text = """
+        乗車日 2026年10月6日
+        サンダーバード15号 大阪→敦賀
+        大阪 10:12発 敦賀 11:34着
+        """
+        let draft = try #require(ReservationEmailParser.parse(text, referenceDate: today).first)
+        #expect(draft.kind == .train)
+        #expect(draft.transportNumber == "サンダーバード15号")
+        #expect(ymdhm(draft.start) == "2026-10-06 10:12")
+    }
+}
