@@ -3,7 +3,8 @@ import SwiftUI
 /// 旅行のメモ（3.0 から何枚も書ける）。リストのタブの「メモ」で出す。
 ///
 /// 共有した旅行では、メモごとに「みんなで見る」か「自分だけ」を選べる
-/// （ご要望から。`TripMemo`）。1文字ごとには保存せず、編集の画面を閉じたときに保存する
+/// （ご要望から。`TripMemo`）。1文字ごとには保存せず、編集の画面を閉じたときに保存する。
+/// 3.7 から、直しても並びは変わらず、「並び替え」で好きな順に並べられる（`orderedMemos`）
 struct TripMemoView: View {
     let plan: TravelPlan
 
@@ -13,15 +14,14 @@ struct TripMemoView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var editing: TripMemo?
+    @State private var showsReorder = false
 
     private var currentPlan: TravelPlan {
         viewModel.travelPlans.first(where: { $0.id == plan.id }) ?? plan
     }
 
-    /// 新しいものを上に
-    private var memos: [TripMemo] {
-        currentPlan.memos.sorted { $0.updatedAt > $1.updatedAt }
-    }
+    /// 並べた順（新しく足したものは上）。直しても動かない
+    private var memos: [TripMemo] { currentPlan.orderedMemos }
 
     private var cardFill: Color {
         colorScheme == .dark
@@ -55,6 +55,19 @@ struct TripMemoView: View {
             }
             .buttonStyle(.plain)
 
+            if memos.count >= 2 {
+                HStack {
+                    Spacer()
+                    Button {
+                        showsReorder = true
+                    } label: {
+                        Label("並び替え", systemImage: "arrow.up.arrow.down")
+                            .font(.caption.weight(.semibold))
+                            .foregroundColor(accent)
+                    }
+                }
+            }
+
             if memos.isEmpty {
                 Text("旅行のメモを自由に書けます（例：集合場所、駐車場、気をつけること）")
                     .font(.system(size: 14))
@@ -77,6 +90,19 @@ struct TripMemoView: View {
                 apply(result)
             }
         }
+        .sheet(isPresented: $showsReorder) {
+            TripMemoReorderView(memos: memos, isShared: currentPlan.isShared) { orderedIds in
+                saveOrder(orderedIds)
+            }
+        }
+    }
+
+    private func saveOrder(_ orderedIds: [String]) {
+        guard let userId = authVM.userId else { return }
+        var updated = currentPlan
+        updated.reorderMemos(displayedIds: orderedIds)
+        guard updated.memos.map(\.id) != currentPlan.memos.map(\.id) else { return }
+        viewModel.update(updated, userId: userId)
     }
 
     private func memoCard(_ memo: TripMemo) -> some View {
@@ -126,6 +152,73 @@ struct TripMemoView: View {
             updated.memos.removeAll { $0.id == id }
         }
         viewModel.update(updated, userId: userId)
+    }
+}
+
+/// メモの並び替え（3.7）。持ち物と同じく、右のつまみで上下に動かす
+/// （リストは旅行計画の画面のスクロールの中にあるので、その場でつまむとスクロールと取り合いになる）
+struct TripMemoReorderView: View {
+    @State var memos: [TripMemo]
+    let isShared: Bool
+    let onSave: ([String]) -> Void
+
+    @ObservedObject private var themeManager = ThemeManager.shared
+    @Environment(\.dismiss) private var dismiss
+
+    private var accent: Color { themeManager.currentTheme.actionFill }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(memos) { memo in
+                        HStack(spacing: 8) {
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(memo.displayTitle)
+                                    .lineLimit(1)
+                                let preview = memo.body.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
+                                if !preview.isEmpty && preview != memo.displayTitle {
+                                    Text(preview)
+                                        .font(.caption)
+                                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                                        .lineLimit(1)
+                                }
+                            }
+                            Spacer(minLength: 0)
+                            if isShared {
+                                Image(systemName: memo.isPrivate ? "lock.fill" : "person.2.fill")
+                                    .font(.system(size: 11))
+                                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                            }
+                        }
+                    }
+                    .onMove { source, destination in
+                        memos.move(fromOffsets: source, toOffset: destination)
+                    }
+                } footer: {
+                    Text(isShared
+                         ? "右のつまみを上下にドラッグして並べ替えます。並びはこの端末のものです（同行者の並びは変わりません）。"
+                         : "右のつまみを上下にドラッグして並べ替えます。")
+                }
+            }
+            .environment(\.editMode, .constant(.active))
+            .navigationTitle("メモを並び替え")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .navigationBarLeading) {
+                    Button("キャンセル") { dismiss() }
+                        .foregroundColor(accent)
+                }
+                ToolbarItem(placement: .navigationBarTrailing) {
+                    Button("完了") {
+                        onSave(memos.map(\.id))
+                        dismiss()
+                    }
+                    .fontWeight(.semibold)
+                    .foregroundColor(accent)
+                }
+            }
+        }
     }
 }
 
