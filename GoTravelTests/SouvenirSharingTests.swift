@@ -14,11 +14,15 @@ struct SouvenirSharingTests {
                    updatedAt: Self.base.addingTimeInterval(seconds))
     }
 
-    @Test("お土産だけが、項目ごとに「みんな」か「自分だけ」を選べる")
+    @Test("どのリストも「みんなの」と「自分の」の欄に分かれ、担当を付けられるのは持ち物だけ（3.7）")
     func kinds() {
-        #expect(PackingItem.Kind.souvenir.choosesVisibilityPerItem)
-        #expect(!PackingItem.Kind.packing.choosesVisibilityPerItem)
-        #expect(!PackingItem.Kind.wish.choosesVisibilityPerItem)
+        for kind in PackingItem.Kind.allCases {
+            #expect(kind.sharedSectionTitle != kind.privateSectionTitle)
+        }
+        #expect(PackingItem.Kind.packing.sharedSectionTitle == "みんなで持っていく物")
+        #expect(PackingItem.Kind.packing.usesAssignee)
+        #expect(!PackingItem.Kind.souvenir.usesAssignee)
+        #expect(!PackingItem.Kind.wish.usesAssignee)
     }
 
     @Test("「みんな」のお土産は相手が足したものも届き、「自分だけ」のお土産は消えない")

@@ -383,4 +383,39 @@ struct SharedPlanMergeTests {
 
         #expect(second.isDoNothing)
     }
+
+    // MARK: - みんなで持っていく物（3.7）
+
+    @Test("みんなの欄の持ち物は共有され、相手が決めた担当とチェックが届く。自分の欄の持ち物は残る")
+    func sharedPackingItemsMerge() {
+        let tent = PackingItem(id: "tent", name: "テント", kind: .packing, ownerId: nil)
+        let charger = PackingItem(id: "charger", name: "充電器", kind: .packing, ownerId: "me")
+        let base = makePlan(updatedAt: t(0), packingItems: [tent])
+        let local = makePlan(updatedAt: t(5), packingItems: [tent, charger])
+        var remoteTent = tent
+        remoteTent.assigneeId = "owner"
+        remoteTent.isChecked = true
+        let remote = makePlan(updatedAt: t(10), packingItems: [remoteTent])
+
+        let decision = SharedPlanMerge.decide(local: local, remote: remote, base: base, myUserId: "me")
+        let merged = try! #require(decision.takenPlan ?? decision.pushedPlan)
+
+        let mergedTent = merged.packingItems.first { $0.id == "tent" }
+        #expect(mergedTent?.assigneeId == "owner")
+        #expect(mergedTent?.isChecked == true)
+        #expect(merged.packingItems.contains { $0.id == "charger" && $0.ownerId == "me" })
+    }
+
+    @Test("担当は保存して読み直しても残り、担当の無い前のデータも読める")
+    func assigneeCodable() throws {
+        let item = PackingItem(name: "クーラーボックス", kind: .packing, ownerId: nil, assigneeId: "owner")
+        let decoded = try JSONDecoder().decode(PackingItem.self, from: JSONEncoder().encode(item))
+        #expect(decoded.assigneeId == "owner")
+        #expect(decoded.isShared)
+
+        let old = #"{"id":"a","name":"充電器","isChecked":false,"kind":"packing","ownerId":"me"}"#
+        let legacy = try JSONDecoder().decode(PackingItem.self, from: Data(old.utf8))
+        #expect(legacy.assigneeId == nil)
+        #expect(!legacy.isShared)
+    }
 }

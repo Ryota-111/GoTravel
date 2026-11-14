@@ -70,27 +70,38 @@ struct PackingItem: Identifiable, Codable {
         /// 「お母さん」「会社」の下に、その人に渡すものを並べて、相手ごとに開け閉めできる
         var usesRecipient: Bool { self == .souvenir }
 
-        /// 同行者と分け合うリストか。
-        ///
-        /// やりたいことは**みんなで出し合いたい**ので共有する。
-        /// 持ち物は各自が自分のぶんを持つ（充電器は全員それぞれ要る）ので個人のもの。
-        var isSharedWithMembers: Bool { self == .wish }
+        // MARK: 共有した旅行での分け方（3.7）
+        //
+        // 3.6 までは、持ち物はいつも自分だけ・やりたいことはいつもみんな・お土産は1つずつ選ぶ、だった。
+        // 「持ち物も共有したい。個人の持ち物と、同行者と揃えて持っていく物で分かれていると嬉しい」
+        // というご要望から、**どのリストも「みんなの」と「自分の」の2つの欄に分ける。**
+        // 新しい項目は「自分の」から始める（同行者に見せたくないものを、うっかり見せないように）。
+        // 欄は `ownerId` で決まる（nil ならみんなの）。旅行の JSON の中なので、スキーマ変更は要らない
 
-        /// 項目ごとに「みんな」か「自分だけ」かを選べるリストか（3.0）。
-        ///
-        /// お土産は、家族で旅行するときは同じリストで確かめたい。
-        /// 一方で同行者へのぶんを書くこともあり、本人に見えると台無しになるので、
-        /// 項目ごとに「自分だけ」にもできるようにする。新しい項目は「みんな」から始まる
-        var choosesVisibilityPerItem: Bool { self == .souvenir }
-
-        /// 共有中の旅行で、このリストの立ち位置を一言で説明する
-        var sharingNote: String {
-            if choosesVisibilityPerItem {
-                return "同行者と一緒に見て書けます。🔒を付けた項目は自分だけに見えます"
+        /// 同行者と分け合う欄の名前
+        var sharedSectionTitle: String {
+            switch self {
+            case .packing:  return "みんなで持っていく物"
+            case .souvenir: return "みんなのお土産"
+            case .wish:     return "みんなでやりたいこと"
             }
-            return isSharedWithMembers
-                ? "同行者にも見えます。みんなで書き足せます"
-                : "自分だけに見えます。同行者には共有されません"
+        }
+
+        /// 自分だけの欄の名前
+        var privateSectionTitle: String {
+            switch self {
+            case .packing:  return "自分の持ち物"
+            case .souvenir: return "自分だけのお土産"
+            case .wish:     return "自分だけのやりたいこと"
+            }
+        }
+
+        /// みんなの項目に「誰が持っていくか（担当）」を付けられるか。揃えて持っていく物で使う
+        var usesAssignee: Bool { self == .packing }
+
+        /// 共有中の旅行で、このリストの分け方を一言で説明する
+        var sharingNote: String {
+            "「\(sharedSectionTitle)」は同行者も見て書けます。「\(privateSectionTitle)」は自分だけに見えます"
         }
     }
 
@@ -115,6 +126,13 @@ struct PackingItem: Identifiable, Codable {
     /// （`CloudKitService.publishSharedTravelPlan` が落とす）。
     var ownerId: String?
 
+    /// みんなで持っていく物を、誰が持っていくか（同行者の userId。3.7）。nil なら決めていない。
+    /// 古い版が書き換えると消えて、担当の無い項目に戻る
+    var assigneeId: String?
+
+    /// みんなの欄の項目か（同行者と分け合う）
+    var isShared: Bool { ownerId == nil }
+
     /// 渡す相手とメモを1行に（「お母さんへ ・ 小さめのもの」）。どちらも無ければ nil。
     /// 相手ごとにまとめない所（しおり・前の旅行から取り込む画面）で使う
     var recipientAndNote: String? {
@@ -136,7 +154,8 @@ struct PackingItem: Identifiable, Codable {
          kind: Kind = .packing,
          note: String? = nil,
          recipient: String? = nil,
-         ownerId: String? = nil) {
+         ownerId: String? = nil,
+         assigneeId: String? = nil) {
         self.id = id
         self.name = name
         self.isChecked = isChecked
@@ -144,10 +163,11 @@ struct PackingItem: Identifiable, Codable {
         self.note = note
         self.recipient = recipient
         self.ownerId = ownerId
+        self.assigneeId = assigneeId
     }
 
     enum CodingKeys: String, CodingKey {
-        case id, name, isChecked, kind, note, recipient, ownerId
+        case id, name, isChecked, kind, note, recipient, ownerId, assigneeId
     }
 
     /// `kind` と `note` を足す前に保存されたデータには、そのキーが無い。
@@ -163,6 +183,7 @@ struct PackingItem: Identifiable, Codable {
         // 持ち主を持たせる前の項目は「みんなのもの」として扱う。
         // 既に同行者に見えていたものを、後から隠すほうが混乱する
         ownerId = try container.decodeIfPresent(String.self, forKey: .ownerId)
+        assigneeId = try container.decodeIfPresent(String.self, forKey: .assigneeId)
     }
 }
 
@@ -570,6 +591,9 @@ struct TravelPlan: Identifiable, Codable {
                     && lhs.kind == rhs.kind
                     && lhs.note == rhs.note
                     && lhs.ownerId == rhs.ownerId
+                    // 3.7 の担当。比べ漏れると、直しても「変わっていない」とみなされ、
+                    // 更新時刻が進まず同行者へ送られない
+                    && lhs.assigneeId == rhs.assigneeId
             }
     }
 

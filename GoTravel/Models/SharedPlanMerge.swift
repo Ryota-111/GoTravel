@@ -308,6 +308,7 @@ enum SharedPlanMerge {
             && lhs.note == rhs.note
             && lhs.recipient == rhs.recipient
             && lhs.ownerId == rhs.ownerId
+            && lhs.assigneeId == rhs.assigneeId
     }
 
     // MARK: - 突き合わせの本体

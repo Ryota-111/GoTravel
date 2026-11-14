@@ -39,13 +39,16 @@ struct TripMemoView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             if currentPlan.isShared {
-                Label("メモごとに「みんなで見る」か「自分だけ」を選べます", systemImage: "person.2.fill")
+                Label("「みんなのメモ」は同行者も見て書けます。「自分だけのメモ」は自分だけに見えます", systemImage: "person.2.fill")
                     .font(.system(size: 12))
                     .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
             }
 
+            // 共有中の旅行では、新しいメモは「自分だけ」から（3.7）。書く画面で「みんなで見る」に替えられる。
+            // 共有していない旅行では 3.6 までと同じ（しおりは「みんな」のメモだけを載せるため）
             Button {
-                editing = TripMemo(isPrivate: false, authorId: authVM.userId)
+                editing = TripMemo(isPrivate: currentPlan.isShared, authorId: authVM.userId)
             } label: {
                 Label("メモを追加", systemImage: "plus")
                     .font(.subheadline.weight(.semibold))
@@ -70,19 +73,12 @@ struct TripMemoView: View {
                     .padding(.top, 6)
             }
 
-            if let reordering {
-                ForEach(reordering) { memo in
-                    reorderCard(memo)
-                }
+            if currentPlan.isShared && !memos.isEmpty {
+                // 共有中の旅行では「みんなの」と「自分だけの」の2つの欄に分ける（3.7）
+                memoSection(isPrivate: false)
+                memoSection(isPrivate: true)
             } else {
-                ForEach(memos) { memo in
-                    Button {
-                        editing = memo
-                    } label: {
-                        memoCard(memo)
-                    }
-                    .buttonStyle(.plain)
-                }
+                memoCards(reordering ?? memos)
             }
         }
         // カードの間やまわりで指を離したときも、つまんだ印を消す
@@ -94,6 +90,69 @@ struct TripMemoView: View {
             TripMemoEditor(memo: memo, isShared: currentPlan.isShared,
                            isNew: !currentPlan.memos.contains { $0.id == memo.id }) { result in
                 apply(result)
+            }
+        }
+    }
+
+    // MARK: - 欄
+
+    @ViewBuilder
+    private func memoCards(_ list: [TripMemo]) -> some View {
+        if reordering != nil {
+            ForEach(list) { memo in
+                reorderCard(memo)
+            }
+        } else {
+            ForEach(list) { memo in
+                Button {
+                    editing = memo
+                } label: {
+                    memoCard(memo)
+                }
+                .buttonStyle(.plain)
+            }
+        }
+    }
+
+    private func memoSection(isPrivate: Bool) -> some View {
+        let list = (reordering ?? memos).filter { $0.isPrivate == isPrivate }
+        let title = isPrivate ? "自分だけのメモ" : "みんなのメモ"
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: isPrivate ? "lock.fill" : "person.2.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(isPrivate ? themeManager.currentTheme.secondaryText : accent)
+                Text(title)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
+                Spacer(minLength: 0)
+                if reordering == nil {
+                    Button {
+                        editing = TripMemo(isPrivate: isPrivate, authorId: authVM.userId)
+                    } label: {
+                        Image(systemName: "plus.circle")
+                            .font(.system(size: 17))
+                            .foregroundColor(accent)
+                            .frame(width: 30, height: 28)
+                            .contentShape(Rectangle())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(Text("\(title)を足す"))
+                }
+            }
+            .padding(.horizontal, 4)
+            .padding(.top, 6)
+
+            if list.isEmpty {
+                Text(isPrivate
+                     ? "まだありません。メモを書く画面で「自分だけ」を選ぶと、ここに入ります"
+                     : "まだありません。メモを書く画面で「みんなで見る」を選ぶと、ここに入ります")
+                    .font(.caption)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 4)
+            } else {
+                memoCards(list)
             }
         }
     }
@@ -252,7 +311,9 @@ private struct MemoReorderDropDelegate: DropDelegate {
     func dropEntered(info: DropInfo) {
         guard let draggingId, draggingId != targetId, var list = items,
               let from = list.firstIndex(where: { $0.id == draggingId }),
-              let to = list.firstIndex(where: { $0.id == targetId }) else { return }
+              let to = list.firstIndex(where: { $0.id == targetId }),
+              // 「みんなの」と「自分だけの」の欄をまたいでは動かさない（欄は書く画面で替える）
+              list[from].isPrivate == list[to].isPrivate else { return }
         list.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
         withAnimation(.easeInOut(duration: 0.2)) { items = list }
         UISelectionFeedbackGenerator().selectionChanged()
