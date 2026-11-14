@@ -1,10 +1,11 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 /// 旅行のメモ（3.0 から何枚も書ける）。リストのタブの「メモ」で出す。
 ///
 /// 共有した旅行では、メモごとに「みんなで見る」か「自分だけ」を選べる
 /// （ご要望から。`TripMemo`）。1文字ごとには保存せず、編集の画面を閉じたときに保存する。
-/// 3.7 から、直しても並びは変わらず、「並び替え」で好きな順に並べられる（`orderedMemos`）
+/// 3.7 から、直しても並びは変わらず、「並び替え」を押すとその場でカードをつまんで動かせる（`orderedMemos`）
 struct TripMemoView: View {
     let plan: TravelPlan
 
@@ -14,7 +15,10 @@ struct TripMemoView: View {
     @Environment(\.colorScheme) private var colorScheme
 
     @State private var editing: TripMemo?
-    @State private var showsReorder = false
+    /// 並び替えのあいだの並び。nil なら並び替えていない。「完了」で保存する
+    @State private var reordering: [TripMemo]?
+    /// つまんで動かしているメモ
+    @State private var draggingId: String?
 
     private var currentPlan: TravelPlan {
         viewModel.travelPlans.first(where: { $0.id == plan.id }) ?? plan
@@ -55,17 +59,8 @@ struct TripMemoView: View {
             }
             .buttonStyle(.plain)
 
-            if memos.count >= 2 {
-                HStack {
-                    Spacer()
-                    Button {
-                        showsReorder = true
-                    } label: {
-                        Label("並び替え", systemImage: "arrow.up.arrow.down")
-                            .font(.caption.weight(.semibold))
-                            .foregroundColor(accent)
-                    }
-                }
+            if memos.count >= 2 || reordering != nil {
+                reorderBar
             }
 
             if memos.isEmpty {
@@ -75,14 +70,25 @@ struct TripMemoView: View {
                     .padding(.top, 6)
             }
 
-            ForEach(memos) { memo in
-                Button {
-                    editing = memo
-                } label: {
-                    memoCard(memo)
+            if let reordering {
+                ForEach(reordering) { memo in
+                    reorderCard(memo)
                 }
-                .buttonStyle(.plain)
+            } else {
+                ForEach(memos) { memo in
+                    Button {
+                        editing = memo
+                    } label: {
+                        memoCard(memo)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
+        }
+        // カードの間やまわりで指を離したときも、つまんだ印を消す
+        .onDrop(of: [.text], isTargeted: nil) { _ in
+            draggingId = nil
+            return reordering != nil
         }
         .sheet(item: $editing) { memo in
             TripMemoEditor(memo: memo, isShared: currentPlan.isShared,
@@ -90,11 +96,93 @@ struct TripMemoView: View {
                 apply(result)
             }
         }
-        .sheet(isPresented: $showsReorder) {
-            TripMemoReorderView(memos: memos, isShared: currentPlan.isShared) { orderedIds in
-                saveOrder(orderedIds)
+    }
+
+    // MARK: - その場で並び替え
+
+    private var reorderBar: some View {
+        HStack {
+            if reordering != nil {
+                Text("カードをつまんで上下に動かします")
+                    .font(.caption)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                Spacer()
+                Button("キャンセル") {
+                    withAnimation(.easeInOut(duration: 0.2)) { reordering = nil }
+                    draggingId = nil
+                }
+                .font(.caption.weight(.semibold))
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+                Button("完了") {
+                    if let reordering { saveOrder(reordering.map(\.id)) }
+                    withAnimation(.easeInOut(duration: 0.2)) { reordering = nil }
+                    draggingId = nil
+                }
+                .font(.caption.weight(.bold))
+                .foregroundColor(accent)
+                .padding(.leading, 8)
+            } else {
+                Spacer()
+                Button {
+                    withAnimation(.easeInOut(duration: 0.2)) { reordering = memos }
+                } label: {
+                    Label("並び替え", systemImage: "arrow.up.arrow.down")
+                        .font(.caption.weight(.semibold))
+                        .foregroundColor(accent)
+                }
             }
         }
+    }
+
+    /// 並び替えのあいだのカード。題名だけの小さな形にして、つまみを出す。
+    /// 旅行計画の画面のスクロールと取り合わないよう、長押ししてからつまむ（ドラッグ＆ドロップ）
+    private func reorderCard(_ memo: TripMemo) -> some View {
+        HStack(spacing: 10) {
+            Text(memo.displayTitle)
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(textColor)
+                .lineLimit(1)
+            Spacer(minLength: 0)
+            if currentPlan.isShared {
+                Image(systemName: memo.isPrivate ? "lock.fill" : "person.2.fill")
+                    .font(.system(size: 11))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+            Image(systemName: "line.3.horizontal")
+                .font(.system(size: 15, weight: .semibold))
+                .foregroundColor(themeManager.currentTheme.secondaryText)
+        }
+        .padding(.horizontal, 14)
+        .padding(.vertical, 12)
+        .background(
+            RoundedRectangle(cornerRadius: AppRadius.large)
+                .fill(cardFill)
+                .overlay(RoundedRectangle(cornerRadius: AppRadius.large)
+                    .stroke(draggingId == memo.id ? accent : textColor.opacity(0.12),
+                            lineWidth: draggingId == memo.id ? 2 : 1))
+        )
+        .opacity(draggingId == memo.id ? 0.5 : 1)
+        .contentShape(.dragPreview, RoundedRectangle(cornerRadius: AppRadius.large))
+        .onDrag {
+            draggingId = memo.id
+            return NSItemProvider(object: memo.id as NSString)
+        }
+        .onDrop(of: [.text], delegate: MemoReorderDropDelegate(targetId: memo.id,
+                                                              items: $reordering,
+                                                              draggingId: $draggingId))
+        .accessibilityElement(children: .combine)
+        .accessibilityHint("上下に動かすには、アクションを使います")
+        .accessibilityAction(named: "上へ移動") { move(memo.id, by: -1) }
+        .accessibilityAction(named: "下へ移動") { move(memo.id, by: 1) }
+    }
+
+    /// VoiceOver のための1つずつの移動
+    private func move(_ id: String, by offset: Int) {
+        guard var list = reordering, let from = list.firstIndex(where: { $0.id == id }) else { return }
+        let to = from + offset
+        guard list.indices.contains(to) else { return }
+        list.swapAt(from, to)
+        reordering = list
     }
 
     private func saveOrder(_ orderedIds: [String]) {
@@ -155,70 +243,28 @@ struct TripMemoView: View {
     }
 }
 
-/// メモの並び替え（3.7）。持ち物と同じく、右のつまみで上下に動かす
-/// （リストは旅行計画の画面のスクロールの中にあるので、その場でつまむとスクロールと取り合いになる）
-struct TripMemoReorderView: View {
-    @State var memos: [TripMemo]
-    let isShared: Bool
-    let onSave: ([String]) -> Void
+/// つまんだカードがほかのカードの上に来たら、その場で入れ替える
+private struct MemoReorderDropDelegate: DropDelegate {
+    let targetId: String
+    @Binding var items: [TripMemo]?
+    @Binding var draggingId: String?
 
-    @ObservedObject private var themeManager = ThemeManager.shared
-    @Environment(\.dismiss) private var dismiss
+    func dropEntered(info: DropInfo) {
+        guard let draggingId, draggingId != targetId, var list = items,
+              let from = list.firstIndex(where: { $0.id == draggingId }),
+              let to = list.firstIndex(where: { $0.id == targetId }) else { return }
+        list.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
+        withAnimation(.easeInOut(duration: 0.2)) { items = list }
+        UISelectionFeedbackGenerator().selectionChanged()
+    }
 
-    private var accent: Color { themeManager.currentTheme.actionFill }
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
 
-    var body: some View {
-        NavigationStack {
-            List {
-                Section {
-                    ForEach(memos) { memo in
-                        HStack(spacing: 8) {
-                            VStack(alignment: .leading, spacing: 2) {
-                                Text(memo.displayTitle)
-                                    .lineLimit(1)
-                                let preview = memo.bodyBelowTitle.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
-                                if !preview.isEmpty {
-                                    Text(preview)
-                                        .font(.caption)
-                                        .foregroundColor(themeManager.currentTheme.secondaryText)
-                                        .lineLimit(1)
-                                }
-                            }
-                            Spacer(minLength: 0)
-                            if isShared {
-                                Image(systemName: memo.isPrivate ? "lock.fill" : "person.2.fill")
-                                    .font(.system(size: 11))
-                                    .foregroundColor(themeManager.currentTheme.secondaryText)
-                            }
-                        }
-                    }
-                    .onMove { source, destination in
-                        memos.move(fromOffsets: source, toOffset: destination)
-                    }
-                } footer: {
-                    Text(isShared
-                         ? "右のつまみを上下にドラッグして並べ替えます。並びはこの端末のものです（同行者の並びは変わりません）。"
-                         : "右のつまみを上下にドラッグして並べ替えます。")
-                }
-            }
-            .environment(\.editMode, .constant(.active))
-            .navigationTitle("メモを並び替え")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    Button("キャンセル") { dismiss() }
-                        .foregroundColor(accent)
-                }
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    Button("完了") {
-                        onSave(memos.map(\.id))
-                        dismiss()
-                    }
-                    .fontWeight(.semibold)
-                    .foregroundColor(accent)
-                }
-            }
-        }
+    func performDrop(info: DropInfo) -> Bool {
+        draggingId = nil
+        return true
     }
 }
 
