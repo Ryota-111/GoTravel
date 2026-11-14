@@ -426,8 +426,8 @@ private struct BackupPlanDetailView: View {
                         Text(memo.displayTitle)
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(palette.text)
-                        if !memo.body.isEmpty {
-                            Text(memo.body)
+                        if !memo.bodyBelowTitle.isEmpty {
+                            Text(memo.bodyBelowTitle)
                                 .foregroundColor(palette.text)
                         }
                     }

@@ -403,7 +403,7 @@ struct BookletPageView: View {
         let memo = plan.sharedMemos.first { $0.id == id }
         return VStack(alignment: .leading, spacing: 0) {
             heading(memo?.displayTitle ?? "メモ")
-            Text(memo?.body ?? "")
+            Text(memo?.bodyBelowTitle ?? "")
                 .font(p.font(12))
                 .foregroundColor(p.ink)
                 .lineSpacing(5)

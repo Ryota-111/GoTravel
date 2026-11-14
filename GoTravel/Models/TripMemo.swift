@@ -36,6 +36,16 @@ struct TripMemo: Identifiable, Codable, Equatable {
         return firstLine.isEmpty ? "メモ" : firstLine
     }
 
+    /// 題名の下に出す本文。題名が無く本文の1行目を題名にしているときは、その行を除く
+    /// （同じ文が題名と本文に2回出ないように）
+    var bodyBelowTitle: String {
+        guard title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return body }
+        var lines = body.components(separatedBy: .newlines)
+        guard let first = lines.firstIndex(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) else { return "" }
+        lines.removeSubrange(...first)
+        return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var isEmpty: Bool {
         title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty

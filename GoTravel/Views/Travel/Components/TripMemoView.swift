@@ -120,8 +120,8 @@ struct TripMemoView: View {
                         .accessibilityLabel(memo.isPrivate ? "自分だけ" : "みんなで見る")
                 }
             }
-            if !memo.body.isEmpty {
-                Text(memo.body)
+            if !memo.bodyBelowTitle.isEmpty {
+                Text(memo.bodyBelowTitle)
                     .font(.system(size: 13))
                     .foregroundColor(textColor.opacity(0.8))
                     .lineLimit(4)
@@ -176,8 +176,8 @@ struct TripMemoReorderView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(memo.displayTitle)
                                     .lineLimit(1)
-                                let preview = memo.body.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
-                                if !preview.isEmpty && preview != memo.displayTitle {
+                                let preview = memo.bodyBelowTitle.split(whereSeparator: \.isNewline).first.map(String.init) ?? ""
+                                if !preview.isEmpty {
                                     Text(preview)
                                         .font(.caption)
                                         .foregroundColor(themeManager.currentTheme.secondaryText)
