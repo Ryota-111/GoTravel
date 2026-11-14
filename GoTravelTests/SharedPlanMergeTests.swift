@@ -418,4 +418,18 @@ struct SharedPlanMergeTests {
         #expect(legacy.assigneeId == nil)
         #expect(!legacy.isShared)
     }
+
+    @Test("渡す相手や担当を変えただけでも、変わったとみなして同行者へ送る")
+    func recipientAndAssigneeAreContent() {
+        let item = PackingItem(id: "a", name: "テント", kind: .packing, ownerId: nil)
+        var assigned = item
+        assigned.assigneeId = "owner"
+        var souvenir = PackingItem(id: "b", name: "ちんすこう", kind: .souvenir, ownerId: nil)
+        let before = makePlan(updatedAt: t(0), packingItems: [item, souvenir])
+        souvenir.recipient = "会社"
+        let after = makePlan(updatedAt: t(0), packingItems: [assigned, souvenir])
+
+        #expect(!before.isContentEqual(to: after))
+        #expect(!before.isSharedContentEqual(to: after))
+    }
 }

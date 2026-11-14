@@ -591,8 +591,9 @@ struct TravelPlan: Identifiable, Codable {
                     && lhs.kind == rhs.kind
                     && lhs.note == rhs.note
                     && lhs.ownerId == rhs.ownerId
-                    // 3.7 の担当。比べ漏れると、直しても「変わっていない」とみなされ、
+                    // 3.5 の渡す相手・3.7 の担当。比べ漏れると、直しても「変わっていない」とみなされ、
                     // 更新時刻が進まず同行者へ送られない
+                    && lhs.recipient == rhs.recipient
                     && lhs.assigneeId == rhs.assigneeId
             }
     }
