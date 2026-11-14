@@ -432,4 +432,36 @@ struct SharedPlanMergeTests {
         #expect(!before.isContentEqual(to: after))
         #expect(!before.isSharedContentEqual(to: after))
     }
+
+    @Test("2人が同時にメモを足して並びが食い違っても、送り合い続けない（並びは端末ごと）")
+    func memoOrderDoesNotPingPong() throws {
+        let first = TripMemo(id: "m1", title: "集合場所", createdAt: t(0), updatedAt: t(0))
+        let mine = TripMemo(id: "mA", title: "オーナーのメモ", createdAt: t(1), updatedAt: t(1))
+        let theirs = TripMemo(id: "mB", title: "同行者のメモ", createdAt: t(2), updatedAt: t(2))
+        var base = makePlan(updatedAt: t(0))
+        base.memos = [first]
+        // オーナーが足して送った
+        var owner = makePlan(updatedAt: t(5))
+        owner.memos = [first, mine]
+        // 同じころ、同行者も足していた
+        var member = makePlan(userId: "me", updatedAt: t(6))
+        member.memos = [first, theirs]
+
+        // 同行者が突き合わせて、自分のメモを送る
+        let memberDecision = SharedPlanMerge.decide(local: member, remote: owner, base: base, myUserId: "me")
+        let published = try #require(memberDecision.pushedPlan)
+        #expect(Set(published.memos.map(\.id)) == ["m1", "mA", "mB"])
+
+        // オーナーが受け取る。メモはそろったので、並びが違うだけでは送り返さない
+        let ownerDecision = SharedPlanMerge.decide(local: owner, remote: published, base: owner, myUserId: "owner")
+        #expect(ownerDecision.pushedPlan == nil)
+        let ownerAfter = try #require(ownerDecision.takenPlan)
+        #expect(ownerAfter.memos.map(\.id) == ["m1", "mA", "mB"])
+
+        // 並べ替えただけのときも、同行者へは送らない
+        var reordered = ownerAfter
+        reordered.reorderMemos(displayedIds: ["m1", "mB", "mA"])
+        #expect(reordered.isSharedContentEqual(to: ownerAfter))
+        #expect(!reordered.isContentEqual(to: ownerAfter))
+    }
 }

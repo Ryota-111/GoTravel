@@ -603,13 +603,16 @@ struct TravelPlan: Identifiable, Codable {
     /// 持ち主のいる持ち物・お土産と写真のファイル名は各自のもので、
     /// パブリックDBには載せていない（`CloudKitService.applySharedPlanFields`）。
     /// ここが違うだけなら相手へ送るものは無い。
-    /// 並び順は端末ごとに違ってよいので、共有の持ち物は id 順にそろえて比べる
+    /// 並び順は端末ごとに違ってよいので、共有の持ち物とメモは id 順にそろえて比べる
     func isSharedContentEqual(to other: TravelPlan) -> Bool {
         func sharedPart(of plan: TravelPlan) -> TravelPlan {
             var copy = plan
             copy.localImageFileName = nil
-            // 自分だけのメモは載せていない
-            copy.memos = plan.sharedMemos
+            // 自分だけのメモは載せていない。
+            // メモの並びも端末ごと（3.7 から並べ替えられ、突き合わせでも手元の並びを保つ）。
+            // 並びまで比べると、2人が同時にメモを足したり片方が並べ替えたりしたあと、
+            // 中身は同じなのに「相手と違う」ことになって、突き合わせのたびに送り合い続ける
+            copy.memos = plan.sharedMemos.sorted { $0.id < $1.id }
             copy.packingItems = plan.packingItems
                 .filter { $0.ownerId == nil }
                 .sorted { $0.id < $1.id }
