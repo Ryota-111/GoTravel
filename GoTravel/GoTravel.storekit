@@ -63,7 +63,7 @@
       "type" : "Consumable"
     },
     {
-      "displayPrice" : "490",
+      "displayPrice" : "980",
       "familyShareable" : false,
       "internalID" : "pro_themes",
       "localizations" : [
