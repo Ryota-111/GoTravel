@@ -36,6 +36,16 @@ struct TripMemo: Identifiable, Codable, Equatable {
         return firstLine.isEmpty ? "メモ" : firstLine
     }
 
+    /// 題名の下に出す本文。題名が無く本文の1行目を題名にしているときは、その行を除く
+    /// （同じ文が題名と本文に2回出ないように）
+    var bodyBelowTitle: String {
+        guard title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return body }
+        var lines = body.components(separatedBy: .newlines)
+        guard let first = lines.firstIndex(where: { !$0.trimmingCharacters(in: .whitespaces).isEmpty }) else { return "" }
+        lines.removeSubrange(...first)
+        return lines.joined(separator: "\n").trimmingCharacters(in: .whitespacesAndNewlines)
+    }
+
     var isEmpty: Bool {
         title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && body.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -65,6 +75,30 @@ struct TripMemo: Identifiable, Codable, Equatable {
         authorId = try c.decodeIfPresent(String.self, forKey: .authorId)
         createdAt = try c.decodeIfPresent(Date.self, forKey: .createdAt) ?? Date()
         updatedAt = try c.decodeIfPresent(Date.self, forKey: .updatedAt) ?? Date()
+    }
+}
+
+// MARK: - 並び（3.7）
+//
+// 3.6 までは「書き換えた順」に並べていたので、メモを直すたびに一番上へ動いていた。
+// 「更新すると上にいくのをやめてほしい」「移動できるようにしてほしい」というご要望から、
+// **配列の順を並びとし、画面には後ろから出す**（新しく足したメモが上）。
+//
+// 後ろから出すのは、古い版のアプリ・共有の突き合わせが、新しいメモを配列の後ろに足すため。
+// こうしておけば、どの版で足したメモも一番上に出て、並べ替えた順も崩れない
+
+extension TravelPlan {
+    /// 画面に出す順（上から）
+    var orderedMemos: [TripMemo] { memos.reversed() }
+
+    /// 画面で並べ替えた順（上から）を、保存する順に直す。
+    /// 並べ替えのあいだに届いたメモ（並べ替えの画面に無かったもの）は、一番上に残す
+    mutating func reorderMemos(displayedIds: [String]) {
+        let byId = Dictionary(memos.map { ($0.id, $0) }, uniquingKeysWith: { first, _ in first })
+        let listed = Set(displayedIds)
+        let ordered = displayedIds.reversed().compactMap { byId[$0] }
+        let arrived = memos.filter { !listed.contains($0.id) }
+        memos = ordered + arrived
     }
 }
 

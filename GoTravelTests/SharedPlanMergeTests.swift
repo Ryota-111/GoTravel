@@ -383,4 +383,85 @@ struct SharedPlanMergeTests {
 
         #expect(second.isDoNothing)
     }
+
+    // MARK: - みんなで持っていく物（3.7）
+
+    @Test("みんなの欄の持ち物は共有され、相手が決めた担当とチェックが届く。自分の欄の持ち物は残る")
+    func sharedPackingItemsMerge() {
+        let tent = PackingItem(id: "tent", name: "テント", kind: .packing, ownerId: nil)
+        let charger = PackingItem(id: "charger", name: "充電器", kind: .packing, ownerId: "me")
+        let base = makePlan(updatedAt: t(0), packingItems: [tent])
+        let local = makePlan(updatedAt: t(5), packingItems: [tent, charger])
+        var remoteTent = tent
+        remoteTent.assigneeId = "owner"
+        remoteTent.isChecked = true
+        let remote = makePlan(updatedAt: t(10), packingItems: [remoteTent])
+
+        let decision = SharedPlanMerge.decide(local: local, remote: remote, base: base, myUserId: "me")
+        let merged = try! #require(decision.takenPlan ?? decision.pushedPlan)
+
+        let mergedTent = merged.packingItems.first { $0.id == "tent" }
+        #expect(mergedTent?.assigneeId == "owner")
+        #expect(mergedTent?.isChecked == true)
+        #expect(merged.packingItems.contains { $0.id == "charger" && $0.ownerId == "me" })
+    }
+
+    @Test("担当は保存して読み直しても残り、担当の無い前のデータも読める")
+    func assigneeCodable() throws {
+        let item = PackingItem(name: "クーラーボックス", kind: .packing, ownerId: nil, assigneeId: "owner")
+        let decoded = try JSONDecoder().decode(PackingItem.self, from: JSONEncoder().encode(item))
+        #expect(decoded.assigneeId == "owner")
+        #expect(decoded.isShared)
+
+        let old = #"{"id":"a","name":"充電器","isChecked":false,"kind":"packing","ownerId":"me"}"#
+        let legacy = try JSONDecoder().decode(PackingItem.self, from: Data(old.utf8))
+        #expect(legacy.assigneeId == nil)
+        #expect(!legacy.isShared)
+    }
+
+    @Test("渡す相手や担当を変えただけでも、変わったとみなして同行者へ送る")
+    func recipientAndAssigneeAreContent() {
+        let item = PackingItem(id: "a", name: "テント", kind: .packing, ownerId: nil)
+        var assigned = item
+        assigned.assigneeId = "owner"
+        var souvenir = PackingItem(id: "b", name: "ちんすこう", kind: .souvenir, ownerId: nil)
+        let before = makePlan(updatedAt: t(0), packingItems: [item, souvenir])
+        souvenir.recipient = "会社"
+        let after = makePlan(updatedAt: t(0), packingItems: [assigned, souvenir])
+
+        #expect(!before.isContentEqual(to: after))
+        #expect(!before.isSharedContentEqual(to: after))
+    }
+
+    @Test("2人が同時にメモを足して並びが食い違っても、送り合い続けない（並びは端末ごと）")
+    func memoOrderDoesNotPingPong() throws {
+        let first = TripMemo(id: "m1", title: "集合場所", createdAt: t(0), updatedAt: t(0))
+        let mine = TripMemo(id: "mA", title: "オーナーのメモ", createdAt: t(1), updatedAt: t(1))
+        let theirs = TripMemo(id: "mB", title: "同行者のメモ", createdAt: t(2), updatedAt: t(2))
+        var base = makePlan(updatedAt: t(0))
+        base.memos = [first]
+        // オーナーが足して送った
+        var owner = makePlan(updatedAt: t(5))
+        owner.memos = [first, mine]
+        // 同じころ、同行者も足していた
+        var member = makePlan(userId: "me", updatedAt: t(6))
+        member.memos = [first, theirs]
+
+        // 同行者が突き合わせて、自分のメモを送る
+        let memberDecision = SharedPlanMerge.decide(local: member, remote: owner, base: base, myUserId: "me")
+        let published = try #require(memberDecision.pushedPlan)
+        #expect(Set(published.memos.map(\.id)) == ["m1", "mA", "mB"])
+
+        // オーナーが受け取る。メモはそろったので、並びが違うだけでは送り返さない
+        let ownerDecision = SharedPlanMerge.decide(local: owner, remote: published, base: owner, myUserId: "owner")
+        #expect(ownerDecision.pushedPlan == nil)
+        let ownerAfter = try #require(ownerDecision.takenPlan)
+        #expect(ownerAfter.memos.map(\.id) == ["m1", "mA", "mB"])
+
+        // 並べ替えただけのときも、同行者へは送らない
+        var reordered = ownerAfter
+        reordered.reorderMemos(displayedIds: ["m1", "mB", "mA"])
+        #expect(reordered.isSharedContentEqual(to: ownerAfter))
+        #expect(!reordered.isContentEqual(to: ownerAfter))
+    }
 }

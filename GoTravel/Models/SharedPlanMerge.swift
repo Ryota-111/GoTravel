@@ -140,7 +140,7 @@ enum SharedPlanMerge {
                     + local.packingItems.filter { $0.ownerId != nil },
                 local: local.packingItems
             )
-            merged.memos = newer.sharedMemos + local.privateMemos
+            merged.memos = orderedLikeLocal(newer.sharedMemos + local.privateMemos, local: local.memos)
             return merged
         }
 
@@ -175,14 +175,15 @@ enum SharedPlanMerge {
         merged.packingItems = mergePackingItems(local: local, remote: remote, base: base)
 
         // メモ（3.0 から何枚も）：共有メモは1枚ずつ、書き換えたほうを採る。
-        // 自分だけのメモは共有レコードに載っていないので、手元の分をそのまま残す
-        merged.memos = merge(
+        // 自分だけのメモは共有レコードに載っていないので、手元の分をそのまま残す。
+        // 並びは手元のまま（3.7 から並べ替えられる。自分だけのメモが共有メモの間にあっても崩さない）
+        merged.memos = orderedLikeLocal(merge(
             local: local.sharedMemos,
             remote: remote.sharedMemos,
             base: base.sharedMemos,
             id: \.id,
             hasBase: true
-        ) + local.privateMemos
+        ) + local.privateMemos, local: local.memos)
 
         return merged
     }
@@ -287,7 +288,7 @@ enum SharedPlanMerge {
     ///
     /// 共有ぶんと自分のぶんを継ぎ足すと、自分が並べた順番が崩れるうえ、
     /// 中身が同じでも「手元と違う」ことになって毎回保存が走る
-    private static func orderedLikeLocal(_ items: [PackingItem], local: [PackingItem]) -> [PackingItem] {
+    private static func orderedLikeLocal<Item: Identifiable>(_ items: [Item], local: [Item]) -> [Item] where Item.ID == String {
         let position = Dictionary(local.enumerated().map { ($0.element.id, $0.offset) },
                                   uniquingKeysWith: { first, _ in first })
         return items.enumerated().sorted { lhs, rhs in
@@ -307,6 +308,7 @@ enum SharedPlanMerge {
             && lhs.note == rhs.note
             && lhs.recipient == rhs.recipient
             && lhs.ownerId == rhs.ownerId
+            && lhs.assigneeId == rhs.assigneeId
     }
 
     // MARK: - 突き合わせの本体

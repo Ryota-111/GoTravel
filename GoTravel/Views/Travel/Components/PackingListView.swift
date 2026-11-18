@@ -23,8 +23,8 @@ struct PackingListView: View {
     @State private var collapsedRecipients: Set<String> = []
     /// ドラッグしたお土産を、いま重ねている相手（`SouvenirGroup.id`）
     @State private var dropTargetRecipient: String?
-    /// お土産を「自分だけ」で足すか（共有中の旅行でだけ選べる。はじめは「みんな」）
-    @State private var newItemIsPrivate = false
+    /// 「自分の」欄に足すか（共有中の旅行でだけ選べる。3.7 から、どのリストも「自分の」から始める）
+    @State private var newItemIsPrivate = true
     /// 「よく使う持ち物」で選択中のもの。まとめて追加するまで保持する
     @State private var selectedPresets: Set<String> = []
     @State private var showPresetEditor = false
@@ -43,15 +43,16 @@ struct PackingListView: View {
             .filter { $0.kind == kind && $0.isVisible(to: authVM.userId) }
     }
 
-    /// 新しく足す項目の持ち主。
-    /// やりたいことは「みんなのもの」にしたいので持ち主を付けない。
-    /// お土産は「みんな」から始まり、共有中の旅行で「自分だけ」を選んだときだけ持ち主を付ける
+    /// 新しく足す項目の持ち主（3.7）。
+    /// 共有中の旅行では、選んだ欄に入れる（「自分だけ」なら持ち主を付け、「みんな」なら付けない）。
+    /// 共有していない旅行では 3.6 までと同じ（持ち物は自分のもの、お土産・やりたいことは持ち主なし）。
+    /// しおりは持ち主の無いお土産だけを載せるので、ここを変えると、共有していない人のしおりからお土産が消える
     private var newItemOwnerId: String? {
-        if kind.choosesVisibilityPerItem {
-            return currentPlan?.isShared == true && newItemIsPrivate ? authVM.userId : nil
-        }
-        return kind.isSharedWithMembers ? nil : authVM.userId
+        guard isSharedPlan else { return kind == .packing ? authVM.userId : nil }
+        return newItemIsPrivate ? authVM.userId : nil
     }
+
+    private var isSharedPlan: Bool { currentPlan?.isShared == true }
 
     /// よく使うものから足すときの渡す相手。相手の欄に書いてあればその人のぶんにする
     private var presetRecipient: String? {
@@ -127,7 +128,7 @@ struct PackingListView: View {
         }
         .sheet(isPresented: $showReorder) {
             // 見えている順（済んだものは下）から並べ替え始める
-            PackingReorderView(kind: kind, items: sortedItems) { orderedIds in
+            PackingReorderView(kind: kind, items: sortedItems, splitsSections: isSharedPlan) { orderedIds in
                 saveOrder(orderedIds)
             }
         }
@@ -144,7 +145,7 @@ struct PackingListView: View {
 
     private var sharingBadge: some View {
         HStack(spacing: 7) {
-            Image(systemName: kind.isSharedWithMembers || kind.choosesVisibilityPerItem ? "person.2.fill" : "lock.fill")
+            Image(systemName: "person.2.fill")
                 .font(.system(size: 11, weight: .semibold))
 
             Text(kind.sharingNote)
@@ -223,11 +224,11 @@ struct PackingListView: View {
                     )
             }
 
-            // 共有中の旅行のお土産は、足す前に「みんな」か「自分だけ」かを選べる
-            if kind.choosesVisibilityPerItem && currentPlan?.isShared == true {
-                Picker("見る人", selection: $newItemIsPrivate) {
-                    Label("みんな", systemImage: "person.2.fill").tag(false)
+            // 共有中の旅行では、足す前にどちらの欄に入れるか選ぶ（はじめは「自分の」）
+            if isSharedPlan {
+                Picker("入れる欄", selection: $newItemIsPrivate) {
                     Label("自分だけ", systemImage: "lock.fill").tag(true)
+                    Label("みんな", systemImage: "person.2.fill").tag(false)
                 }
                 .pickerStyle(.segmented)
             }
@@ -350,23 +351,96 @@ struct PackingListView: View {
 
     // MARK: - 一覧
 
+    /// 共有中の旅行では「みんなの」と「自分の」の2つの欄に分ける（3.7）。共有していなければ1つ
     @ViewBuilder
     private var itemsList: some View {
-        if kind.usesRecipient && SouvenirGrouping.usesGroups(items) {
-            groupedList
+        if isSharedPlan {
+            VStack(spacing: 18) {
+                section(isShared: true)
+                section(isShared: false)
+            }
         } else {
-            flatList
+            list(of: items, sectionKey: "")
         }
     }
 
+    @ViewBuilder
+    private func list(of sectionItems: [PackingItem], sectionKey: String) -> some View {
+        if kind.usesRecipient && SouvenirGrouping.usesGroups(sectionItems) {
+            groupedList(sectionItems, sectionKey: sectionKey)
+        } else {
+            flatList(sectionItems)
+        }
+    }
+
+    private func section(isShared: Bool) -> some View {
+        let sectionItems = items.filter { $0.isShared == isShared }
+        let title = isShared ? kind.sharedSectionTitle : kind.privateSectionTitle
+        return VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 6) {
+                Image(systemName: isShared ? "person.2.fill" : "lock.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .foregroundColor(isShared ? accent : themeManager.currentTheme.secondaryText)
+                Text(title)
+                    .font(.system(size: 14, weight: .bold))
+                    .foregroundColor(themeManager.currentTheme.adaptiveText(for: colorScheme))
+                if !sectionItems.isEmpty {
+                    Text("\(sectionItems.filter(\.isChecked).count)/\(sectionItems.count)")
+                        .font(.caption.weight(.semibold).monospacedDigit())
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                }
+                Spacer(minLength: 0)
+                // この欄に足す。上の入力欄の「自分だけ／みんな」をこの欄に合わせて、名前の欄に移る
+                Button {
+                    newItemIsPrivate = !isShared
+                    isInputFocused = true
+                } label: {
+                    Image(systemName: "plus.circle")
+                        .font(.system(size: 17))
+                        .foregroundColor(accent)
+                        .frame(width: 30, height: 28)
+                        .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(Text("\(title)に足す"))
+            }
+            .padding(.horizontal, 4)
+            .accessibilityElement(children: .contain)
+
+            if sectionItems.isEmpty {
+                Text(isShared
+                     ? "まだありません。上で「みんな」を選んで足すか、項目の「…」から移せます"
+                     : "まだありません。上で「自分だけ」を選んで足すか、項目の「…」から移せます")
+                    .font(.caption)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
+                    .padding(.horizontal, 4)
+            } else {
+                list(of: sectionItems, sectionKey: isShared ? "shared:" : "private:")
+            }
+        }
+    }
+
+    /// 済んだものは下へ送る（見えている順）
+    private func checkedLast(_ list: [PackingItem]) -> [PackingItem] {
+        list.enumerated()
+            .sorted { lhs, rhs in
+                if lhs.element.isChecked != rhs.element.isChecked { return !lhs.element.isChecked }
+                return lhs.offset < rhs.offset
+            }
+            .map(\.element)
+    }
+
     /// 渡す相手ごとにまとめた一覧（3.5）。相手の行を押すと開け閉めできる。
-    /// お土産を長押しして、ほかの相手のまとまり（閉じていても見出しでよい）へドラッグすると移せる
-    private var groupedList: some View {
+    /// お土産を長押しして、ほかの相手のまとまり（閉じていても見出しでよい）へドラッグすると移せる。
+    /// 共有中の旅行では欄ごとにまとめ、ドラッグで移せるのは同じ欄の中だけ（`sectionKey` で閉じた相手も分ける）
+    private func groupedList(_ sectionItems: [PackingItem], sectionKey: String) -> some View {
         VStack(spacing: 10) {
-            ForEach(SouvenirGrouping.groups(items)) { group in
+            ForEach(SouvenirGrouping.groups(sectionItems)) { group in
+                let groupKey = sectionKey + group.id
                 VStack(spacing: 8) {
-                    groupHeader(group)
-                    if !collapsedRecipients.contains(group.id) {
+                    groupHeader(group, key: groupKey)
+                    if !collapsedRecipients.contains(groupKey) {
                         ForEach(group.items) { item in
                             PackingItemRow(item: item, planId: plan.id ?? "")
                                 .environmentObject(viewModel)
@@ -386,30 +460,31 @@ struct PackingListView: View {
                 .padding(4)
                 .background(
                     RoundedRectangle(cornerRadius: AppRadius.large)
-                        .fill(dropTargetRecipient == group.id ? accent.opacity(0.10) : Color.clear)
+                        .fill(dropTargetRecipient == groupKey ? accent.opacity(0.10) : Color.clear)
                         .overlay(
                             RoundedRectangle(cornerRadius: AppRadius.large)
-                                .stroke(dropTargetRecipient == group.id ? accent.opacity(0.6) : Color.clear,
+                                .stroke(dropTargetRecipient == groupKey ? accent.opacity(0.6) : Color.clear,
                                         style: StrokeStyle(lineWidth: 1.5, dash: [5, 4]))
                         )
                 )
                 .dropDestination(for: String.self) { ids, _ in
                     dropTargetRecipient = nil
-                    return moveSouvenirs(ids, to: group.recipient)
+                    return moveSouvenirs(ids, to: group.recipient, within: sectionItems, key: sectionKey)
                 } isTargeted: { targeted in
                     if targeted {
-                        dropTargetRecipient = group.id
-                    } else if dropTargetRecipient == group.id {
+                        dropTargetRecipient = groupKey
+                    } else if dropTargetRecipient == groupKey {
                         dropTargetRecipient = nil
                     }
                 }
             }
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: items.map(\.isChecked))
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: sectionItems.map(\.isChecked))
     }
 
-    /// ドラッグで落としたお土産を、その相手へ移す。この旅行のお土産でなければ何もしない
-    private func moveSouvenirs(_ ids: [String], to recipient: String?) -> Bool {
+    /// ドラッグで落としたお土産を、その相手へ移す。同じ欄のお土産でなければ何もしない
+    private func moveSouvenirs(_ ids: [String], to recipient: String?, within sectionItems: [PackingItem], key sectionKey: String) -> Bool {
+        let items = sectionItems
         let known = Set(items.map(\.id))
         let moving = ids.filter { known.contains($0) }
         guard !moving.isEmpty, let userId = authVM.userId,
@@ -421,22 +496,22 @@ struct PackingListView: View {
         updatedPlan.assignSouvenirs(moving, to: recipient)
         withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) {
             viewModel.update(updatedPlan, userId: userId)
-            if let recipient { collapsedRecipients.remove(recipient) } else { collapsedRecipients.remove("") }
+            collapsedRecipients.remove(sectionKey + (recipient ?? ""))
         }
         UIImpactFeedbackGenerator(style: .medium).impactOccurred()
         return true
     }
 
-    private func groupHeader(_ group: SouvenirGroup) -> some View {
-        let isCollapsed = collapsedRecipients.contains(group.id)
+    private func groupHeader(_ group: SouvenirGroup, key: String) -> some View {
+        let isCollapsed = collapsedRecipients.contains(key)
         let isDone = group.checkedCount == group.items.count
         return HStack(spacing: 8) {
             Button {
                 withAnimation(.easeInOut(duration: 0.2)) {
                     if isCollapsed {
-                        collapsedRecipients.remove(group.id)
+                        collapsedRecipients.remove(key)
                     } else {
-                        collapsedRecipients.insert(group.id)
+                        collapsedRecipients.insert(key)
                     }
                 }
             } label: {
@@ -472,6 +547,7 @@ struct PackingListView: View {
             // この人に渡すものを足す。相手の欄に名前を入れて、名前の欄に移る
             Button {
                 newItemRecipient = group.recipient ?? ""
+                if isSharedPlan { newItemIsPrivate = !key.hasPrefix("shared:") }
                 isInputFocused = true
             } label: {
                 Image(systemName: "plus.circle")
@@ -487,16 +563,17 @@ struct PackingListView: View {
         .padding(.top, 4)
     }
 
-    private var flatList: some View {
-        VStack(spacing: 8) {
-            ForEach(sortedItems) { item in
+    private func flatList(_ sectionItems: [PackingItem]) -> some View {
+        let sorted = checkedLast(sectionItems)
+        return VStack(spacing: 8) {
+            ForEach(sorted) { item in
                 PackingItemRow(item: item, planId: plan.id ?? "")
                     .environmentObject(viewModel)
                     .environmentObject(authVM)
                     .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: sortedItems.map(\.isChecked))
+        .animation(.spring(response: 0.35, dampingFraction: 0.8), value: sorted.map(\.isChecked))
     }
 
     // MARK: - 空のとき
@@ -609,8 +686,8 @@ struct PackingListView: View {
     /// - **チェックは外す。** 前回入れ終えたことは、今回の準備には関係ない
     /// - **同じ名前は重ねない。** すでに「充電器」があるところに
     ///   もう1つ増えても困るだけ
-    /// - **持ち主は自分にする。** 前の旅行で共有だった項目でも、
-    ///   持ち物とお土産は各自のものという扱いに揃える
+    /// - **入れる欄は、上で選んでいる欄にする**（はじめは「自分の」）。前の旅行でみんなのものだった
+    ///   項目でも、今回の同行者に見せるかは改めて選んでもらう
     private func importItems(_ incoming: [PackingItem]) {
         guard let userId = authVM.userId,
               var updatedPlan = currentPlan ?? Optional(plan) else { return }
@@ -664,6 +741,7 @@ struct PackingListView: View {
         )
         // 足した相手が閉じていたら開く（足したものが見えないと、足せたか分からない）
         collapsedRecipients.remove(recipient)
+        collapsedRecipients.remove((newItemOwnerId == nil ? "shared:" : "private:") + recipient)
 
         withAnimation(.spring(response: 0.3, dampingFraction: 0.7)) {
             if let userId = authVM.userId {
@@ -773,12 +851,16 @@ struct PackingItemRow: View {
 
             Spacer(minLength: 0)
 
-            // 共有中の旅行の、自分だけのお土産（同行者には見えない）
-            if showsVisibilityChoice && item.ownerId != nil {
-                Image(systemName: "lock.fill")
-                    .font(.system(size: 11))
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-                    .accessibilityLabel("自分だけ")
+            // みんなで持っていく物の担当（3.7）
+            if let assignee = assigneeName {
+                Label(assignee, systemImage: "person.fill")
+                    .font(.system(size: 11, weight: .semibold))
+                    .lineLimit(1)
+                    .foregroundColor(accent)
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(Capsule().fill(accent.opacity(0.12)))
+                    .accessibilityLabel(Text("担当 \(assignee)"))
             }
 
             // 編集と削除は右端の「…」から。長押しの contextMenu だけだと気づけないので常に出す。
@@ -786,6 +868,9 @@ struct PackingItemRow: View {
             Menu {
                 Button("編集", systemImage: "pencil", action: startEditing)
                 duplicateMenu
+                if showsAssigneeChoice {
+                    assigneeMenu
+                }
                 if showsVisibilityChoice {
                     visibilityButton
                 }
@@ -887,26 +972,80 @@ struct PackingItemRow: View {
         UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
-    /// 共有中の旅行のお土産で、「みんな」と「自分だけ」を切り替えられるか
+    /// 共有中の旅行で、「みんなの」と「自分の」の欄を移せるか（3.7 から、どのリストも）
     private var showsVisibilityChoice: Bool {
-        item.kind.choosesVisibilityPerItem && currentPlan?.isShared == true
+        currentPlan?.isShared == true
     }
 
     @ViewBuilder
     private var visibilityButton: some View {
-        if item.ownerId == nil {
-            Button("自分だけにする", systemImage: "lock.fill") { setPrivate(true) }
+        if item.isShared {
+            Button("「\(item.kind.privateSectionTitle)」へ移す", systemImage: "lock.fill") { setPrivate(true) }
         } else {
-            Button("みんなに見せる", systemImage: "person.2.fill") { setPrivate(false) }
+            Button("「\(item.kind.sharedSectionTitle)」へ移す", systemImage: "person.2.fill") { setPrivate(false) }
         }
     }
 
-    /// 自分だけにすると、同行者のリストからは消える（共有には載らなくなる）
+    // MARK: 担当（3.7）
+
+    private var members: [String] { currentPlan?.sharedWith ?? [] }
+
+    /// みんなで持っていく物で、担当を選べるか
+    private var showsAssigneeChoice: Bool {
+        item.kind.usesAssignee && item.isShared && currentPlan?.isShared == true && !members.isEmpty
+    }
+
+    private func memberName(_ userId: String) -> String {
+        SharedMembers.displayName(of: userId, names: viewModel.memberNames(for: planId),
+                                  members: members, myUserId: authVM.userId)
+    }
+
+    /// 行に出す担当の名前。みんなの欄の項目で、担当が決まっているときだけ
+    private var assigneeName: String? {
+        guard item.kind.usesAssignee, item.isShared, currentPlan?.isShared == true,
+              let assigneeId = item.assigneeId else { return nil }
+        return memberName(assigneeId)
+    }
+
+    private var assigneeMenu: some View {
+        Menu {
+            ForEach(members, id: \.self) { userId in
+                Button {
+                    setAssignee(userId)
+                } label: {
+                    if item.assigneeId == userId {
+                        Label(memberName(userId), systemImage: "checkmark")
+                    } else {
+                        Text(memberName(userId))
+                    }
+                }
+            }
+            if item.assigneeId != nil {
+                Button("決めない", systemImage: "xmark") { setAssignee(nil) }
+            }
+        } label: {
+            Label("持っていく人", systemImage: "person.crop.circle.badge.checkmark")
+        }
+    }
+
+    private func setAssignee(_ userId: String?) {
+        guard var updatedPlan = currentPlan,
+              let index = updatedPlan.packingItems.firstIndex(where: { $0.id == item.id }),
+              let myUserId = authVM.userId,
+              updatedPlan.packingItems[index].assigneeId != userId else { return }
+        updatedPlan.packingItems[index].assigneeId = userId
+        withAnimation(.easeInOut(duration: 0.2)) {
+            viewModel.update(updatedPlan, userId: myUserId)
+        }
+    }
+
+    /// 自分の欄へ移すと、同行者のリストからは消える（共有には載らなくなる）。担当も外す
     private func setPrivate(_ isPrivate: Bool) {
         guard var updatedPlan = currentPlan,
               let index = updatedPlan.packingItems.firstIndex(where: { $0.id == item.id }),
               let userId = authVM.userId else { return }
         updatedPlan.packingItems[index].ownerId = isPrivate ? userId : nil
+        if isPrivate { updatedPlan.packingItems[index].assigneeId = nil }
         withAnimation(.easeInOut(duration: 0.2)) {
             viewModel.update(updatedPlan, userId: userId)
         }

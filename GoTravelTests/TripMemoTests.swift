@@ -132,4 +132,54 @@ struct TripMemosTests {
         #expect(a.isSharedContentEqual(to: b))
         #expect(!a.isContentEqual(to: b))
     }
+
+    @Test("題名が無いときは、題名にした本文の1行目を本文には出さない")
+    func bodyBelowTitleSkipsFirstLine() {
+        #expect(TripMemo(title: "", body: "集合は那覇空港\n10時に到着ロビー").bodyBelowTitle == "10時に到着ロビー")
+        #expect(TripMemo(title: "", body: "\n  集合は那覇空港\n\n10時").bodyBelowTitle == "10時")
+        #expect(TripMemo(title: "", body: "集合は那覇空港").bodyBelowTitle == "")
+        #expect(TripMemo(title: "集合", body: "集合は那覇空港\n10時").bodyBelowTitle == "集合は那覇空港\n10時")
+    }
+
+    // MARK: - 並び（3.7）
+
+    @Test("画面には新しく足したメモが上に出て、直しても並びは動かない")
+    func displayOrderIgnoresEdits() {
+        var trip = plan(memos: [memo("a", "集合"), memo("b", "駐車場")], updatedAt: 0)
+        #expect(trip.orderedMemos.map(\.id) == ["b", "a"])
+
+        trip.memos[0].body = "集合 10時"
+        trip.memos[0].updatedAt = Self.base.addingTimeInterval(100)
+        #expect(trip.orderedMemos.map(\.id) == ["b", "a"])
+
+        trip.memos.append(memo("c", "新しい"))
+        #expect(trip.orderedMemos.map(\.id) == ["c", "b", "a"])
+    }
+
+    @Test("並べ替えた順で出る。並べ替えのあいだに届いたメモは一番上に残る")
+    func reorder() {
+        var trip = plan(memos: [memo("a", "1"), memo("b", "2"), memo("c", "3")], updatedAt: 0)
+        trip.reorderMemos(displayedIds: ["a", "c", "b"])
+        #expect(trip.orderedMemos.map(\.id) == ["a", "c", "b"])
+
+        trip.memos.append(memo("d", "届いた"))
+        trip.reorderMemos(displayedIds: ["b", "a", "c"])
+        #expect(trip.orderedMemos.map(\.id) == ["d", "b", "a", "c"])
+    }
+
+    @Test("共有した旅行の突き合わせで、自分だけのメモを間に並べた順が崩れない")
+    func mergeKeepsLocalOrder() {
+        let base = plan(memos: [memo("a", "集合"), memo("b", "駐車場")], updatedAt: 0)
+        // 画面では上から b・p・a
+        let local = plan(memos: [memo("a", "集合"), memo("p", "自分用", private: true), memo("b", "駐車場")],
+                         updatedAt: 10)
+        let remote = plan(memos: [memo("a", "集合 10時"), memo("b", "駐車場"), memo("c", "新しい")], updatedAt: 20)
+
+        let result = merged(local: local, remote: remote, base: base)
+        #expect(result?.orderedMemos.map(\.id) == ["c", "b", "p", "a"])
+        #expect(result?.memos.first { $0.id == "a" }?.body == "集合 10時")
+
+        let withoutBase = merged(local: local, remote: remote, base: nil)
+        #expect(withoutBase?.orderedMemos.map(\.id) == ["c", "b", "p", "a"])
+    }
 }

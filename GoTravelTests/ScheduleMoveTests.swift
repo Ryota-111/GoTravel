@@ -112,13 +112,26 @@ struct ScheduleMoveTests {
         #expect(Reservation.guessedKind(title: "船場センタービル", location: nil) != .ferry)
     }
 
+    @Test("新幹線の予約の出発・到着は、列車名ではなく駅の名前で付ける。駅が無ければ列車名")
+    func trainLegTitlesUseStations() {
+        var reservation = Reservation(kind: .train, date: Date(timeIntervalSince1970: 1_790_000_000),
+                                      transportNumber: "のぞみ23号", departurePlace: "東京", arrivalPlace: "新大阪",
+                                      arrivalDate: Date(timeIntervalSince1970: 1_790_009_000))
+        #expect(reservation.itineraryItems().map(\.title) == ["東京 出発", "新大阪 到着"])
+        #expect(reservation.itineraryItems()[0].move?.line == "のぞみ23号")
+
+        reservation.departurePlace = " "
+        reservation.arrivalPlace = nil
+        #expect(reservation.itineraryItems().map(\.title) == ["のぞみ23号 出発", "のぞみ23号 到着"])
+    }
+
     @Test("バスの予約は出発と到着の2件として行程に入り、出発にだけ便を添える")
     func busItinerary() {
         let reservation = Reservation(kind: .bus, title: "夜行バス", date: Date(timeIntervalSince1970: 1_790_000_000),
                                       transportNumber: "VIP 3便", departurePlace: "梅田", arrivalPlace: "新宿",
                                       arrivalDate: Date(timeIntervalSince1970: 1_790_030_000))
         let items = reservation.itineraryItems()
-        #expect(items.map(\.title) == ["VIP 3便 出発", "VIP 3便 到着"])
+        #expect(items.map(\.title) == ["梅田 出発", "新宿 到着"])
         #expect(items.map(\.location) == ["梅田", "新宿"])
         #expect(items[0].move?.line == "VIP 3便")
         #expect(items[0].move?.transportMode == .bus)

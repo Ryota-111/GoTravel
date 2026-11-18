@@ -421,13 +421,13 @@ private struct BackupPlanDetailView: View {
                 }
             } else if !plan.memos.isEmpty {
                 // 3.0 からはメモが何枚もある
-                ForEach(plan.memos) { memo in
+                ForEach(plan.orderedMemos) { memo in
                     VStack(alignment: .leading, spacing: 6) {
                         Text(memo.displayTitle)
                             .font(.subheadline.weight(.semibold))
                             .foregroundColor(palette.text)
-                        if !memo.body.isEmpty {
-                            Text(memo.body)
+                        if !memo.bodyBelowTitle.isEmpty {
+                            Text(memo.bodyBelowTitle)
                                 .foregroundColor(palette.text)
                         }
                     }

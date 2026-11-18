@@ -103,7 +103,7 @@ struct ReservationItinerarySyncTests {
         trip.syncScheduleItems(for: edited, previous: flight, isOn: true)
 
         let items = trip.scheduleItems(forReservation: flight.id)
-        #expect(items.map(\.title) == ["羽田→那覇（ANA）", "NH991 到着"])
+        #expect(items.map(\.title) == ["羽田→那覇（ANA）", "那覇空港 到着"])
         #expect(items[0].time == date(6, 11))
         #expect(items.map(\.id).first == departure.id)
     }
@@ -368,7 +368,7 @@ extension ReservationItinerarySyncTests {
         trip.syncScheduleItems(for: flight, isOn: true)
 
         let items = trip.scheduleItems(forReservation: flight.id)
-        #expect(items.map(\.title) == ["NH991 出発", "NH991 到着"])
+        #expect(items.map(\.title) == ["羽田空港 出発", "那覇空港 到着"])
         #expect(items.map(\.location) == ["羽田空港", "那覇空港"])
         #expect(items.map(\.latitude) == [35.55, 26.20])          // ピンは出発地と到着地の両方
         #expect(items[0].isRouteLeg && !items[0].isSingleMove)
@@ -448,7 +448,7 @@ extension ReservationItinerarySyncTests {
         let items = trip.scheduleItems(forReservation: id)
         #expect(items.count == 2)
         #expect(items[0].id == "m")
-        #expect(items.map(\.title) == ["市バス 206系統 出発", "市バス 206系統 到着"])
+        #expect(items.map(\.title) == ["京都駅 出発", "清水道 到着"])
         #expect(items.map(\.location) == ["京都駅", "清水道"])
         #expect(items[0].endTime == nil)
         #expect(items[0].notes == "予約番号 B-778\n前の方の席がいい")

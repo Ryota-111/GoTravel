@@ -472,15 +472,23 @@ extension Reservation {
         return label?.isEmpty == false ? label! : title
     }
 
+    /// 出発・到着の予定の名前。「東京 出発」「新大阪 到着」のように駅・空港の名前で付ける（3.7）。
+    /// 便名・列車名は出発の予定の乗り物の行に出るので、名前にまで入れると「のぞみ23号 出発」
+    /// 「のぞみ23号 到着」と、どこを出てどこに着くのか名前から分からなかった（ご報告から）。
+    /// 場所が無ければ、今までどおり便名（無ければ予約の名前）で付ける
+    private func legTitle(place: String?, suffix: String) -> String {
+        let name = place?.trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        return "\(name.isEmpty ? legacyName : name) \(suffix)"
+    }
+
     /// 乗り物の予約の「出発」「到着」の2件。出発にだけ乗り物・便・のりば・座席を持たせる（3.4）
     private func routeItems() -> [ScheduleItem] {
         guard kind.usesRoute, let date else { return [] }
-        let name = legacyName
         let move = scheduleMove
         var items = [
             // 費用は1件目（出発）にだけ入れる。到着にも入れると予算で2重に数える
             ScheduleItem(time: date,
-                         title: "\(name) 出発",
+                         title: legTitle(place: departurePlace, suffix: "出発"),
                          location: departurePlace,
                          notes: itineraryNotes,
                          latitude: departureLocation?.latitude,
@@ -495,7 +503,7 @@ extension Reservation {
         if let arrivalDate {
             items.append(
                 ScheduleItem(time: arrivalDate,
-                             title: "\(name) 到着",
+                             title: legTitle(place: arrivalPlace, suffix: "到着"),
                              location: arrivalPlace,
                              notes: nil,
                              latitude: arrivalLocation?.latitude,
