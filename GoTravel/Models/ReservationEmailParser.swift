@@ -75,6 +75,11 @@ enum ReservationEmailParser {
             drafts = [singleDateDraft(kind: kind, in: text, events: events)]
         }
 
+        // 飛行機・新幹線と分かっても、便名・列車名が見つからないと下書きが無かった。
+        // そのときに読めていた日付や時刻まで捨てて「見つかりませんでした」になっていた（ご報告から。3.8）
+        if drafts.isEmpty, kind.usesRoute {
+            drafts = [routeDraftWithoutNumber(kind: kind, in: text, events: events)]
+        }
         if drafts.isEmpty {
             drafts = [ReservationDraft(kind: kind)]
         }
@@ -772,6 +777,41 @@ enum ReservationEmailParser {
         let matches = regex.matches(in: text, range: NSRange(location: 0, length: ns.length))
         guard let match = matches.first(where: { $0.range.location >= position }) ?? matches.first else { return nil }
         return (ns.substring(with: match.range(at: 1)), ns.substring(with: match.range(at: 2)))
+    }
+
+    /// 便名・列車名が読めなかった乗り物の予約（3.8）。日付・時刻・発着地だけで下書きを作る。
+    /// 便名は編集画面で入れてもらう
+    private static func routeDraftWithoutNumber(kind: Reservation.Kind, in text: String,
+                                                events: [DateTimeEvent]) -> ReservationDraft {
+        var draft = ReservationDraft(kind: kind)
+        let dateWords = ["出発日", "搭乗日", "乗車日", "ご利用日", "利用日", "出発", "date"]
+        let dateEvent = event(after: dateWords, in: text, events: events) ?? events.first
+        if var start = dateEvent?.components {
+            let times = timeMatches(in: text).filter { $0.position >= (dateEvent?.position ?? 0) }
+            if start.hour == nil, let first = times.first {
+                start.hour = first.hour
+                start.minute = first.minute
+            }
+            draft.start = start
+            draft.guessedYear = dateEvent?.guessedYear ?? false
+            // 出発の時刻の次の時刻を、同じ日の到着とみなす（日付をまたぐ便は編集画面で直してもらう）
+            if let startHour = start.hour, let startMinute = start.minute,
+               let next = times.first(where: { $0.hour * 60 + $0.minute > startHour * 60 + startMinute }) {
+                var arrival = start
+                arrival.hour = next.hour
+                arrival.minute = next.minute
+                draft.arrival = arrival
+            }
+        }
+        if kind == .flight {
+            let places = uniqueNames(airportMentions(in: text))
+            draft.departurePlace = places.first
+            draft.arrivalPlace = places.dropFirst().first
+        } else if let route = firstRoute(in: text, from: 0) {
+            draft.departurePlace = route.from
+            draft.arrivalPlace = route.to
+        }
+        return draft
     }
 
     // MARK: - 宿・レンタカー（始まりと終わり）

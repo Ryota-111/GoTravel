@@ -21,6 +21,8 @@ struct ReservationEmailImportView: View {
 
     @State private var text = ""
     @State private var foundNothing = false
+    /// 何も読めなかったときの下書き（種類・名前・金額だけ）。「読み取れたところだけで入れる」で使う（3.8）
+    @State private var partialDrafts: [ReservationDraft] = []
     @State private var isReading = false
     /// 確認画面のスクリーンショットや e チケットの画像
     @State private var pickedPhoto: PhotosPickerItem?
@@ -176,11 +178,25 @@ struct ReservationEmailImportView: View {
             .background(RoundedRectangle(cornerRadius: AppRadius.medium).fill(cardFill))
 
             if foundNothing {
-                Label("予約の内容が見つかりませんでした。本文全体を貼り付けているか確かめてください。",
-                      systemImage: "exclamationmark.circle")
-                    .font(.system(size: 12))
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-                    .fixedSize(horizontal: false, vertical: true)
+                VStack(alignment: .leading, spacing: 8) {
+                    Label("日時や予約番号が見つかりませんでした。本文全体を貼り付けているか確かめてください。",
+                          systemImage: "exclamationmark.circle")
+                        .font(.system(size: 12))
+                        .foregroundColor(themeManager.currentTheme.secondaryText)
+                        .fixedSize(horizontal: false, vertical: true)
+                    // 行き止まりにしない（3.8。「読み取る」を押しても先へ進めない、というご報告から）。
+                    // 読めたところ（種類・名前・金額）だけ入れて、残りは編集画面で入れてもらう
+                    if !partialDrafts.isEmpty {
+                        Button {
+                            Task { await importDrafts(partialDrafts) }
+                        } label: {
+                            Label("読み取れたところだけで入れる", systemImage: "square.and.pencil")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(accent)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
             }
 
             Button {
@@ -325,11 +341,19 @@ struct ReservationEmailImportView: View {
         defer { isReading = false }
 
         // 決まった形の読み取りに、使える端末では端末の中の AI で足りないところを埋める（3.4。どこにも送らない）
-        let drafts = await ReservationReader.read(text, kind: kind).filter(\.hasContent)
+        let all = await ReservationReader.read(text, kind: kind)
+        let drafts = all.filter(\.hasContent)
         guard !drafts.isEmpty else {
             foundNothing = true
+            partialDrafts = Array(all.prefix(1))
             return
         }
+        partialDrafts = []
+        await importDrafts(drafts)
+    }
+
+    /// 下書きを予約にして、編集画面へ渡す
+    private func importDrafts(_ drafts: [ReservationDraft]) async {
 
         // 目的地が海外のときだけ現地の時計を使う。国内なら日本時間
         var destination: TimeZone?

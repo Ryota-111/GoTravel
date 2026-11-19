@@ -351,4 +351,37 @@ extension ReservationEmailParserTests {
         #expect(draft.transportNumber == "サンダーバード15号")
         #expect(ymdhm(draft.start) == "2026-10-06 10:12")
     }
+
+    @Test("便名が読めない航空券でも、日付・時刻・空港は捨てない（3.8。「見つかりませんでした」で先へ進めなかった）")
+    func flightWithoutNumberKeepsDateAndAirports() throws {
+        let text = """
+        航空券 ご搭乗のご案内
+        搭乗日 2026年11月3日
+        羽田 08:15 発 → 那覇 11:05 着
+        """
+        let draft = try #require(ReservationEmailParser.parse(text, kind: .flight, referenceDate: today).first)
+
+        #expect(draft.transportNumber == nil)
+        #expect(ymdhm(draft.start) == "2026-11-03 08:15")
+        #expect(ymdhm(draft.arrival) == "2026-11-03 11:05")
+        #expect(draft.departurePlace == "羽田空港")
+        #expect(draft.arrivalPlace == "那覇空港")
+    }
+
+    @Test("列車名が読めない新幹線でも、乗る日と時刻・駅は捨てない")
+    func trainWithoutNameKeepsDateAndStations() throws {
+        let text = """
+        新幹線 乗車券・特急券
+        乗車日 2026年11月3日
+        東京 → 新大阪
+        東京 09:30 発 新大阪 11:57 着
+        """
+        let draft = try #require(ReservationEmailParser.parse(text, kind: .train, referenceDate: today).first)
+
+        #expect(draft.transportNumber == nil)
+        #expect(ymdhm(draft.start) == "2026-11-03 09:30")
+        #expect(ymdhm(draft.arrival) == "2026-11-03 11:57")
+        #expect(draft.departurePlace == "東京")
+        #expect(draft.arrivalPlace == "新大阪")
+    }
 }
