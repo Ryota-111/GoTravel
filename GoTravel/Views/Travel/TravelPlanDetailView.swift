@@ -2340,12 +2340,27 @@ struct TravelPlanDetailView: View {
                         .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
             } else if let note = planWeatherNote {
-                weatherNote(note.text, icon: note.icon)
+                // 押すと取り直す（覚えた予報は使わない）。「天気が出ない」というご報告から（3.8）
+                Button { fetchPlanWeather(ignoringCache: true) } label: {
+                    weatherNote(note.text, icon: note.icon)
+                }
+                .buttonStyle(.plain)
             } else if plan.dayCount == 1, let weather = weather(forDay: plan.startDate) {
                 // 1日だけの旅行に「1日目」と付けても意味がないので、今までどおり1行で出す
                 weatherSummary(weather)
-            } else if !planWeatherDays.isEmpty {
+            } else if hasWeatherForAnyDay(of: plan) {
                 tripWeatherRow(plan: plan)
+            } else if !planWeatherDays.isEmpty {
+                // 予報は届いたのに、旅行のどの日とも合わなかった。3.7 までは何も出ずに空いていた（3.8）。
+                // 予報が届く前（開いた直後）はここに来ない（何も出さない）
+                if WeatherService.isWithinForecast(plan.startDate) {
+                    Button { fetchPlanWeather(ignoringCache: true) } label: {
+                        weatherNote("天気を取得できませんでした。タップすると取り直します", icon: "arrow.clockwise")
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    weatherNote(Self.notYetAvailableText, icon: "calendar")
+                }
             }
         }
     }
@@ -2367,6 +2382,11 @@ struct TravelPlanDetailView: View {
             }
         }
         }
+    }
+
+    /// 旅行のどれかの日に、予報があるか
+    private func hasWeatherForAnyDay(of plan: TravelPlan) -> Bool {
+        !planWeatherDays.isEmpty && (1...max(plan.dayCount, 1)).contains { weather(forDay: plan.date(forDay: $0)) != nil }
     }
 
     /// その日の予報。取れていない日は nil（10日より先など）。
@@ -2944,7 +2964,8 @@ struct TravelPlanDetailView: View {
     }
 
     /// 天気を出す。1時間以内に取った予報があれば、問い合わせずにそれを使う
-    private func fetchPlanWeather() {
+    /// - Parameter ignoringCache: 覚えた予報を使わずに問い合わせる（案内を押して取り直すとき）
+    private func fetchPlanWeather(ignoringCache: Bool = false) {
         guard #available(iOS 16.0, *) else {
             return
         }
@@ -2963,7 +2984,7 @@ struct TravelPlanDetailView: View {
         }
 
         // 1時間以内に取った予報があれば、問い合わせずにすぐ出す（WeatherKit の回数を使わない）
-        if let cached = WeatherService.shared.cachedForecast(
+        if !ignoringCache, let cached = WeatherService.shared.cachedForecast(
             latitude: latitude, longitude: longitude, startDate: plan.startDate, endDate: plan.endDate) {
             planWeatherDays = cached.days
             weatherFetchedAt = cached.fetchedAt
@@ -2989,7 +3010,8 @@ struct TravelPlanDetailView: View {
                     latitude: latitude,
                     longitude: longitude,
                     startDate: plan.startDate,
-                    endDate: plan.endDate
+                    endDate: plan.endDate,
+                    ignoringCache: ignoringCache
                 )
                 let fetchedDays = forecast.days
 
