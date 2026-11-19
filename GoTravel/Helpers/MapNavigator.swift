@@ -112,6 +112,33 @@ enum MapNavigator {
         components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
         return components.url
     }
+
+    /// Google マップで、その場所のページ（口コミや営業時間）を開く URL（3.8）。アプリが無ければブラウザ版。
+    ///
+    /// 経路案内を Google マップにしている人が、予定の場所を押すと Apple の場所のカードが開いていた。
+    /// 「地図を Google マップと紐づけてほしい」というご要望から。案内と同じく名前で探し、近くの座標を添える
+    static func googlePlaceURL(for destination: MapDestination, appInstalled: Bool) -> URL? {
+        let coordinate = "\(destination.coordinate.latitude),\(destination.coordinate.longitude)"
+        let name = destination.name.trimmingCharacters(in: .whitespacesAndNewlines)
+        let target = name.isEmpty ? coordinate : name
+
+        var components: URLComponents
+        if appInstalled {
+            components = URLComponents(string: "comgooglemaps://")!
+            components.queryItems = [
+                URLQueryItem(name: "q", value: target),
+                URLQueryItem(name: "center", value: coordinate)
+            ]
+        } else {
+            components = URLComponents(string: "https://www.google.com/maps/search/")!
+            components.queryItems = [
+                URLQueryItem(name: "api", value: "1"),
+                URLQueryItem(name: "query", value: target)
+            ]
+        }
+        components.percentEncodedQuery = components.percentEncodedQuery?.replacingOccurrences(of: "+", with: "%2B")
+        return components.url
+    }
 }
 
 // MARK: - 画面に付ける

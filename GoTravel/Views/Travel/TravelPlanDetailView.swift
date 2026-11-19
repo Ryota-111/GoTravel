@@ -704,9 +704,18 @@ struct TravelPlanDetailView: View {
     }
 
     /// 予定の場所の、iOS の場所カードを開く。名前で施設を探し、見つからなければ座標だけのカードにする
+    /// 経路案内を Google マップにしている人には、Google マップでその場所のページを開く（3.8）
     private func openPlaceCard(for item: ScheduleItem) {
         guard let latitude = item.latitude, let longitude = item.longitude,
               resolvingPlaceItemID == nil else { return }
+        if MapNavigator.preference == .google {
+            let destination = MapDestination(name: item.location ?? item.title,
+                                             coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude))
+            if let url = MapNavigator.googlePlaceURL(for: destination, appInstalled: MapNavigator.isGoogleMapsInstalled) {
+                UIApplication.shared.open(url)
+            }
+            return
+        }
         resolvingPlaceItemID = item.id
         Task {
             let found = await PlaceCardResolver.mapItem(
