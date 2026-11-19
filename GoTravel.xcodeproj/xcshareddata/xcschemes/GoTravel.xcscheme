@@ -79,6 +79,10 @@
             argument = "-TravoryEmptyDataMode"
             isEnabled = "NO">
          </CommandLineArgument>
+         <CommandLineArgument
+            argument = "-TravorySimulateStoreFailure"
+            isEnabled = "NO">
+         </CommandLineArgument>
       </CommandLineArguments>
       <StoreKitConfigurationFileReference
          identifier = "../../../GoTravel/GoTravel.storekit">

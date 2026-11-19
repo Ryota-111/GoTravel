@@ -46,6 +46,11 @@ final class DiagnosticsReporter: NSObject, MXMetricManagerSubscriber {
 
     // MARK: 送る
 
+    /// MetricKit を通さずに、アプリが自分で気づいたことを送る（3.8。データを開けなかったときなど）
+    func report(_ text: String) {
+        enqueue([text])
+    }
+
     private func enqueue(_ texts: [String]) {
         guard Self.isEnabled, !texts.isEmpty else { return }
         var pending = UserDefaults.standard.stringArray(forKey: pendingKey) ?? []
