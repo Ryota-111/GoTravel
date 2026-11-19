@@ -40,4 +40,24 @@ struct MapNavigatorTests {
             for: MapDestination(name: "A+B ホテル", coordinate: yomiuriland), appInstalled: false))
         #expect(url.absoluteString.contains("A%2BB"))
     }
+
+    @Test("場所のページ（3.8）：アプリでは名前で探し、近くの座標を添える。ブラウザ版も名前で探す")
+    func placePage() throws {
+        let destination = MapDestination(name: "よみうりランド", coordinate: yomiuriland)
+        let app = try #require(MapNavigator.googlePlaceURL(for: destination, appInstalled: true))
+        let appItems = try #require(URLComponents(url: app, resolvingAgainstBaseURL: false)?.queryItems)
+        #expect(app.scheme == "comgooglemaps")
+        #expect(appItems.first { $0.name == "q" }?.value == "よみうりランド")
+        #expect(appItems.first { $0.name == "center" }?.value == "35.6249,139.5175")
+
+        let web = try #require(MapNavigator.googlePlaceURL(for: destination, appInstalled: false))
+        let webItems = try #require(URLComponents(url: web, resolvingAgainstBaseURL: false)?.queryItems)
+        #expect(web.absoluteString.hasPrefix("https://www.google.com/maps/search/?api=1"))
+        #expect(webItems.first { $0.name == "query" }?.value == "よみうりランド")
+
+        let unnamed = try #require(MapNavigator.googlePlaceURL(
+            for: MapDestination(name: " ", coordinate: yomiuriland), appInstalled: false))
+        #expect(URLComponents(url: unnamed, resolvingAgainstBaseURL: false)?.queryItems?
+            .first { $0.name == "query" }?.value == "35.6249,139.5175")
+    }
 }

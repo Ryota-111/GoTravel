@@ -44,6 +44,13 @@ final class WeatherService {
     /// 天気が見られるようになるのは、出発の何日前からか
     static var availableDaysBefore: Int { forecastDays - 1 }
 
+    /// その日（旅行の始まり）が、もう予報の範囲に入っているか
+    static func isWithinForecast(_ startDate: Date, now: Date = Date()) -> Bool {
+        let days = Calendar.current.dateComponents([.day], from: Calendar.current.startOfDay(for: now),
+                                                   to: startDate.startOfDayInLocalTimezone).day ?? 0
+        return days <= availableDaysBefore
+    }
+
     /// 予報がある最後の日の翌日 0:00（問い合わせの終端に使う。終端は含まれない）
     private static var forecastHorizonEnd: Date {
         Calendar.current.date(byAdding: .day, value: forecastDays, to: Date.todayInLocalTimezone)
@@ -179,8 +186,9 @@ final class WeatherService {
 
     /// 旅行の予報。1時間以内に取ったものがあれば、問い合わせずにそれを返す。
     /// 同じ予報を同時に頼まれたら、問い合わせは1回にまとめる
-    func tripForecast(latitude: Double, longitude: Double, startDate: Date, endDate: Date) async throws -> TripForecast {
-        if let cached = cachedForecast(latitude: latitude, longitude: longitude,
+    func tripForecast(latitude: Double, longitude: Double, startDate: Date, endDate: Date,
+                      ignoringCache: Bool = false) async throws -> TripForecast {
+        if !ignoringCache, let cached = cachedForecast(latitude: latitude, longitude: longitude,
                                                       startDate: startDate, endDate: endDate) {
             return cached
         }

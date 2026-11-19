@@ -90,6 +90,12 @@ struct CurrencyCostFields: View {
 
             if input.isForeign {
                 rateRow
+            } else {
+                // 予定ごとに通貨を選べるのに、気づかれていなかった（「通貨を選べるようにしてほしい」というご要望から。3.8）
+                Text("現地の通貨で払うものは、金額の右の「\(unitLabel)」を押すと通貨を変えられます")
+                    .font(.caption2)
+                    .foregroundColor(secondaryText)
+                    .fixedSize(horizontal: false, vertical: true)
             }
         }
         .onAppear { input.adopt(baseCurrency: baseCurrency) }
@@ -135,6 +141,7 @@ struct CurrencyCostFields: View {
                 }
             }
         } label: {
+            // 押せると分かるよう、枠のついたボタンの形にする（3.8。文字だけだと単位の表示に見えていた）
             HStack(spacing: 3) {
                 Text(unitLabel)
                 Image(systemName: "chevron.up.chevron.down")
@@ -142,6 +149,9 @@ struct CurrencyCostFields: View {
             }
             .font(.subheadline.weight(.semibold))
             .foregroundColor(accent)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 5)
+            .background(Capsule().fill(accent.opacity(0.12)))
         }
         .accessibilityLabel(Text("通貨：\(CurrencyCatalog.name(of: input.currencyCode))"))
     }

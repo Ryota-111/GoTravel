@@ -23,7 +23,8 @@ private enum TransportRailMetrics {
 
 /// 手段を選ぶメニューの中身
 @ViewBuilder
-private func transportMenuItems(selected: TransportMode?, onSelect: @escaping (TransportMode?) -> Void) -> some View {
+private func transportMenuItems(selected: TransportMode?, removable: Bool = true,
+                                onSelect: @escaping (TransportMode?) -> Void) -> some View {
     ForEach(TransportMode.allCases) { candidate in
         Button {
             onSelect(candidate)
@@ -35,7 +36,7 @@ private func transportMenuItems(selected: TransportMode?, onSelect: @escaping (T
             }
         }
     }
-    if selected != nil {
+    if selected != nil && removable {
         Divider()
         Button(role: .destructive) {
             onSelect(nil)
@@ -56,11 +57,13 @@ struct TransportGapRow: View {
     let placeholderColor: Color
     /// 過ぎた区間は色を落とす
     var isPast = false
+    /// 「外す」を出すか。「移動」の予定の線は移動そのものなので外せない（3.8）
+    var removable = true
     let onSelect: (TransportMode?) -> Void
 
     var body: some View {
         Menu {
-            transportMenuItems(selected: mode, onSelect: onSelect)
+            transportMenuItems(selected: mode, removable: removable, onSelect: onSelect)
         } label: {
             HStack(spacing: 0) {
                 Color.clear.frame(width: TransportRailMetrics.timeColumnWidth)
@@ -110,7 +113,8 @@ extension View {
     ///   - leading: 時刻の列の左端（行の左の余白）
     ///   - duration: 前の予定の終わりから次の予定の始まりまで。終わりの時刻が無いときは nil（滞在の時間が混ざるため）
     func transportBadge(mode: TransportMode?, duration: TimeInterval?, tint: Color, isPast: Bool,
-                        leading: CGFloat, onSelect: @escaping (TransportMode?) -> Void) -> some View {
+                        leading: CGFloat, removable: Bool = true,
+                        onSelect: @escaping (TransportMode?) -> Void) -> some View {
         overlay(alignment: .topLeading) {
             if let mode {
                 GeometryReader { geometry in
@@ -118,7 +122,7 @@ extension View {
                     let bottom = geometry.size.height + TransportRailMetrics.nextDotTop
                     // 時刻の列の上のほうには終わりの時刻などが出るので、短い区間でもそこには掛けない
                     let center = max((top + bottom) / 2, 48)
-                    TransportBadge(mode: mode, duration: duration, tint: tint, isPast: isPast, onSelect: onSelect)
+                    TransportBadge(mode: mode, duration: duration, tint: tint, isPast: isPast, removable: removable, onSelect: onSelect)
                         .offset(x: leading, y: center - TransportBadge.height / 2)
                 }
             }
@@ -134,6 +138,7 @@ private struct TransportBadge: View {
     let duration: TimeInterval?
     let tint: Color
     let isPast: Bool
+    let removable: Bool
     let onSelect: (TransportMode?) -> Void
 
     private var color: Color { tint.opacity(isPast ? 0.45 : 1) }
@@ -141,7 +146,7 @@ private struct TransportBadge: View {
 
     var body: some View {
         Menu {
-            transportMenuItems(selected: mode, onSelect: onSelect)
+            transportMenuItems(selected: mode, removable: removable, onSelect: onSelect)
         } label: {
             HStack(spacing: 0) {
                 VStack(alignment: .trailing, spacing: 0) {

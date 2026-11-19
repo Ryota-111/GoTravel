@@ -704,9 +704,18 @@ struct TravelPlanDetailView: View {
     }
 
     /// 予定の場所の、iOS の場所カードを開く。名前で施設を探し、見つからなければ座標だけのカードにする
+    /// 経路案内を Google マップにしている人には、Google マップでその場所のページを開く（3.8）
     private func openPlaceCard(for item: ScheduleItem) {
         guard let latitude = item.latitude, let longitude = item.longitude,
               resolvingPlaceItemID == nil else { return }
+        if MapNavigator.preference == .google {
+            let destination = MapDestination(name: item.location ?? item.title,
+                                             coordinate: CLLocationCoordinate2D(latitude: latitude, longitude: longitude))
+            if let url = MapNavigator.googlePlaceURL(for: destination, appInstalled: MapNavigator.isGoogleMapsInstalled) {
+                UIApplication.shared.open(url)
+            }
+            return
+        }
         resolvingPlaceItemID = item.id
         Task {
             let found = await PlaceCardResolver.mapItem(
@@ -846,7 +855,7 @@ struct TravelPlanDetailView: View {
                 if !isLast {
                     TransportRailSegment(
                         // 着く予定の「次の予定までの移動手段」は、始まった日の次の予定へのものなので使わない
-                        mode: arrival ? nil : item.transportToNextMode,
+                        mode: arrival ? nil : item.timelineTransportMode,
                         tint: scheduleAccentColor,
                         railColor: state == .past
                             ? scheduleAccentColor.opacity(0.4)
@@ -1024,6 +1033,10 @@ struct TravelPlanDetailView: View {
                 // 行けなかった場所を次の日に回す（3.5、ご要望から）。予約から作った予定は予約の画面で直す
                 if !arrival && item.canMoveToAnotherDay {
                     moveToDayMenu(itemIDs: [item.id], plan: plan)
+                }
+                // 同じ中身を何度も入れずに済むように（3.8、ご要望から）
+                if !arrival {
+                    duplicateMenu(item: item, plan: plan)
                 }
                 Button(role: .destructive) {
                     deleteScheduleItem(item, from: plan)
@@ -1298,22 +1311,21 @@ struct TravelPlanDetailView: View {
 
     /// 予定を一番上に固定する・外す
     /// 予定と予定の間の行。棒の上に移動手段を出す（3.2）
-    /// 終わりの時刻があるときだけ、終わり〜次の始まりを移動の時間とする
+    /// 「移動」の予定は乗っている時間、それ以外は終わりの時刻があるときだけ終わり〜次の始まり（`timelineTransportDuration`）
     private func transportDuration(from item: ScheduleItem, to next: ScheduleItem?) -> TimeInterval? {
-        // 時間未定の予定（3.4）が絡む区間は、時刻が並ぶ位置でしかないので出さない
-        guard let next, let endTime = item.endTime, !next.hasUndecidedTime else { return nil }
-        return next.time.timeIntervalSince(endTime)
+        item.timelineTransportDuration(to: next)
     }
 
     private func transportGapRow(item: ScheduleItem, plan: TravelPlan, state: TimelineRowState) -> some View {
         TransportGapRow(
-            mode: item.transportToNextMode,
+            mode: item.timelineTransportMode,
             tint: scheduleAccentColor,
             railColor: state == .past
                 ? scheduleAccentColor.opacity(0.4)
                 : themeManager.currentTheme.secondaryText.opacity(0.18),
             placeholderColor: themeManager.currentTheme.secondaryText.opacity(0.45),
-            isPast: state == .past
+            isPast: state == .past,
+            removable: !item.isSingleMove
         ) { mode in
             setTransport(mode, after: item, in: plan)
         }
@@ -1325,7 +1337,13 @@ struct TravelPlanDetailView: View {
         var updatedPlan = plan
         for dayIndex in updatedPlan.daySchedules.indices {
             if let itemIndex = updatedPlan.daySchedules[dayIndex].scheduleItems.firstIndex(where: { $0.id == item.id }) {
-                updatedPlan.daySchedules[dayIndex].scheduleItems[itemIndex].transportToNext = mode?.rawValue
+                if item.isSingleMove {
+                    // 「移動」の予定の線は移動そのもの。選び直したら乗り物を変える（外すことはできない）
+                    guard let mode else { return }
+                    updatedPlan.daySchedules[dayIndex].scheduleItems[itemIndex].move?.mode = mode.rawValue
+                } else {
+                    updatedPlan.daySchedules[dayIndex].scheduleItems[itemIndex].transportToNext = mode?.rawValue
+                }
             }
         }
         withAnimation(.easeInOut(duration: 0.2)) {
@@ -1351,6 +1369,49 @@ struct TravelPlanDetailView: View {
             } label: {
                 Label(title, systemImage: "calendar")
             }
+        }
+    }
+
+    // MARK: - 複製（3.8）
+
+    /// 複製する先の日を選ぶメニュー。いま見ている日をいちばん上に出す
+    @ViewBuilder
+    private func duplicateMenu(item: ScheduleItem, plan: TravelPlan) -> some View {
+        let days = plan.daySchedules.sorted { $0.dayNumber < $1.dayNumber }
+        if days.count <= 1 {
+            Button {
+                duplicate(item, toDay: selectedDay, in: plan)
+            } label: {
+                Label("複製", systemImage: "plus.square.on.square")
+            }
+        } else {
+            Menu {
+                Button("この日に複製") {
+                    duplicate(item, toDay: selectedDay, in: plan)
+                }
+                Section("ほかの日に複製") {
+                    ForEach(days.filter { $0.dayNumber != selectedDay }) { day in
+                        Button("Day \(day.dayNumber)　\(Self.moveDayFormatter.string(from: day.date))") {
+                            duplicate(item, toDay: day.dayNumber, in: plan)
+                        }
+                    }
+                }
+            } label: {
+                Label("複製", systemImage: "plus.square.on.square")
+            }
+        }
+    }
+
+    /// 複製する。ほかの日に複製したときは、その日へ切り替えて見せる
+    private func duplicate(_ item: ScheduleItem, toDay dayNumber: Int, in plan: TravelPlan) {
+        guard let userId = authVM.userId,
+              let result = plan.duplicatingItem(item.id, toDay: dayNumber) else { return }
+        withAnimation(.easeInOut(duration: 0.25)) {
+            viewModel.update(result.plan, userId: userId)
+        }
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        if dayNumber != selectedDay {
+            withAnimation(.easeInOut(duration: 0.25)) { selectedDay = dayNumber }
         }
     }
 
@@ -1790,11 +1851,12 @@ struct TravelPlanDetailView: View {
                             }
                         }
                         .transportBadge(
-                            mode: next == nil ? nil : item.transportToNextMode,
+                            mode: next == nil ? nil : item.timelineTransportMode,
                             duration: transportDuration(from: item, to: next),
                             tint: scheduleAccentColor,
                             isPast: state == .past,
-                            leading: 4
+                            leading: 4,
+                            removable: !item.isSingleMove
                         ) { mode in
                             setTransport(mode, after: item, in: plan)
                         }
@@ -2108,11 +2170,12 @@ struct TravelPlanDetailView: View {
                         )
                             // 地図タブの行程表には間の行を挟まないので、予定の行の中で区間の真ん中に置く（3.2）
                             .transportBadge(
-                                mode: next == nil ? nil : item.transportToNextMode,
+                                mode: next == nil ? nil : item.timelineTransportMode,
                                 duration: transportDuration(from: item, to: next),
                                 tint: scheduleAccentColor,
                                 isPast: rowState(index: index, nowIndex: nowIndex) == .past,
-                                leading: 4
+                                leading: 4,
+                                removable: !item.isSingleMove
                             ) { mode in
                                 setTransport(mode, after: item, in: plan)
                             }
@@ -2340,12 +2403,27 @@ struct TravelPlanDetailView: View {
                         .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
             } else if let note = planWeatherNote {
-                weatherNote(note.text, icon: note.icon)
+                // 押すと取り直す（覚えた予報は使わない）。「天気が出ない」というご報告から（3.8）
+                Button { fetchPlanWeather(ignoringCache: true) } label: {
+                    weatherNote(note.text, icon: note.icon)
+                }
+                .buttonStyle(.plain)
             } else if plan.dayCount == 1, let weather = weather(forDay: plan.startDate) {
                 // 1日だけの旅行に「1日目」と付けても意味がないので、今までどおり1行で出す
                 weatherSummary(weather)
-            } else if !planWeatherDays.isEmpty {
+            } else if hasWeatherForAnyDay(of: plan) {
                 tripWeatherRow(plan: plan)
+            } else if !planWeatherDays.isEmpty {
+                // 予報は届いたのに、旅行のどの日とも合わなかった。3.7 までは何も出ずに空いていた（3.8）。
+                // 予報が届く前（開いた直後）はここに来ない（何も出さない）
+                if WeatherService.isWithinForecast(plan.startDate) {
+                    Button { fetchPlanWeather(ignoringCache: true) } label: {
+                        weatherNote("天気を取得できませんでした。タップすると取り直します", icon: "arrow.clockwise")
+                    }
+                    .buttonStyle(.plain)
+                } else {
+                    weatherNote(Self.notYetAvailableText, icon: "calendar")
+                }
             }
         }
     }
@@ -2367,6 +2445,11 @@ struct TravelPlanDetailView: View {
             }
         }
         }
+    }
+
+    /// 旅行のどれかの日に、予報があるか
+    private func hasWeatherForAnyDay(of plan: TravelPlan) -> Bool {
+        !planWeatherDays.isEmpty && (1...max(plan.dayCount, 1)).contains { weather(forDay: plan.date(forDay: $0)) != nil }
     }
 
     /// その日の予報。取れていない日は nil（10日より先など）。
@@ -2944,7 +3027,8 @@ struct TravelPlanDetailView: View {
     }
 
     /// 天気を出す。1時間以内に取った予報があれば、問い合わせずにそれを使う
-    private func fetchPlanWeather() {
+    /// - Parameter ignoringCache: 覚えた予報を使わずに問い合わせる（案内を押して取り直すとき）
+    private func fetchPlanWeather(ignoringCache: Bool = false) {
         guard #available(iOS 16.0, *) else {
             return
         }
@@ -2963,7 +3047,7 @@ struct TravelPlanDetailView: View {
         }
 
         // 1時間以内に取った予報があれば、問い合わせずにすぐ出す（WeatherKit の回数を使わない）
-        if let cached = WeatherService.shared.cachedForecast(
+        if !ignoringCache, let cached = WeatherService.shared.cachedForecast(
             latitude: latitude, longitude: longitude, startDate: plan.startDate, endDate: plan.endDate) {
             planWeatherDays = cached.days
             weatherFetchedAt = cached.fetchedAt
@@ -2989,7 +3073,8 @@ struct TravelPlanDetailView: View {
                     latitude: latitude,
                     longitude: longitude,
                     startDate: plan.startDate,
-                    endDate: plan.endDate
+                    endDate: plan.endDate,
+                    ignoringCache: ignoringCache
                 )
                 let fetchedDays = forecast.days
 
