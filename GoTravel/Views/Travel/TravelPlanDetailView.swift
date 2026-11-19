@@ -1025,6 +1025,10 @@ struct TravelPlanDetailView: View {
                 if !arrival && item.canMoveToAnotherDay {
                     moveToDayMenu(itemIDs: [item.id], plan: plan)
                 }
+                // 同じ中身を何度も入れずに済むように（3.8、ご要望から）
+                if !arrival {
+                    duplicateMenu(item: item, plan: plan)
+                }
                 Button(role: .destructive) {
                     deleteScheduleItem(item, from: plan)
                 } label: {
@@ -1351,6 +1355,49 @@ struct TravelPlanDetailView: View {
             } label: {
                 Label(title, systemImage: "calendar")
             }
+        }
+    }
+
+    // MARK: - 複製（3.8）
+
+    /// 複製する先の日を選ぶメニュー。いま見ている日をいちばん上に出す
+    @ViewBuilder
+    private func duplicateMenu(item: ScheduleItem, plan: TravelPlan) -> some View {
+        let days = plan.daySchedules.sorted { $0.dayNumber < $1.dayNumber }
+        if days.count <= 1 {
+            Button {
+                duplicate(item, toDay: selectedDay, in: plan)
+            } label: {
+                Label("複製", systemImage: "plus.square.on.square")
+            }
+        } else {
+            Menu {
+                Button("この日に複製") {
+                    duplicate(item, toDay: selectedDay, in: plan)
+                }
+                Section("ほかの日に複製") {
+                    ForEach(days.filter { $0.dayNumber != selectedDay }) { day in
+                        Button("Day \(day.dayNumber)　\(Self.moveDayFormatter.string(from: day.date))") {
+                            duplicate(item, toDay: day.dayNumber, in: plan)
+                        }
+                    }
+                }
+            } label: {
+                Label("複製", systemImage: "plus.square.on.square")
+            }
+        }
+    }
+
+    /// 複製する。ほかの日に複製したときは、その日へ切り替えて見せる
+    private func duplicate(_ item: ScheduleItem, toDay dayNumber: Int, in plan: TravelPlan) {
+        guard let userId = authVM.userId,
+              let result = plan.duplicatingItem(item.id, toDay: dayNumber) else { return }
+        withAnimation(.easeInOut(duration: 0.25)) {
+            viewModel.update(result.plan, userId: userId)
+        }
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        if dayNumber != selectedDay {
+            withAnimation(.easeInOut(duration: 0.25)) { selectedDay = dayNumber }
         }
     }
 
