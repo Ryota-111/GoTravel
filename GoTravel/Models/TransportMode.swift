@@ -59,3 +59,25 @@ extension PlanScheduleItem {
     /// 次の予定までの移動手段
     var transportToNextMode: TransportMode? { TransportMode(storedValue: transportToNext) }
 }
+
+extension ScheduleItem {
+    /// 時間軸で、この予定の点から次の予定の点までの線に出す手段（3.8）。
+    ///
+    /// 「移動」の予定（足す・直す画面の「移動」で入れたもの）は、線がその移動そのものなので、その乗り物を出す。
+    /// 3.7 までは「次の予定までの移動手段」を出していて、電車の移動に「電車」を選ぶと、
+    /// 着いてから次の予定までの時間が電車の時間として出ていた（ご報告から）
+    var timelineTransportMode: TransportMode? {
+        if isSingleMove, let move { return move.transportMode }
+        return transportToNextMode
+    }
+
+    /// 線に添える時間。「移動」の予定は乗っている時間（出発 → 到着）、
+    /// それ以外は終わりの時刻があるときだけ、終わり〜次の始まり（滞在の時間が混ざるため）。
+    /// 時間未定の予定（3.4）が絡む区間は、時刻が並ぶ位置でしかないので出さない
+    func timelineTransportDuration(to next: ScheduleItem?) -> TimeInterval? {
+        guard let next, let endTime, !hasUndecidedTime else { return nil }
+        if isSingleMove { return endTime.timeIntervalSince(time) }
+        guard !next.hasUndecidedTime else { return nil }
+        return next.time.timeIntervalSince(endTime)
+    }
+}

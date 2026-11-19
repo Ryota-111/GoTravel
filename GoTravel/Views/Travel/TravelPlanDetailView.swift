@@ -855,7 +855,7 @@ struct TravelPlanDetailView: View {
                 if !isLast {
                     TransportRailSegment(
                         // 着く予定の「次の予定までの移動手段」は、始まった日の次の予定へのものなので使わない
-                        mode: arrival ? nil : item.transportToNextMode,
+                        mode: arrival ? nil : item.timelineTransportMode,
                         tint: scheduleAccentColor,
                         railColor: state == .past
                             ? scheduleAccentColor.opacity(0.4)
@@ -1311,22 +1311,21 @@ struct TravelPlanDetailView: View {
 
     /// 予定を一番上に固定する・外す
     /// 予定と予定の間の行。棒の上に移動手段を出す（3.2）
-    /// 終わりの時刻があるときだけ、終わり〜次の始まりを移動の時間とする
+    /// 「移動」の予定は乗っている時間、それ以外は終わりの時刻があるときだけ終わり〜次の始まり（`timelineTransportDuration`）
     private func transportDuration(from item: ScheduleItem, to next: ScheduleItem?) -> TimeInterval? {
-        // 時間未定の予定（3.4）が絡む区間は、時刻が並ぶ位置でしかないので出さない
-        guard let next, let endTime = item.endTime, !next.hasUndecidedTime else { return nil }
-        return next.time.timeIntervalSince(endTime)
+        item.timelineTransportDuration(to: next)
     }
 
     private func transportGapRow(item: ScheduleItem, plan: TravelPlan, state: TimelineRowState) -> some View {
         TransportGapRow(
-            mode: item.transportToNextMode,
+            mode: item.timelineTransportMode,
             tint: scheduleAccentColor,
             railColor: state == .past
                 ? scheduleAccentColor.opacity(0.4)
                 : themeManager.currentTheme.secondaryText.opacity(0.18),
             placeholderColor: themeManager.currentTheme.secondaryText.opacity(0.45),
-            isPast: state == .past
+            isPast: state == .past,
+            removable: !item.isSingleMove
         ) { mode in
             setTransport(mode, after: item, in: plan)
         }
@@ -1338,7 +1337,13 @@ struct TravelPlanDetailView: View {
         var updatedPlan = plan
         for dayIndex in updatedPlan.daySchedules.indices {
             if let itemIndex = updatedPlan.daySchedules[dayIndex].scheduleItems.firstIndex(where: { $0.id == item.id }) {
-                updatedPlan.daySchedules[dayIndex].scheduleItems[itemIndex].transportToNext = mode?.rawValue
+                if item.isSingleMove {
+                    // 「移動」の予定の線は移動そのもの。選び直したら乗り物を変える（外すことはできない）
+                    guard let mode else { return }
+                    updatedPlan.daySchedules[dayIndex].scheduleItems[itemIndex].move?.mode = mode.rawValue
+                } else {
+                    updatedPlan.daySchedules[dayIndex].scheduleItems[itemIndex].transportToNext = mode?.rawValue
+                }
             }
         }
         withAnimation(.easeInOut(duration: 0.2)) {
@@ -1846,11 +1851,12 @@ struct TravelPlanDetailView: View {
                             }
                         }
                         .transportBadge(
-                            mode: next == nil ? nil : item.transportToNextMode,
+                            mode: next == nil ? nil : item.timelineTransportMode,
                             duration: transportDuration(from: item, to: next),
                             tint: scheduleAccentColor,
                             isPast: state == .past,
-                            leading: 4
+                            leading: 4,
+                            removable: !item.isSingleMove
                         ) { mode in
                             setTransport(mode, after: item, in: plan)
                         }
@@ -2164,11 +2170,12 @@ struct TravelPlanDetailView: View {
                         )
                             // 地図タブの行程表には間の行を挟まないので、予定の行の中で区間の真ん中に置く（3.2）
                             .transportBadge(
-                                mode: next == nil ? nil : item.transportToNextMode,
+                                mode: next == nil ? nil : item.timelineTransportMode,
                                 duration: transportDuration(from: item, to: next),
                                 tint: scheduleAccentColor,
                                 isPast: rowState(index: index, nowIndex: nowIndex) == .past,
-                                leading: 4
+                                leading: 4,
+                                removable: !item.isSingleMove
                             ) { mode in
                                 setTransport(mode, after: item, in: plan)
                             }
