@@ -26,6 +26,8 @@ struct MainTabView: View {
     @StateObject private var plansViewModel = PlansViewModel()
     @StateObject private var travelPlanViewModel = TravelPlanViewModel()
     @ObservedObject private var icsInbox = ICSImportInbox.shared
+    /// 招待のリンクから開かれたとき（3.8）
+    @ObservedObject private var joinInbox = JoinInviteInbox.shared
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
@@ -165,6 +167,12 @@ struct MainTabView: View {
         }
         .sheet(item: $sharedPlaces) { presentation in
             SharedPlaceInboxView(items: presentation.items)
+                .environmentObject(authVM)
+        }
+        // 招待のリンクから開かれたら、コードを入れた参加の画面を出す（3.8）
+        .sheet(item: $joinInbox.pending) { pending in
+            JoinTravelPlanView(initialCode: pending.code)
+                .environmentObject(travelPlanViewModel)
                 .environmentObject(authVM)
         }
     }

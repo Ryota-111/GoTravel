@@ -319,10 +319,13 @@ struct PlanCategoryShareSection: View {
     }
 
     private func inviteMessage(name: String, code: String) -> String {
-        """
-        Travory のカレンダー「\(name)」に招待します！
-        Travory（3.0 以降）のプロフィール →「共有コードで参加」から、この共有コードを入力してください。
-
+        var message = "Travory のカレンダー「\(name)」に招待します！\n"
+        // 招待のリンク（3.8）。Travory が無い人は App Store へ、ある人はコードが入った参加の画面へ
+        if let join = JoinInvite.url(code: code) {
+            message += "このリンクから参加できます（Travory を持っていなければ、入れ方も出ます）：\n\(join.absoluteString)\n\n"
+        }
+        return message + """
+        開かないときは、Travory（3.0 以降）のプロフィール →「共有コードで参加」から、この共有コードを入力してください。
         共有コード: \(code)
         """
     }

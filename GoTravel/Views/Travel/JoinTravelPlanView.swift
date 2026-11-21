@@ -8,6 +8,8 @@ struct JoinTravelPlanView: View {
     @EnvironmentObject var viewModel: TravelPlanViewModel
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
+    /// 招待のリンクから開いたときの共有コード（3.8）。入れた状態で開き、参加は本人が押して決める
+    var initialCode: String? = nil
     @State private var shareCode: String = ""
     @State private var isJoining: Bool = false
     @State private var showError: Bool = false
@@ -36,6 +38,9 @@ struct JoinTravelPlanView: View {
                 }
             }
             .navigationTitle("共有コードで参加")
+            .onAppear {
+                if shareCode.isEmpty, let initialCode { shareCode = initialCode }
+            }
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarTrailing) {

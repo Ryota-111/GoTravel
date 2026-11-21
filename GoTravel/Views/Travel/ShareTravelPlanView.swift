@@ -49,10 +49,13 @@ struct ShareTravelPlanView: View {
 
     /// 招待メッセージ（共有シートで送る本文）。ウェブで見られるなら、そのリンクも添える
     private var inviteMessage: String {
-        var message = """
-        「\(currentPlan.title)」の旅行計画に招待します！
-        Travoryアプリの「共有に参加」から、この共有コードを入力してください。
-
+        var message = "「\(currentPlan.title)」の旅行計画に招待します！\n"
+        // 招待のリンク（3.8）。Travory が無い人は App Store へ、ある人はコードが入った参加の画面へ
+        if let join = JoinInvite.url(code: shareCode) {
+            message += "このリンクから参加できます（Travory を持っていなければ、入れ方も出ます）：\n\(join.absoluteString)\n\n"
+        }
+        message += """
+        開かないときは、Travoryアプリの「共有に参加」から、この共有コードを入力してください。
         共有コード: \(shareCode)
         """
         if let url = webPageURL {
