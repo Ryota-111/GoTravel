@@ -23,6 +23,8 @@ struct TripStatsView: View {
     @State private var period: TripStats.Period = .all
     @State private var metric: Metric = .trips
     @State private var sharing = false
+    /// 開いたときの期間（3.8。年末のふり返りから開いたときは、その年）
+    var initialPeriod: TripStats.Period? = nil
 
     enum Metric: String, CaseIterable, Identifiable {
         case trips, days, spend
@@ -132,6 +134,7 @@ struct TripStatsView: View {
             .task {
                 if let userId = authVM.userId { placesVM.setupFetchedResultsController(userId: userId) }
             }
+            .onAppear { if let initialPeriod { period = initialPeriod } }
             // まだ調べていない場所の県を、少しずつ調べる（画面を閉じたら止まり、次に続きから）
             // 旅行の場所が増えたとき（目的地を引き直したときなど）にも、やり直す
             .task(id: lookupKey) {

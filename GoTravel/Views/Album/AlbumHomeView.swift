@@ -26,6 +26,10 @@ struct AlbumHomeView: View {
     @State private var digestPlan: TravelPlan?
     /// 旅の記録（3.1）
     @State private var showsStats = false
+    /// 年末のふり返りから開いたときの年（3.8）
+    @State private var recapYear: Int?
+    /// 年末のふり返りの入口を閉じた（出し直さない）
+    @State private var recapDismissed = false
     @EnvironmentObject private var plansViewModel: PlansViewModel
 
     /// 既定アルバム（日本全国フォトマップ）は削除できないので選択対象から外す
@@ -60,6 +64,13 @@ struct AlbumHomeView: View {
 
                     ScrollView(showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 0) {
+                            // 年末の「◯年の旅をふり返る」（3.8。12月〜1月15日だけ）
+                            if !isSelectionMode, !recapDismissed,
+                               let year = YearRecap.yearToShow(plans: travelPlanViewModel.travelPlans) {
+                                yearRecapBanner(year)
+                                    .padding(.horizontal, 20)
+                                    .padding(.bottom, 18)
+                            }
                             // 旅のダイジェスト（選んで消しているあいだは出さない）
                             if !isSelectionMode {
                                 digestSection
@@ -122,6 +133,12 @@ struct AlbumHomeView: View {
         .sheet(item: $digestPlan, onDismiss: { libraryVersion += 1 }) { plan in
             // 上の旅行名から、ほかの旅行にも切り替えられる
             TripDigestView(plan: plan, otherPlans: digestCandidates)
+        }
+        .sheet(item: Binding(get: { recapYear.map(RecapYear.init) }, set: { recapYear = $0?.year })) { recap in
+            TripStatsView(initialPeriod: .year(recap.year))
+                .environmentObject(travelPlanViewModel)
+                .environmentObject(plansViewModel)
+                .environmentObject(authVM)
         }
         .sheet(isPresented: $showsStats) {
             TripStatsView()
@@ -295,6 +312,52 @@ struct AlbumHomeView: View {
         }
         .buttonStyle(.plain)
         .accessibilityLabel("旅の記録")
+    }
+
+    /// 年末の「◯年の旅をふり返る」の入口（3.8）。押すと、その年の「記録」が開く（ストーリー用の画像も作れる）
+    private func yearRecapBanner(_ year: Int) -> some View {
+        HStack(spacing: 12) {
+            Button { recapYear = year } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "sparkles")
+                        .font(.title3.weight(.semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 44, height: 44)
+                        .background(Circle().fill(mainColor))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(String(year))年の旅をふり返る")
+                            .font(.headline)
+                            .foregroundColor(accentColor)
+                        Text("行った県・旅の日数を1枚にまとめて、ストーリーに載せられます")
+                            .font(.caption)
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                YearRecap.dismiss(year)
+                withAnimation { recapDismissed = true }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption.weight(.bold))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("閉じる")
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: AppRadius.large).fill(mainColor.opacity(0.12)))
+    }
+
+    private struct RecapYear: Identifiable {
+        let year: Int
+        var id: Int { year }
     }
 
     private func sectionTitle(_ title: String) -> some View {
