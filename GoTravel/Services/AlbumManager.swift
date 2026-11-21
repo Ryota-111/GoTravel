@@ -142,11 +142,13 @@ final class AlbumManager: NSObject, ObservableObject {
         CoreDataManager.shared.saveContext()
     }
 
-    func createTravelPlanAlbum(from travelPlan: TravelPlan) {
-        guard let userId = currentUserId else { return }
+    /// 旅行のアルバムを作る。もうあれば作らない。作った（またはあった）アルバムの id を返す
+    @discardableResult
+    func createTravelPlanAlbum(from travelPlan: TravelPlan) -> String? {
+        guard let userId = currentUserId else { return nil }
 
-        if let planId = travelPlan.id, albums.contains(where: { $0.travelPlanId == planId }) {
-            return
+        if let planId = travelPlan.id, let existing = albums.first(where: { $0.travelPlanId == planId }) {
+            return existing.id
         }
 
         let album = Album(
@@ -160,6 +162,7 @@ final class AlbumManager: NSObject, ObservableObject {
         )
         _ = AlbumEntity.create(from: album, context: context)
         CoreDataManager.shared.saveContext()
+        return album.id
     }
 
     /// 保存済みの内容を基に更新するので、古いスナップショットで他の変更を巻き戻さない
@@ -191,6 +194,11 @@ final class AlbumManager: NSObject, ObservableObject {
     func deleteAlbum(_ album: Album) {
         // 既定アルバムは削除させない
         guard !album.isDefaultAlbum else { return }
+
+        // 共有した旅行のアルバムなら、自分が載せた写真をみんなのアルバムから消し、もう作り直さない（3.8）
+        if let planId = album.travelPlanId {
+            Task { @MainActor in SharedAlbumSync.shared.didDeleteAlbum(planId: planId) }
+        }
 
         deleteFiles(of: album)
 
@@ -262,8 +270,14 @@ final class AlbumManager: NSObject, ObservableObject {
     }
 
     /// 複数枚をまとめて削除する（保存は1回で済ませる）
-    func removePhotos(fileNames: [String], from albumId: String) {
+    /// - Parameter propagatesToSharing: 共有した旅行のアルバムなら、共有のほうにも伝える（3.8）。
+    ///   共有から外れた写真を手元から外すときは false
+    func removePhotos(fileNames: [String], from albumId: String, propagatesToSharing: Bool = true) {
         guard !fileNames.isEmpty else { return }
+
+        if propagatesToSharing, let planId = albums.first(where: { $0.id == albumId })?.travelPlanId {
+            Task { @MainActor in SharedAlbumSync.shared.didRemovePhotos(fileNames: fileNames, planId: planId) }
+        }
 
         for fileName in fileNames {
             deletePhotoFile(fileName: fileName)
@@ -291,6 +305,43 @@ final class AlbumManager: NSObject, ObservableObject {
         }
         mutateAlbum(id: destinationAlbumId) { album in
             album.photoFileNames.append(fileName)
+        }
+    }
+
+    // MARK: - 共有した旅行のアルバム（3.8、`SharedAlbumSync`）
+
+    /// この端末に写真のファイルがあるか
+    func hasPhotoFile(fileName: String) -> Bool {
+        fileManager.fileExists(atPath: albumsDirectory.appendingPathComponent(fileName).path)
+    }
+
+    /// 同行者が載せた写真を、アルバムの後ろに足す。足せたファイル名を返す
+    @discardableResult
+    func addReceivedPhotos(_ photos: [(fileName: String, data: Data)], to albumId: String) -> [String] {
+        var added: [String] = []
+        for photo in photos where writeReceivedPhoto(photo.data, fileName: photo.fileName) {
+            added.append(photo.fileName)
+        }
+        guard !added.isEmpty else { return [] }
+        mutateAlbum(id: albumId) { album in
+            let existing = Set(album.photoFileNames)
+            album.photoFileNames.append(contentsOf: added.filter { !existing.contains($0) })
+        }
+        return added
+    }
+
+    /// 降ろした写真をファイルに書く（アルバムに並んでいるのにファイルが無いときも使う）
+    @discardableResult
+    func writeReceivedPhoto(_ data: Data, fileName: String) -> Bool {
+        let fileURL = albumsDirectory.appendingPathComponent(fileName)
+        do {
+            try data.write(to: fileURL, options: .atomic)
+            thumbnailCache.removeObject(forKey: fileName as NSString)
+            PhotoSyncService.shared.store(data: data, fileName: fileName, folder: .albums)
+            objectWillChange.send()
+            return true
+        } catch {
+            return false
         }
     }
 

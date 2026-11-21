@@ -38,6 +38,17 @@ struct AlbumHomeView: View {
         albumManager.albums.reduce(0) { $0 + $1.photoFileNames.count }
     }
 
+    /// 共有している旅行の id（変わったら突き合わせ直す）
+    private var sharedPlanIds: [String] {
+        travelPlanViewModel.travelPlans.filter(\.isShared).compactMap(\.id).sorted()
+    }
+
+    /// アルバムの旅行を共有していれば、その旅行
+    private func sharedPlan(for album: Album) -> TravelPlan? {
+        guard let planId = album.travelPlanId else { return nil }
+        return travelPlanViewModel.travelPlans.first { $0.id == planId && $0.isShared }
+    }
+
     var body: some View {
         NavigationView {
             ZStack {
@@ -90,6 +101,11 @@ struct AlbumHomeView: View {
                     albumManager.setup(userId: userId)
                 }
             }
+            // 共有した旅行のアルバムの写真を、同行者と突き合わせる（3.8）
+            .task(id: sharedPlanIds) {
+                guard let userId = authVM.userId, !sharedPlanIds.isEmpty else { return }
+                await SharedAlbumSync.shared.syncAll(plans: travelPlanViewModel.travelPlans, userId: userId)
+            }
             .navigationBarHidden(true)
         }
         .navigationViewStyle(.stack)
@@ -125,7 +141,7 @@ struct AlbumHomeView: View {
                 if album.isJapanPhotoMap {
                     JapanPhotoView(albumId: album.id)
                 } else {
-                    AlbumDetailView(album: album)
+                    AlbumDetailView(album: album, sharedPlan: sharedPlan(for: album), userId: authVM.userId)
                 }
             }
             .zoomDestination(id: album.id, in: albumZoom)
