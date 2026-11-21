@@ -596,8 +596,22 @@ struct ShareTravelPlanView: View {
             } catch {
                 publishErrorMessage = Self.publishErrorText(for: error)
                 showPublishError = true
+                isPublishing = false
+                return
             }
             isPublishing = false
+            // 共有したら、ウェブで見る設定もはじめからオンにする（3.8）。
+            // 招待のメッセージにウェブのリンクが入り、アプリの無い同行者（Android など）もすぐ見られる。
+            // 失敗しても共有はできているので、オフのまま（あとからスイッチでオンにできる）
+            if canChangeWebPage, !webPageEnabled, let planId = currentPlan.id {
+                webPageGeneration += 1
+                isUpdatingWebPage = true
+                if let token = try? await CloudKitService.shared.setSharedWebPageEnabled(true, planId: planId) {
+                    webToken = token
+                    SharedWebPage.cache(token: token, planId: planId)
+                }
+                isUpdatingWebPage = false
+            }
         }
     }
 
