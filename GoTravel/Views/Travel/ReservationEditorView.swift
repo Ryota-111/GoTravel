@@ -279,7 +279,7 @@ struct ReservationEditorView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(hasChosenKind ? "\(reservation.kind.label)の予約メール・画像から取り込む" : "予約メール・画像から取り込む")
                         .font(.system(size: 15, weight: .semibold))
-                    Text("確認メールやスクリーンショットから、予約番号・日時・金額を読み取ります")
+                    Text("確認メールやスクリーンショットから、読み取れた予約番号・日時・金額を入れます")
                         .font(.caption2)
                         .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
@@ -317,12 +317,12 @@ struct ReservationEditorView: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
-                        Text("確認メールやスクショから、予約が入ります")
+                        Text("確認メールやスクショから、予約の入力を手伝います")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(textColor)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    Text("予約番号・日時・便名・金額を自動で入力")
+                    Text("予約番号・日時・便名・金額を読み取って入力")
                         .font(.caption2)
                         .foregroundColor(themeManager.currentTheme.secondaryText)
                     Text("Travory Pro")
@@ -349,7 +349,7 @@ struct ReservationEditorView: View {
         }
         .buttonStyle(.plain)
         .padding(.top, 8)
-        .accessibilityLabel("確認メールやスクリーンショットから予約が入ります。Travory Pro の説明を開く")
+        .accessibilityLabel("確認メールやスクリーンショットから、予約の入力を手伝います。Travory Pro の説明を開く")
     }
 
     /// 読み取った1件目を入力欄に入れ、残りは保存したあとに順に開く。

@@ -101,7 +101,7 @@ struct ReservationEmailImportView: View {
         VStack(alignment: .leading, spacing: 14) {
             Text(kind.map { "\($0.label)の予約確認メールの本文を貼り付けるか、" }
                  ?? "予約確認メールの本文を貼り付けるか、")
-                + Text("予約の確認画面のスクリーンショットや e チケットの PDF を選んでください。予約番号・日時・金額などを読み取って、入力欄に入れます。")
+                + Text("予約の確認画面のスクリーンショットや e チケットの PDF を選んでください。予約番号・日時・金額などを読み取り、読み取れたものを入力欄に入れます。書き方や写り方によっては、読み取れない項目もあります。")
             .font(.system(size: 13))
             .foregroundColor(themeManager.currentTheme.secondaryText)
 

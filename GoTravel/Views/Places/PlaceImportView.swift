@@ -264,7 +264,7 @@ struct PlaceImportView: View {
                 .font(.system(size: 14, weight: .semibold))
                 .foregroundColor(textColor)
                 .fixedSize(horizontal: false, vertical: true)
-            Text("お試しの\(PlaceScreenshotTrial.limit)回を使い終わりました。Pro なら、Instagram や TikTok のスクリーンショットから、何枚でも場所を読めます。"
+            Text("お試しの\(PlaceScreenshotTrial.limit)回を使い終わりました。Pro なら、Instagram や TikTok のスクリーンショットから、何枚でも場所を探せます。"
                  + "下の「名前で探す」から保存するのは無料です。")
                 .font(.system(size: 12))
                 .foregroundColor(secondaryText)
@@ -294,8 +294,8 @@ struct PlaceImportView: View {
                 Image(systemName: "sparkles")
                     .foregroundColor(accent)
                 Text(remaining > 0
-                     ? "スクリーンショットからの読み取りは Pro の機能です。お試しで、あと\(remaining)回使えます。Pro なら何枚でも読めます。"
-                     : "スクリーンショットからの読み取りは Pro の機能です。今回でお試しは終わりです。Pro なら何枚でも読めます。")
+                     ? "スクリーンショットからの読み取りは Pro の機能です。お試しで、あと\(remaining)回使えます。Pro なら何枚でも使えます。"
+                     : "スクリーンショットからの読み取りは Pro の機能です。今回でお試しは終わりです。Pro なら何枚でも使えます。")
                     .font(.caption)
                     .foregroundColor(secondaryText)
                     .multilineTextAlignment(.leading)
