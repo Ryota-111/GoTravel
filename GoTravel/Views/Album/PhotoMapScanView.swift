@@ -356,11 +356,9 @@ private struct PhotoMapScanPrefectureView: View {
         for id in selected {
             if let image = await AssetThumbnail.loadFull(localIdentifier: id) { images.append(image) }
         }
-        let wasEmpty = PhotoMapFiles.photos(of: candidate.prefecture,
-                                            in: albumManager.albums.first { $0.id == albumId }?.photoFileNames ?? []).isEmpty
         let added = albumManager.addJapanPhotos(images, prefecture: candidate.prefecture, to: albumId)
-        // 地図が1県埋まるのは達成感のある場面
-        if wasEmpty && added > 0 { ReviewRequestManager.shared.record(.prefectureAdded) }
+        // フォトマップの写真が3枚になったら、評価を頼む（3.8）
+        if added > 0 { ReviewRequestManager.shared.photoMapPhotosAdded(albumId: albumId) }
         // 写真を入れた県は、旅の記録にも撮った年で足す
         let years = Set(candidate.photos.filter { selected.contains($0.id) }
             .map { Calendar.current.component(.year, from: $0.date) })

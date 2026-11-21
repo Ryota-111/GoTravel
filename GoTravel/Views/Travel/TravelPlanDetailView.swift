@@ -599,11 +599,6 @@ struct TravelPlanDetailView: View {
                 }
             }
 
-            // 終わった旅行を見返すのは、思い出が良い形で残っている場面
-            if Calendar.current.startOfDay(for: plan.endDate) < Calendar.current.startOfDay(for: Date()) {
-                ReviewRequestManager.shared.record(.travelCompleted)
-            }
-
             // 画面が出きってから聞く（開いた直後に出すと、何の話か分かりにくい）
             if TabSwipePrompt.shouldAsk() {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {

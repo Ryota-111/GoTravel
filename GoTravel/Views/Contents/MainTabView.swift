@@ -127,6 +127,8 @@ struct MainTabView: View {
         // 旅のダイジェストのお知らせ（3.8）を、前からある旅行にも入れる（1回だけ）
         .onChange(of: travelPlanViewModel.travelPlans.count) { _, _ in
             NotificationService.shared.rescheduleTravelPlansIfNeeded(travelPlanViewModel.travelPlans)
+            // 旅行が終わった次の日なら、評価を頼む（3.8。旅行ごとに1回）
+            ReviewRequestManager.shared.checkDayAfterTrip(plans: travelPlanViewModel.travelPlans)
         }
         // .ics を「Travory で開く」で受け取ったら、カレンダーのタブで確かめる
         .onChange(of: icsInbox.file?.id) { _, id in
@@ -146,6 +148,8 @@ struct MainTabView: View {
             }
             // 共有メニューから予約を送ったあと、アプリに戻ってきたとき
             if phase == .active { checkSharedImports() }
+            // 旅行が終わった次の日に、アプリを前に出したとき（評価を頼む。旅行ごとに1回）
+            if phase == .active { ReviewRequestManager.shared.checkDayAfterTrip(plans: travelPlanViewModel.travelPlans) }
             // 設定アプリで iCloud を直して戻ってきたとき、帯を消す
             if phase == .active { ICloudSyncMonitor.shared.refresh() }
         }

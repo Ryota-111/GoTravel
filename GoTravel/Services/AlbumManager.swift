@@ -308,6 +308,11 @@ final class AlbumManager: NSObject, ObservableObject {
         }
     }
 
+    /// アルバムの写真の枚数。保存したばかりの分も数えるよう、Core Data から読む（評価を頼む判断に使う。3.8）
+    func photoCount(albumId: String) -> Int {
+        fetchAlbum(id: albumId)?.photoFileNames.count ?? 0
+    }
+
     // MARK: - 共有した旅行のアルバム（3.8、`SharedAlbumSync`）
 
     /// この端末に写真のファイルがあるか

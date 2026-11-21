@@ -72,8 +72,8 @@ struct JapanPhotoView: View {
                 let added = AlbumManager.shared.addJapanPhotos(images, prefecture: prefecture, to: albumId)
                 // 写真を入れた県は、年は分からない行った県として旅の記録にも足す（年はあとから足せる）
                 if added > 0 { VisitedPrefectureStore.shared.add(prefecture) }
-                // 地図が1県埋まるのは達成感のある場面
-                if added > 0 { ReviewRequestManager.shared.record(.prefectureAdded) }
+                // フォトマップの写真が3枚になったら、評価を頼む（3.8）
+                if added > 0 { ReviewRequestManager.shared.photoMapPhotosAdded(albumId: albumId) }
             }
         }
     }
@@ -386,7 +386,7 @@ private struct PhotoMapFullScreen: View {
                 // 写真を入れた県は、年は分からない行った県として旅の記録にも足す（年はあとから足せる）
                 if added > 0 {
                     VisitedPrefectureStore.shared.add(prefecture)
-                    ReviewRequestManager.shared.record(.prefectureAdded)
+                    ReviewRequestManager.shared.photoMapPhotosAdded(albumId: albumId)
                 }
             }
         }
@@ -559,14 +559,11 @@ struct PrefectureGalleryView: View {
         }
         .sheet(isPresented: $showPicker) {
             MultiPhotoPicker(selectionLimit: remaining) { images in
-                let wasEmpty = fileNames.isEmpty
                 let added = albumManager.addJapanPhotos(images, prefecture: prefecture, to: albumId)
                 // 写真を入れた県は、年は分からない行った県として旅の記録にも足す（年はあとから足せる）
                 if added > 0 { VisitedPrefectureStore.shared.add(prefecture) }
-                // 地図が1県埋まるのは達成感のある場面
-                if wasEmpty && added > 0 {
-                    ReviewRequestManager.shared.record(.prefectureAdded)
-                }
+                // フォトマップの写真が3枚になったら、評価を頼む（3.8）
+                if added > 0 { ReviewRequestManager.shared.photoMapPhotosAdded(albumId: albumId) }
             }
         }
         .sheet(item: $previewing) { target in

@@ -86,7 +86,6 @@ struct AlbumDetailView: View {
             MultiPhotoPicker { images in
                 guard !images.isEmpty else { return }
                 albumManager.addPhotos(images, to: album.id)
-                ReviewRequestManager.shared.record(.photosAdded)
                 Task { await syncShared() }
             }
         }
