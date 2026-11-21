@@ -14,6 +14,8 @@ struct CreateAlbumView: View {
     @State private var albumTitle = ""
     @State private var selectedType: AlbumType = .travel
     @State private var selectedTravelPlan: TravelPlan?
+    /// 旅行計画の表紙の写真（小さく縮めたもの）。写真の無い計画は入らない（3.8）
+    @State private var planCovers: [String: UIImage] = [:]
 
     let travelPlans: [TravelPlan]
     let albumTypes: [AlbumType] = [.travel, .family, .landscape, .food, .custom, .japan]
@@ -330,6 +332,7 @@ struct CreateAlbumView: View {
                             planCard(plan)
                         }
                     }
+                    .task { loadPlanCovers() }
                 }
             }
         }
@@ -344,14 +347,25 @@ struct CreateAlbumView: View {
             }
         }) {
             HStack(spacing: 14) {
-                ZStack {
-                    Circle()
-                        .fill(planColor.opacity(0.85))
+                // 表紙の写真があれば写真を、無ければ今までどおり計画の色の丸にする（3.8）
+                if let id = plan.id, let cover = planCovers[id] {
+                    Image(uiImage: cover)
+                        .resizable()
+                        .scaledToFill()
                         .frame(width: 46, height: 46)
+                        .clipShape(Circle())
+                        .overlay(Circle().stroke(Color.white.opacity(0.6), lineWidth: 1))
                         .shadow(color: planColor.opacity(0.35), radius: 4, x: 0, y: 2)
-                    Image(systemName: "airplane.departure")
-                        .font(.system(size: 17))
-                        .foregroundColor(.white)
+                } else {
+                    ZStack {
+                        Circle()
+                            .fill(planColor.opacity(0.85))
+                            .frame(width: 46, height: 46)
+                            .shadow(color: planColor.opacity(0.35), radius: 4, x: 0, y: 2)
+                        Image(systemName: "airplane.departure")
+                            .font(.system(size: 17))
+                            .foregroundColor(.white)
+                    }
                 }
 
                 VStack(alignment: .leading, spacing: 3) {
@@ -384,6 +398,15 @@ struct CreateAlbumView: View {
         }
         .buttonStyle(PlainButtonStyle())
         .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
+    }
+
+    /// 表紙の写真を小さく縮めて覚える。一覧の描き直しのたびに大きな写真を読まないように
+    private func loadPlanCovers() {
+        for plan in travelPlans {
+            guard let id = plan.id, planCovers[id] == nil,
+                  let image = TravelBookletRenderer.coverImage(for: plan) else { continue }
+            planCovers[id] = image.downscaled(maxPixel: 140)
+        }
     }
 
     // MARK: - Create Button
