@@ -342,7 +342,7 @@ struct ReservationEmailImportView: View {
 
         // 決まった形の読み取りに、使える端末では端末の中の AI で足りないところを埋める（3.4。どこにも送らない）
         let all = await ReservationReader.read(text, kind: kind)
-        let drafts = all.filter(\.hasContent)
+        let drafts = all.filter(\.isWorthImporting)
         guard !drafts.isEmpty else {
             foundNothing = true
             partialDrafts = Array(all.prefix(1))
@@ -375,12 +375,6 @@ struct ReservationEmailImportView: View {
     }
 }
 
-private extension ReservationDraft {
-    /// 何も読み取れなかった下書き（予約のメールではなかった）を落とす
-    var hasContent: Bool {
-        start != nil || confirmationNumber != nil || transportNumber != nil
-    }
-}
 
 private extension CGImagePropertyOrientation {
     /// UIImage の向きを、Vision に渡す向きに直す

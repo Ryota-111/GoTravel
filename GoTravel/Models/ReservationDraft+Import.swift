@@ -140,3 +140,18 @@ extension ReservationDraft {
         return ScheduleClock.legacyTimeZone
     }
 }
+
+extension ReservationDraft {
+    /// 予約として取り込む値打ちがあるか（3.8）。
+    ///
+    /// 3.7 までは日時・予約番号・便名の3つだけで見ていて、チェックアウトの日だけ・発着地だけ読めた下書きを
+    /// 「見つかりませんでした」で捨てていた。予約の中身らしい項目が1つでもあれば残す。
+    /// 名前だけは、種類が分かったときだけ（予約のメールでない文の1行目を名前にしただけのことがある）。
+    /// 金額だけも残さない（領収書など、予約でない文にもある）
+    var isWorthImporting: Bool {
+        if confirmationNumber != nil || transportNumber != nil { return true }
+        if start != nil || arrival != nil || end != nil { return true }
+        if departurePlace != nil || arrivalPlace != nil { return true }
+        return !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && kind != .other
+    }
+}
