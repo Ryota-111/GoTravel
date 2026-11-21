@@ -7,8 +7,9 @@ import UIKit
 /// Gmail アプリには、メール1通を丸ごと共有する手段が「印刷 → 共有（PDF）」しかない、というご意見から。
 ///
 /// - 文字の入った PDF（メールを印刷したもの・多くの e チケット）は、中の文字をそのまま読む
-/// - 文字の入っていない PDF（紙をスキャンしたもの）は、初めの数ページを画像にして、
-///   スクリーンショットと同じく端末の中で文字を読む（`ReservationImageTextReader`）
+/// - 文字の入っていないページ（紙をスキャンしたもの）は、数ページまで画像にして、
+///   スクリーンショットと同じく端末の中で文字を読む（`ReservationImageTextReader`）。
+///   ページごとに見るので、文字のページとスキャンのページが混ざった PDF も読める（3.8）
 /// - **端末の中だけで読む。** PDF はどこにも送らない
 enum ReservationPDFTextReader {
 
@@ -34,20 +35,25 @@ enum ReservationPDFTextReader {
         // 鍵のかかった PDF は開けない（パスワードを聞く画面は作らない）
         guard !document.isLocked else { throw ReadError.unreadable }
 
-        let embedded = embeddedText(of: document)
-        if hasEnoughText(embedded) { return embedded }
-
-        // 文字の入っていない PDF。ページを画像にして読む
+        // ページごとに見る（3.8）。文字の入ったページは中の文字を、文字の無いページ（スキャン）だけ画像にして読む。
+        // 3.7 までは PDF 全体で文字が少しでもあれば中の文字だけを使い、スキャンのページを読んでいなかった
         var pages: [String] = []
-        for index in 0..<min(document.pageCount, maxImagePages) {
-            guard let page = document.page(at: index), let image = render(page) else { continue }
-            if let text = try? await ReservationImageTextReader.text(from: image) {
-                pages.append(text)
+        var recognizedPages = 0
+        for index in 0..<min(document.pageCount, maxTextPages) {
+            guard let page = document.page(at: index) else { continue }
+            let embedded = (page.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if hasEnoughText(embedded) {
+                pages.append(embedded)
+            } else if recognizedPages < maxImagePages, let image = render(page) {
+                recognizedPages += 1
+                if let text = try? await ReservationImageTextReader.text(from: image), hasEnoughText(text) {
+                    pages.append(text)
+                }
             }
         }
-        let recognized = pages.joined(separator: "\n")
-        guard hasEnoughText(recognized) else { throw ReadError.noText }
-        return recognized
+        let text = pages.joined(separator: "\n")
+        guard hasEnoughText(text) else { throw ReadError.noText }
+        return text
     }
 
     /// PDF に入っている文字（初めの `maxTextPages` ページ）。ページの間は改行でつなぐ

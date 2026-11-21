@@ -49,7 +49,32 @@ struct ReservationPDFTextReaderTests {
         #expect(ReservationPDFTextReader.hasEnoughText("予約番号 K7Q2PX 搭乗日 2026年10月6日"))
     }
 
+    @Test("文字のページとスキャンのページが混ざった PDF は、スキャンのページも読む（3.8）", .timeLimit(.minutes(1)))
+    func readsMixedPDF() async throws {
+        let text = try await ReservationPDFTextReader.text(from: mixedPDF(cover: ["ご利用ありがとうございます", "このメールは送信専用です。お問い合わせは窓口へ"],
+                                                                          scanned: lines))
+        #expect(text.contains("送信専用"))
+        #expect(text.contains("K7Q2PX"), "\(text)")
+    }
+
     // MARK: - PDF を作る
+
+    /// 1ページ目は文字、2ページ目は画像だけ
+    private func mixedPDF(cover: [String], scanned: [String]) -> Data {
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 2
+        let image = UIGraphicsImageRenderer(size: pageRect.size, format: format).image { context in
+            UIColor.white.setFill()
+            context.fill(pageRect)
+            draw(scanned)
+        }
+        return UIGraphicsPDFRenderer(bounds: pageRect).pdfData { context in
+            context.beginPage()
+            draw(cover)
+            context.beginPage()
+            image.draw(in: pageRect)
+        }
+    }
 
     private let pageRect = CGRect(x: 0, y: 0, width: 595, height: 842)   // A4
 

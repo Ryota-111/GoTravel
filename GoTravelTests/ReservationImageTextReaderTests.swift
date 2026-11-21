@@ -118,3 +118,15 @@ struct ReservationImageTextReaderTests {
         return image.cgImage!
     }
 }
+
+extension ReservationImageTextReaderTests {
+    @Test("候補の違いが見た目の似た文字だけで、便名が読めるようになるときだけ、その候補を使う（3.8）")
+    func bestCandidate() {
+        #expect(ReservationImageTextReader.bestCandidate(["搭乗便 NHB014", "搭乗便 NH8014"]) == "搭乗便 NH8014")
+        // 便名が増えない置き換えはしない（予約番号の O を 0 にしない）
+        #expect(ReservationImageTextReader.bestCandidate(["予約番号 EEFO3D", "予約番号 EEF03D"]) == "予約番号 EEFO3D")
+        // 違いが似た文字でないものは使わない
+        #expect(ReservationImageTextReader.bestCandidate(["NHX014", "NH8014"]) == "NHX014")
+        #expect(ReservationImageTextReader.bestCandidate(["那覇空港"]) == "那覇空港")
+    }
+}
