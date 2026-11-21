@@ -124,6 +124,10 @@ struct MainTabView: View {
         // TravelPlan は Equatable ではないため配列を直接監視できないので、
         // 起動時・タブ切り替え時・バックグラウンドへ移る時に更新する
         .onAppear { updateWidgetSnapshot() }
+        // 旅のダイジェストのお知らせ（3.8）を、前からある旅行にも入れる（1回だけ）
+        .onChange(of: travelPlanViewModel.travelPlans.count) { _, _ in
+            NotificationService.shared.rescheduleTravelPlansIfNeeded(travelPlanViewModel.travelPlans)
+        }
         // .ics を「Travory で開く」で受け取ったら、カレンダーのタブで確かめる
         .onChange(of: icsInbox.file?.id) { _, id in
             if id != nil { selectedTab = 1 }

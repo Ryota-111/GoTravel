@@ -68,12 +68,44 @@ class NotificationService {
                 )
             }
         }
+
+        // 旅行が終わった次の日の夜に、旅のダイジェスト動画を勧める（3.8）。
+        // 旅の記憶が新しいうちが、いちばん作られ、いちばん人に見せられる
+        if let dayAfter = calendar.date(byAdding: .day, value: 1, to: plan.endDate) {
+            var components = calendar.dateComponents(in: TimeZone.current, from: dayAfter)
+            components.hour = 19
+            components.minute = 0
+            components.second = 0
+
+            if let scheduledDate = calendar.date(from: components), scheduledDate > now {
+                scheduleNotification(
+                    id: "\(planId)_digest",
+                    title: "旅のダイジェストを作りませんか",
+                    body: "\(plan.title)で撮った写真と動画を、2秒ずつつないだ動画にできます。思い出タブから作れます。",
+                    dateComponents: components
+                )
+            }
+        }
+    }
+
+    /// 旅行のお知らせの中身を増やしたとき（3.8 で旅のダイジェストを足した）に、まだ終わっていない旅行のお知らせを1回だけ入れ直す。
+    /// お知らせは保存したときにしか入らないので、入れ直さないと、前からある旅行には新しいお知らせが届かない
+    func rescheduleTravelPlansIfNeeded(_ plans: [TravelPlan]) {
+        let key = "TravelPlanNotificationsVersion"
+        let version = 2
+        guard !plans.isEmpty, UserDefaults.standard.integer(forKey: key) < version else { return }
+        UserDefaults.standard.set(version, forKey: key)
+        let yesterday = Date().addingTimeInterval(-60 * 60 * 24)
+        for plan in plans where plan.endDate >= yesterday {
+            scheduleTravelPlanNotifications(for: plan)
+        }
     }
 
     func cancelTravelPlanNotifications(for planId: String) {
         let identifiers = [
             "\(planId)_week",
-            "\(planId)_day"
+            "\(planId)_day",
+            "\(planId)_digest"
         ]
         UNUserNotificationCenter.current().removePendingNotificationRequests(withIdentifiers: identifiers)
     }

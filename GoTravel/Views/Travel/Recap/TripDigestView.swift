@@ -1096,7 +1096,8 @@ struct TripDigestPlayerView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .confirmationAction) {
-                    ShareLink(item: result.url) {
+                    // 文を受け取れる送り先（LINE・メッセージなど）には一言を添える（3.8）
+                    ShareLink(item: result.url, message: Text("「\(result.title)」の旅を動画にまとめました #Travory #旅のダイジェスト")) {
                         Label("送る・保存", systemImage: "square.and.arrow.up")
                     }
                 }

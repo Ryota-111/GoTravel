@@ -701,6 +701,7 @@ private struct TripStatsShareSheet: View {
                 ToolbarItem(placement: .confirmationAction) {
                     if let image = images[page] {
                         ShareLink(item: Image(uiImage: image),
+                                  message: Text("\(periodTitle)の旅をふり返りました #Travory"),
                                   preview: SharePreview("\(periodTitle)の旅", image: Image(uiImage: image))) {
                             Label("送る・保存", systemImage: "square.and.arrow.up")
                         }
