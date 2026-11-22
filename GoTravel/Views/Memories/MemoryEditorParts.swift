@@ -128,7 +128,10 @@ struct MemoryTextSheet: View {
     }
 }
 
-/// テンプレートの見本を横に並べる。Pro のものは鍵の印
+/// テンプレートの見本を横に並べる。Pro のものは鍵の印。
+///
+/// 見本は一度だけ小さな画像に書き出して並べる（3.8）。本番の大きさのテンプレートを8つ並べて描くと、
+/// 押すたびに全部を描き直して反応が遅くなっていた。写真・比率・文字が変わったときだけ書き出し直す
 struct MemoryTemplateStrip: View {
     let kind: MemoryKind
     let selectedId: String
@@ -136,18 +139,31 @@ struct MemoryTemplateStrip: View {
     let isPro: Bool
     let onSelect: (MemoryTemplate) -> Void
 
+    @State private var thumbnails: [String: UIImage] = [:]
+
+    /// 見本を書き出し直す合図（写真・比率・文字）
+    private var renderKey: String {
+        let project = context.project
+        return [project.aspect.rawValue, project.title, project.subtitle, project.note, project.detail, project.badge,
+                project.photos.map(\.assetId).joined(separator: ","), "\(context.images.count)"].joined(separator: "|")
+    }
+
     var body: some View {
+        let aspect = context.project.aspect.canvasSize
         ScrollView(.horizontal, showsIndicators: false) {
             HStack(spacing: 12) {
                 ForEach(MemoryTemplate.templates(for: kind)) { template in
                     Button { onSelect(template) } label: {
                         VStack(spacing: 6) {
-                            // 見本の中の写真や文字が押した操作を受け取らないようにする（どこを押しても選べるように）
-                            ScaledCanvas(size: context.project.aspect.canvasSize) {
-                                MemoryCanvas(templateId: template.id, context: context)
+                            ZStack {
+                                Color.secondary.opacity(0.08)
+                                if let image = thumbnails[template.id] {
+                                    Image(uiImage: image).resizable().scaledToFill()
+                                } else {
+                                    ProgressView().controlSize(.small)
+                                }
                             }
-                            .allowsHitTesting(false)
-                            .frame(height: 92)
+                            .frame(width: 92 * aspect.width / aspect.height, height: 92)
                             .clipShape(RoundedRectangle(cornerRadius: 8))
                             .overlay(RoundedRectangle(cornerRadius: 8)
                                 .stroke(template.id == selectedId ? Color.accentColor : Color.secondary.opacity(0.25),
@@ -165,13 +181,30 @@ struct MemoryTemplateStrip: View {
                             Text(template.name)
                                 .font(.caption2.weight(template.id == selectedId ? .bold : .regular))
                                 .foregroundStyle(.primary)
+                                .lineLimit(1)
                         }
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
-                    .contentShape(Rectangle())
                 }
             }
             .padding(.horizontal, 16)
+        }
+        .task(id: renderKey) { await renderThumbnails() }
+    }
+
+    /// 1つずつ書き出す（あいだに画面の操作を受け付ける）
+    @MainActor
+    private func renderThumbnails() async {
+        for template in MemoryTemplate.templates(for: kind) {
+            guard !Task.isCancelled else { return }
+            var thumbContext = context
+            thumbContext.showsWatermark = false
+            let renderer = ImageRenderer(content: MemoryCanvas(templateId: template.id, context: thumbContext))
+            // 92pt の高さを、画面の3倍の細かさで描ける大きさ
+            renderer.scale = 92 * 3 / context.project.aspect.canvasSize.height
+            if let image = renderer.uiImage { thumbnails[template.id] = image }
+            await Task.yield()
         }
     }
 }

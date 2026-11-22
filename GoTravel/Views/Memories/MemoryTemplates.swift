@@ -18,10 +18,18 @@ struct MemoryTemplate: Identifiable, Hashable {
         MemoryTemplate(id: "dump.film", kind: .photoDump, name: "フィルム", isPro: false, photoCount: 4),
         MemoryTemplate(id: "dump.magazine", kind: .photoDump, name: "マガジン", isPro: true, photoCount: 4),
         MemoryTemplate(id: "dump.minimal", kind: .photoDump, name: "ミニマル", isPro: true, photoCount: 3),
+        MemoryTemplate(id: "dump.grid", kind: .photoDump, name: "グリッド", isPro: false, photoCount: 9),
+        MemoryTemplate(id: "dump.ticket", kind: .photoDump, name: "チケット", isPro: true, photoCount: 4),
+        MemoryTemplate(id: "dump.booth", kind: .photoDump, name: "フォトブース", isPro: true, photoCount: 6),
+        MemoryTemplate(id: "dump.journal", kind: .photoDump, name: "ジャーナル", isPro: true, photoCount: 3),
         MemoryTemplate(id: "poster.editorial", kind: .poster, name: "エディトリアル", isPro: false, photoCount: 1),
         MemoryTemplate(id: "poster.frame", kind: .poster, name: "フレーム", isPro: false, photoCount: 1),
         MemoryTemplate(id: "poster.vintage", kind: .poster, name: "ヴィンテージ", isPro: true, photoCount: 1),
         MemoryTemplate(id: "poster.cover", kind: .poster, name: "マガジン表紙", isPro: true, photoCount: 1, isDark: true),
+        MemoryTemplate(id: "poster.postcard", kind: .poster, name: "ポストカード", isPro: false, photoCount: 1),
+        MemoryTemplate(id: "poster.textmask", kind: .poster, name: "文字の切り抜き", isPro: true, photoCount: 1),
+        MemoryTemplate(id: "poster.split", kind: .poster, name: "スプリット", isPro: true, photoCount: 1, isDark: true),
+        MemoryTemplate(id: "poster.duotone", kind: .poster, name: "デュオトーン", isPro: true, photoCount: 1, isDark: true),
         MemoryTemplate(id: "diary.scrapbook", kind: .diary, name: "スクラップブック", isPro: false, photoCount: 4),
         MemoryTemplate(id: "diary.journal", kind: .diary, name: "ジャーナル", isPro: true, photoCount: 4),
     ]
@@ -46,6 +54,14 @@ struct MemoryCanvas: View {
             case "dump.film": FilmDumpTemplate(context: context, size: size)
             case "dump.magazine": MagazineDumpTemplate(context: context, size: size)
             case "dump.minimal": MinimalDumpTemplate(context: context, size: size)
+            case "dump.grid": GridCollageTemplate(context: context, size: size)
+            case "dump.ticket": TicketCollageTemplate(context: context, size: size)
+            case "dump.booth": PhotoBoothCollageTemplate(context: context, size: size)
+            case "dump.journal": JournalCollageTemplate(context: context, size: size)
+            case "poster.postcard": PostcardPosterTemplate(context: context, size: size)
+            case "poster.textmask": TextMaskPosterTemplate(context: context, size: size)
+            case "poster.split": SplitPosterTemplate(context: context, size: size)
+            case "poster.duotone": DuotonePosterTemplate(context: context, size: size)
             case "poster.editorial": EditorialPosterTemplate(context: context, size: size)
             case "poster.frame": FramePosterTemplate(context: context, size: size)
             case "poster.vintage": VintagePosterTemplate(context: context, size: size)

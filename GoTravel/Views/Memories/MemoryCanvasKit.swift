@@ -95,29 +95,39 @@ enum MemoryColor {
 
 // MARK: - 紙の地
 
-/// 少しざらついた紙。粒は決まった並びで描く（書き出すたびに模様が変わらないように）
+/// 少しざらついた紙。粒は決まった並びで描く（書き出すたびに模様が変わらないように）。
+/// 粒の模様は1枚の画像として一度だけ作り、並べて敷く（描き直しのたびに数千の粒を打ち直すと、編集の反応が遅くなるため）
 struct PaperBackground: View {
     var base: Color = MemoryColor.paper
 
     var body: some View {
         ZStack {
             base
-            Canvas { context, size in
-                var generator = SeededRandom(seed: 7)
-                let count = Int(size.width * size.height / 900)
-                for _ in 0..<count {
-                    let x = CGFloat(generator.next()) * size.width
-                    let y = CGFloat(generator.next()) * size.height
-                    let r = CGFloat(generator.next()) * 1.6 + 0.4
-                    let dark = generator.next() > 0.5
-                    context.fill(Path(ellipseIn: CGRect(x: x, y: y, width: r, height: r)),
-                                 with: .color((dark ? Color.black : Color.white).opacity(0.05)))
-                }
-            }
+            Image(uiImage: Self.grainTile)
+                .resizable(resizingMode: .tile)
             RadialGradient(colors: [.clear, MemoryColor.paperShadow.opacity(0.35)],
                            center: .center, startRadius: 300, endRadius: 1300)
         }
     }
+
+    /// 紙の粒の模様（540 × 540。並べて敷く）
+    static let grainTile: UIImage = {
+        let side: CGFloat = 540
+        let format = UIGraphicsImageRendererFormat()
+        format.scale = 1
+        format.opaque = false
+        return UIGraphicsImageRenderer(size: CGSize(width: side, height: side), format: format).image { context in
+            var generator = SeededRandom(seed: 7)
+            for _ in 0..<Int(side * side / 900) {
+                let x = CGFloat(generator.next()) * side
+                let y = CGFloat(generator.next()) * side
+                let r = CGFloat(generator.next()) * 1.6 + 0.4
+                let dark = generator.next() > 0.5
+                (dark ? UIColor.black : UIColor.white).withAlphaComponent(0.05).setFill()
+                context.cgContext.fillEllipse(in: CGRect(x: x, y: y, width: r, height: r))
+            }
+        }
+    }()
 }
 
 /// 決まった並びの乱数（紙の粒・飾りの傾きを、毎回同じにする）

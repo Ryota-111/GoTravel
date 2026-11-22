@@ -30,7 +30,7 @@ struct MemoryGalleryTests {
     @Test(.enabled(if: directory != nil)) func gallery() throws {
         var images: [String: UIImage] = [:]
         var photos: [MemoryPhoto] = []
-        for i in 0..<6 { images["a\(i)"] = photo(i); photos.append(MemoryPhoto(assetId: "a\(i)", date: Date())) }
+        for i in 0..<9 { images["a\(i)"] = photo(i); photos.append(MemoryPhoto(assetId: "a\(i)", date: Date())) }
         var base = MemoryProject(planId: "p", kind: .photoDump, templateId: "", aspect: .story)
         base.photos = photos
         base.subtitle = "2026.11.15 – 11.17"

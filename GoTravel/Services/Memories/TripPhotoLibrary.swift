@@ -41,7 +41,10 @@ enum TripPhotoLibrary {
         options.predicate = NSPredicate(format: "creationDate >= %@ AND creationDate < %@", start as NSDate, end as NSDate)
         options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: true)]
         var assets: [PHAsset] = []
+        // 旅行中に作って保存した思い出の画像は、旅行の写真に混ぜない
+        let exported = exportedAssetIds
         PHAsset.fetchAssets(with: options).enumerateObjects { asset, _, _ in
+            guard !exported.contains(asset.localIdentifier) else { return }
             switch asset.mediaType {
             case .image where !asset.mediaSubtypes.contains(.photoScreenshot):
                 assets.append(asset)
@@ -130,14 +133,37 @@ enum TripPhotoLibrary {
         guard !files.isEmpty else { return false }
         let status = await PHPhotoLibrary.requestAuthorization(for: .addOnly)
         guard status == .authorized || status == .limited else { return false }
+        var created: [String] = []
         do {
             try await PHPhotoLibrary.shared().performChanges {
-                for url in files { PHAssetChangeRequest.creationRequestForAssetFromImage(atFileURL: url) }
+                for url in files {
+                    if let id = PHAssetChangeRequest.creationRequestForAssetFromImage(atFileURL: url)?
+                        .placeholderForCreatedAsset?.localIdentifier {
+                        created.append(id)
+                    }
+                }
             }
+            rememberExported(created)
             return true
         } catch {
             return false
         }
+    }
+
+    // MARK: - 保存した思い出
+
+    private static let exportedKey = "MemoryExportedAssetIds"
+
+    /// 思い出をつくるで保存した画像の id。旅行の写真の候補から外す（作ったコラージュが次のコラージュに入らないように）
+    static var exportedAssetIds: Set<String> {
+        Set(UserDefaults.standard.stringArray(forKey: exportedKey) ?? [])
+    }
+
+    private static func rememberExported(_ ids: [String]) {
+        guard !ids.isEmpty else { return }
+        // 多くなりすぎないよう、新しいほうから 500 件まで
+        let all = (UserDefaults.standard.stringArray(forKey: exportedKey) ?? []) + ids
+        UserDefaults.standard.set(Array(all.suffix(500)), forKey: exportedKey)
     }
 
     // MARK: - 目的地の英語の名前
