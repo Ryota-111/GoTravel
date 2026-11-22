@@ -549,16 +549,28 @@ struct AlbumCard: View {
 
     /// 計算プロパティのままだと参照のたびにディスクから読み直すため、一度だけ読んで保持する
     @State private var recentPhotos: [UIImage] = []
+    /// フォトマップの、写真のある県の代表写真（3.8。表紙の地図に使う）
+    @State private var prefectureCovers: [Prefecture: UIImage] = [:]
 
     private var photoCount: Int {
         album.photoFileNames.count
     }
 
-    /// フォトマップの写真は `JapanPhotos` にあるので、読み出し先だけ分ける
+    /// フォトマップの写真は `JapanPhotos` にあるので、読み出し先だけ分ける。
+    /// フォトマップの表紙は日本地図にするので、県ごとの代表写真を読む（3.8）
     private func loadRecentPhotos() {
-        recentPhotos = album.isJapanPhotoMap
-            ? JapanPhotoManager.shared.recentThumbnails(in: album, limit: 4)
-            : albumManager.recentThumbnails(from: album, limit: 4)
+        if album.isJapanPhotoMap {
+            var covers: [Prefecture: UIImage] = [:]
+            for prefecture in Prefecture.allCases {
+                if let name = PhotoMapFiles.cover(of: prefecture, in: album.photoFileNames),
+                   let image = JapanPhotoManager.shared.thumbnail(name) {
+                    covers[prefecture] = image
+                }
+            }
+            prefectureCovers = covers
+        } else {
+            recentPhotos = albumManager.recentThumbnails(from: album, limit: 4)
+        }
     }
 
     private var resolvedCoverColor: Color {
@@ -667,15 +679,17 @@ struct AlbumCard: View {
         Color.clear
             .aspectRatio(4.0 / 3.0, contentMode: .fit)
             .overlay {
-                if recentPhotos.isEmpty {
+                if album.isJapanPhotoMap {
+                    photoMapPreview
+                } else if recentPhotos.isEmpty {
                     emptyPhotoPreview
-                } else if recentPhotos.count == 1 {
-                    photoFill(recentPhotos[0])
                 } else {
                     mosaicPreview
                 }
             }
-            .overlay(alignment: .bottomLeading) { photoCountBadge }
+            .overlay(alignment: .bottomLeading) {
+                if !album.isJapanPhotoMap { photoCountBadge }
+            }
             .clipped()
     }
 
@@ -698,26 +712,109 @@ struct AlbumCard: View {
         }
     }
 
-    /// 2x2 のモザイク。GeometryReader で幅を測らず、比率だけで組む
+    /// 写真の枚数に合わせて並べる（3.8）。4枚に満たないときに、空いたマスを色の四角で埋めていた。
+    /// 1枚は全面、2枚は左右、3枚は左に大きく1枚と右に2枚、4枚以上は 2x2
+    @ViewBuilder
     private var mosaicPreview: some View {
-        VStack(spacing: 2) {
-            ForEach(0..<2, id: \.self) { row in
+        let photos = recentPhotos
+        switch photos.count {
+        case 1:
+            tile(photos[0])
+        case 2:
+            HStack(spacing: 2) {
+                tile(photos[0])
+                tile(photos[1])
+            }
+        case 3:
+            // 表紙の枠（4:3 で決まっている）の幅を測り、左の1枚を6割にする
+            GeometryReader { geo in
                 HStack(spacing: 2) {
-                    ForEach(0..<2, id: \.self) { column in
-                        let index = row * 2 + column
-                        Group {
-                            if index < recentPhotos.count {
-                                photoFill(recentPhotos[index])
-                            } else {
-                                resolvedCoverColor.opacity(0.25)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .clipped()
+                    tile(photos[0])
+                        .frame(width: max(geo.size.width - 2, 0) * 0.6)
+                    VStack(spacing: 2) {
+                        tile(photos[1])
+                        tile(photos[2])
                     }
                 }
             }
+        default:
+            VStack(spacing: 2) {
+                HStack(spacing: 2) {
+                    tile(photos[0])
+                    tile(photos[1])
+                }
+                HStack(spacing: 2) {
+                    tile(photos[2])
+                    tile(photos[3])
+                }
+            }
         }
+    }
+
+    /// 写真1枚を、与えられた枠いっぱいに切り抜いて敷く
+    private func tile(_ image: UIImage) -> some View {
+        Color.clear
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay { photoFill(image) }
+            .clipped()
+    }
+
+    // MARK: - フォトマップの表紙（3.8）
+
+    /// 日本地図（写真のある県は写真で、無い県は薄く）と、埋まった県の数
+    private var photoMapPreview: some View {
+        let filled = prefectureCovers.count
+        let total = Prefecture.allCases.count
+        return ZStack {
+            LinearGradient(
+                colors: [resolvedCoverColor.opacity(0.22), resolvedCoverColor.opacity(0.06)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            // 地図は縦に長いので、表紙の幅の6割強を地図に使い、高さいっぱいに描く
+            GeometryReader { geo in
+                HStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Spacer(minLength: 0)
+                        HStack(alignment: .firstTextBaseline, spacing: 2) {
+                            Text("\(filled)")
+                                .font(.system(size: 30, weight: .bold, design: .rounded))
+                                .foregroundColor(resolvedCoverColor)
+                                .monospacedDigit()
+                                .minimumScaleFactor(0.6)
+                            Text("/\(total)")
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
+                        }
+                        .lineLimit(1)
+                        Text("都道府県")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
+                        // 埋まった割合
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(resolvedCoverColor.opacity(0.18))
+                            Capsule().fill(resolvedCoverColor)
+                                .frame(width: geo.size.width * 0.3 * CGFloat(filled) / CGFloat(max(total, 1)))
+                        }
+                        .frame(width: geo.size.width * 0.3, height: 5)
+                        .padding(.top, 4)
+                    }
+                    .padding(.leading, 12)
+                    .padding(.bottom, 12)
+                    .frame(width: geo.size.width * 0.38, height: geo.size.height, alignment: .bottomLeading)
+
+                    // 写真の無い県は文字の色で薄く描く（表紙の色だと、下地に溶けて見えない）
+                    PhotoMapCanvas(covers: prefectureCovers, ink: accentColor, onTap: { _ in })
+                        .allowsHitTesting(false)
+                        .padding(.vertical, 6)
+                        .padding(.trailing, 4)
+                        .frame(width: geo.size.width * 0.62, height: geo.size.height)
+                        .accessibilityHidden(true)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("日本全国フォトマップ、47都道府県のうち\(filled)")
     }
 
     @ViewBuilder

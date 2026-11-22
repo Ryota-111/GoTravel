@@ -103,6 +103,14 @@ final class ScreenTourTests: XCTestCase {
         }
         if steps.contains("album") {
             let app = launch(tab: 3, extra: extra)
+            // アルバムの表紙（フォトマップの地図、写真1〜4枚の並び）が見えるところまで下げて撮る
+            shot("album-home-top")
+            let start = app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.75))
+            start.press(forDuration: 0.1, thenDragTo: app.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.6)))
+            sleep(1)
+            shot("album-home")
+            app.swipeDown()
+            sleep(1)
             if tap(app, "日本全国フォトマ") { shot("album-detail") }
         }
         if steps.contains("packing") {

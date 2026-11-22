@@ -1,6 +1,7 @@
 #if DEBUG
 import Foundation
 import SwiftUI
+import UIKit
 import CoreData
 
 /// 画面を確かめるための見本データ（開発用のビルドだけ）。
@@ -91,6 +92,49 @@ enum DemoDataSeeder {
         for place in places { _ = VisitedPlaceEntity.create(from: place, context: context) }
 
         CoreDataManager.shared.saveContext()
+        seedAlbums(userId: userId, context: context)
     }
+
+    /// 思い出タブの表紙を確かめるためのアルバム（3.8）。写真1〜4枚のアルバムと、写真の入ったフォトマップ。
+    /// 写真は色の帯を描いた絵（実際の写真は使わない）
+    private static func seedAlbums(userId: String, context: NSManagedObjectContext) {
+        let palette: [(UIColor, UIColor)] = [
+            (.systemTeal, .systemBlue), (.systemOrange, .systemPink), (.systemGreen, .systemTeal),
+            (.systemIndigo, .systemPurple), (.systemYellow, .systemOrange), (.systemBlue, .systemIndigo)
+        ]
+        func photo(_ index: Int) -> UIImage {
+            let colors = palette[index % palette.count]
+            return UIGraphicsImageRenderer(size: CGSize(width: 600, height: 450)).image { ctx in
+                let gradient = CGGradient(colorsSpace: CGColorSpaceCreateDeviceRGB(),
+                                          colors: [colors.0.cgColor, colors.1.cgColor] as CFArray, locations: [0, 1])!
+                ctx.cgContext.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: 600, y: 450), options: [])
+                UIColor.white.withAlphaComponent(0.35).setFill()
+                ctx.cgContext.fillEllipse(in: CGRect(x: 380, y: 60, width: 120, height: 120))
+            }
+        }
+
+        let japan = Album(id: "demo-japan", title: AlbumType.japan.title, coverColor: AlbumType.japan.coverColor,
+                          icon: AlbumType.japan.icon, isDefaultAlbum: true, type: .japan, userId: userId)
+        _ = AlbumEntity.create(from: japan, context: context)
+        let samples: [(String, Int)] = [("demo-a1", 1), ("demo-a2", 2), ("demo-a3", 3), ("demo-a4", 5)]
+        for (index, sample) in samples.enumerated() {
+            let album = Album(id: sample.0, title: "写真\(sample.1)枚のアルバム", coverColor: palette[index].0.swiftUIColor,
+                              icon: "photo.on.rectangle.angled", type: .custom, userId: userId)
+            _ = AlbumEntity.create(from: album, context: context)
+        }
+        CoreDataManager.shared.saveContext()
+
+        let manager = AlbumManager.shared
+        for sample in samples {
+            manager.addPhotos((0..<sample.1).map { photo($0 + sample.1) }, to: sample.0)
+        }
+        for (index, prefecture) in [Prefecture.hokkaido, .tokyo, .kyoto, .osaka, .fukuoka, .okinawa, .nagano].enumerated() {
+            _ = manager.addJapanPhotos([photo(index)], prefecture: prefecture, to: japan.id)
+        }
+    }
+}
+
+private extension UIColor {
+    var swiftUIColor: Color { Color(self) }
 }
 #endif
