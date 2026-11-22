@@ -24,6 +24,61 @@ enum DiaryFormat {
     }
 }
 
+/// 編集中は打ち込める欄、書き出すときは文字（3.8。日記を、そのページの上で直せるように）
+struct DiaryInlineText: View {
+    let text: Binding<String>?
+    let value: String
+    let placeholder: String
+    let font: Font
+    var lineLimit = 3
+
+    var body: some View {
+        if let text {
+            TextField(placeholder, text: text, axis: .vertical)
+                .font(font)
+                .lineLimit(1...lineLimit)
+                .foregroundStyle(MemoryColor.ink)
+                .tint(MemoryColor.ink)
+        } else {
+            Text(value)
+                .font(font)
+                .lineLimit(lineLimit)
+                .minimumScaleFactor(0.6)
+                .foregroundStyle(MemoryColor.ink)
+        }
+    }
+}
+
+/// 日記の写真を押す（写真を選ぶ）・長押し（外す・項目を消す）
+struct DiaryPhotoActions: ViewModifier {
+    let context: MemoryCanvasContext
+    let pageIndex: Int
+    let entry: DiaryEntry
+
+    func body(content: Content) -> some View {
+        if context.interactive {
+            content
+                .contentShape(Rectangle())
+                .onTapGesture { context.onTapEntryPhoto?(pageIndex, entry.id) }
+                .contextMenu {
+                    Button { context.onTapEntryPhoto?(pageIndex, entry.id) } label: {
+                        Label(entry.photo == nil ? "写真を入れる" : "写真を変える", systemImage: "photo")
+                    }
+                    if entry.photo != nil {
+                        Button { context.onRemoveEntryPhoto?(pageIndex, entry.id) } label: {
+                            Label("写真を外す", systemImage: "photo.badge.minus")
+                        }
+                    }
+                    Button(role: .destructive) { context.onDeleteEntry?(pageIndex, entry.id) } label: {
+                        Label("この項目を消す", systemImage: "trash")
+                    }
+                }
+        } else {
+            content
+        }
+    }
+}
+
 /// スクラップブック：紙の地に、ポラロイドを左右交互に貼る
 struct ScrapbookDiaryTemplate: View {
     let context: MemoryCanvasContext
@@ -64,13 +119,8 @@ struct ScrapbookDiaryTemplate: View {
                 .font(.system(size: 92 * t, weight: .light))
                 .foregroundStyle(MemoryColor.ink)
                 .position(x: size.width * 0.86, y: size.height * 0.125)
-            Text(page.headline.isEmpty && context.interactive ? "この日のひとことを書く" : page.headline)
-                .font(MemoryFont.japaneseHand(64 * t))
-                .foregroundStyle(page.headline.isEmpty ? MemoryColor.softInk.opacity(0.6) : MemoryColor.ink)
-                .lineLimit(2)
-                .minimumScaleFactor(0.6)
-                .contentShape(Rectangle())
-                .onTapGesture { if context.interactive { context.onTapHeadline?() } }
+            DiaryInlineText(text: context.headlineText?(pageIndex), value: page.headline,
+                            placeholder: "この日のひとことを書く", font: MemoryFont.japaneseHand(64 * t), lineLimit: 2)
                 .placedText(x: 0.07, y: 0.15, width: 0.72, in: size)
         }
     }
@@ -86,16 +136,14 @@ struct ScrapbookDiaryTemplate: View {
                 let y = top + row * CGFloat(index)
                 PolaroidPhoto(photo: entry.photo, context: context, border: 14 * t, bottomRatio: 2.2)
                     .allowsHitTesting(false)
+                    .modifier(DiaryPhotoActions(context: context, pageIndex: pageIndex, entry: entry))
                     .placed(x: left ? 0.06 : 0.53, y: y + row * 0.01, width: 0.41, height: row * 0.98, in: size,
                             rotation: left ? -3 : 3)
                 VStack(alignment: .leading, spacing: 8) {
                     Text(DiaryFormat.timeText(entry.time))
                         .font(MemoryFont.hand(56 * t))
-                    Text(entry.text.isEmpty && context.interactive ? "一言を書く" : entry.text)
-                        .font(MemoryFont.japaneseHand(42 * t))
-                        .foregroundStyle(entry.text.isEmpty ? MemoryColor.softInk.opacity(0.6) : MemoryColor.ink)
-                        .lineLimit(3)
-                        .minimumScaleFactor(0.6)
+                    DiaryInlineText(text: context.entryText?(pageIndex, entry.id), value: entry.text,
+                                    placeholder: "一言を書く", font: MemoryFont.japaneseHand(42 * t))
                     Path { path in
                         path.move(to: .zero)
                         path.addLine(to: CGPoint(x: size.width * 0.36, y: 0))
@@ -105,13 +153,6 @@ struct ScrapbookDiaryTemplate: View {
                 }
                 .foregroundStyle(MemoryColor.ink)
                 .placedText(x: left ? 0.52 : 0.07, y: y + row * 0.45, width: 0.41, in: size)
-            }
-            // 項目を押すと直せる（写真も文字も、同じ編集の画面で）
-            ForEach(Array(items.enumerated()), id: \.element.id) { index, entry in
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture { if context.interactive { context.onTapEntry?(entry.id) } }
-                    .placed(x: 0.05, y: top + row * CGFloat(index), width: 0.9, height: row, in: size)
             }
         }
     }
@@ -141,12 +182,8 @@ struct JournalDiaryTemplate: View {
                         Text(DiaryFormat.dateText(page.date))
                             .font(MemoryFont.mono(26 * t))
                     }
-                    Text(page.headline.isEmpty && context.interactive ? "この日のひとことを書く" : page.headline)
-                        .font(MemoryFont.sans(44 * t))
-                        .foregroundStyle(page.headline.isEmpty ? MemoryColor.softInk.opacity(0.6) : MemoryColor.ink)
-                        .lineLimit(2)
-                        .contentShape(Rectangle())
-                        .onTapGesture { if context.interactive { context.onTapHeadline?() } }
+                    DiaryInlineText(text: context.headlineText?(pageIndex), value: page.headline,
+                                    placeholder: "この日のひとことを書く", font: MemoryFont.sans(44 * t), lineLimit: 2)
                     Rectangle().frame(height: 2)
                 }
                 .foregroundStyle(MemoryColor.ink)
@@ -180,22 +217,16 @@ struct JournalDiaryTemplate: View {
                 VStack(alignment: .leading, spacing: 10) {
                     Text(DiaryFormat.timeText(entry.time))
                         .font(MemoryFont.mono(32 * t))
-                    Text(entry.text.isEmpty && context.interactive ? "一言を書く" : entry.text)
-                        .font(MemoryFont.sans(38 * t))
-                        .foregroundStyle(entry.text.isEmpty ? MemoryColor.softInk.opacity(0.6) : MemoryColor.ink)
-                        .lineLimit(4)
-                        .minimumScaleFactor(0.6)
+                    DiaryInlineText(text: context.entryText?(pageIndex, entry.id), value: entry.text,
+                                    placeholder: "一言を書く", font: MemoryFont.sans(38 * t), lineLimit: 4)
                 }
                 .foregroundStyle(MemoryColor.ink)
                 .placedText(x: 0.15, y: y + row * 0.3, width: 0.4, in: size)
                 MemoryPhotoView(photo: entry.photo, context: context)
                     .allowsHitTesting(false)
                     .clipShape(RoundedRectangle(cornerRadius: 18))
+                    .modifier(DiaryPhotoActions(context: context, pageIndex: pageIndex, entry: entry))
                     .placed(x: 0.58, y: y + row * 0.03, width: 0.35, height: row * 0.86, in: size)
-                Color.clear
-                    .contentShape(Rectangle())
-                    .onTapGesture { if context.interactive { context.onTapEntry?(entry.id) } }
-                    .placed(x: 0.05, y: y, width: 0.9, height: row, in: size)
             }
         }
     }

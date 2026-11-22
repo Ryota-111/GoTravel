@@ -20,9 +20,13 @@ struct MemoryCanvasContext {
     var interactive = false
     var onTapPhoto: ((String) -> Void)? = nil
     var onTapText: ((MemoryTextField) -> Void)? = nil
-    /// 日記：項目・その日のひとことを押したとき
-    var onTapEntry: ((String) -> Void)? = nil
-    var onTapHeadline: (() -> Void)? = nil
+    /// 日記：その場で打てる欄（3.8）。ページの番号（と項目の id）から、直す文字を渡す
+    var headlineText: ((Int) -> Binding<String>)? = nil
+    var entryText: ((Int, String) -> Binding<String>)? = nil
+    /// 日記：項目の写真を押したとき（写真を選ぶ）・長押しのメニュー
+    var onTapEntryPhoto: ((Int, String) -> Void)? = nil
+    var onRemoveEntryPhoto: ((Int, String) -> Void)? = nil
+    var onDeleteEntry: ((Int, String) -> Void)? = nil
 
     /// i 番目の写真（足りなければ nil）
     func photo(_ index: Int) -> MemoryPhoto? {

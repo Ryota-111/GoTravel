@@ -22,8 +22,8 @@ struct DiaryEditorView: View {
     @ObservedObject private var proStore = ProStore.shared
 
     @State private var page = 0
-    @State private var editingEntry: DiaryEntryTarget?
-    @State private var editingHeadline: DiaryHeadlineTarget?
+    /// 写真を選んでいる項目
+    @State private var choosingPhoto: DiaryEntryTarget?
     @State private var addingTo: DiaryHeadlineTarget?
     @State private var showsPro = false
     @State private var confirmsRebuild = false
@@ -37,11 +37,48 @@ struct DiaryEditorView: View {
 
     private var showsWatermark: Bool { !proStore.isPurchased }
 
+    /// ページの上でそのまま直す（3.8）。文字は打ったそばから保存する
     private func context(page index: Int) -> MemoryCanvasContext {
-        MemoryCanvasContext(project: model.project, images: model.images, showsWatermark: showsWatermark,
-                            interactive: true,
-                            onTapEntry: { id in editingEntry = DiaryEntryTarget(pageIndex: index, entryId: id) },
-                            onTapHeadline: { editingHeadline = DiaryHeadlineTarget(pageIndex: index) })
+        var context = MemoryCanvasContext(project: model.project, images: model.images, showsWatermark: showsWatermark,
+                                          interactive: true)
+        context.headlineText = { page in
+            Binding(get: { model.project.pages[safe: page]?.headline ?? "" },
+                    set: { value in model.update { if $0.pages.indices.contains(page) { $0.pages[page].headline = value } } })
+        }
+        context.entryText = { page, id in
+            Binding(get: { model.project.pages[safe: page]?.entries.first { $0.id == id }?.text ?? "" },
+                    set: { value in
+                        model.update { project in
+                            guard project.pages.indices.contains(page),
+                                  let i = project.pages[page].entries.firstIndex(where: { $0.id == id }) else { return }
+                            project.pages[page].entries[i].text = value
+                        }
+                    })
+        }
+        context.onTapEntryPhoto = { page, id in
+            dismissKeyboard()
+            choosingPhoto = DiaryEntryTarget(pageIndex: page, entryId: id)
+        }
+        context.onRemoveEntryPhoto = { page, id in
+            model.update { project in
+                guard project.pages.indices.contains(page),
+                      let i = project.pages[page].entries.firstIndex(where: { $0.id == id }) else { return }
+                project.pages[page].entries[i].photo = nil
+            }
+        }
+        context.onDeleteEntry = { page, id in
+            withAnimation {
+                model.update { project in
+                    guard project.pages.indices.contains(page) else { return }
+                    project.pages[page].entries.removeAll { $0.id == id }
+                }
+            }
+        }
+        return context
+    }
+
+    private func dismissKeyboard() {
+        UIApplication.shared.sendAction(#selector(UIResponder.resignFirstResponder), to: nil, from: nil, for: nil)
     }
 
     var body: some View {
@@ -70,8 +107,24 @@ struct DiaryEditorView: View {
             }
         }
         .task { await model.start() }
-        .sheet(item: $editingEntry) { target in entrySheet(target) }
-        .sheet(item: $editingHeadline) { target in headlineSheet(target) }
+        .sheet(item: $choosingPhoto) { target in
+            MemoryPhotoPickerSheet(candidates: candidates(onPage: target.pageIndex), includesVideos: true) { assetId, isVideo, date in
+                model.update { project in
+                    guard project.pages.indices.contains(target.pageIndex),
+                          let i = project.pages[target.pageIndex].entries.firstIndex(where: { $0.id == target.entryId })
+                    else { return }
+                    project.pages[target.pageIndex].entries[i].photo = MemoryPhoto(assetId: assetId, isVideo: isVideo, date: date)
+                    if let date { project.pages[target.pageIndex].entries[i].time = date }
+                }
+                Task { await model.loadImages() }
+            }
+        }
+        .toolbar {
+            ToolbarItemGroup(placement: .keyboard) {
+                Spacer()
+                Button("完了") { dismissKeyboard() }.bold()
+            }
+        }
         .sheet(item: $addingTo) { target in
             MemoryPhotoPickerSheet(candidates: candidates(onPage: target.pageIndex), includesVideos: true) { assetId, isVideo, date in
                 model.update { project in
@@ -119,7 +172,7 @@ struct DiaryEditorView: View {
             .tabViewStyle(.page(indexDisplayMode: .always))
             .indexViewStyle(.page(backgroundDisplayMode: .always))
 
-            Text("項目を押すと、一言や写真を直せます")
+            Text("一言を押すとそのまま書けます。写真を押すと選び直せ、長押しで外す・消すができます")
                 .font(.caption2)
                 .foregroundStyle(.secondary)
                 .padding(.top, 4)
@@ -186,38 +239,6 @@ struct DiaryEditorView: View {
         return sameDay.isEmpty ? model.candidates : sameDay
     }
 
-    // MARK: - 項目を直す
-
-    private func entrySheet(_ target: DiaryEntryTarget) -> some View {
-        DiaryEntryEditor(
-            entry: model.project.pages[safe: target.pageIndex]?.entries.first { $0.id == target.entryId },
-            image: { model.images[$0] },
-            candidates: candidates(onPage: target.pageIndex),
-            onSave: { entry in
-                model.update { project in
-                    guard project.pages.indices.contains(target.pageIndex),
-                          let i = project.pages[target.pageIndex].entries.firstIndex(where: { $0.id == entry.id }) else { return }
-                    project.pages[target.pageIndex].entries[i] = entry
-                }
-                Task { await model.loadImages() }
-            },
-            onDelete: {
-                model.update { project in
-                    guard project.pages.indices.contains(target.pageIndex) else { return }
-                    project.pages[target.pageIndex].entries.removeAll { $0.id == target.entryId }
-                }
-            })
-    }
-
-    private func headlineSheet(_ target: DiaryHeadlineTarget) -> some View {
-        DiaryHeadlineEditor(text: model.project.pages[safe: target.pageIndex]?.headline ?? "") { text in
-            model.update { project in
-                guard project.pages.indices.contains(target.pageIndex) else { return }
-                project.pages[target.pageIndex].headline = text
-            }
-        }
-    }
-
     // MARK: - 書き出し
 
     private func save() async {
@@ -237,103 +258,6 @@ struct DiaryEditorView: View {
     private func show(_ text: String) {
         withAnimation { toast = text }
         DispatchQueue.main.asyncAfter(deadline: .now() + 2.2) { withAnimation { toast = nil } }
-    }
-}
-
-/// 日記の1項目を直す
-private struct DiaryEntryEditor: View {
-    @State private var entry: DiaryEntry
-    let image: (String) -> UIImage?
-    let candidates: [TripPhotoCandidate]
-    let onSave: (DiaryEntry) -> Void
-    let onDelete: () -> Void
-
-    @Environment(\.dismiss) private var dismiss
-    @State private var picking = false
-
-    init(entry: DiaryEntry?, image: @escaping (String) -> UIImage?, candidates: [TripPhotoCandidate],
-         onSave: @escaping (DiaryEntry) -> Void, onDelete: @escaping () -> Void) {
-        _entry = State(initialValue: entry ?? DiaryEntry())
-        self.image = image
-        self.candidates = candidates
-        self.onSave = onSave
-        self.onDelete = onDelete
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("一言") {
-                    TextField("例：初めての沖縄そば！", text: $entry.text, axis: .vertical)
-                        .lineLimit(2...4)
-                }
-                Section("写真") {
-                    if let photo = entry.photo, let img = image(photo.assetId) {
-                        Image(uiImage: img).resizable().scaledToFill()
-                            .frame(height: 180).frame(maxWidth: .infinity).clipped()
-                            .listRowInsets(EdgeInsets())
-                    }
-                    Button(entry.photo == nil ? "写真を入れる" : "写真を変える") { picking = true }
-                    if entry.photo != nil {
-                        Button("写真を外す", role: .destructive) { entry.photo = nil }
-                    }
-                }
-                Section {
-                    Button("この項目を消す", role: .destructive) {
-                        onDelete()
-                        dismiss()
-                    }
-                }
-            }
-            .navigationTitle(DiaryFormat.timeText(entry.time).isEmpty ? "項目" : DiaryFormat.timeText(entry.time))
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完了") {
-                        onSave(entry)
-                        dismiss()
-                    }
-                }
-            }
-            .sheet(isPresented: $picking) {
-                MemoryPhotoPickerSheet(candidates: candidates, includesVideos: true) { assetId, isVideo, date in
-                    entry.photo = MemoryPhoto(assetId: assetId, isVideo: isVideo, date: date)
-                    if let date { entry.time = date }
-                }
-            }
-        }
-    }
-}
-
-/// その日のひとことを書く
-private struct DiaryHeadlineEditor: View {
-    @State var text: String
-    let onSave: (String) -> Void
-    @Environment(\.dismiss) private var dismiss
-    @FocusState private var focused: Bool
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                TextField("例：はじめての沖縄、最高のスタート！", text: $text, axis: .vertical)
-                    .lineLimit(2...3)
-                    .focused($focused)
-            }
-            .navigationTitle("この日のひとこと")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) { Button("キャンセル") { dismiss() } }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完了") {
-                        onSave(text)
-                        dismiss()
-                    }
-                }
-            }
-            .onAppear { focused = true }
-        }
-        .presentationDetents([.medium])
     }
 }
 
