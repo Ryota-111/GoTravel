@@ -113,6 +113,21 @@ final class ScreenTourTests: XCTestCase {
             sleep(1)
             if tap(app, "日本全国フォトマ") { shot("album-detail") }
         }
+        if steps.contains("memories") {
+            // 旅の思い出をつくる（3.8）：写真コラージュ・ポスター・日記の編集画面
+            for (index, kind) in ["写真コラージュ", "旅行ポスター", "旅行日記"].enumerated() {
+                // 旅行の一覧は計画のタブで読み込まれるので、計画のタブで起動してから移る
+                let app = launch(tab: 0, extra: extra)
+                app.tabBars.buttons["思い出"].tap()
+                sleep(2)
+                if index == 0 { shot("memories-entry") }
+                guard tap(app, kind) else { continue }
+                if index == 0 { shot("memories-picker") }
+                guard tap(app, "沖縄 3泊4日") else { continue }
+                sleep(8)
+                shot("memories-\(index)")
+            }
+        }
         if steps.contains("packing") {
             let app = launch(tab: 0, extra: extra)
             if tap(app, "沖縄 3泊4日"), tap(app, "リスト") {

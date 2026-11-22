@@ -71,6 +71,12 @@ struct AlbumHomeView: View {
                                     .padding(.horizontal, 20)
                                     .padding(.bottom, 18)
                             }
+                            // 旅の思い出をつくる（3.8。写真コラージュ・ポスター・日記）
+                            if !isSelectionMode {
+                                MemoriesMakerSection(plans: travelPlanViewModel.travelPlans)
+                                    .padding(.top, 4)
+                                    .padding(.bottom, 22)
+                            }
                             // 旅のダイジェスト（選んで消しているあいだは出さない）
                             if !isSelectionMode {
                                 digestSection
