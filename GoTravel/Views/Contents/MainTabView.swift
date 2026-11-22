@@ -16,6 +16,8 @@ struct MainTabView: View {
     @State private var showICloudAlert = false
     @State private var hasCheckedICloud = false
     @State private var whatsNew: WhatsNew?
+    /// 全画面の「こんなことができます」（3.8〜）
+    @State private var whatsNewShowcase: WhatsNew?
     /// 共有メニューから送られた予約確認メールや画像（`SharedImportInbox`）
     @State private var sharedImports: SharedImportsPresentation?
     /// 一度見せたもの。「あとで」で閉じたあと、アプリに戻るたびに出し直さない
@@ -114,7 +116,11 @@ struct MainTabView: View {
             #endif
 
             if canShowWhatsNew, WhatsNewManager.shouldShow {
-                whatsNew = WhatsNew.current
+                if let content = WhatsNew.current, content.showcase {
+                    whatsNewShowcase = content
+                } else {
+                    whatsNew = WhatsNew.current
+                }
                 WhatsNewManager.markAsShown()
             } else {
                 checkSharedImports()
@@ -166,6 +172,9 @@ struct MainTabView: View {
         // 新機能のお知らせと重ならないよう、閉じてから受け取り箱を見る
         .sheet(item: $whatsNew, onDismiss: checkSharedImports) { content in
             WhatsNewView(content: content)
+        }
+        .fullScreenCover(item: $whatsNewShowcase, onDismiss: checkSharedImports) { content in
+            WhatsNewShowcaseView(content: content, onTryMemories: { selectedTab = 3 })
         }
         // 予約の受け取り箱を閉じてから、場所の受け取り箱を見る（シートは1枚ずつ）
         .sheet(item: $sharedImports, onDismiss: checkSharedImports) { presentation in
