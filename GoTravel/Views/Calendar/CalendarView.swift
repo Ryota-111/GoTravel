@@ -90,6 +90,8 @@ struct CalendarView: View {
     @State private var showAddSheet = false
     @State private var dragOffset: CGFloat = 0
     @State private var isTimelineExpanded = false
+    /// カレンダーの下の端。下の予定のシートを、その下に収める（6段の月で最後の段が隠れないように。3.8）
+    @State private var calendarBottom: CGFloat = 0
     @State private var hasLoadedData = false
     @State private var showAuthError = false
     @Environment(\.colorScheme) var colorScheme
@@ -136,6 +138,13 @@ struct CalendarView: View {
 
                     monthCalendarGrid
                         .padding(.horizontal, 16)
+                        .background(GeometryReader { proxy in
+                            Color.clear
+                                .onAppear { calendarBottom = proxy.frame(in: .named("calendarRoot")).maxY }
+                                .onChange(of: proxy.frame(in: .named("calendarRoot")).maxY) { _, value in
+                                    calendarBottom = value
+                                }
+                        })
                         .padding(.bottom, 20)
 
                     Spacer()
@@ -162,7 +171,8 @@ struct CalendarView: View {
                     timelineItems: dailyTimeline,
                     isExpanded: $isTimelineExpanded,
                     onAddPlan: { showAddSheet = true },
-                    collapsedFraction: displayStyle == .tiles ? 0.25 : 0.35
+                    collapsedFraction: displayStyle == .tiles ? 0.25 : 0.35,
+                    calendarBottom: calendarBottom
                 )
                 .environmentObject(viewModel)
                 .environmentObject(travelViewModel)
@@ -170,6 +180,7 @@ struct CalendarView: View {
                 .readableWidth(alignment: .bottom)
                 .ignoresSafeArea(.keyboard, edges: .bottom)
             }
+            .coordinateSpace(name: "calendarRoot")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {

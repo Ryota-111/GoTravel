@@ -8,6 +8,8 @@ struct BottomTimelineCard: View {
     var onAddPlan: () -> Void = {}
     /// 閉じているときの高さ（画面の高さに対する割合）。タイルの表示では、マスに予定の名前が出るので低くする（3.5）
     var collapsedFraction: CGFloat = 0.35
+    /// 上のカレンダーの下の端（"calendarRoot" の座標）。6段の月でも最後の段を隠さないよう、閉じた高さをその下に収める（3.8）
+    var calendarBottom: CGFloat? = nil
 
     @EnvironmentObject var plansViewModel: PlansViewModel
     @EnvironmentObject var travelViewModel: TravelPlanViewModel
@@ -57,7 +59,11 @@ struct BottomTimelineCard: View {
     }
 
     private func minHeight(for geometry: GeometryProxy) -> CGFloat {
-        geometry.size.height * collapsedFraction
+        let preferred = geometry.size.height * collapsedFraction
+        guard let calendarBottom, calendarBottom > 0 else { return preferred }
+        // カレンダーの下の端からシートの下の端までの空き。シートの見出しが読める高さは残す
+        let available = geometry.frame(in: .named("calendarRoot")).maxY - calendarBottom - 6
+        return max(min(preferred, available), 150)
     }
 
     private func maxHeight(for geometry: GeometryProxy) -> CGFloat {
