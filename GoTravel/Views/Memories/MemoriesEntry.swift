@@ -3,6 +3,8 @@ import SwiftUI
 /// 思い出タブの「旅の思い出をつくる」（3.8）。写真コラージュ・旅行ポスター・旅行日記の入口
 struct MemoriesMakerSection: View {
     let plans: [TravelPlan]
+    /// しまっているか（見出しを押して切り替える。思い出タブが覚えておく）
+    @Binding var isCollapsed: Bool
     @ObservedObject private var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) private var colorScheme
     @State private var choosing: MemoryKind?
@@ -20,16 +22,30 @@ struct MemoriesMakerSection: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                Text("旅の思い出をつくる")
-                    .font(.headline)
-                    .foregroundColor(accent)
-                Text("旅行中に撮った写真から、そのまま投稿できる1枚に")
-                    .font(.caption)
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) { isCollapsed.toggle() }
+            } label: {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("旅の思い出をつくる")
+                            .font(.headline)
+                            .foregroundColor(accent)
+                        if !isCollapsed {
+                            Text("旅行中に撮った写真から、そのまま投稿できる1枚に")
+                                .font(.caption)
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
+                        }
+                    }
+                    Spacer()
+                    CollapseChevron(isCollapsed: isCollapsed, color: themeManager.currentTheme.secondaryText)
+                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityHint(isCollapsed ? "押すと出します" : "押すとしまいます")
             .padding(.horizontal, 20)
 
+            if !isCollapsed {
             ScrollView(.horizontal, showsIndicators: false) {
                 HStack(spacing: 12) {
                     ForEach(MemoryKind.allCases) { kind in
@@ -39,6 +55,8 @@ struct MemoriesMakerSection: View {
                 }
                 .padding(.horizontal, 20)
                 .padding(.vertical, 4)
+            }
+            .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
         .sheet(item: $choosing) { kind in
@@ -269,5 +287,20 @@ struct MemoryTripPicker: View {
                   let image = TravelBookletRenderer.coverImage(for: plan) else { continue }
             covers[id] = image.downscaled(maxPixel: 900)
         }
+    }
+}
+
+/// しまう・出すの印（しまっているときは右向き、出しているときは下向き）
+struct CollapseChevron: View {
+    let isCollapsed: Bool
+    let color: Color
+
+    var body: some View {
+        Image(systemName: "chevron.down")
+            .font(.subheadline.weight(.semibold))
+            .foregroundColor(color)
+            .rotationEffect(.degrees(isCollapsed ? -90 : 0))
+            .frame(width: 28, height: 28)
+            .background(Circle().fill(color.opacity(0.12)))
     }
 }

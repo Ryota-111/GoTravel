@@ -26,6 +26,9 @@ struct AlbumHomeView: View {
     @State private var digestPlan: TravelPlan?
     /// 旅の記録（3.1）
     @State private var showsStats = false
+    /// 「旅の思い出をつくる」「旅のダイジェスト」をしまったか（3.8。アプリを閉じても覚えておく）
+    @AppStorage("AlbumHomeMemoriesCollapsed") private var memoriesCollapsed = false
+    @AppStorage("AlbumHomeDigestCollapsed") private var digestCollapsed = false
     /// 年末のふり返りから開いたときの年（3.8）
     @State private var recapYear: Int?
     /// 年末のふり返りの入口を閉じた（出し直さない）
@@ -73,7 +76,7 @@ struct AlbumHomeView: View {
                             }
                             // 旅の思い出をつくる（3.8。写真コラージュ・ポスター・日記）
                             if !isSelectionMode {
-                                MemoriesMakerSection(plans: travelPlanViewModel.travelPlans)
+                                MemoriesMakerSection(plans: travelPlanViewModel.travelPlans, isCollapsed: $memoriesCollapsed)
                                     .padding(.top, 4)
                                     .padding(.bottom, 22)
                             }
@@ -275,14 +278,30 @@ struct AlbumHomeView: View {
     private var digestSection: some View {
         let _ = libraryVersion
         return VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                sectionTitle("旅のダイジェスト")
-                Text("旅行中に撮った写真と動画を、2秒ずつつないだ動画に")
-                    .font(.caption)
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            // 見出しを押すと、しまう・出す（3.8）
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) { digestCollapsed.toggle() }
+            } label: {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        sectionTitle("旅のダイジェスト")
+                        if !digestCollapsed {
+                            Text("旅行中に撮った写真と動画を、2秒ずつつないだ動画に")
+                                .font(.caption)
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
+                        }
+                    }
+                    Spacer()
+                    CollapseChevron(isCollapsed: digestCollapsed, color: themeManager.currentTheme.secondaryText)
+                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityHint(digestCollapsed ? "押すと出します" : "押すとしまいます")
             .padding(.horizontal, 20)
-            if digestCandidates.isEmpty {
+            if digestCollapsed {
+                EmptyView()
+            } else if digestCandidates.isEmpty {
                 Text("旅行が始まると、撮った写真と動画から作れます。")
                     .font(.footnote)
                     .foregroundColor(themeManager.currentTheme.secondaryText)
