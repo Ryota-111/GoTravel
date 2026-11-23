@@ -94,6 +94,10 @@ final class ProStore: ObservableObject {
                 owned = true
             }
         }
+        #if DEBUG
+        // 開発用のビルドだけ、起動引数 `-TravoryProPreview YES` で Pro として動かす（App Store の動画・画面を撮るため）
+        if UserDefaults.standard.bool(forKey: "TravoryProPreview") { owned = true }
+        #endif
         isPurchased = owned
         UserDefaults.standard.set(owned, forKey: ProStore.purchasedCacheKey)
         ThemeManager.shared.setPremiumUnlocked(owned)

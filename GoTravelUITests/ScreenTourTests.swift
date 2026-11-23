@@ -43,6 +43,32 @@ final class ScreenTourTests: XCTestCase {
         try? data.write(to: directory.appendingPathComponent(name + ".png"))
     }
 
+    /// 写真へのアクセスの確認が出ていたら、すべての写真を許可する（シミュレーターの許可の命令が効かない版があるため）
+    private func allowPhotos(_ app: XCUIApplication) {
+        let springboard = XCUIApplication(bundleIdentifier: "com.apple.springboard")
+        for _ in 0..<3 {
+            for root in [springboard, app] {
+                for label in ["フルアクセスを許可", "Allow Full Access", "すべての写真へのアクセスを許可"] {
+                    let button = root.buttons.matching(NSPredicate(format: "label == %@", label)).firstMatch
+                    if button.waitForExistence(timeout: 2) { button.tap(); sleep(2); return }
+                }
+            }
+        }
+    }
+
+    /// 下（iPad では上・Duo では横）のタブを押す
+    private func openTab(_ app: XCUIApplication, _ name: String) {
+        let tab = app.tabBars.buttons[name]
+        if tab.waitForExistence(timeout: 2) {
+            tab.tap()
+        } else {
+            // iPad は上、Duo は横にタブがある（アイコンだけのこともある）。ボタン以外も含めて名前で探す
+            let any = app.descendants(matching: .any).matching(NSPredicate(format: "label == %@ OR identifier == %@", name, name)).firstMatch
+            if any.waitForExistence(timeout: 2) { any.tap() }
+        }
+        sleep(2)
+    }
+
     /// 文字で探して押す。見つからなければ何もしない
     @discardableResult
     private func tap(_ app: XCUIApplication, _ text: String) -> Bool {
@@ -118,14 +144,27 @@ final class ScreenTourTests: XCTestCase {
             for (index, kind) in ["写真コラージュ", "旅行ポスター", "旅行日記"].enumerated() {
                 // 旅行の一覧は計画のタブで読み込まれるので、計画のタブで起動してから移る
                 let app = launch(tab: 0, extra: extra)
-                app.tabBars.buttons["思い出"].tap()
+                openTab(app, "思い出")
                 sleep(2)
                 if index == 0 { shot("memories-entry") }
                 guard tap(app, kind) else { continue }
                 if index == 0 { shot("memories-picker") }
                 guard tap(app, "沖縄 3泊4日") else { continue }
+                allowPhotos(app)
                 sleep(8)
                 shot("memories-\(index)")
+            }
+        }
+        if steps.contains("map") {
+            // 旅行計画の地図タブ（地図と行程表）。地図の絵が読み込まれるまで待つ
+            let app = launch(tab: 0, extra: extra)
+            if tap(app, "沖縄 3泊4日"), tap(app, "地図") {
+                sleep(8)
+                shot("travel-map")
+                if tap(app, "Day 2") || tap(app, "2日目") {
+                    sleep(8)
+                    shot("travel-map-day2")
+                }
             }
         }
         if steps.contains("packing") {
