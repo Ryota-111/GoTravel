@@ -3,6 +3,7 @@ import SwiftUI
 /// 思い出タブの「旅の思い出をつくる」（3.8）。写真コラージュ・旅行ポスター・旅行日記の入口
 struct MemoriesMakerSection: View {
     let plans: [TravelPlan]
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     /// しまっているか（見出しを押して切り替える。思い出タブが覚えておく）
     @Binding var isCollapsed: Bool
     @ObservedObject private var themeManager = ThemeManager.shared
@@ -59,7 +60,11 @@ struct MemoriesMakerSection: View {
             .transition(.opacity.combined(with: .move(edge: .top)))
             }
         }
-        .sheet(item: $choosing) { kind in
+        // iPad など広い画面では全画面で開く（シートの小さな窓だと、作品が小さく作りにくいため。3.8）
+        .sheet(item: horizontalSizeClass == .regular ? .constant(nil) : $choosing) { kind in
+            MemoryTripPicker(kind: kind, plans: candidates)
+        }
+        .fullScreenCover(item: horizontalSizeClass == .regular ? $choosing : .constant(nil)) { kind in
             MemoryTripPicker(kind: kind, plans: candidates)
         }
     }
