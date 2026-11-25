@@ -45,6 +45,8 @@ struct ReservationEditorView: View {
     /// 開いて閉じただけで増えるのは事故に近い。
     /// 行程に出したいかどうかは予約ごとに違うので、その都度選んでもらう
     @State private var addsToItinerary = false
+    /// 乗り物の予約を、行程に「移動」の1件として出すか（3.8）。新しい予約は移動から始める
+    @State private var itineraryAsMove = true
 
     // MARK: メールからの取り込み（Travory Pro）
 
@@ -263,6 +265,14 @@ struct ReservationEditorView: View {
         // いま行程に出ているかどうかを、そのままトグルの状態にする。
         // これをしないと、一度オンにしたものをオフに戻せない
         addsToItinerary = plan?.hasScheduleItems(forReservation: reservation.id) ?? false
+        // 前に保存した予約は、今の行程の出し方のまま。選んでいなければ、行程に移動の1件があるかで決める
+        // （3.7 までに作った乗り物の予約は、出発と到着の2件）
+        if let chosen = reservation.itineraryAsMove {
+            itineraryAsMove = chosen
+        } else if !isNewReservation {
+            itineraryAsMove = plan?.scheduleItems(forReservation: reservation.id)
+                .contains { $0.reservationPart == ReservationPart.move.rawValue } ?? false
+        }
         costInput = CostInput(cost: reservation.cost, foreign: reservation.foreignCost,
                               base: plan?.currencyCode ?? CurrencyCatalog.yen)
     }
@@ -423,6 +433,7 @@ struct ReservationEditorView: View {
         draft.arrivalTimeZoneIdentifier = arrivalZone.identifier
         draft.endDate = (draft.kind.usesPeriod && hasDate && hasEndDate) ? endDate : nil
         if draft.kind.usesRoute { draft.title = composedRouteTitle }
+        draft.itineraryAsMove = draft.kind.usesRoute ? itineraryAsMove : nil
         return draft.itineraryItems()
     }
 
@@ -453,6 +464,15 @@ struct ReservationEditorView: View {
                         .foregroundColor(textColor)
                 }
                 .tint(accent)
+
+                // 乗り物は、移動の1件か、出発と到着の2件かを選べる（3.8、ご要望から）
+                if addsToItinerary && reservation.kind.usesRoute {
+                    Picker("行程での出し方", selection: $itineraryAsMove) {
+                        Text("移動として1件").tag(true)
+                        Text("出発と到着の2件").tag(false)
+                    }
+                    .pickerStyle(.segmented)
+                }
 
                 Text(addsToItinerary
                      ? "タイムスケジュールに、\(itineraryPreviewText)が並びます。"
@@ -1086,6 +1106,7 @@ struct ReservationEditorView: View {
         // 終わりは、期間を持てる種類で始まりがあるときだけ残す
         edited.endDate = (edited.kind.usesPeriod && edited.date != nil && hasEndDate) ? endDate : nil
         if !edited.kind.usesPeriod { edited.pinsDuringPeriod = nil }
+        edited.itineraryAsMove = edited.kind.usesRoute ? itineraryAsMove : nil
 
         // 種類を変えたときに、前の種類の入力が残らないようにする
         if !edited.kind.usesRoute {

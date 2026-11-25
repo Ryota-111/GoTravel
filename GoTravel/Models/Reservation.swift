@@ -216,6 +216,11 @@ struct Reservation: Identifiable, Codable, Equatable {
     var splitWith: [String]?
     var splitAmounts: [String: Double]?
 
+    /// 乗り物の予約を、行程に「移動」の1件として出すか（3.8、ご要望から）。
+    /// true なら出発から到着までを1件の移動にする（行程で足した「移動」と同じ見た目）。
+    /// 無い・false なら今までどおり「出発」と「到着」の2件。JSON の中なのでスキーマ変更は要らない
+    var itineraryAsMove: Bool?
+
     /// 保存のときの項目名。**項目を足したら、ここにも必ず足すこと**（足さないと保存されない）。
     /// `storedKind` は "kind" として書く（駐車場以外は今までと同じ形）
     enum CodingKeys: String, CodingKey {
@@ -227,6 +232,7 @@ struct Reservation: Identifiable, Codable, Equatable {
         case timeZoneIdentifier, arrivalTimeZoneIdentifier, endDate, pinsDuringPeriod
         case cost, foreignCost, location, departureLocation, arrivalLocation
         case paidBy, splitWith, splitAmounts
+        case itineraryAsMove
     }
 
     /// 経路を表示するかどうか。
@@ -485,6 +491,25 @@ extension Reservation {
     private func routeItems() -> [ScheduleItem] {
         guard kind.usesRoute, let date else { return [] }
         let move = scheduleMove
+
+        // 移動の1件（3.8）。出発が始まり、到着が終わり。名前は行程の移動と同じく「東京 → 新大阪」
+        if itineraryAsMove == true {
+            var item = ScheduleItem(time: date,
+                                    title: move.defaultTitle,
+                                    location: departurePlace,
+                                    notes: itineraryNotes,
+                                    latitude: departureLocation?.latitude,
+                                    longitude: departureLocation?.longitude,
+                                    cost: cost,
+                                    reservationId: id,
+                                    timeZoneIdentifier: timeZoneIdentifier,
+                                    foreignCost: foreignCost,
+                                    reservationPart: ReservationPart.move.rawValue,
+                                    endTime: arrivalDate,
+                                    endTimeZoneIdentifier: arrivalDate == nil ? nil : arrivalTimeZoneIdentifier)
+            item.move = move
+            return [item]
+        }
         var items = [
             // 費用は1件目（出発）にだけ入れる。到着にも入れると予算で2重に数える
             ScheduleItem(time: date,
