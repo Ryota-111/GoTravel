@@ -97,6 +97,18 @@ final class ScreenTourTests: XCTestCase {
                 shot("onboarding-\(page)")
             }
         }
+        if steps.contains("whatsnew") {
+            // 新機能の紹介を1ページずつ（TOUR_VERSION に前の版を渡すと出る）
+            let app = launch(tab: 0, extra: extra)
+            shot("whatsnew-0")
+            for page in 1...8 {
+                let next = app.buttons.matching(NSPredicate(format: "label == '次へ'")).firstMatch
+                guard next.waitForExistence(timeout: 2) else { break }
+                next.tap()
+                sleep(1)
+                shot("whatsnew-\(page)")
+            }
+        }
         if steps.contains("tabs") {
             for tab in 0..<4 {
                 let app = launch(tab: tab, extra: extra)

@@ -24,24 +24,36 @@ struct WhatsNewShowcaseView: View {
         var hint: String? = nil
     }
 
+    /// 並びの順（id はページの番号。`visual(for:)` で絵を決める）
     private var pages: [Page] {
         [
             Page(id: 0, eyebrow: "NEW",
                  title: "旅の写真が、\n1枚の作品に",
                  body: "旅行中に撮った写真から、写真コラージュ・旅行ポスター・旅行日記をつくれます。よく撮れた写真を選んで並べるので、あとは文字を直すだけ。ストーリーや投稿にそのまま載せられます。",
                  hint: "思い出タブ →「旅の思い出をつくる」"),
-            Page(id: 1, eyebrow: "無料",
+            Page(id: 1, eyebrow: "NEW",
+                 title: "旅行計画がなくても、\nつくれます",
+                 body: "名前と期間を決めるか、使いたい写真を選ぶだけで、思い出の1枚やダイジェスト動画をつくれます。計画を立てずに出かけた旅や、日帰りのおでかけにも。",
+                 hint: "思い出タブ →「自由に作る」"),
+            Page(id: 2, eyebrow: "かんたん",
+                 title: "右下の＋から、\nすぐ作れます",
+                 body: "思い出タブの＋から、写真コラージュ・ポスター・日記・ダイジェスト・アルバムを選べます。場所保存の＋も同じ形になりました。"),
+            Page(id: 3, eyebrow: "無料",
                  title: "みんなの写真が、\n1つのアルバムに",
                  body: "共有した旅行のアルバムで「共有する」を押すと、同行者が撮った写真も同じアルバムに集まります。旅行のあとに写真を送り合わなくて大丈夫です。",
                  hint: "共有した旅行のアルバムを開く"),
-            Page(id: 2, eyebrow: "かんたん",
+            Page(id: 4, eyebrow: "かんたん",
                  title: "リンクを送るだけで、\n旅行に招待",
                  body: "旅行の共有画面から招待を送ると、相手は届いたリンクを押すだけで参加の画面が開きます。コードを打ち込む必要はありません。",
                  hint: "旅行計画 → 共有"),
-            Page(id: 3, eyebrow: "旅のあとも",
+            Page(id: 5, eyebrow: "旅のあとも",
                  title: "旅が終わっても、\nまた楽しめる",
                  body: "旅行の次の日の夜に、旅のダイジェスト動画のお知らせが届きます。12月からは、その年の旅をまとめてふり返れます。"),
-            Page(id: 4, eyebrow: "もっと正確に",
+            Page(id: 6, eyebrow: "見やすく",
+                 title: "飛行機や新幹線も、\n「移動」の形で",
+                 body: "予約から行程に入れた乗り物を、「東京 → 新大阪」の移動1件で出せるようになりました。出発と到着の2件にしたときも、間に乗り物と乗っている時間が出ます。",
+                 hint: "予約の「行程にも追加する」で選べます"),
+            Page(id: 7, eyebrow: "もっと正確に",
                  title: "予約の読み取りを\n見直しました",
                  body: "往復や乗り継ぎの航空券、バス・船の予約も読めるようになりました。違う値を入れないよう、自信のない項目は空けておきます。"),
         ]
@@ -124,9 +136,12 @@ struct WhatsNewShowcaseView: View {
     private func visual(for id: Int) -> some View {
         switch id {
         case 0: ShowcaseMemoriesVisual()
-        case 1: ShowcaseSharedAlbumVisual(blue: Self.blue, orange: Self.orange)
-        case 2: ShowcaseInviteVisual(blue: Self.blue, orange: Self.orange)
-        case 3: ShowcaseAfterTripVisual(blue: Self.blue, orange: Self.orange)
+        case 1: ShowcaseFreeMemoryVisual()
+        case 2: ShowcaseAddMenuVisual()
+        case 3: ShowcaseSharedAlbumVisual(blue: Self.blue, orange: Self.orange)
+        case 4: ShowcaseInviteVisual(blue: Self.blue, orange: Self.orange)
+        case 5: ShowcaseAfterTripVisual(blue: Self.blue, orange: Self.orange)
+        case 6: ShowcaseMoveVisual(blue: Self.blue, orange: Self.orange)
         default: ShowcaseReadingVisual(blue: Self.blue, orange: Self.orange)
         }
     }
@@ -527,5 +542,136 @@ private struct ShowcaseReadingVisual: View {
         .background(RoundedRectangle(cornerRadius: 22).fill(.white).shadow(color: .black.opacity(0.1), radius: 16, y: 8))
         .frame(maxWidth: 340)
         .frame(maxHeight: .infinity)
+    }
+}
+
+// MARK: - 絵：旅行計画なしで自由に作る（3.8）
+
+private struct ShowcaseFreeMemoryVisual: View {
+    var body: some View {
+        VStack(spacing: 14) {
+            ZStack {
+                polaroid(0).rotationEffect(.degrees(-9)).offset(x: -70, y: 8)
+                polaroid(2).rotationEffect(.degrees(8)).offset(x: 70, y: 4)
+                polaroid(1).rotationEffect(.degrees(-2)).offset(y: -6)
+            }
+            .frame(height: 190)
+            Text("Make your own")
+                .font(MemoryFont.script(38))
+                .foregroundStyle(MemoryColor.ink)
+            Text("SUMMER WEEKEND · 24 PHOTOS")
+                .font(MemoryFont.mono(11))
+                .foregroundStyle(MemoryColor.softInk)
+        }
+        .padding(.vertical, 24)
+        .frame(maxWidth: 340)
+        .background(RoundedRectangle(cornerRadius: 22).fill(MemoryColor.paper)
+            .shadow(color: .black.opacity(0.1), radius: 16, y: 8))
+        .frame(maxHeight: .infinity)
+    }
+
+    private func polaroid(_ index: Int) -> some View {
+        ShowcaseSamplePhotos.gradient(index)
+            .frame(width: 112, height: 120)
+            .padding(7)
+            .padding(.bottom, 18)
+            .background(Color.white)
+            .shadow(color: .black.opacity(0.15), radius: 6, y: 3)
+    }
+}
+
+// MARK: - 絵：＋のメニュー（3.8）
+
+private struct ShowcaseAddMenuVisual: View {
+    private let rows: [(String, String, String)] = [
+        ("photo collage", "写真コラージュ", "square.grid.2x2"),
+        ("travel poster", "旅行ポスター", "photo.artframe"),
+        ("travel diary", "旅行日記", "book.pages"),
+        ("trip movie", "旅のダイジェスト", "play.rectangle.on.rectangle"),
+        ("new album", "アルバム", "rectangle.stack.badge.plus"),
+    ]
+
+    var body: some View {
+        VStack(alignment: .trailing, spacing: 10) {
+            ForEach(rows.indices, id: \.self) { i in
+                HStack(spacing: 10) {
+                    VStack(alignment: .trailing, spacing: -3) {
+                        Text(rows[i].0).font(MemoryFont.hand(16)).foregroundStyle(MemoryColor.softInk)
+                        Text(rows[i].1).font(.system(size: 14, weight: .bold)).foregroundStyle(MemoryColor.ink)
+                    }
+                    .padding(.leading, 16).padding(.trailing, 14).padding(.vertical, 7)
+                    .background(Capsule().fill(MemoryColor.paper))
+                    .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
+                    Image(systemName: rows[i].2)
+                        .font(.system(size: 17, weight: .medium))
+                        .foregroundStyle(MemoryColor.ink)
+                        .frame(width: 46, height: 46)
+                        .background(Circle().fill(MemoryColor.paper))
+                        .shadow(color: .black.opacity(0.15), radius: 8, y: 3)
+                        .padding(.trailing, 5)
+                }
+            }
+            Image(systemName: "plus")
+                .font(.system(size: 24, weight: .bold))
+                .foregroundStyle(MemoryColor.paper)
+                .rotationEffect(.degrees(135))
+                .frame(width: 56, height: 56)
+                .background(Circle().fill(MemoryColor.ink))
+                .shadow(color: .black.opacity(0.25), radius: 8, y: 4)
+        }
+        .padding(24)
+        .frame(maxWidth: 340, alignment: .trailing)
+        .background(RoundedRectangle(cornerRadius: 22).fill(Color.black.opacity(0.06)))
+        .frame(maxHeight: .infinity)
+    }
+}
+
+// MARK: - 絵：予約を「移動」の形で（3.8）
+
+private struct ShowcaseMoveVisual: View {
+    let blue: Color
+    let orange: Color
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            row(time: "07:00", title: "羽田 → 那覇", detail: "NH993 · 座席 23A", icon: "airplane", end: "09:45")
+            HStack(spacing: 0) {
+                VStack(alignment: .trailing, spacing: 0) {
+                    Text("飛行機").font(.system(size: 10, weight: .bold))
+                    Text("2時間45分").font(.system(size: 10, weight: .semibold)).monospacedDigit()
+                }
+                .foregroundStyle(blue)
+                .frame(width: 58, alignment: .trailing)
+                Image(systemName: "airplane")
+                    .font(.system(size: 12, weight: .bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 28, height: 28)
+                    .background(Circle().fill(blue))
+                    .padding(.leading, 6)
+            }
+            .padding(.vertical, 6)
+            row(time: "10:30", title: "レンタカーを借りる", detail: "那覇空港", icon: "mappin.circle.fill", end: nil)
+        }
+        .padding(20)
+        .frame(maxWidth: 340, alignment: .leading)
+        .background(RoundedRectangle(cornerRadius: 22).fill(.white).shadow(color: .black.opacity(0.1), radius: 16, y: 8))
+        .frame(maxHeight: .infinity)
+    }
+
+    private func row(time: String, title: String, detail: String, icon: String, end: String?) -> some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(alignment: .trailing, spacing: 2) {
+                Text(time).font(.system(size: 14, weight: .bold)).monospacedDigit()
+                if let end { Text(end).font(.system(size: 12, weight: .semibold)).monospacedDigit().opacity(0.6) }
+            }
+            .foregroundStyle(.secondary)
+            .frame(width: 46, alignment: .trailing)
+            Circle().stroke(blue, lineWidth: 3).frame(width: 12, height: 12).padding(.top, 3)
+            VStack(alignment: .leading, spacing: 3) {
+                Text(title).font(.system(size: 16, weight: .semibold))
+                Label(detail, systemImage: icon).font(.system(size: 12, weight: .semibold)).foregroundStyle(blue)
+                    .labelStyle(.titleAndIcon)
+            }
+        }
     }
 }
