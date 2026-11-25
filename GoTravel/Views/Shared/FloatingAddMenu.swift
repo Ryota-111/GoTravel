@@ -1,4 +1,5 @@
 import SwiftUI
+import Combine
 
 /// 画面の右下の「＋」を押すと、選べるものが上に向かって順に開く小さなメニュー（3.8）。
 /// 思い出・場所保存で使う。
@@ -102,18 +103,76 @@ struct FloatingAddMenu: View {
     }
 }
 
-/// ＋のメニューを開いているあいだ、後ろを暗くする。押すと閉じる
+/// ＋のメニューを開いているあいだ、後ろを暗くする。押すと閉じる。
+///
+/// 暗くするのはタブの中の、下のタブより上まで。下のタブはアプリ全体の画面（`MainTabView`）にあり、
+/// タブの中からは暗くできないので、そこから下は `FloatingMenuDim` を見て `MainTabView` が暗くする（3.8）
 struct FloatingAddMenuBackdrop: View {
     @Binding var isOpen: Bool
 
     var body: some View {
-        if isOpen {
-            Color.black.opacity(0.28)
-                .ignoresSafeArea()
-                .onTapGesture { isOpen = false }
-                .transition(.opacity)
-                .accessibilityHidden(true)
+        GeometryReader { proxy in
+            Group {
+                if isOpen {
+                    Color.black.opacity(FloatingMenuDim.opacity)
+                        .ignoresSafeArea(edges: .top)
+                        .onTapGesture { isOpen = false }
+                        .transition(.opacity)
+                        .accessibilityHidden(true)
+                }
+            }
+            .onAppear { FloatingMenuDim.shared.bottomInset = proxy.safeAreaInsets.bottom }
+            .onChange(of: proxy.safeAreaInsets.bottom) { _, inset in FloatingMenuDim.shared.bottomInset = inset }
         }
+        .allowsHitTesting(isOpen)
+        .onChange(of: isOpen) { _, open in
+            FloatingMenuDim.shared.isOpen = open
+            FloatingMenuDim.shared.close = open ? { isOpen = false } : nil
+        }
+        .onDisappear {
+            // 開いたままほかのタブへ移ったら閉じる
+            if isOpen { isOpen = false }
+            FloatingMenuDim.shared.isOpen = false
+            FloatingMenuDim.shared.close = nil
+        }
+    }
+}
+
+/// ＋のメニューを開いているか（下のタブを暗くするため、アプリ全体の画面と分け合う。3.8）
+final class FloatingMenuDim: ObservableObject {
+    static let shared = FloatingMenuDim()
+    static let opacity = 0.28
+
+    @Published var isOpen = false
+    /// タブの中の下の余白（下のタブの高さ）。画面の下の端からこの高さを暗くする
+    @Published var bottomInset: CGFloat = 0
+    /// 暗いところを押したときに閉じる
+    var close: (() -> Void)?
+
+    private init() {}
+}
+
+/// 下のタブのところを暗くする（`MainTabView` に重ねる）
+struct FloatingMenuTabBarDim: View {
+    @ObservedObject private var dim = FloatingMenuDim.shared
+
+    var body: some View {
+        GeometryReader { _ in
+            VStack(spacing: 0) {
+                Spacer(minLength: 0)
+                if dim.isOpen {
+                    Color.black.opacity(FloatingMenuDim.opacity)
+                        .frame(height: dim.bottomInset)
+                        .contentShape(Rectangle())
+                        .onTapGesture { dim.close?() }
+                        .transition(.opacity)
+                        .accessibilityHidden(true)
+                }
+            }
+        }
+        .ignoresSafeArea()
+        .allowsHitTesting(dim.isOpen)
+        .animation(.easeInOut(duration: 0.2), value: dim.isOpen)
     }
 }
 

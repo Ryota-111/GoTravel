@@ -66,6 +66,8 @@ struct MainTabView: View {
 
     var body: some View {
         tabs
+        // 思い出・場所保存の＋のメニューを開いているあいだ、下のタブも暗くする（3.8）
+        .overlay { FloatingMenuTabBarDim() }
         .onChange(of: selectedTab) { oldValue, newValue in
             if oldValue != newValue {
                 let impact = UIImpactFeedbackGenerator(style: .light)
