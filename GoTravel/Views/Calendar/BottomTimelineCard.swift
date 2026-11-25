@@ -16,7 +16,11 @@ struct BottomTimelineCard: View {
     @ObservedObject var themeManager = ThemeManager.shared
 
     @Environment(\.colorScheme) var colorScheme
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var dragOffset: CGFloat = 0
+    /// 中身（つまみ・見出し・予定の一覧）の高さ。iPad では閉じた高さを中身に合わせる（3.8）
+    @State private var chromeHeight: CGFloat = 0
+    @State private var listHeight: CGFloat = 0
 
     var body: some View {
         GeometryReader { geometry in
@@ -33,6 +37,11 @@ struct BottomTimelineCard: View {
                     headerSection
                         .padding(.horizontal, 20)
                         .padding(.bottom, 12)
+                        .background(GeometryReader { proxy in
+                            Color.clear
+                                .onAppear { chromeHeight = proxy.size.height + 25 }
+                                .onChange(of: proxy.size.height) { _, value in chromeHeight = value + 25 }
+                        })
 
                     if timelineItems.isEmpty {
                         emptyStateView
@@ -59,7 +68,11 @@ struct BottomTimelineCard: View {
     }
 
     private func minHeight(for geometry: GeometryProxy) -> CGFloat {
-        let preferred = geometry.size.height * collapsedFraction
+        var preferred = geometry.size.height * collapsedFraction
+        // iPad は画面が高く、予定が少ないとシートの下半分が空いていた。中身の高さまで縮める（3.8）
+        if horizontalSizeClass == .regular, chromeHeight > 0, listHeight > 0 {
+            preferred = min(preferred, chromeHeight + listHeight + 12)
+        }
         guard let calendarBottom, calendarBottom > 0 else { return preferred }
         // カレンダーの下の端からシートの下の端までの空き。シートの見出しが読める高さは残す
         let available = geometry.frame(in: .named("calendarRoot")).maxY - calendarBottom - 6
@@ -135,6 +148,7 @@ struct BottomTimelineCard: View {
             }
             .padding(.horizontal, 20)
             .padding(.bottom, 20)
+            .background(listHeightReader)
         }
     }
 
@@ -206,6 +220,17 @@ struct BottomTimelineCard: View {
         }
         .frame(maxWidth: .infinity)
         .padding(.top, 20)
+        .padding(.bottom, 20)
+        .background(listHeightReader)
+    }
+
+    /// 予定の一覧の高さを測る
+    private var listHeightReader: some View {
+        GeometryReader { proxy in
+            Color.clear
+                .onAppear { listHeight = proxy.size.height }
+                .onChange(of: proxy.size.height) { _, value in listHeight = value }
+        }
     }
 
     // MARK: - Drag Gesture
