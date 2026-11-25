@@ -237,6 +237,12 @@ final class ScreenTourTests: XCTestCase {
                 }
             }
         }
+        // アプリ全体をひと通り押して回る（テスターとしての確認。3.8）。
+        // qa ですべて、qa-plan・qa-profile などで区切りごとに
+        let qaSections = Set(steps.filter { $0.hasPrefix("qa") }.map(String.init))
+        if !qaSections.isEmpty {
+            qaTour(extra: extra, sections: qaSections)
+        }
         if steps.contains("map") {
             // 旅行計画の地図タブ（地図と行程表）。地図の絵が読み込まれるまで待つ
             let app = launch(tab: 0, extra: extra)
@@ -270,6 +276,129 @@ final class ScreenTourTests: XCTestCase {
                 sleep(1)
                 shot("place-detail-2")
             }
+        }
+    }
+
+    // MARK: - ひと通りの確認（qa）
+
+    /// 左上の戻る。無ければ左上を押す
+    private func back(_ app: XCUIApplication) {
+        let button = app.navigationBars.buttons.firstMatch
+        if button.waitForExistence(timeout: 1.5), button.isHittable {
+            button.tap()
+        } else {
+            app.coordinate(withNormalizedOffset: CGVector(dx: 0.06, dy: 0.08)).tap()
+        }
+        sleep(1)
+    }
+
+    /// シートを閉じる。キャンセル・閉じる・完了のどれかを押し、無ければ下に払う
+    private func closeSheet(_ app: XCUIApplication) {
+        for label in ["キャンセル", "閉じる", "完了"] {
+            let button = app.buttons.matching(NSPredicate(format: "label == %@", label)).firstMatch
+            if button.exists, button.isHittable { button.tap(); sleep(1); return }
+        }
+        app.swipeDown(velocity: .fast)
+        sleep(1)
+    }
+
+    /// 名前の書いてあるボタン（ラベルが一致）を押す
+    @discardableResult
+    private func press(_ app: XCUIApplication, _ label: String) -> Bool {
+        let element = app.buttons.matching(NSPredicate(format: "label == %@ OR identifier == %@", label, label)).firstMatch
+        guard element.waitForExistence(timeout: 2), element.isHittable else { return tap(app, label) }
+        element.tap()
+        sleep(2)
+        return true
+    }
+
+    private func qaTour(extra: [String], sections: Set<String>) {
+        func wants(_ name: String) -> Bool { sections.contains("qa") || sections.contains("qa-\(name)") }
+        // 計画のタブ
+        if wants("plan") {
+            let app = launch(tab: 0, extra: extra)
+            shot("qa-01-plan")
+            app.swipeUp(); sleep(1); shot("qa-02-plan-scrolled")
+            app.swipeUp(); sleep(1); shot("qa-03-plan-scrolled2")
+            app.swipeDown(); app.swipeDown(); sleep(1)
+            if press(app, "タスクリスト") || tap(app, "タスクリスト") { shot("qa-04-tasks"); back(app) }
+            if press(app, "旅行計画を追加") { shot("qa-05-add-trip"); closeSheet(app) }
+            if press(app, "予定を追加") { shot("qa-06-add-plan"); closeSheet(app) }
+        }
+        // プロフィールと設定
+        if wants("profile") {
+            let app = launch(tab: 0, extra: extra)
+            if press(app, "プロフィール") {
+                shot("qa-10-profile")
+                app.swipeUp(); sleep(1); shot("qa-11-profile-scrolled")
+                app.swipeDown(); sleep(1)
+                for (index, row) in ["アプリ設定", "ヘルプ・サポート", "データ", "最近削除", "Pro", "応援", "地図アプリ", "通知", "カレンダー", "時間帯"].enumerated() {
+                    if tap(app, row) {
+                        shot("qa-12-profile-\(index)")
+                        back(app)
+                    } else {
+                        app.swipeUp(); sleep(1)
+                        if tap(app, row) { shot("qa-12-profile-\(index)"); back(app) }
+                        app.swipeDown(); sleep(1)
+                    }
+                }
+            }
+        }
+        // 旅行の中（日程・地図・リスト・予約確認・費用）
+        if wants("trip") {
+            let app = launch(tab: 0, extra: extra)
+            if tap(app, "沖縄 3泊4日") {
+                shot("qa-20-trip")
+                for (index, tab) in ["地図", "リスト", "予約確認", "費用"].enumerated() where tap(app, tab) {
+                    sleep(3)
+                    shot("qa-21-trip-\(index)")
+                    app.swipeUp(); sleep(1)
+                    shot("qa-21-trip-\(index)-scrolled")
+                    app.swipeDown(); sleep(1)
+                }
+                if tap(app, "日程") {
+                    if press(app, "追加") { shot("qa-22-add-item"); closeSheet(app) }
+                    if tap(app, "Day 2") { shot("qa-23-day2") }
+                }
+                if tap(app, "予約確認") {
+                    if press(app, "予約を追加") || press(app, "追加") { sleep(1); shot("qa-24-add-reservation"); closeSheet(app) }
+                }
+            }
+        }
+        // おでかけの予定
+        if wants("outing") {
+            let app = launch(tab: 0, extra: extra)
+            app.swipeUp(); sleep(1)
+            if tap(app, "鎌倉さんぽ") {
+                shot("qa-30-plan-detail")
+                app.swipeUp(); sleep(1); shot("qa-31-plan-detail-scrolled")
+            }
+        }
+        // カレンダー
+        if wants("calendar") {
+            let app = launch(tab: 1, extra: extra)
+            shot("qa-40-calendar")
+            if press(app, "次の月") { shot("qa-41-calendar-next") }
+            if press(app, "カレンダーの表示") { shot("qa-42-calendar-mode"); closeSheet(app) }
+        }
+        // 場所保存
+        if wants("places") {
+            let app = launch(tab: 2, extra: extra)
+            shot("qa-50-places")
+            if press(app, "行った") { shot("qa-51-places-visited"); press(app, "行きたい") }
+            if press(app, "placesAddButton") || press(app, "場所を追加") { shot("qa-52-places-add"); app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.3)).tap(); sleep(1) }
+            if tap(app, "地図") { sleep(3); shot("qa-53-places-map"); tap(app, "リスト") }
+            if tap(app, "伏見稲荷大社") { shot("qa-54-place-detail"); back(app) }
+        }
+        // 思い出
+        if wants("memories") {
+            let app = launch(tab: 3, extra: extra)
+            shot("qa-60-memories")
+            app.swipeUp(); sleep(1); shot("qa-61-memories-scrolled")
+            app.swipeDown(); sleep(1)
+            if press(app, "memoriesAddButton") { shot("qa-62-memories-add"); app.coordinate(withNormalizedOffset: CGVector(dx: 0.3, dy: 0.3)).tap(); sleep(1) }
+            if tap(app, "旅の記録") { sleep(2); shot("qa-63-stats"); closeSheet(app); back(app) }
+            if tap(app, "日本全国フォトマ") { sleep(2); shot("qa-64-photomap"); back(app) }
         }
     }
 }

@@ -44,10 +44,13 @@ enum DemoDataSeeder {
             cardColor: Color(red: 0.16, green: 0.55, blue: 0.85), userId: userId,
             daySchedules: [
                 DaySchedule(dayNumber: 1, date: day(0), scheduleItems: [
-                    ScheduleItem(time: time(day(0), 7), title: "羽田空港を出発", location: "羽田空港 第2ターミナル", cost: 24800),
-                    ScheduleItem(time: time(day(0), 10, 30), title: "レンタカーを借りる", location: "那覇空港", latitude: 26.2066, longitude: 127.6465, cost: 18000),
+                    ScheduleItem(time: time(day(0), 7), title: "羽田空港を出発", location: "羽田空港 第2ターミナル", cost: 24800,
+                                 reservationId: "demo-okinawa-ana993"),
+                    ScheduleItem(time: time(day(0), 10, 30), title: "レンタカーを借りる", location: "那覇空港", latitude: 26.2066, longitude: 127.6465, cost: 18000,
+                                 reservationId: "demo-okinawa-car"),
                     ScheduleItem(time: time(day(0), 12, 30), title: "国際通りで沖縄そば", location: "国際通り", notes: "ソーキそばが人気の店", latitude: 26.2155, longitude: 127.6855, cost: 2400),
-                    ScheduleItem(time: time(day(0), 15), title: "ホテルにチェックイン", location: "ハレクラニ沖縄", latitude: 26.4864, longitude: 127.8508, cost: 96000),
+                    ScheduleItem(time: time(day(0), 15), title: "ホテルにチェックイン", location: "ハレクラニ沖縄", latitude: 26.4864, longitude: 127.8508, cost: 96000,
+                                 reservationId: "demo-okinawa-hotel"),
                     ScheduleItem(time: time(day(0), 18, 30), title: "海を見ながら夕食", location: "恩納村", latitude: 26.474, longitude: 127.825, cost: 8000)
                 ]),
                 DaySchedule(dayNumber: 2, date: day(1), scheduleItems: [
@@ -80,12 +83,13 @@ enum DemoDataSeeder {
                 PackingItem(name: "ブルーシールのアイス", kind: .wish)
             ],
             reservations: [
-                Reservation(kind: .flight, title: "ANA 993便", date: time(day(0), 7), confirmationNumber: "8K2M4Q",
+                // 行程の予定と同じものは予約とつなぐ（つながないと、費用の画面で予約の金額を2重に数える）
+                Reservation(id: "demo-okinawa-ana993", kind: .flight, title: "ANA 993便", date: time(day(0), 7), confirmationNumber: "8K2M4Q",
                             transportNumber: "NH993", departurePlace: "羽田", arrivalPlace: "那覇",
                             arrivalDate: time(day(0), 9, 45), seat: "23A", cost: 24800),
-                Reservation(kind: .hotel, title: "ハレクラニ沖縄", date: time(day(0), 15), confirmationNumber: "HK-58213",
+                Reservation(id: "demo-okinawa-hotel", kind: .hotel, title: "ハレクラニ沖縄", date: time(day(0), 15), confirmationNumber: "HK-58213",
                             endDate: time(day(3), 11), cost: 96000),
-                Reservation(kind: .rentalCar, title: "OTSレンタカー", date: time(day(0), 10, 30), confirmationNumber: "R2611-0482",
+                Reservation(id: "demo-okinawa-car", kind: .rentalCar, title: "OTSレンタカー", date: time(day(0), 10, 30), confirmationNumber: "R2611-0482",
                             endDate: time(day(3), 11, 30), cost: 18000),
                 Reservation(kind: .flight, title: "ANA 998便", date: time(day(3), 13, 20), confirmationNumber: "8K2M4Q",
                             transportNumber: "NH998", departurePlace: "那覇", arrivalPlace: "羽田",
