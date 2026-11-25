@@ -155,6 +155,23 @@ final class ScreenTourTests: XCTestCase {
                 shot("memories-\(index)")
             }
         }
+        if steps.contains("addmenu") {
+            // 思い出タブの右下の＋のメニュー（3.8）
+            let app = launch(tab: 0, extra: extra)
+            openTab(app, "思い出")
+            sleep(2)
+            shot("addmenu-closed")
+            let plus = app.buttons.matching(NSPredicate(format: "label == '作る' OR identifier == 'memoriesAddButton'")).firstMatch
+            if plus.waitForExistence(timeout: 3) {
+                plus.tap()
+                sleep(2)
+                shot("addmenu-open")
+                if tap(app, "写真コラージュを作る") {
+                    sleep(2)
+                    shot("addmenu-collage")
+                }
+            }
+        }
         if steps.contains("free") {
             // 旅行計画なしで自由に作る（3.8）：思い出タブのダイジェストの列 → コラージュの「自由に作る」
             let app = launch(tab: 0, extra: extra)

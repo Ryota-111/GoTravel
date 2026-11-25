@@ -9,6 +9,11 @@ struct AlbumHomeView: View {
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
     @State private var showCreateAlbum = false
+    /// 右下の＋のメニューを開いているか（3.8）
+    @State private var addMenuOpen = false
+    /// ＋のメニューから選んだ、作るもの（コラージュ・ポスター・日記）。旅行を選ぶ画面を開く
+    @State private var makerKind: MemoryKind?
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var selectedAlbum: Album?
     /// アルバムのカードから中身へ広がる遷移
     @Namespace private var albumZoom
@@ -105,6 +110,8 @@ struct AlbumHomeView: View {
                 }
 
                 if !isSelectionMode {
+                    // ＋のメニューを開いているあいだは、うしろを暗くする（押すと閉じる）
+                    FloatingAddMenuBackdrop(isOpen: $addMenuOpen.animation(.easeInOut(duration: 0.2)))
                     VStack {
                         Spacer()
                         HStack {
@@ -143,6 +150,13 @@ struct AlbumHomeView: View {
                         }
                     }
             }
+        }
+        // ＋のメニューから、旅の思い出（コラージュ・ポスター・日記）を作る。広い画面では全画面
+        .sheet(item: horizontalSizeClass == .regular ? .constant(nil) : $makerKind) { kind in
+            MemoryTripPicker(kind: kind, plans: makerPlans)
+        }
+        .fullScreenCover(item: horizontalSizeClass == .regular ? $makerKind : .constant(nil)) { kind in
+            MemoryTripPicker(kind: kind, plans: makerPlans)
         }
         .sheet(isPresented: $settingUpFreeDigest, onDismiss: {
             // 決める画面が閉じてから開く（続けて別の画面を出すと、出ないことがあるため）
@@ -606,11 +620,32 @@ struct AlbumHomeView: View {
     }
 
     // MARK: - FAB
+    /// 右下の＋。押すと、作れるもの（コラージュ・ポスター・日記・ダイジェスト・アルバム）のメニューが開く（3.8）
     private var fabButton: some View {
-        Button(action: { showCreateAlbum = true }) {
-            FloatingAddButtonLabel()
+        MemoriesAddMenu(isOpen: $addMenuOpen.animation(.easeInOut(duration: 0.2))) { item in
+            switch item {
+            case .collage: makerKind = .photoDump
+            case .poster: makerKind = .poster
+            case .diary: makerKind = .diary
+            case .digest:
+                // いちばん新しい旅行で開く（上の名前から、ほかの旅行にも切り替えられる）。
+                // 作れる旅行が無ければ、旅行計画なしで作る画面を出す
+                if let latest = digestCandidates.first {
+                    digestPlan = latest
+                } else {
+                    settingUpFreeDigest = true
+                }
+            case .album: showCreateAlbum = true
+            }
         }
-        .accessibilityLabel("アルバムを作成")
+    }
+
+    /// 旅の思い出を作れる旅行（もう始まった旅行。新しい順）
+    private var makerPlans: [TravelPlan] {
+        let today = Calendar.current.startOfDay(for: Date())
+        return travelPlanViewModel.travelPlans
+            .filter { Calendar.current.startOfDay(for: $0.startDate) <= today }
+            .sorted { $0.startDate > $1.startDate }
     }
 }
 
