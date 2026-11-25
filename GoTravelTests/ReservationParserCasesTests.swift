@@ -276,4 +276,20 @@ struct ReservationParserCasesTests {
         #expect(draft?.departurePlace == "神戸空港")
         #expect(draft?.arrivalPlace == "羽田空港")
     }
+
+    @Test("座席を読む：Wallet の表の形・見出しの後ろ・新幹線の「号車・番・席」（3.8）")
+    func seats() {
+        let wallet = "便名\t出発時刻\t到着時刻\nSKY102\t09:20\t10:25\n搭乗者名\t座席\nYAMADA TARO\t8G"
+        #expect(ReservationEmailParser.parse(wallet, referenceDate: Self.reference).first?.seat == "8G")
+        let walletHidden = "SKY102\t09:20\t10:25\n搭乗者名\t座席\n8G"
+        #expect(ReservationEmailParser.parse(walletHidden, referenceDate: Self.reference).first?.seat == "8G")
+        #expect(ReservationEmailParser.seats(in: "ANA 993便 羽田 → 那覇\n座席番号：23A") == ["23A"])
+        #expect(ReservationEmailParser.seats(in: "Seat: 12K") == ["12K"])
+        #expect(ReservationEmailParser.seats(in: "5号車6番E席\nこだま\n5号車3番D席") == ["5号車6番E席", "5号車3番D席"])
+        // 2人分（スカイマーク）と、見出しの数行下（ANA）
+        #expect(ReservationEmailParser.seats(in: "神戸 発 07:30 → 那覇 着 09:35\n座席番号:26H,26G") == ["26H, 26G"])
+        #expect(ReservationEmailParser.seats(in: "□ 座席番号\nTARO YAMADA様\n[1]38J\n\n□ 運賃額等") == ["38J"])
+        // 座席の種類だけで番号の無いものは読まない
+        #expect(ReservationEmailParser.seats(in: "座席：普通車指定席").isEmpty)
+    }
 }

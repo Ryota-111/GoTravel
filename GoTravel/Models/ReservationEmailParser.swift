@@ -26,6 +26,8 @@ struct ReservationDraft: Equatable {
     var guessedYear = false
     /// 支払った金額（円）。1通に複数の予約があるときは、1件目にだけ入れる（合計なので）
     var cost: Double?
+    /// 座席（「23A」「5号車6番E席」。3.8）。飛行機・電車・バス・船だけ
+    var seat: String?
 }
 
 // MARK: - 読み取り
@@ -91,6 +93,15 @@ enum ReservationEmailParser {
             drafts[index].confirmationNumber = confirmation
         }
         drafts[0].cost = paidAmount(in: text)
+        // 座席（3.8）。便・列車の数と同じだけ見つかれば順に、1件だけなら1つ目を入れる
+        if kind.usesRoute {
+            let found = seats(in: text)
+            if found.count == drafts.count {
+                for index in drafts.indices { drafts[index].seat = found[index] }
+            } else if drafts.count == 1, let first = found.first {
+                drafts[0].seat = first
+            }
+        }
         return drafts
     }
 
@@ -842,6 +853,106 @@ enum ReservationEmailParser {
             if names.count >= 2 { return Array(names.prefix(2)) }
         }
         return nil
+    }
+
+    // MARK: - 座席（3.8）
+
+    /// 座席の見出し
+    private static let seatLabel = #"(?:座席番号|座席|お座席|席番号|seat(?:\s?(?:no\.?|number))?)"#
+    /// 座席の値（「23A」「12-K」）
+    private static let seatValue = #"\d{1,3}\s?-?\s?[A-Ka-k]"#
+
+    /// 「26h,26 G」→「26H, 26G」
+    private static func seatList(_ raw: String) -> String {
+        raw.components(separatedBy: CharacterSet(charactersIn: ",、・/"))
+            .map { $0.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "-", with: "").uppercased() }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
+    }
+
+    /// 座席を、出てくる順に。
+    /// - 「座席：23A」「Seat 12K」のように見出しの後ろ
+    /// - 「5号車6番E席」（新幹線）はそのまま
+    /// - Wallet の搭乗券のように、見出しの行（「搭乗者名  座席」）の次の行の同じ列（右端なら右端）
+    static func seats(in text: String) -> [String] {
+        var found: [(position: Int, seat: String)] = []
+        let ns = text as NSString
+        func add(_ position: Int, _ raw: String) {
+            let seat = seatList(raw)
+            guard !found.contains(where: { $0.position == position }) else { return }
+            found.append((position, seat))
+        }
+
+        // 新幹線の「5号車6番E席」
+        if let regex = try? NSRegularExpression(pattern: #"(\d{1,2})\s?号車\s?(\d{1,2})\s?番\s?([A-Ea-e])\s?席"#) {
+            for match in regex.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+                let car = ns.substring(with: match.range(at: 1))
+                let row = ns.substring(with: match.range(at: 2))
+                let letter = ns.substring(with: match.range(at: 3)).uppercased()
+                // 「5号車6番E席」は書かれたとおりに残す（車内の表示と同じ書き方のほうが探しやすい）
+                found.append((match.range.location, "\(car)号車\(row)番\(letter)席"))
+            }
+        }
+
+        // 見出しの後ろ（同じ行）。2人分なら「26H,26G」のように並ぶので、まとめて「26H, 26G」にする
+        let inline = seatLabel + #"\s*[】\])）]?\s*[:：]?\s*("# + seatValue + #"(?:\s*[,、・/]\s*"# + seatValue + #")*)(?![A-Za-z0-9])"#
+        if let regex = try? NSRegularExpression(pattern: inline, options: [.caseInsensitive]) {
+            for match in regex.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+                add(match.range(at: 1).location, seatList(ns.substring(with: match.range(at: 1))))
+            }
+        }
+
+        // 見出しだけの行の下（ANA の「□ 座席番号」の下に、名前の行と「[1]38J」）。4行先まで見る
+        let headingOnly = try? NSRegularExpression(pattern: #"^[□■【\[・\s]*"# + seatLabel + #"\s*[】\]]?\s*[:：]?$"#,
+                                                   options: [.caseInsensitive])
+        let passengerSeat = try? NSRegularExpression(pattern: #"^(?:\[\d{1,2}\]\s*)?("# + seatValue + #")$"#)
+        var lineOffset = 0
+        let allLines = text.components(separatedBy: "\n")
+        for (index, line) in allLines.enumerated() {
+            defer { lineOffset += (line as NSString).length + 1 }
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard headingOnly?.firstMatch(in: trimmed, range: NSRange(location: 0, length: (trimmed as NSString).length)) != nil
+            else { continue }
+            var seatsBelow: [String] = []
+            var position = lineOffset + (line as NSString).length + 1
+            for next in allLines.dropFirst(index + 1).prefix(4) {
+                let cell = next.trimmingCharacters(in: .whitespaces)
+                if let match = passengerSeat?.firstMatch(in: cell, range: NSRange(location: 0, length: (cell as NSString).length)) {
+                    seatsBelow.append((cell as NSString).substring(with: match.range(at: 1)))
+                } else if !seatsBelow.isEmpty {
+                    break
+                }
+                if seatsBelow.isEmpty { position += (next as NSString).length + 1 }
+            }
+            if !seatsBelow.isEmpty { add(position, seatList(seatsBelow.joined(separator: ","))) }
+        }
+
+        // 表の形（見出しの行の次の行）
+        let lines = text.components(separatedBy: "\n")
+        var offset = 0
+        let onlyLabel = try? NSRegularExpression(pattern: "^" + seatLabel + "$", options: [.caseInsensitive])
+        let onlyValue = try? NSRegularExpression(pattern: "^" + seatValue + "$")
+        for (index, line) in lines.enumerated() {
+            defer { offset += (line as NSString).length + 1 }
+            guard index + 1 < lines.count else { continue }
+            let cells = line.components(separatedBy: "\t").map { $0.trimmingCharacters(in: .whitespaces) }
+            guard let column = cells.firstIndex(where: { cell in
+                onlyLabel?.firstMatch(in: cell, range: NSRange(location: 0, length: (cell as NSString).length)) != nil
+            }) else { continue }
+            let next = lines[index + 1].components(separatedBy: "\t").map { $0.trimmingCharacters(in: .whitespaces) }
+            let value: String?
+            if next.count == cells.count {
+                value = next[column]
+            } else if column == cells.count - 1 {
+                value = next.last
+            } else {
+                value = nil
+            }
+            guard let value, onlyValue?.firstMatch(in: value, range: NSRange(location: 0, length: (value as NSString).length)) != nil
+            else { continue }
+            add(offset + (line as NSString).length + 1, value)
+        }
+        return found.sorted { $0.position < $1.position }.map(\.seat)
     }
 
     // MARK: - 新幹線

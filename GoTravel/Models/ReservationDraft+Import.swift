@@ -41,6 +41,7 @@ extension ReservationDraft {
             reservation.transportNumber = transportNumber
             reservation.departurePlace = departurePlace
             reservation.arrivalPlace = arrivalPlace
+            reservation.seat = seat
         } else {
             reservation.title = title
         }
