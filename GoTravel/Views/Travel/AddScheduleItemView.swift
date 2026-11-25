@@ -38,6 +38,8 @@ struct AddScheduleItemView: View {
     @State private var draftItemId = UUID().uuidString
     @State private var didAddItem = false
     /// 「移動」の予定にするか（3.4）。乗り物・出発地・到着地・便を入れる
+    /// タイトルを一度でも書き換えたか（空の赤い枠は、書き換えてから出す）
+    @State private var titleTouched = false
     @State private var isMove = false
     @State private var moveInput = MoveInput()
     /// 時間未定にするか（3.4）。未定のときは時刻の代わりに「入れる位置」を選ぶ
@@ -210,12 +212,14 @@ struct AddScheduleItemView: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: AppRadius.medium)
                             .stroke(
-                                title.isEmpty && !isMove
+                                titleTouched && title.isEmpty && !isMove
                                     ? themeManager.currentTheme.error.opacity(0.4)
                                     : travelColor.opacity(0.3),
                                 lineWidth: 1.5
                             )
                     )
+                    // 開いたときから赤くすると、間違えたように見える。一度入れてから消したときだけ赤くする（3.8）
+                    .onChange(of: title) { _, _ in titleTouched = true }
             }
         }
     }

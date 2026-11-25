@@ -1157,6 +1157,13 @@ struct CalendarView: View {
     private func changeMonth(by value: Int) {
         if let newMonth = calendar.date(byAdding: .month, value: value, to: currentMonth) {
             currentMonth = newMonth
+            // 下のシートが前の月の日のままにならないよう、その月の日を選ぶ（3.8）。
+            // 今日のある月なら今日、ほかの月は1日
+            if calendar.isDate(Date(), equalTo: newMonth, toGranularity: .month) {
+                selectedDate = Date()
+            } else if let first = calendar.dateInterval(of: .month, for: newMonth)?.start {
+                selectedDate = first
+            }
         }
     }
 

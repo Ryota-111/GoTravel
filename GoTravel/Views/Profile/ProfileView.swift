@@ -227,19 +227,22 @@ struct ProfileView: View {
                                 .foregroundColor(themeManager.currentTheme.secondaryTextOnScreen(for: colorScheme))
                         }
 
-                        Text(authVM.userEmail ?? "")
-                            .font(.system(size: 15, weight: .medium))
-                            .foregroundColor(themeManager.currentTheme.secondaryTextOnCardBackground2(for: colorScheme))
-                            .padding(.horizontal, 20)
-                            .padding(.vertical, 8)
-                            .background(
-                                Capsule()
-                                    .fill(themeManager.currentTheme.cardBackground2)
-                                    .overlay(
-                                        Capsule()
-                                            .stroke(themeManager.currentTheme.cardBorder, lineWidth: 1)
-                                    )
-                            )
+                        // メールアドレスが無い人（Apple ID で共有しなかった人など）は、空の枠を出さない（3.8）
+                        if let email = authVM.userEmail?.trimmingCharacters(in: .whitespacesAndNewlines), !email.isEmpty {
+                            Text(email)
+                                .font(.system(size: 15, weight: .medium))
+                                .foregroundColor(themeManager.currentTheme.secondaryTextOnCardBackground2(for: colorScheme))
+                                .padding(.horizontal, 20)
+                                .padding(.vertical, 8)
+                                .background(
+                                    Capsule()
+                                        .fill(themeManager.currentTheme.cardBackground2)
+                                        .overlay(
+                                            Capsule()
+                                                .stroke(themeManager.currentTheme.cardBorder, lineWidth: 1)
+                                        )
+                                )
+                        }
                     }
                     .padding(.top, 4)
                     .padding(.bottom, 20)
@@ -297,7 +300,7 @@ struct ProfileView: View {
         let value: String
         var isWarning = false
         if last == 0 {
-            value = "まだ書き出していません"
+            value = "まだです"
         } else if Date().timeIntervalSince1970 - last > DataBackupView.reminderInterval {
             value = "3か月たちました"
             isWarning = true
@@ -514,6 +517,9 @@ struct ProfileMenuRow: View {
             Text(title)
                 .font(.system(size: 16, weight: .medium))
                 .foregroundColor(themeManager.currentTheme.textOnCardBackground2(for: colorScheme))
+                // 名前は1行に収め、狭いときは右の値のほうを省く（「書き出し・読み込み」が2行に折れていた。3.8）
+                .lineLimit(1)
+                .layoutPriority(1)
             Spacer(minLength: 8)
             if let value {
                 Text(value)

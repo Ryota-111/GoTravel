@@ -97,6 +97,15 @@ struct BottomTimelineCard: View {
 
             Spacer()
 
+            // この日に予定を足す。シートが低いときは一覧の下の「この日に追加」が下のタブに隠れるので、
+            // 見出しにも置いていつでも押せるようにする（3.8）
+            Button(action: onAddPlan) {
+                Image(systemName: "plus.circle.fill")
+                    .font(.title3)
+                    .foregroundColor(themeManager.currentTheme.secondary)
+            }
+            .accessibilityLabel("この日に予定を追加")
+
             Button(action: {
                 withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
                     isExpanded.toggle()
