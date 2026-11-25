@@ -37,4 +37,10 @@ struct StoreLoadFailureTests {
         #expect(StoreLoadFailure.capacityLabel(450_000_000) == "約 400MB")
         #expect(StoreLoadFailure.capacityLabel(12_340_000_000) == "約 12.3GB")
     }
+
+    @Test("端末のロックで読めなかったとき（SQLite の 23）は、それと分かる（開発者には送らない）")
+    func deviceLocked() {
+        #expect(StoreLoadFailure(domain: NSCocoaErrorDomain, code: 256, underlying: ["NSSQLiteErrorDomain 23"]).isDeviceLocked)
+        #expect(!StoreLoadFailure(domain: NSCocoaErrorDomain, code: 256, underlying: ["NSSQLiteErrorDomain 4618"]).isDeviceLocked)
+    }
 }

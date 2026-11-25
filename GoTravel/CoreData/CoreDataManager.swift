@@ -172,8 +172,9 @@ class CoreDataManager: ObservableObject {
         let failure = StoreLoadFailure(error, availableCapacity: Self.availableCapacity())
         let isNew = storeLoadFailure != failure
         storeLoadFailure = failure
-        // 同じ理由で開き直しに失敗するたびに送らない
-        if isNew {
+        // 同じ理由で開き直しに失敗するたびに送らない。
+        // 端末のロックで読めなかっただけのとき（ロックが解ければ開ける）は送らない（3.8）
+        if isNew && !failure.isDeviceLocked {
             DiagnosticsReporter.shared.report(failure.diagnosticText)
         }
     }
