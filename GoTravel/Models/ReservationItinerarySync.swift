@@ -58,8 +58,14 @@ extension TravelPlan {
                 item = Self.merge(current: current, fresh: fresh, previouslyGenerated: generated, currency: currencyCode)
             } else if part == .departure, let move = existingByPart[.move] {
                 // 移動の1件（行程の移動に予約番号を入れた予定など）は、出発の予定として引き継ぐ
-                let generated = previousGenerated.first { $0.reservationPart == fresh.reservationPart }
+                let generated = previousGenerated.first { $0.reservationPart == ReservationPart.move.rawValue }
+                    ?? previousGenerated.first { $0.reservationPart == fresh.reservationPart }
                 item = Self.merge(current: move, fresh: fresh, previouslyGenerated: generated, currency: currencyCode)
+            } else if part == .move, let departure = existingByPart[.departure] {
+                // 出発と到着の2件から移動の1件にしたとき（3.8）は、出発の予定を引き継ぐ（日程タブで入れた場所やメモを残す）
+                let generated = previousGenerated.first { $0.reservationPart == ReservationPart.departure.rawValue }
+                    ?? previousGenerated.first { $0.reservationPart == fresh.reservationPart }
+                item = Self.merge(current: departure, fresh: fresh, previouslyGenerated: generated, currency: currencyCode)
             }
             if let dayNumber = dayNumber(forDate: item.time, in: item.timeZone) {
                 addScheduleItem(item, onDay: dayNumber)
@@ -259,6 +265,8 @@ extension Reservation {
         paidBy = item.paidBy
         splitWith = item.splitWith
         splitAmounts = item.splitAmounts
+        // 行程の移動から作った予約は、行程でも移動の1件のままにする
+        itineraryAsMove = true
     }
 }
 

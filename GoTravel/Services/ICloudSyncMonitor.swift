@@ -58,6 +58,8 @@ final class ICloudSyncMonitor: ObservableObject {
 
     /// アカウントの状態を確かめ直す（アプリに戻ってきたときなど）
     func refresh() {
+        // 空データモード（見本データ・画面の撮影）では iCloud を見ない。start と同じ
+        guard !CoreDataManager.isEmptyDataMode else { return }
         Task {
             let status = try? await CKContainer(identifier: "iCloud.com.gmail.taismryotasis.Travory").accountStatus()
             accountProblem = Self.problem(for: status)

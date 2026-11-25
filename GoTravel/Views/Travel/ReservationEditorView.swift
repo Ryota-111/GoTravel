@@ -45,6 +45,8 @@ struct ReservationEditorView: View {
     /// 開いて閉じただけで増えるのは事故に近い。
     /// 行程に出したいかどうかは予約ごとに違うので、その都度選んでもらう
     @State private var addsToItinerary = false
+    /// 乗り物の予約を、行程に「移動」の1件として出すか（3.8）。新しい予約は移動から始める
+    @State private var itineraryAsMove = true
 
     // MARK: メールからの取り込み（Travory Pro）
 
@@ -263,6 +265,14 @@ struct ReservationEditorView: View {
         // いま行程に出ているかどうかを、そのままトグルの状態にする。
         // これをしないと、一度オンにしたものをオフに戻せない
         addsToItinerary = plan?.hasScheduleItems(forReservation: reservation.id) ?? false
+        // 前に保存した予約は、今の行程の出し方のまま。選んでいなければ、行程に移動の1件があるかで決める
+        // （3.7 までに作った乗り物の予約は、出発と到着の2件）
+        if let chosen = reservation.itineraryAsMove {
+            itineraryAsMove = chosen
+        } else if !isNewReservation {
+            itineraryAsMove = plan?.scheduleItems(forReservation: reservation.id)
+                .contains { $0.reservationPart == ReservationPart.move.rawValue } ?? false
+        }
         costInput = CostInput(cost: reservation.cost, foreign: reservation.foreignCost,
                               base: plan?.currencyCode ?? CurrencyCatalog.yen)
     }
@@ -279,7 +289,7 @@ struct ReservationEditorView: View {
                 VStack(alignment: .leading, spacing: 2) {
                     Text(hasChosenKind ? "\(reservation.kind.label)の予約メール・画像から取り込む" : "予約メール・画像から取り込む")
                         .font(.system(size: 15, weight: .semibold))
-                    Text("確認メールやスクリーンショットから、予約番号・日時・金額を読み取ります")
+                    Text("確認メールやスクリーンショットから、読み取れた予約番号・日時・金額を入れます")
                         .font(.caption2)
                         .foregroundColor(themeManager.currentTheme.secondaryText)
                 }
@@ -317,12 +327,12 @@ struct ReservationEditorView: View {
 
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
-                        Text("確認メールやスクショから、予約が入ります")
+                        Text("確認メールやスクショから、予約の入力を手伝います")
                             .font(.system(size: 14, weight: .semibold))
                             .foregroundColor(textColor)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    Text("予約番号・日時・便名・金額を自動で入力")
+                    Text("予約番号・日時・便名・金額を読み取って入力")
                         .font(.caption2)
                         .foregroundColor(themeManager.currentTheme.secondaryText)
                     Text("Travory Pro")
@@ -349,7 +359,7 @@ struct ReservationEditorView: View {
         }
         .buttonStyle(.plain)
         .padding(.top, 8)
-        .accessibilityLabel("確認メールやスクリーンショットから予約が入ります。Travory Pro の説明を開く")
+        .accessibilityLabel("確認メールやスクリーンショットから、予約の入力を手伝います。Travory Pro の説明を開く")
     }
 
     /// 読み取った1件目を入力欄に入れ、残りは保存したあとに順に開く。
@@ -423,6 +433,7 @@ struct ReservationEditorView: View {
         draft.arrivalTimeZoneIdentifier = arrivalZone.identifier
         draft.endDate = (draft.kind.usesPeriod && hasDate && hasEndDate) ? endDate : nil
         if draft.kind.usesRoute { draft.title = composedRouteTitle }
+        draft.itineraryAsMove = draft.kind.usesRoute ? itineraryAsMove : nil
         return draft.itineraryItems()
     }
 
@@ -453,6 +464,15 @@ struct ReservationEditorView: View {
                         .foregroundColor(textColor)
                 }
                 .tint(accent)
+
+                // 乗り物は、移動の1件か、出発と到着の2件かを選べる（3.8、ご要望から）
+                if addsToItinerary && reservation.kind.usesRoute {
+                    Picker("行程での出し方", selection: $itineraryAsMove) {
+                        Text("移動として1件").tag(true)
+                        Text("出発と到着の2件").tag(false)
+                    }
+                    .pickerStyle(.segmented)
+                }
 
                 Text(addsToItinerary
                      ? "タイムスケジュールに、\(itineraryPreviewText)が並びます。"
@@ -1086,6 +1106,7 @@ struct ReservationEditorView: View {
         // 終わりは、期間を持てる種類で始まりがあるときだけ残す
         edited.endDate = (edited.kind.usesPeriod && edited.date != nil && hasEndDate) ? endDate : nil
         if !edited.kind.usesPeriod { edited.pinsDuringPeriod = nil }
+        edited.itineraryAsMove = edited.kind.usesRoute ? itineraryAsMove : nil
 
         // 種類を変えたときに、前の種類の入力が残らないようにする
         if !edited.kind.usesRoute {

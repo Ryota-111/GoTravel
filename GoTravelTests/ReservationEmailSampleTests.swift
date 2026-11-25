@@ -46,7 +46,7 @@ struct ReservationEmailSampleTests {
 
     /// 比べる項目。正解の JSON に書いた項目だけ比べる（null と書けば「読み取らないこと」が正解）
     private static let fields = ["kind", "title", "confirmationNumber", "transportNumber",
-                                 "departurePlace", "arrivalPlace", "start", "arrival", "end", "cost"]
+                                 "departurePlace", "arrivalPlace", "start", "arrival", "end", "cost", "seat"]
 
     @Test("実際のメールで精度を測る", .enabled(if: !sampleFiles.isEmpty))
     func measureAccuracy() async throws {
@@ -72,6 +72,10 @@ struct ReservationEmailSampleTests {
                          read: (String, Date) async -> [ReservationDraft]) async throws {
         var fieldHits: [String: Int] = [:]
         var fieldTotals: [String: Int] = [:]
+        // 外れ方を分けて数える（3.8）。誤った値を入れたのか、読めずに空けたのかで、重さが違う
+        var fieldWrong: [String: Int] = [:]     // 正解と違う値を入れた
+        var fieldMissing: [String: Int] = [:]   // 正解があるのに空けた
+        var fieldSpurious: [String: Int] = [:]  // 正解は「無い」のに値を入れた
         var perfect = 0
         var measured = 0
         var lines: [String] = []
@@ -107,6 +111,11 @@ struct ReservationEmailSampleTests {
                     if want == got {
                         fieldHits[field, default: 0] += 1
                     } else {
+                        switch (want, got) {
+                        case (nil, _?): fieldSpurious[field, default: 0] += 1
+                        case (_?, nil): fieldMissing[field, default: 0] += 1
+                        default: fieldWrong[field, default: 0] += 1
+                        }
                         misses.append("\(index + 1)件目の \(field)：\(got ?? "なし")（正解 \(want ?? "なし")）")
                     }
                 }
@@ -123,12 +132,18 @@ struct ReservationEmailSampleTests {
         var report = ["# \(title)", "",
                       "測った日：\(Self.dayString(Date()))", "",
                       "**直さずに保存できた割合：\(perfect) / \(measured)**", "",
-                      "| 項目 | 正解 |", "|---|---|"]
+                      "誤った値（違う値・無いはずの値）は、空欄より重い外れ。0 を保つ", "",
+                      "| 項目 | 正解 | 違う値を入れた | 無いはずの値を入れた | 空けた |", "|---|---|---|---|---|"]
         for field in Self.fields where fieldTotals[field] != nil {
             let hits = fieldHits[field] ?? 0
             let total = fieldTotals[field] ?? 0
-            report.append("| \(field) | \(hits) / \(total)（\(total == 0 ? 0 : hits * 100 / total)%） |")
+            report.append("| \(field) | \(hits) / \(total)（\(total == 0 ? 0 : hits * 100 / total)%） | "
+                          + "\(fieldWrong[field] ?? 0) | \(fieldSpurious[field] ?? 0) | \(fieldMissing[field] ?? 0) |")
         }
+        let wrong = fieldWrong.values.reduce(0, +) + fieldSpurious.values.reduce(0, +)
+        let checked = fieldTotals.values.reduce(0, +)
+        report += ["", "**誤った値を入れた割合：\(wrong) / \(checked) 項目**　"
+                   + "**読めずに空けた割合：\(fieldMissing.values.reduce(0, +)) / \(checked) 項目**"]
         report += ["", "## メールごと", ""] + lines
 
         let output = report.joined(separator: "\n")
@@ -151,6 +166,7 @@ struct ReservationEmailSampleTests {
         case "end": return text(of: draft.end)
         // "6000"（円）
         case "cost": return draft.cost.map { String(Int($0)) }
+        case "seat": return draft.seat
         default: return nil
         }
     }

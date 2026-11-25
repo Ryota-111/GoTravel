@@ -82,6 +82,9 @@ struct TransportGapRow: View {
                         }
                     } else {
                         TransportRailSegment(mode: mode, tint: tint, railColor: railColor, isPast: isPast)
+                            // 次の予定の点の上には3の余白があり、線がそこで切れて上にずれて見えていた（3.8）。
+                            // 点の中まで伸ばす（点は後ろの行で上に重なるので、はみ出しは見えない）
+                            .padding(.bottom, -(TransportRailMetrics.nextDotTop + 6))
                     }
                 }
                 .frame(width: TransportRailMetrics.railWidth)

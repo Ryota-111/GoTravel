@@ -309,6 +309,8 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
                 // メンバーが削除 → 自分をメンバーから外すだけ。
                 // **相手の最新から外す。** 手元の計画を土台にすると、
                 // まだ取り込んでいない他の人の編集を古い内容で上書きしてしまう
+                // アルバムに載せた自分の写真も、みんなのアルバムから消す（3.8）
+                Task { @MainActor in SharedAlbumSync.shared.didLeave(planId: planId, userId: userId) }
                 Task {
                     guard var updated = try? await CloudKitService.shared
                         .fetchSharedTravelPlan(planId: planId) else { return }
@@ -318,10 +320,11 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
                     try? await CloudKitService.shared.publishSharedTravelPlan(updated)
                 }
             } else {
-                // オーナーが削除 → 共有レコード自体を削除
+                // オーナーが削除 → 共有レコード自体を削除。アルバムに載った写真も消す（3.8）
                 Task {
                     try? await CloudKitService.shared.deleteSharedTravelPlan(planId: planId)
                 }
+                Task { @MainActor in SharedAlbumSync.shared.didStopSharing(planId: planId) }
             }
         }
     }
@@ -551,6 +554,8 @@ final class TravelPlanViewModel: NSObject, ObservableObject {
         pendingShareDeletions[planId] = Task {
             try? await CloudKitService.shared.deleteSharedTravelPlan(planId: planId)
         }
+        // アルバムに載った写真も、全員分消す（3.8）
+        SharedAlbumSync.shared.didStopSharing(planId: planId)
     }
 
     /// 写し間違いの救済候補。O↔0・I↔1 は見た目が紛らわしく、

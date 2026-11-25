@@ -58,7 +58,7 @@ struct CalendarExportSheet: View {
         NavigationStack {
             Form {
                 Section {
-                    Text("この予定を iPhone のカレンダーにも追加します。Travory で直すと、追加した予定も直ります。\nGoogle カレンダーを使っている場合は、追加先に Google のカレンダーを選ぶと、Google カレンダーにも出ます。")
+                    Text("この予定を \(DeviceWord.name) のカレンダーにも追加します。Travory で直すと、追加した予定も直ります。\nGoogle カレンダーを使っている場合は、追加先に Google のカレンダーを選ぶと、Google カレンダーにも出ます。")
                         .font(.footnote)
                         .foregroundColor(.secondary)
                 }
@@ -231,17 +231,17 @@ struct CalendarExportSettingsView: View {
                     }
                 }
             } header: {
-                Text("iPhone の予定を Travory で見る")
+                Text("\(DeviceWord.name) の予定を Travory で見る")
             } footer: {
-                Text("iPhone のカレンダー（祝日・仕事・Google など）の予定を、Travory のカレンダーに並べて表示します。見るだけで、Travory には保存しません。")
+                Text("\(DeviceWord.name) のカレンダー（祝日・仕事・Google など）の予定を、Travory のカレンダーに並べて表示します。見るだけで、Travory には保存しません。")
             }
 
             Section {
-                Text("Travory の旅行計画や予定を、iPhone のカレンダーにも追加します。Travory で直すと、追加した予定も直ります。1件ずつ追加するときは、旅行計画の「書き出し」や予定の画面から追加できます。")
+                Text("Travory の旅行計画や予定を、\(DeviceWord.name) のカレンダーにも追加します。Travory で直すと、追加した予定も直ります。1件ずつ追加するときは、旅行計画の「書き出し」や予定の画面から追加できます。")
                     .font(.footnote)
                     .foregroundColor(.secondary)
             } header: {
-                Text("Travory の予定を iPhone のカレンダーに追加")
+                Text("Travory の予定を \(DeviceWord.name) のカレンダーに追加")
             }
 
             if service.hasAccess {
@@ -286,7 +286,7 @@ struct CalendarExportSettingsView: View {
             }
         }
         .tint(themeManager.currentTheme.actionFill)
-        .navigationTitle("iPhone のカレンダー")
+        .navigationTitle("\(DeviceWord.name) のカレンダー")
         .navigationBarTitleDisplayMode(.inline)
         .onAppear {
             service.refreshAuthorization()

@@ -9,6 +9,11 @@ struct AlbumHomeView: View {
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
     @State private var showCreateAlbum = false
+    /// 右下の＋のメニューを開いているか（3.8）
+    @State private var addMenuOpen = false
+    /// ＋のメニューから選んだ、作るもの（コラージュ・ポスター・日記）。旅行を選ぶ画面を開く
+    @State private var makerKind: MemoryKind?
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
     @State private var selectedAlbum: Album?
     /// アルバムのカードから中身へ広がる遷移
     @Namespace private var albumZoom
@@ -24,8 +29,20 @@ struct AlbumHomeView: View {
     /// 残した動画が変わった合図（ダイジェストの画面を閉じたら読み直す）
     @State private var libraryVersion = 0
     @State private var digestPlan: TravelPlan?
+    /// 旅行計画なしで作ったもの（3.8）
+    @State private var freeMemories: [FreeMemory] = FreeMemoryStore.all()
+    @State private var settingUpFreeDigest = false
+    /// 「自由に作る」で決めたもの。決める画面を閉じてからダイジェストを開く
+    @State private var createdFreeDigest: FreeMemory?
     /// 旅の記録（3.1）
     @State private var showsStats = false
+    /// 「旅の思い出をつくる」「旅のダイジェスト」をしまったか（3.8。アプリを閉じても覚えておく）
+    @AppStorage("AlbumHomeMemoriesCollapsed") private var memoriesCollapsed = false
+    @AppStorage("AlbumHomeDigestCollapsed") private var digestCollapsed = false
+    /// 年末のふり返りから開いたときの年（3.8）
+    @State private var recapYear: Int?
+    /// 年末のふり返りの入口を閉じた（出し直さない）
+    @State private var recapDismissed = false
     @EnvironmentObject private var plansViewModel: PlansViewModel
 
     /// 既定アルバム（日本全国フォトマップ）は削除できないので選択対象から外す
@@ -36,6 +53,17 @@ struct AlbumHomeView: View {
     /// フォトマップも写真の並びをアルバムに持つようになったので、どのアルバムも同じ数え方
     private var totalPhotoCount: Int {
         albumManager.albums.reduce(0) { $0 + $1.photoFileNames.count }
+    }
+
+    /// 共有している旅行の id（変わったら突き合わせ直す）
+    private var sharedPlanIds: [String] {
+        travelPlanViewModel.travelPlans.filter(\.isShared).compactMap(\.id).sorted()
+    }
+
+    /// アルバムの旅行を共有していれば、その旅行
+    private func sharedPlan(for album: Album) -> TravelPlan? {
+        guard let planId = album.travelPlanId else { return nil }
+        return travelPlanViewModel.travelPlans.first { $0.id == planId && $0.isShared }
     }
 
     var body: some View {
@@ -49,6 +77,19 @@ struct AlbumHomeView: View {
 
                     ScrollView(showsIndicators: false) {
                         VStack(alignment: .leading, spacing: 0) {
+                            // 年末の「◯年の旅をふり返る」（3.8。12月〜1月15日だけ）
+                            if !isSelectionMode, !recapDismissed,
+                               let year = YearRecap.yearToShow(plans: travelPlanViewModel.travelPlans) {
+                                yearRecapBanner(year)
+                                    .padding(.horizontal, 20)
+                                    .padding(.bottom, 18)
+                            }
+                            // 旅の思い出をつくる（3.8。写真コラージュ・ポスター・日記）
+                            if !isSelectionMode {
+                                MemoriesMakerSection(plans: travelPlanViewModel.travelPlans, isCollapsed: $memoriesCollapsed)
+                                    .padding(.top, 4)
+                                    .padding(.bottom, 22)
+                            }
                             // 旅のダイジェスト（選んで消しているあいだは出さない）
                             if !isSelectionMode {
                                 digestSection
@@ -69,6 +110,8 @@ struct AlbumHomeView: View {
                 }
 
                 if !isSelectionMode {
+                    // ＋のメニューを開いているあいだは、うしろを暗くする（押すと閉じる）
+                    FloatingAddMenuBackdrop(isOpen: $addMenuOpen.animation(.easeInOut(duration: 0.2)))
                     VStack {
                         Spacer()
                         HStack {
@@ -90,6 +133,11 @@ struct AlbumHomeView: View {
                     albumManager.setup(userId: userId)
                 }
             }
+            // 共有した旅行のアルバムの写真を、同行者と突き合わせる（3.8）
+            .task(id: sharedPlanIds) {
+                guard let userId = authVM.userId, !sharedPlanIds.isEmpty else { return }
+                await SharedAlbumSync.shared.syncAll(plans: travelPlanViewModel.travelPlans, userId: userId)
+            }
             .navigationBarHidden(true)
         }
         .navigationViewStyle(.stack)
@@ -103,9 +151,38 @@ struct AlbumHomeView: View {
                     }
             }
         }
-        .sheet(item: $digestPlan, onDismiss: { libraryVersion += 1 }) { plan in
+        // ＋のメニューから、旅の思い出（コラージュ・ポスター・日記）を作る。広い画面では全画面
+        .sheet(item: horizontalSizeClass == .regular ? .constant(nil) : $makerKind) { kind in
+            MemoryTripPicker(kind: kind, plans: makerPlans)
+        }
+        .fullScreenCover(item: horizontalSizeClass == .regular ? $makerKind : .constant(nil)) { kind in
+            MemoryTripPicker(kind: kind, plans: makerPlans)
+        }
+        .sheet(isPresented: $settingUpFreeDigest, onDismiss: {
+            // 決める画面が閉じてから開く（続けて別の画面を出すと、出ないことがあるため）
+            if let createdFreeDigest { digestPlan = createdFreeDigest.plan }
+            createdFreeDigest = nil
+        }) {
+            NavigationStack {
+                FreeMemorySetupView(purpose: "旅のダイジェスト") { memory in
+                    freeMemories = FreeMemoryStore.all()
+                    createdFreeDigest = memory
+                    settingUpFreeDigest = false
+                }
+            }
+        }
+        .sheet(item: $digestPlan, onDismiss: {
+            libraryVersion += 1
+            freeMemories = FreeMemoryStore.all()
+        }) { plan in
             // 上の旅行名から、ほかの旅行にも切り替えられる
             TripDigestView(plan: plan, otherPlans: digestCandidates)
+        }
+        .sheet(item: Binding(get: { recapYear.map(RecapYear.init) }, set: { recapYear = $0?.year })) { recap in
+            TripStatsView(initialPeriod: .year(recap.year))
+                .environmentObject(travelPlanViewModel)
+                .environmentObject(plansViewModel)
+                .environmentObject(authVM)
         }
         .sheet(isPresented: $showsStats) {
             TripStatsView()
@@ -125,7 +202,7 @@ struct AlbumHomeView: View {
                 if album.isJapanPhotoMap {
                     JapanPhotoView(albumId: album.id)
                 } else {
-                    AlbumDetailView(album: album)
+                    AlbumDetailView(album: album, sharedPlan: sharedPlan(for: album), userId: authVM.userId)
                 }
             }
             .zoomDestination(id: album.id, in: albumZoom)
@@ -236,18 +313,29 @@ struct AlbumHomeView: View {
     private var digestSection: some View {
         let _ = libraryVersion
         return VStack(alignment: .leading, spacing: 10) {
-            VStack(alignment: .leading, spacing: 2) {
-                sectionTitle("旅のダイジェスト")
-                Text("旅行中に撮った写真と動画を、2秒ずつつないだ動画に")
-                    .font(.caption)
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            // 見出しを押すと、しまう・出す（3.8）
+            Button {
+                withAnimation(.easeInOut(duration: 0.25)) { digestCollapsed.toggle() }
+            } label: {
+                HStack(alignment: .firstTextBaseline) {
+                    VStack(alignment: .leading, spacing: 2) {
+                        sectionTitle("旅のダイジェスト")
+                        if !digestCollapsed {
+                            Text("旅行中に撮った写真と動画を、2秒ずつつないだ動画に")
+                                .font(.caption)
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
+                        }
+                    }
+                    Spacer()
+                    CollapseChevron(isCollapsed: digestCollapsed, color: themeManager.currentTheme.secondaryText)
+                }
+                .contentShape(Rectangle())
             }
+            .buttonStyle(.plain)
+            .accessibilityHint(digestCollapsed ? "押すと出します" : "押すとしまいます")
             .padding(.horizontal, 20)
-            if digestCandidates.isEmpty {
-                Text("旅行が始まると、撮った写真と動画から作れます。")
-                    .font(.footnote)
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-                    .padding(.horizontal, 20)
+            if digestCollapsed {
+                EmptyView()
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 12) {
@@ -256,7 +344,18 @@ struct AlbumHomeView: View {
                                            saved: TripDigestLibrary.entries(planId: plan.id).first,
                                            onOpen: { digestPlan = plan },
                                            onPlay: { entry in playingDigest = entry })
+                                .contextMenu {
+                                    if FreeMemoryStore.isFree(planId: plan.id), let id = plan.id {
+                                        Button(role: .destructive) {
+                                            FreeMemoryStore.delete(id: id)
+                                            withAnimation { freeMemories = FreeMemoryStore.all() }
+                                        } label: {
+                                            Label("削除", systemImage: "trash")
+                                        }
+                                    }
+                                }
                         }
+                        freeDigestCard
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 4)
@@ -281,18 +380,93 @@ struct AlbumHomeView: View {
         .accessibilityLabel("旅の記録")
     }
 
+    /// 年末の「◯年の旅をふり返る」の入口（3.8）。押すと、その年の「記録」が開く（ストーリー用の画像も作れる）
+    private func yearRecapBanner(_ year: Int) -> some View {
+        HStack(spacing: 12) {
+            Button { recapYear = year } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "sparkles")
+                        .font(.title3.weight(.semibold))
+                        .foregroundColor(.white)
+                        .frame(width: 44, height: 44)
+                        .background(Circle().fill(mainColor))
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("\(String(year))年の旅をふり返る")
+                            .font(.headline)
+                            .foregroundColor(accentColor)
+                        Text("行った県・旅の日数を1枚にまとめて、ストーリーに載せられます")
+                            .font(.caption)
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
+                            .fixedSize(horizontal: false, vertical: true)
+                    }
+                    Spacer(minLength: 0)
+                }
+                .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+
+            Button {
+                YearRecap.dismiss(year)
+                withAnimation { recapDismissed = true }
+            } label: {
+                Image(systemName: "xmark")
+                    .font(.caption.weight(.bold))
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+                    .frame(width: 28, height: 28)
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("閉じる")
+        }
+        .padding(14)
+        .background(RoundedRectangle(cornerRadius: AppRadius.large).fill(mainColor.opacity(0.12)))
+    }
+
+    private struct RecapYear: Identifiable {
+        let year: Int
+        var id: Int { year }
+    }
+
     private func sectionTitle(_ title: String) -> some View {
         Text(title)
             .font(.headline)
             .foregroundColor(accentColor)
     }
 
-    /// ダイジェストを作れる旅行（もう始まっている旅行。新しい順）
+    /// ダイジェストを作れる旅行（もう始まっている旅行と、旅行計画なしで作ったもの。新しい順）
     private var digestCandidates: [TravelPlan] {
         let today = Calendar.current.startOfDay(for: Date())
-        return travelPlanViewModel.travelPlans
+        return (travelPlanViewModel.travelPlans
             .filter { Calendar.current.startOfDay(for: $0.startDate) <= today }
+            + freeMemories.map(\.plan))
             .sorted { $0.startDate > $1.startDate }
+    }
+
+    /// 旅行計画なしでダイジェストを作る入口（3.8）。旅行のカードと同じ大きさで、列の最後に置く
+    private var freeDigestCard: some View {
+        Button { settingUpFreeDigest = true } label: {
+            VStack(spacing: 10) {
+                Image(systemName: "plus")
+                    .font(.title2.weight(.semibold))
+                    .foregroundColor(mainColor)
+                    .frame(width: 48, height: 48)
+                    .background(Circle().fill(mainColor.opacity(0.12)))
+                Text("自由に作る")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundColor(accentColor)
+                Text(digestCandidates.isEmpty ? "旅行計画がなくても\n期間か写真を選んで" : "期間か写真を\n選んで作る")
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+            .frame(width: DigestTripCard.size.width, height: DigestTripCard.size.height)
+            .background(
+                RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
+                    .strokeBorder(mainColor.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+            )
+            .contentShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("旅行計画なしでダイジェストを自由に作る")
     }
 
     private func statChip(icon: String, text: String) -> some View {
@@ -446,11 +620,32 @@ struct AlbumHomeView: View {
     }
 
     // MARK: - FAB
+    /// 右下の＋。押すと、作れるもの（コラージュ・ポスター・日記・ダイジェスト・アルバム）のメニューが開く（3.8）
     private var fabButton: some View {
-        Button(action: { showCreateAlbum = true }) {
-            FloatingAddButtonLabel()
+        MemoriesAddMenu(isOpen: $addMenuOpen.animation(.easeInOut(duration: 0.2))) { item in
+            switch item {
+            case .collage: makerKind = .photoDump
+            case .poster: makerKind = .poster
+            case .diary: makerKind = .diary
+            case .digest:
+                // いちばん新しい旅行で開く（上の名前から、ほかの旅行にも切り替えられる）。
+                // 作れる旅行が無ければ、旅行計画なしで作る画面を出す
+                if let latest = digestCandidates.first {
+                    digestPlan = latest
+                } else {
+                    settingUpFreeDigest = true
+                }
+            case .album: showCreateAlbum = true
+            }
         }
-        .accessibilityLabel("アルバムを作成")
+    }
+
+    /// 旅の思い出を作れる旅行（もう始まった旅行。新しい順）
+    private var makerPlans: [TravelPlan] {
+        let today = Calendar.current.startOfDay(for: Date())
+        return travelPlanViewModel.travelPlans
+            .filter { Calendar.current.startOfDay(for: $0.startDate) <= today }
+            .sorted { $0.startDate > $1.startDate }
     }
 }
 
@@ -470,16 +665,28 @@ struct AlbumCard: View {
 
     /// 計算プロパティのままだと参照のたびにディスクから読み直すため、一度だけ読んで保持する
     @State private var recentPhotos: [UIImage] = []
+    /// フォトマップの、写真のある県の代表写真（3.8。表紙の地図に使う）
+    @State private var prefectureCovers: [Prefecture: UIImage] = [:]
 
     private var photoCount: Int {
         album.photoFileNames.count
     }
 
-    /// フォトマップの写真は `JapanPhotos` にあるので、読み出し先だけ分ける
+    /// フォトマップの写真は `JapanPhotos` にあるので、読み出し先だけ分ける。
+    /// フォトマップの表紙は日本地図にするので、県ごとの代表写真を読む（3.8）
     private func loadRecentPhotos() {
-        recentPhotos = album.isJapanPhotoMap
-            ? JapanPhotoManager.shared.recentThumbnails(in: album, limit: 4)
-            : albumManager.recentThumbnails(from: album, limit: 4)
+        if album.isJapanPhotoMap {
+            var covers: [Prefecture: UIImage] = [:]
+            for prefecture in Prefecture.allCases {
+                if let name = PhotoMapFiles.cover(of: prefecture, in: album.photoFileNames),
+                   let image = JapanPhotoManager.shared.thumbnail(name) {
+                    covers[prefecture] = image
+                }
+            }
+            prefectureCovers = covers
+        } else {
+            recentPhotos = albumManager.recentThumbnails(from: album, limit: 4)
+        }
     }
 
     private var resolvedCoverColor: Color {
@@ -588,15 +795,17 @@ struct AlbumCard: View {
         Color.clear
             .aspectRatio(4.0 / 3.0, contentMode: .fit)
             .overlay {
-                if recentPhotos.isEmpty {
+                if album.isJapanPhotoMap {
+                    photoMapPreview
+                } else if recentPhotos.isEmpty {
                     emptyPhotoPreview
-                } else if recentPhotos.count == 1 {
-                    photoFill(recentPhotos[0])
                 } else {
                     mosaicPreview
                 }
             }
-            .overlay(alignment: .bottomLeading) { photoCountBadge }
+            .overlay(alignment: .bottomLeading) {
+                if !album.isJapanPhotoMap { photoCountBadge }
+            }
             .clipped()
     }
 
@@ -619,26 +828,109 @@ struct AlbumCard: View {
         }
     }
 
-    /// 2x2 のモザイク。GeometryReader で幅を測らず、比率だけで組む
+    /// 写真の枚数に合わせて並べる（3.8）。4枚に満たないときに、空いたマスを色の四角で埋めていた。
+    /// 1枚は全面、2枚は左右、3枚は左に大きく1枚と右に2枚、4枚以上は 2x2
+    @ViewBuilder
     private var mosaicPreview: some View {
-        VStack(spacing: 2) {
-            ForEach(0..<2, id: \.self) { row in
+        let photos = recentPhotos
+        switch photos.count {
+        case 1:
+            tile(photos[0])
+        case 2:
+            HStack(spacing: 2) {
+                tile(photos[0])
+                tile(photos[1])
+            }
+        case 3:
+            // 表紙の枠（4:3 で決まっている）の幅を測り、左の1枚を6割にする
+            GeometryReader { geo in
                 HStack(spacing: 2) {
-                    ForEach(0..<2, id: \.self) { column in
-                        let index = row * 2 + column
-                        Group {
-                            if index < recentPhotos.count {
-                                photoFill(recentPhotos[index])
-                            } else {
-                                resolvedCoverColor.opacity(0.25)
-                            }
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
-                        .clipped()
+                    tile(photos[0])
+                        .frame(width: max(geo.size.width - 2, 0) * 0.6)
+                    VStack(spacing: 2) {
+                        tile(photos[1])
+                        tile(photos[2])
                     }
                 }
             }
+        default:
+            VStack(spacing: 2) {
+                HStack(spacing: 2) {
+                    tile(photos[0])
+                    tile(photos[1])
+                }
+                HStack(spacing: 2) {
+                    tile(photos[2])
+                    tile(photos[3])
+                }
+            }
         }
+    }
+
+    /// 写真1枚を、与えられた枠いっぱいに切り抜いて敷く
+    private func tile(_ image: UIImage) -> some View {
+        Color.clear
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay { photoFill(image) }
+            .clipped()
+    }
+
+    // MARK: - フォトマップの表紙（3.8）
+
+    /// 日本地図（写真のある県は写真で、無い県は薄く）と、埋まった県の数
+    private var photoMapPreview: some View {
+        let filled = prefectureCovers.count
+        let total = Prefecture.allCases.count
+        return ZStack {
+            LinearGradient(
+                colors: [resolvedCoverColor.opacity(0.22), resolvedCoverColor.opacity(0.06)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            // 地図は縦に長いので、表紙の幅の6割強を地図に使い、高さいっぱいに描く
+            GeometryReader { geo in
+                HStack(spacing: 0) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Spacer(minLength: 0)
+                        HStack(alignment: .firstTextBaseline, spacing: 2) {
+                            Text("\(filled)")
+                                .font(.system(size: 30, weight: .bold, design: .rounded))
+                                .foregroundColor(resolvedCoverColor)
+                                .monospacedDigit()
+                                .minimumScaleFactor(0.6)
+                            Text("/\(total)")
+                                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                                .foregroundColor(themeManager.currentTheme.secondaryText)
+                        }
+                        .lineLimit(1)
+                        Text("都道府県")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundColor(themeManager.currentTheme.secondaryText)
+                        // 埋まった割合
+                        ZStack(alignment: .leading) {
+                            Capsule().fill(resolvedCoverColor.opacity(0.18))
+                            Capsule().fill(resolvedCoverColor)
+                                .frame(width: geo.size.width * 0.3 * CGFloat(filled) / CGFloat(max(total, 1)))
+                        }
+                        .frame(width: geo.size.width * 0.3, height: 5)
+                        .padding(.top, 4)
+                    }
+                    .padding(.leading, 12)
+                    .padding(.bottom, 12)
+                    .frame(width: geo.size.width * 0.38, height: geo.size.height, alignment: .bottomLeading)
+
+                    // 写真の無い県は文字の色で薄く描く（表紙の色だと、下地に溶けて見えない）
+                    PhotoMapCanvas(covers: prefectureCovers, ink: accentColor, onTap: { _ in })
+                        .allowsHitTesting(false)
+                        .padding(.vertical, 6)
+                        .padding(.trailing, 4)
+                        .frame(width: geo.size.width * 0.62, height: geo.size.height)
+                        .accessibilityHidden(true)
+                }
+            }
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel("日本全国フォトマップ、47都道府県のうち\(filled)")
     }
 
     @ViewBuilder

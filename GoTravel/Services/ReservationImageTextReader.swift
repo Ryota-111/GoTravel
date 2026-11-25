@@ -24,9 +24,8 @@ enum ReservationImageTextReader {
                      languages: [String] = recognitionLanguages) async throws -> String {
         let observations = try await recognize(image, orientation: orientation, languages: languages)
         let text = layout(observations.compactMap { observation in
-            observation.topCandidates(1).first.map {
-                TextBox(text: $0.string, frame: observation.boundingBox)
-            }
+            let candidates = observation.topCandidates(3).map(\.string)
+            return candidates.isEmpty ? nil : TextBox(text: bestCandidate(candidates), frame: observation.boundingBox)
         })
         guard !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { throw ReadError.noText }
         return text
@@ -53,6 +52,30 @@ enum ReservationImageTextReader {
             try handler.perform([request])
             return request.results ?? []
         }.value
+    }
+
+    // MARK: - 候補から選ぶ（3.8）
+
+    /// 見た目の似た文字。写真の文字認識で取り違えやすい
+    private static let lookAlikes: Set<[Character]> = [["O", "0"], ["0", "O"], ["o", "0"], ["0", "o"],
+                                                       ["I", "1"], ["1", "I"], ["l", "1"], ["1", "l"],
+                                                       ["S", "5"], ["5", "S"], ["B", "8"], ["8", "B"]]
+
+    /// Vision の候補（よさそうな順）から使うものを選ぶ。ふつうは1番目。
+    ///
+    /// 2番目以降の候補が、1番目と見た目の似た文字（O/0・I/1・S/5・B/8）だけ違い、
+    /// その違いで便名が読めるようになるときだけ、そちらを使う（「NH8O14」→「NH8014」）。
+    /// 文全体を決まった規則で置き換えると、正しい予約番号（「EEF03D」の O など）を壊すので、しない
+    static func bestCandidate(_ candidates: [String]) -> String {
+        guard let first = candidates.first else { return "" }
+        let firstFlights = ReservationEmailParser.flightNumbers(in: first).count
+        for alternative in candidates.dropFirst() where alternative.count == first.count {
+            let differences = zip(first, alternative).filter { $0 != $1 }
+            guard !differences.isEmpty,
+                  differences.allSatisfy({ lookAlikes.contains([$0.0, $0.1]) }) else { continue }
+            if ReservationEmailParser.flightNumbers(in: alternative).count > firstFlights { return alternative }
+        }
+        return first
     }
 
     // MARK: - 行に並べ直す

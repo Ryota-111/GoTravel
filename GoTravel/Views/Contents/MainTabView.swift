@@ -16,6 +16,8 @@ struct MainTabView: View {
     @State private var showICloudAlert = false
     @State private var hasCheckedICloud = false
     @State private var whatsNew: WhatsNew?
+    /// 全画面の「こんなことができます」（3.8〜）
+    @State private var whatsNewShowcase: WhatsNew?
     /// 共有メニューから送られた予約確認メールや画像（`SharedImportInbox`）
     @State private var sharedImports: SharedImportsPresentation?
     /// 一度見せたもの。「あとで」で閉じたあと、アプリに戻るたびに出し直さない
@@ -26,6 +28,8 @@ struct MainTabView: View {
     @StateObject private var plansViewModel = PlansViewModel()
     @StateObject private var travelPlanViewModel = TravelPlanViewModel()
     @ObservedObject private var icsInbox = ICSImportInbox.shared
+    /// 招待のリンクから開かれたとき（3.8）
+    @ObservedObject private var joinInbox = JoinInviteInbox.shared
     @EnvironmentObject var authVM: AuthViewModel
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.colorScheme) var colorScheme
@@ -62,6 +66,8 @@ struct MainTabView: View {
 
     var body: some View {
         tabs
+        // 思い出・場所保存の＋のメニューを開いているあいだ、下のタブも暗くする（3.8）
+        .overlay { FloatingMenuTabBarDim() }
         .onChange(of: selectedTab) { oldValue, newValue in
             if oldValue != newValue {
                 let impact = UIImpactFeedbackGenerator(style: .light)
@@ -112,7 +118,11 @@ struct MainTabView: View {
             #endif
 
             if canShowWhatsNew, WhatsNewManager.shouldShow {
-                whatsNew = WhatsNew.current
+                if let content = WhatsNew.current, content.showcase {
+                    whatsNewShowcase = content
+                } else {
+                    whatsNew = WhatsNew.current
+                }
                 WhatsNewManager.markAsShown()
             } else {
                 checkSharedImports()
@@ -122,6 +132,12 @@ struct MainTabView: View {
         // TravelPlan は Equatable ではないため配列を直接監視できないので、
         // 起動時・タブ切り替え時・バックグラウンドへ移る時に更新する
         .onAppear { updateWidgetSnapshot() }
+        // 旅のダイジェストのお知らせ（3.8）を、前からある旅行にも入れる（1回だけ）
+        .onChange(of: travelPlanViewModel.travelPlans.count) { _, _ in
+            NotificationService.shared.rescheduleTravelPlansIfNeeded(travelPlanViewModel.travelPlans)
+            // 旅行が終わった次の日なら、評価を頼む（3.8。旅行ごとに1回）
+            ReviewRequestManager.shared.checkDayAfterTrip(plans: travelPlanViewModel.travelPlans)
+        }
         // .ics を「Travory で開く」で受け取ったら、カレンダーのタブで確かめる
         .onChange(of: icsInbox.file?.id) { _, id in
             if id != nil { selectedTab = 1 }
@@ -140,6 +156,8 @@ struct MainTabView: View {
             }
             // 共有メニューから予約を送ったあと、アプリに戻ってきたとき
             if phase == .active { checkSharedImports() }
+            // 旅行が終わった次の日に、アプリを前に出したとき（評価を頼む。旅行ごとに1回）
+            if phase == .active { ReviewRequestManager.shared.checkDayAfterTrip(plans: travelPlanViewModel.travelPlans) }
             // 設定アプリで iCloud を直して戻ってきたとき、帯を消す
             if phase == .active { ICloudSyncMonitor.shared.refresh() }
         }
@@ -157,6 +175,9 @@ struct MainTabView: View {
         .sheet(item: $whatsNew, onDismiss: checkSharedImports) { content in
             WhatsNewView(content: content)
         }
+        .fullScreenCover(item: $whatsNewShowcase, onDismiss: checkSharedImports) { content in
+            WhatsNewShowcaseView(content: content, onTryMemories: { selectedTab = 3 })
+        }
         // 予約の受け取り箱を閉じてから、場所の受け取り箱を見る（シートは1枚ずつ）
         .sheet(item: $sharedImports, onDismiss: checkSharedImports) { presentation in
             SharedImportInboxView(items: presentation.items)
@@ -165,6 +186,12 @@ struct MainTabView: View {
         }
         .sheet(item: $sharedPlaces) { presentation in
             SharedPlaceInboxView(items: presentation.items)
+                .environmentObject(authVM)
+        }
+        // 招待のリンクから開かれたら、コードを入れた参加の画面を出す（3.8）
+        .sheet(item: $joinInbox.pending) { pending in
+            JoinTravelPlanView(initialCode: pending.code)
+                .environmentObject(travelPlanViewModel)
                 .environmentObject(authVM)
         }
     }

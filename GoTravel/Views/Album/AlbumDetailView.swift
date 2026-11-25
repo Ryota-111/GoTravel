@@ -1,9 +1,15 @@
 import SwiftUI
 
 // MARK: - Album Detail View
+/// アルバムの中。思い出タブ（`AlbumHomeView`）と同じ作りにそろえる（3.8）：
+/// 大きな丸い見出し・小さな札・カプセルのボタン、テーマの背景
 struct AlbumDetailView: View {
     let album: Album
+    /// アルバムの旅行を同行者と共有しているとき、その旅行（3.8。写真を見せ合う）
+    var sharedPlan: TravelPlan? = nil
+    var userId: String? = nil
     @ObservedObject private var albumManager = AlbumManager.shared
+    @ObservedObject private var sharing = SharedAlbumSync.shared
     @ObservedObject var themeManager = ThemeManager.shared
     @Environment(\.dismiss) var dismiss
     @Environment(\.colorScheme) var colorScheme
@@ -17,6 +23,10 @@ struct AlbumDetailView: View {
     @State private var isSelectionMode = false
     @State private var selectedPhotos: Set<String> = []
     @State private var showDeleteConfirmation = false
+
+    // 同行者との写真の共有（3.8）
+    @State private var confirmsStartSharing = false
+    @State private var confirmsStopSharing = false
 
     private var currentAlbum: Album? {
         albumManager.albums.first(where: { $0.id == album.id })
@@ -35,90 +45,48 @@ struct AlbumDetailView: View {
         colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1
     }
 
+    private var sharedPlanId: String? { sharedPlan?.id }
+    private var isSharingPhotos: Bool {
+        guard let sharedPlanId else { return false }
+        _ = sharing.settingsVersion
+        return sharing.isUploading(planId: sharedPlanId)
+    }
+
     var body: some View {
-        NavigationView {
-            ZStack {
-                backgroundGradient
+        ZStack {
+            backgroundGradient
 
-                VStack(spacing: 0) {
-                    // 未購入のときだけ出る。写真を入れる場所に置いておく
-                    DeviceOnlyPhotoNote()
-                        .padding(.horizontal, 16)
-                        .padding(.top, 8)
+            VStack(spacing: 0) {
+                headerBar
 
-                    if photos.isEmpty {
+                if photos.isEmpty {
+                    VStack(spacing: 10) {
+                        notes
+                        Spacer(minLength: 0)
                         emptyStateView
-                    } else {
-                        photoGridView
+                        Spacer(minLength: 0)
                     }
-                }
-            }
-            .navigationTitle(navigationTitleText)
-            .navigationBarTitleDisplayMode(isSelectionMode ? .inline : .large)
-            .toolbar {
-                ToolbarItem(placement: .navigationBarLeading) {
-                    if isSelectionMode {
-                        Button("キャンセル") { exitSelectionMode() }
-                            .foregroundColor(albumColor)
-                    } else {
-                        Button("閉じる") { dismiss() }
-                            .foregroundColor(albumColor)
-                    }
-                }
-
-                ToolbarItem(placement: .navigationBarTrailing) {
-                    if isSelectionMode {
-                        Button(selectedPhotos.count == photos.count ? "すべて解除" : "すべて選択") {
-                            toggleSelectAll()
-                        }
-                        .foregroundColor(albumColor)
-                    } else {
-                        HStack(spacing: 14) {
-                            if !photos.isEmpty {
-                                Button("選択") {
-                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                        isSelectionMode = true
-                                    }
-                                }
-                                .foregroundColor(albumColor)
-                            }
-
-                            Button(action: { showAlbumEditor = true }) {
-                                Image(systemName: "slider.horizontal.3")
-                                    .font(.subheadline.weight(.semibold))
-                                    .foregroundColor(albumColor)
-                            }
-                            .accessibilityLabel("アルバムを編集")
-
-                            Button(action: {
-                                showImagePicker = true
-                            }) {
-                                Image(systemName: "plus.circle.fill")
-                                    .font(.title3)
-                                    .foregroundColor(albumColor)
-                            }
-                            .accessibilityLabel("写真を追加")
-                        }
-                    }
-                }
-            }
-            .safeAreaInset(edge: .bottom) {
-                if isSelectionMode {
-                    selectionToolbar
-                }
-            }
-            .onAppear {
-                withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
-                    animatePhotos = true
+                } else {
+                    photoGridView
                 }
             }
         }
-        .navigationViewStyle(.stack)
+        .safeAreaInset(edge: .bottom) {
+            if isSelectionMode {
+                selectionToolbar
+            }
+        }
+        .onAppear {
+            withAnimation(.spring(response: 0.6, dampingFraction: 0.8).delay(0.1)) {
+                animatePhotos = true
+            }
+        }
+        .task { await syncShared() }
         .sheet(isPresented: $showImagePicker) {
             MultiPhotoPicker { images in
                 guard !images.isEmpty else { return }
                 albumManager.addPhotos(images, to: album.id)
-                ReviewRequestManager.shared.record(.photosAdded)
+                Task { await syncShared() }
             }
         }
         .sheet(isPresented: $showAlbumEditor) {
@@ -146,16 +114,195 @@ struct AlbumDetailView: View {
             }
             Button("キャンセル", role: .cancel) {}
         } message: {
-            Text("削除した写真は元に戻せません")
+            Text(sharedPlan == nil
+                 ? "削除した写真は元に戻せません"
+                 : "削除した写真は元に戻せません。自分が共有した写真は、同行者のアルバムからも消えます")
+        }
+        .confirmationDialog("自分の写真を同行者と共有しますか？", isPresented: $confirmsStartSharing,
+                            titleVisibility: .visible) {
+            Button("共有する") { setSharing(true) }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text(photos.isEmpty
+                 ? "これから足す写真が、この旅行の同行者のアルバムにも入ります。共有コードで参加した人なら誰でも見られます。"
+                 : "このアルバムの写真\(photos.count)枚と、これから足す写真が、この旅行の同行者のアルバムにも入ります。共有コードで参加した人なら誰でも見られます。")
+        }
+        .confirmationDialog("写真の共有をやめますか？", isPresented: $confirmsStopSharing, titleVisibility: .visible) {
+            Button("共有をやめる", role: .destructive) { setSharing(false) }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("自分が共有した写真を、同行者のアルバムから消します。この端末のアルバムには残ります。")
         }
     }
 
-    // MARK: - Selection
+    // MARK: - 見出し
 
-    private var navigationTitleText: String {
-        if isSelectionMode { return selectionTitle }
-        return currentAlbum?.title ?? album.title
+    private var headerBar: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            HStack(spacing: 10) {
+                if isSelectionMode {
+                    Button(selectedPhotos.count == photos.count ? "すべて解除" : "すべて選択") {
+                        toggleSelectAll()
+                    }
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundColor(albumColor)
+                } else {
+                    Button { dismiss() } label: {
+                        Image(systemName: "chevron.down")
+                            .font(.subheadline.weight(.bold))
+                            .foregroundColor(albumColor)
+                            .frame(width: 36, height: 36)
+                            .background(Circle().fill(albumColor.opacity(0.12)))
+                    }
+                    .accessibilityLabel("閉じる")
+                }
+
+                Spacer(minLength: 0)
+
+                if isSelectionMode {
+                    Button("キャンセル") { exitSelectionMode() }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(albumColor)
+                } else {
+                    if !photos.isEmpty {
+                        Button("選択") {
+                            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                isSelectionMode = true
+                            }
+                        }
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundColor(albumColor)
+                    }
+                    moreMenu
+                    addButton
+                }
+            }
+            .buttonStyle(.plain)
+
+            Text(isSelectionMode ? selectionTitle : (currentAlbum?.title ?? album.title))
+                .font(.system(.largeTitle, design: .rounded).weight(.bold))
+                .foregroundColor(textColor)
+                .lineLimit(2)
+                .minimumScaleFactor(0.7)
+
+            if !isSelectionMode {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 8) {
+                        chip(icon: "photo.on.rectangle.angled", text: "\(photos.count)枚")
+                        chip(icon: "calendar", text: "\(formatDate(currentAlbum?.updatedAt ?? album.updatedAt)) 更新")
+                        sharingChip
+                    }
+                }
+            }
+        }
+        .padding(.horizontal, 20)
+        .padding(.top, 12)
+        .padding(.bottom, 12)
     }
+
+    /// 写真を足す。思い出タブの「記録」と同じカプセル
+    private var addButton: some View {
+        Button { showImagePicker = true } label: {
+            Label("追加", systemImage: "plus")
+                .font(.subheadline.weight(.bold))
+                .foregroundColor(.white)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 9)
+                .background(Capsule().fill(albumColor))
+        }
+        .accessibilityLabel("写真を追加")
+    }
+
+    /// アルバムの編集と、同行者との共有の切り替え
+    private var moreMenu: some View {
+        Menu {
+            Button { showAlbumEditor = true } label: {
+                Label("アルバムを編集", systemImage: "slider.horizontal.3")
+            }
+            if sharedPlan != nil {
+                if isSharingPhotos {
+                    Button(role: .destructive) { confirmsStopSharing = true } label: {
+                        Label("写真の共有をやめる", systemImage: "person.2.slash")
+                    }
+                } else {
+                    Button { confirmsStartSharing = true } label: {
+                        Label("同行者と写真を共有", systemImage: "person.2")
+                    }
+                }
+            }
+        } label: {
+            Image(systemName: "ellipsis")
+                .font(.subheadline.weight(.bold))
+                .foregroundColor(albumColor)
+                .frame(width: 36, height: 36)
+                .background(Circle().fill(albumColor.opacity(0.12)))
+        }
+        .accessibilityLabel("その他")
+    }
+
+    /// 共有の様子。共有しているとき・やり取りしているとき・失敗したときだけ出す
+    @ViewBuilder
+    private var sharingChip: some View {
+        if let sharedPlan, let sharedPlanId {
+            if sharing.syncingPlanIds.contains(sharedPlanId) {
+                HStack(spacing: 5) {
+                    ProgressView().controlSize(.mini)
+                    Text("同行者とやり取り中").font(.caption.weight(.semibold))
+                }
+                .foregroundColor(albumColor)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 6)
+                .background(albumColor.opacity(0.12), in: Capsule())
+            } else if sharing.failedPlanIds.contains(sharedPlanId), let userId {
+                Button {
+                    Task { await sharing.sync(plan: sharedPlan, userId: userId) }
+                } label: {
+                    chip(icon: "arrow.clockwise", text: "やり取りできませんでした・もう一度",
+                         color: themeManager.currentTheme.error)
+                }
+                .buttonStyle(.plain)
+            } else if isSharingPhotos {
+                chip(icon: "person.2.fill", text: "同行者と共有中")
+            }
+        }
+    }
+
+    private func chip(icon: String, text: String, color: Color? = nil) -> some View {
+        let tint = color ?? albumColor
+        return HStack(spacing: 5) {
+            Image(systemName: icon)
+                .font(.caption2.weight(.semibold))
+            Text(text)
+                .font(.caption.weight(.semibold))
+                .lineLimit(1)
+        }
+        .foregroundColor(tint)
+        .padding(.horizontal, 12)
+        .padding(.vertical, 6)
+        .background(tint.opacity(0.12), in: Capsule())
+    }
+
+    /// 写真の上に出す案内（端末の中だけに保存される・同行者と見せ合える）
+    @ViewBuilder
+    private var notes: some View {
+        VStack(spacing: 8) {
+            // 未購入のときだけ出る。写真を入れる場所に置いておく
+            DeviceOnlyPhotoNote()
+            if let sharedPlanId, !sharing.isBannerDismissed(planId: sharedPlanId) {
+                SharedAlbumBanner(tint: albumColor,
+                                  onShare: { confirmsStartSharing = true },
+                                  onDismiss: {
+                                      withAnimation(.easeInOut(duration: 0.2)) {
+                                          sharing.dismissBanner(planId: sharedPlanId)
+                                      }
+                                  })
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+            }
+        }
+        .padding(.horizontal, 16)
+    }
+
+    // MARK: - Selection
 
     private var selectionTitle: String {
         selectedPhotos.isEmpty ? "写真を選択" : "\(selectedPhotos.count)枚を選択中"
@@ -220,125 +367,123 @@ struct AlbumDetailView: View {
         albumManager.removePhotos(fileNames: [fileName], from: album.id)
     }
 
-    // MARK: - Background
-    private var backgroundGradient: some View {
-        let base: Color = colorScheme == .dark
-            ? themeManager.currentTheme.backgroundDark
-            : themeManager.currentTheme.backgroundLight
+    // MARK: - 共有（3.8）
 
-        return LinearGradient(
-            colors: [albumColor.opacity(colorScheme == .dark ? 0.35 : 0.20), base],
-            startPoint: .top,
-            endPoint: .bottom
-        )
+    /// 共有した旅行のアルバムなら、同行者と写真を突き合わせる
+    private func syncShared() async {
+        guard let sharedPlan, let userId else { return }
+        await SharedAlbumSync.shared.sync(plan: sharedPlan, userId: userId)
+    }
+
+    private func setSharing(_ enabled: Bool) {
+        guard let sharedPlan, let userId else { return }
+        Task { await sharing.setUploading(enabled, plan: sharedPlan, userId: userId) }
+    }
+
+    // MARK: - Background
+
+    /// 思い出タブと同じテーマの背景に、アルバムの色をうっすら重ねる
+    private var backgroundGradient: some View {
+        ZStack {
+            LinearGradient(
+                colors: colorScheme == .dark
+                    ? [themeManager.currentTheme.gradientDark, themeManager.currentTheme.dark]
+                    : [themeManager.currentTheme.gradientLight, themeManager.currentTheme.light],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+            LinearGradient(
+                colors: [albumColor.opacity(colorScheme == .dark ? 0.22 : 0.12), .clear],
+                startPoint: .top,
+                endPoint: .center
+            )
+        }
         .ignoresSafeArea()
     }
 
     // MARK: - Empty State View
     private var emptyStateView: some View {
-        VStack(spacing: 15) {
+        VStack(spacing: 14) {
             Image(systemName: currentAlbum?.icon ?? album.icon)
-                .font(.system(size: 80))
-                .foregroundColor(albumColor.opacity(0.5))
+                .font(.system(size: 34, weight: .semibold))
+                .foregroundColor(albumColor)
+                .frame(width: 84, height: 84)
+                .background(Circle().fill(albumColor.opacity(0.12)))
 
             Text("写真がありません")
-                .font(.title2.bold())
+                .font(.title3.weight(.bold))
                 .foregroundColor(textColor)
 
-            Text("＋ボタンから写真を追加しましょう")
+            Text(sharedPlan == nil
+                 ? "右上の「追加」から写真を入れましょう"
+                 : "右上の「追加」から写真を入れましょう。同行者が共有した写真もここに入ります")
                 .font(.subheadline)
                 .foregroundColor(themeManager.currentTheme.secondaryText)
                 .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
 
-            Button(action: {
+            Button {
                 showImagePicker = true
-            }) {
-                Label("写真を追加", systemImage: "plus.circle.fill")
+            } label: {
+                Label("写真を追加", systemImage: "plus")
                     .font(.headline)
                     .foregroundColor(.white)
-                    .padding(.horizontal, 30)
-                    .padding(.vertical, 15)
-                    .background(
-                        LinearGradient(
-                            colors: [albumColor, albumColor.opacity(0.7)],
-                            startPoint: .leading,
-                            endPoint: .trailing
-                        )
-                    )
-                    .cornerRadius(AppRadius.large)
-                    .shadow(color: albumColor.opacity(0.5), radius: 10, x: 0, y: 5)
+                    .padding(.horizontal, 28)
+                    .padding(.vertical, 13)
+                    .background(Capsule().fill(albumColor))
             }
-            .buttonStyle(PlainButtonStyle())
-            .padding(.top, 10)
+            .buttonStyle(.plain)
+            .padding(.top, 4)
         }
+        .padding(.bottom, 60)
     }
 
     // MARK: - Photo Grid View
     private var photoGridView: some View {
         ScrollView(showsIndicators: false) {
-            VStack(spacing: 20) {
-                albumStatsSection
+            VStack(spacing: 12) {
+                notes
 
-                // 固定サイズだと画面幅によって隙間ができるため、正方形の可変セルにする
-                LazyVGrid(columns: [
-                    GridItem(.flexible(), spacing: 8),
-                    GridItem(.flexible(), spacing: 8),
-                    GridItem(.flexible(), spacing: 8)
-                ], spacing: 8) {
-                    ForEach(Array(photos.enumerated()), id: \.element) { index, fileName in
-                        PhotoThumbnail(
-                            fileName: fileName,
-                            albumColor: albumColor,
-                            isSelectionMode: isSelectionMode,
-                            isSelected: selectedPhotos.contains(fileName),
-                            onTap: {
-                                if isSelectionMode {
-                                    toggleSelection(fileName)
-                                } else {
-                                    viewerIndex = index
+                // 写真アプリのように隙間を細くして、写真を大きく見せる
+                IsWideLayoutReader { isWide in
+                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 4), count: isWide ? 5 : 3),
+                              spacing: 4) {
+                        ForEach(Array(photos.enumerated()), id: \.element) { index, fileName in
+                            PhotoThumbnail(
+                                fileName: fileName,
+                                albumColor: albumColor,
+                                isSelectionMode: isSelectionMode,
+                                isSelected: selectedPhotos.contains(fileName),
+                                onTap: {
+                                    if isSelectionMode {
+                                        toggleSelection(fileName)
+                                    } else {
+                                        viewerIndex = index
+                                    }
+                                },
+                                onDelete: { deletePhoto(fileName) },
+                                onStartSelection: {
+                                    withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                        isSelectionMode = true
+                                        selectedPhotos = [fileName]
+                                    }
                                 }
-                            },
-                            onDelete: { deletePhoto(fileName) },
-                            onStartSelection: {
-                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
-                                    isSelectionMode = true
-                                    selectedPhotos = [fileName]
-                                }
-                            }
-                        )
-                        .opacity(animatePhotos ? 1 : 0)
-                        .scaleEffect(animatePhotos ? 1 : 0.8)
-                        .animation(
-                            .spring(response: 0.6, dampingFraction: 0.8)
-                                .delay(min(Double(index) * 0.03, 0.4)),
-                            value: animatePhotos
-                        )
+                            )
+                            .opacity(animatePhotos ? 1 : 0)
+                            .scaleEffect(animatePhotos ? 1 : 0.94)
+                            .animation(
+                                .spring(response: 0.5, dampingFraction: 0.85)
+                                    .delay(min(Double(index) * 0.02, 0.3)),
+                                value: animatePhotos
+                            )
+                        }
                     }
+                    .padding(.horizontal, 12)
                 }
-                .padding(.horizontal)
             }
-            .padding(.vertical)
+            .padding(.bottom, 24)
         }
-    }
-
-    // MARK: - Album Stats Section
-    private var albumStatsSection: some View {
-        HStack(spacing: 30) {
-            StatCard(
-                icon: "photo.on.rectangle.angled",
-                title: "写真",
-                value: "\(photos.count)",
-                color: albumColor
-            )
-
-            StatCard(
-                icon: "calendar",
-                title: "更新日",
-                value: formatDate(currentAlbum?.updatedAt ?? Date()),
-                color: albumColor
-            )
-        }
-        .padding(.horizontal)
+        .refreshable { await syncShared() }
     }
 
     private func formatDate(_ date: Date) -> String {
@@ -383,15 +528,14 @@ struct PhotoThumbnail: View {
                             )
                     }
                 }
-                .clipShape(RoundedRectangle(cornerRadius: AppRadius.medium))
+                .clipShape(RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous))
                 .overlay(
-                    RoundedRectangle(cornerRadius: AppRadius.medium)
-                        .stroke(isSelected ? albumColor : albumColor.opacity(0.3), lineWidth: isSelected ? 3 : 1)
+                    RoundedRectangle(cornerRadius: AppRadius.small, style: .continuous)
+                        .stroke(albumColor, lineWidth: isSelected ? 3 : 0)
                 )
                 // 選択中は少し縮めて、選ばれていることが一目で分かるようにする
                 .scaleEffect(isSelected ? 0.92 : 1.0)
                 .animation(.spring(response: 0.25, dampingFraction: 0.7), value: isSelected)
-                .shadow(color: .black.opacity(0.2), radius: 5, x: 0, y: 2)
                 .contentShape(Rectangle())
                 .onTapGesture { onTap() }
                 .contextMenu {
@@ -441,47 +585,6 @@ struct PhotoThumbnail: View {
 struct PhotoViewerTarget: Identifiable {
     let index: Int
     var id: Int { index }
-}
-
-// MARK: - Stat Card
-struct StatCard: View {
-    let icon: String
-    let title: String
-    let value: String
-    let color: Color
-    @Environment(\.colorScheme) var colorScheme
-    @ObservedObject var themeManager = ThemeManager.shared
-
-    var body: some View {
-        VStack(spacing: 8) {
-            HStack(spacing: 6) {
-                Image(systemName: icon)
-                    .font(.caption)
-                    .foregroundColor(color)
-
-                Text(title)
-                    .font(.caption)
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-            }
-
-            Text(value)
-                .font(.title3.bold())
-                // 白固定だとライトモードで背景に溶けるためテーマの文字色を使う
-                .foregroundColor(colorScheme == .dark ? themeManager.currentTheme.accent2 : themeManager.currentTheme.accent1)
-        }
-        .frame(maxWidth: .infinity)
-        .padding()
-        .background(
-            RoundedRectangle(cornerRadius: AppRadius.large)
-                .fill(colorScheme == .dark
-                      ? themeManager.currentTheme.secondaryBackgroundDark
-                      : themeManager.currentTheme.backgroundLight)
-        )
-        .overlay(
-            RoundedRectangle(cornerRadius: AppRadius.large)
-                .stroke(color.opacity(0.3), lineWidth: 1)
-        )
-    }
 }
 
 // MARK: - Photo Viewer (スワイプで前後の写真へ移動できる)

@@ -427,7 +427,7 @@ extension ReservationItinerarySyncTests {
         return item
     }
 
-    @Test("移動に予約番号を入れると予約として残り、その予定が出発になって到着が足される（同じものを2つ作らない）")
+    @Test("移動に予約番号を入れると予約として残り、行程では移動の1件のまま（同じものを2つ作らない。3.8 から）")
     func moveBecomesReservation() throws {
         var trip = plan()
         trip.daySchedules[0].scheduleItems = [busMove()]
@@ -446,14 +446,16 @@ extension ReservationItinerarySyncTests {
         #expect(reservation.note == "前の方の席がいい")
 
         let items = trip.scheduleItems(forReservation: id)
-        #expect(items.count == 2)
+        #expect(reservation.itineraryAsMove == true)
+        #expect(items.count == 1)
         #expect(items[0].id == "m")
-        #expect(items.map(\.title) == ["京都駅 出発", "清水道 到着"])
-        #expect(items.map(\.location) == ["京都駅", "清水道"])
-        #expect(items[0].endTime == nil)
+        #expect(items[0].isMove)
+        #expect(items[0].title == "京都駅 → 清水道")
+        #expect(items[0].location == "京都駅")
+        #expect(items[0].endTime == date(6, 9, 40))
         #expect(items[0].notes == "予約番号 B-778\n前の方の席がいい")
-        #expect(items.map(\.cost) == [230, nil])
-        #expect(trip.daySchedules.flatMap(\.scheduleItems).count == 2)
+        #expect(items[0].cost == 230)
+        #expect(trip.daySchedules.flatMap(\.scheduleItems).count == 1)
     }
 
     @Test("自分で名前を付けた移動は、予約にしても出発の名前が残る")
@@ -538,5 +540,40 @@ extension ReservationItinerarySyncTests {
         #expect(items.map(\.reservationPart) == ["departure", "arrival"])
         #expect(items[0].id == "m")
         #expect(items[0].endTime == nil)
+    }
+
+    @Test("乗り物の予約を移動の1件で出せる。2件から切り替えても、日程タブで入れたメモは残る（3.8、ご要望から）")
+    func trainAsSingleMove() throws {
+        var trip = plan()
+        var train = Reservation(kind: .train, title: "のぞみ", date: date(6, 9), transportNumber: "のぞみ23号",
+                                departurePlace: "東京", arrivalPlace: "新大阪", arrivalDate: date(6, 11, 30),
+                                timeZoneIdentifier: tokyo.identifier, arrivalTimeZoneIdentifier: tokyo.identifier,
+                                cost: 14_720)
+        trip.reservations = [train]
+        trip.syncScheduleItems(for: train, isOn: true)
+        #expect(trip.scheduleItems(forReservation: train.id).count == 2)
+        let departureId = try #require(trip.scheduleItems(forReservation: train.id).first { $0.reservationPart == "departure" }?.id)
+        editItem(in: &trip, id: departureId) { $0.notes = "グリーン車" }
+
+        let before = train
+        train.itineraryAsMove = true
+        trip.reservations = [train]
+        trip.syncScheduleItems(for: train, previous: before, isOn: true)
+
+        let items = trip.scheduleItems(forReservation: train.id)
+        #expect(items.count == 1)
+        let move = try #require(items.first)
+        #expect(move.id == departureId)
+        #expect(move.reservationPart == ReservationPart.move.rawValue)
+        #expect(move.isMove)
+        #expect(move.title == "東京 → 新大阪")
+        #expect(move.endTime == date(6, 11, 30))
+        #expect(move.move?.line == "のぞみ23号")
+        #expect(move.cost == 14_720)
+        #expect(move.notes == "グリーン車")
+
+        // 保存しても選んだ出し方が残る
+        let decoded = try JSONDecoder().decode(Reservation.self, from: JSONEncoder().encode(train))
+        #expect(decoded.itineraryAsMove == true)
     }
 }

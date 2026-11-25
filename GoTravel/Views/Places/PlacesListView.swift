@@ -37,6 +37,7 @@ struct PlacesListView: View {
     @State private var screenshotItems: [PhotosPickerItem] = []
     @State private var importPresentation: PlaceImportPresentation?
     @State private var showsNothingToPaste = false
+    @State private var addMenuOpen = false
 
     /// 地図の長押しで場所を追加する導線。マップ画面と同じ処理を使う
     @StateObject private var placePicker = MapPlacePicker()
@@ -111,6 +112,10 @@ struct PlacesListView: View {
                 }
             }
             // 地図の情報パネルと重なるときだけ引っ込める
+            .overlay {
+                // ＋のメニュー（3.8）。開いているあいだは後ろを暗くする
+                FloatingAddMenuBackdrop(isOpen: $addMenuOpen.animation(.easeInOut(duration: 0.2)))
+            }
             .overlay(alignment: .bottomTrailing) {
                 if !(showMap && selectedPlace != nil) {
                     addPlaceFloatingButton
@@ -170,29 +175,29 @@ struct PlacesListView: View {
     }
 
     /// 追加ボタン。
-    /// リストの末尾に置くと件数が増えるほど遠ざかるため、内容に左右されない右下に浮かせる
+    /// リストの末尾に置くと件数が増えるほど遠ざかるため、内容に左右されない右下に浮かせる。
+    /// 地図で探すだけでなく、見つけた場所をそのまま入れられる（3.5）。3.8 から思い出の＋と同じ開くメニューに
     private var addPlaceFloatingButton: some View {
-        // 地図で探すだけでなく、見つけた場所をそのまま入れられるようにする（3.5）
-        Menu {
-            Button { showsMapSearch = true } label: {
-                Label("地図で探す", systemImage: "map")
-            }
-            Button { showsScreenshotPicker = true } label: {
-                Label("スクリーンショットから", systemImage: "camera.viewfinder")
-            }
-            Button(action: pasteLink) {
-                Label("コピーしたリンクから", systemImage: "doc.on.clipboard")
-            }
-        } label: {
-            FloatingAddButtonLabel()
-        }
+        FloatingAddMenu(
+            isOpen: $addMenuOpen.animation(.easeInOut(duration: 0.2)),
+            entries: [
+                .init(id: "link", english: "from a link", title: "コピーしたリンクから",
+                      icon: "doc.on.clipboard", action: pasteLink),
+                .init(id: "screenshot", english: "from screenshots", title: "スクリーンショットから",
+                      icon: "camera.viewfinder") { showsScreenshotPicker = true },
+                // いちばん使うものを＋のすぐ上に
+                .init(id: "map", english: "search the map", title: "地図で探す",
+                      icon: "map") { showsMapSearch = true },
+            ],
+            buttonLabel: "場所を追加",
+            accessibilityHint: "地図・スクリーンショット・コピーしたリンクから選べます",
+            identifier: "placesAddButton")
         .background(
             NavigationLink(destination: MapHomeView(), isActive: $showsMapSearch) { EmptyView() }
                 .hidden()
         )
         .padding(.trailing, FloatingAddButtonLabel.margin)
         .padding(.bottom, FloatingAddButtonLabel.margin)
-        .accessibilityLabel(Text("場所を追加"))
     }
 
     // MARK: - View Components

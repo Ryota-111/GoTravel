@@ -38,6 +38,8 @@ struct EditScheduleItemView: View {
     @State private var linkURL: String
     @State private var showDeleteConfirmation = false
     /// 「移動」の予定か（3.4）
+    /// タイトルを一度でも書き換えたか（空の赤い枠は、書き換えてから出す）
+    @State private var titleTouched = false
     @State private var isMove: Bool
     @State private var moveInput: MoveInput
     /// 時間未定か（3.4）と、未定のときにすぐ前に来る予定
@@ -259,12 +261,14 @@ struct EditScheduleItemView: View {
                     .overlay(
                         RoundedRectangle(cornerRadius: AppRadius.medium)
                             .stroke(
-                                title.isEmpty && !isMove
+                                titleTouched && title.isEmpty && !isMove
                                     ? themeManager.currentTheme.error.opacity(0.4)
                                     : travelColor.opacity(0.3),
                                 lineWidth: 1.5
                             )
                     )
+                    // 開いたときから赤くすると、間違えたように見える。一度入れてから消したときだけ赤くする（3.8）
+                    .onChange(of: title) { _, _ in titleTouched = true }
             }
         }
     }

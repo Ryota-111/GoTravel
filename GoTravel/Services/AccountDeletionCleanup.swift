@@ -12,6 +12,7 @@ import WidgetKit
 /// - **パブリックDBの共有レコード。** 共有した旅行計画・カテゴリは自動同期の外にあるので、
 ///   退会しても共有コードで読める状態のまま残る（ウェブで見るページも開ける）。
 ///   参加していた計画には、メンバーとして名前が残る
+/// - 共有した旅行のアルバムに載せた写真（3.8。パブリックDBの `SharedTripPhoto`）
 /// - 端末の中の写真（旅行計画のヘッダー写真・保存した場所の写真・予定の写真）
 /// - 予約済みの通知。消した旅行の「明日です」が鳴る
 /// - ウィジェットとライブアクティビティ。消した旅行が出続ける
@@ -185,9 +186,13 @@ enum AccountDeletionCleanup {
         remaining.joinedCategoryIds = []
         var countsAsAttempt = false
 
+        // 共有した旅行のアルバムに載せた自分の写真（3.8）。片付けきれなくても、退会そのものは止めない
+        try? await cloud.deleteSharedAlbumPhotos(addedBy: userId)
+
         for planId in records.ownedTravelPlanIds {
             do {
                 try await cloud.deleteSharedTravelPlan(planId: planId)
+                try? await cloud.deleteAllSharedAlbumPhotos(planId: planId)
             } catch {
                 remaining.ownedTravelPlanIds.append(planId)
                 if !isTemporary(error) { countsAsAttempt = true }

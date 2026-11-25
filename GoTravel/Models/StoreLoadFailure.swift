@@ -45,6 +45,15 @@ struct StoreLoadFailure: Equatable {
         return availableCapacity < 200 * 1_000_000
     }
 
+    /// 端末のロックで読めなかったか（SQLite の 23）。
+    ///
+    /// 再起動したあと一度もロックを解いていないうちに、アプリが裏で起こされたとき（iCloud の知らせなど）に起きる。
+    /// データの入れ物はロックを解くまで読めない決まりなので、壊れたわけではない。ロックが解けたら開き直せる。
+    /// 3.7 で届いた「データを開けなかった」の報告はほとんどこれだった（3.8）
+    var isDeviceLocked: Bool {
+        underlying.contains("\(NSSQLiteErrorDomain) 23")
+    }
+
     /// 画面に出す短い番号（問い合わせのときに伝えてもらう）
     var shortCode: String {
         ([ "\(domain) \(code)" ] + underlying).joined(separator: " / ")

@@ -49,10 +49,13 @@ struct ShareTravelPlanView: View {
 
     /// 招待メッセージ（共有シートで送る本文）。ウェブで見られるなら、そのリンクも添える
     private var inviteMessage: String {
-        var message = """
-        「\(currentPlan.title)」の旅行計画に招待します！
-        Travoryアプリの「共有に参加」から、この共有コードを入力してください。
-
+        var message = "「\(currentPlan.title)」の旅行計画に招待します！\n"
+        // 招待のリンク（3.8）。Travory が無い人は App Store へ、ある人はコードが入った参加の画面へ
+        if let join = JoinInvite.url(code: shareCode) {
+            message += "このリンクから参加できます（Travory を持っていなければ、入れ方も出ます）：\n\(join.absoluteString)\n\n"
+        }
+        message += """
+        開かないときは、Travoryアプリの「共有に参加」から、この共有コードを入力してください。
         共有コード: \(shareCode)
         """
         if let url = webPageURL {
@@ -593,8 +596,22 @@ struct ShareTravelPlanView: View {
             } catch {
                 publishErrorMessage = Self.publishErrorText(for: error)
                 showPublishError = true
+                isPublishing = false
+                return
             }
             isPublishing = false
+            // 共有したら、ウェブで見る設定もはじめからオンにする（3.8）。
+            // 招待のメッセージにウェブのリンクが入り、アプリの無い同行者（Android など）もすぐ見られる。
+            // 失敗しても共有はできているので、オフのまま（あとからスイッチでオンにできる）
+            if canChangeWebPage, !webPageEnabled, let planId = currentPlan.id {
+                webPageGeneration += 1
+                isUpdatingWebPage = true
+                if let token = try? await CloudKitService.shared.setSharedWebPageEnabled(true, planId: planId) {
+                    webToken = token
+                    SharedWebPage.cache(token: token, planId: planId)
+                }
+                isUpdatingWebPage = false
+            }
         }
     }
 

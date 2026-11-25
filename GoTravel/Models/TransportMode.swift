@@ -68,13 +68,34 @@ extension ScheduleItem {
     /// 着いてから次の予定までの時間が電車の時間として出ていた（ご報告から）
     var timelineTransportMode: TransportMode? {
         if isSingleMove, let move { return move.transportMode }
-        return transportToNextMode
+        if let chosen = transportToNextMode { return chosen }
+        // 乗り物の予約の「出発」の予定（出発と到着の2件で出したもの）は、到着までその乗り物に乗っているので、
+        // 選んでいなくても線をその乗り物にする（3.8、ご要望から）
+        if isDepartureLeg, let move { return move.transportMode }
+        return nil
+    }
+
+    /// 乗り物の予約から作った「出発」の予定か
+    var isDepartureLeg: Bool {
+        move != nil && reservationPart == ReservationPart.departure.rawValue
+    }
+
+    /// 時間軸の線の乗り物が予定そのものから決まっていて、「外す」が効かないか
+    /// （「移動」の予定と、乗り物を選んでいない「出発」の予定）
+    var hasFixedTimelineTransport: Bool {
+        isSingleMove || (isDepartureLeg && transportToNextMode == nil)
     }
 
     /// 線に添える時間。「移動」の予定は乗っている時間（出発 → 到着）、
     /// それ以外は終わりの時刻があるときだけ、終わり〜次の始まり（滞在の時間が混ざるため）。
     /// 時間未定の予定（3.4）が絡む区間は、時刻が並ぶ位置でしかないので出さない
     func timelineTransportDuration(to next: ScheduleItem?) -> TimeInterval? {
+        // 乗り物の予約の出発から到着までは、乗っている時間（3.8）
+        if isDepartureLeg, let next, let reservationId, next.reservationId == reservationId,
+           next.reservationPart == ReservationPart.arrival.rawValue {
+            let ride = next.time.timeIntervalSince(time)
+            return ride > 0 ? ride : nil
+        }
         guard let next, let endTime, !hasUndecidedTime else { return nil }
         if isSingleMove { return endTime.timeIntervalSince(time) }
         guard !next.hasUndecidedTime else { return nil }

@@ -26,6 +26,8 @@ struct ReservationDraft: Equatable {
     var guessedYear = false
     /// 支払った金額（円）。1通に複数の予約があるときは、1件目にだけ入れる（合計なので）
     var cost: Double?
+    /// 座席（「23A」「5号車6番E席」。3.8）。飛行機・電車・バス・船だけ
+    var seat: String?
 }
 
 // MARK: - 読み取り
@@ -47,11 +49,10 @@ enum ReservationEmailParser {
                       referenceDate: Date = Date()) -> [ReservationDraft] {
         let text = tableToLabelValues(normalized(rawText))
         let kind = chosenKind ?? detectKind(text)
-        // 受付・支払いの日時や、キャンセル・有効の期限は、予約の日時として使わない
-        let allEvents = dateTimeEvents(in: text, referenceDate: referenceDate)
-        let reservationEvents = allEvents.filter { !$0.isAdministrative }
-        let events = reservationEvents.isEmpty ? allEvents : reservationEvents
-        let confirmation = confirmationNumber(in: text)
+        // 受付・支払いの日時や、キャンセル・有効の期限は、予約の日時として使わない。
+        // 3.7 までは、予約の日時が1つも無いと管理用の日時に戻って使っていた。誤った日時を入れるより空のほうがよい（3.8）
+        let events = dateTimeEvents(in: text, referenceDate: referenceDate).filter { !$0.isAdministrative }
+        let confirmation = confirmationNumber(in: text, kind: kind)
 
         var drafts: [ReservationDraft]
         switch kind {
@@ -59,9 +60,14 @@ enum ReservationEmailParser {
             drafts = flightDrafts(in: text, events: events)
         case .train:
             drafts = trainDrafts(in: text, events: events)
+        case .bus, .ferry:
+            // 便名の決まった書き方が無いので、日付・時刻・発着地で読む（3.8）
+            drafts = [routeDraftWithoutNumber(kind: kind, in: text, events: events)]
         case .hotel:
             drafts = [periodDraft(kind: .hotel, in: text, events: events,
-                                  startWords: ["チェックイン", "宿泊日", "到着日", "check-in", "check in", "arrival", "arrive"],
+                                  startWords: ["チェックイン", "宿泊日", "到着日", "check-in", "check in", "arrival", "arrive",
+                                               // 「到着予定時刻：18:00」。チェックインの時刻が無い宿の目安（3.8）
+                                               "到着予定時刻", "到着予定"],
                                   endWords: ["チェックアウト", "出発日", "check-out", "check out", "departure", "depart"])]
         case .parking:
             drafts = [periodDraft(kind: .parking, in: text, events: events,
@@ -87,6 +93,15 @@ enum ReservationEmailParser {
             drafts[index].confirmationNumber = confirmation
         }
         drafts[0].cost = paidAmount(in: text)
+        // 座席（3.8）。便・列車の数と同じだけ見つかれば順に、1件だけなら1つ目を入れる
+        if kind.usesRoute {
+            let found = seats(in: text)
+            if found.count == drafts.count {
+                for index in drafts.indices { drafts[index].seat = found[index] }
+            } else if drafts.count == 1, let first = found.first {
+                drafts[0].seat = first
+            }
+        }
         return drafts
     }
 
@@ -97,12 +112,18 @@ enum ReservationEmailParser {
     /// 合計が書いていない航空券のために、運賃や領収額も最後に探す
     private static let amountLabels = ["割引後料金合計", "割引後合計", "割引後の合計", "お支払い金額", "お支払金額", "お支払額",
                                        "支払い金額", "支払金額", "ご請求額", "お支払い総額", "支払総額", "合計金額", "料金合計",
-                                       "総額", "合計", "total", "領収額", "発売額", "運賃額", "航空券代金", "運賃"]
+                                       "総額", "合計", "total", "領収額", "発売額", "運賃額", "航空券代金",
+                                       // カーシェア（Times CAR）の「課金予定料金」（3.8）
+                                       "課金予定料金", "利用予定料金", "運賃",
+                                       // 宿の代金（合計が無いとき。3.8）
+                                       "宿泊代金", "宿泊料金"]
 
     /// 支払った金額（円）。ラベルの後ろ（改行1つまで）にある最初の円の金額を使う。
     /// 小計や1枚あたりの値段を拾わないよう、ラベルの無い金額は使わない。
     /// 円以外（ドル・ユーロ）は、予算が円なので読まない
     static func paidAmount(in text: String) -> Double? {
+        // 「【合　計】」のように、字のあいだに空白を入れて幅をそろえたラベルも読む（3.8。アパホテル）
+        let text = text.replacingOccurrences(of: #"合[ \t\u3000]+計"#, with: "合計", options: .regularExpression)
         let ns = text as NSString
         let amount = #"^[^\n]{0,30}?(?:\n[^\n]{0,30}?)?(?:[¥￥]\s?([\d,]+)|([\d,]+)\s?円|JPY\s?([\d,]+)|·\s?(\d{1,3}(?:,\d{3})+|\d{3,})(?=\s?[(（\n]|\s*\z))"#
         guard let amountRegex = try? NSRegularExpression(pattern: amount, options: [.caseInsensitive]) else { return nil }
@@ -222,6 +243,9 @@ enum ReservationEmailParser {
         let scores: [(Reservation.Kind, Int)] = [
             (.flight, flightCount * 3 + eTicket + score(["便名", "搭乗", "フライト", "航空", "空港", "flight", "boarding", "airline", "airport"])),
             (.train, trainCount * 3 + score(["新幹線", "号車", "乗車", "列車", "えきねっと", "スマートex", "ex予約"])),
+            // バス・船（3.8）。「乗車」は電車と同じなので、バス・船の言葉で決める
+            (.bus, score(["高速バス", "夜行バス", "バスタ", "バス停", "バスのご予約", "バス予約", "ハイウェイバス", "willer", "highway bus", "express bus"]) * 2),
+            (.ferry, score(["フェリー", "乗船", "出航", "出港", "船便", "ferry"]) * 2),
             (.hotel, score(["チェックイン", "チェックアウト", "宿泊", "ご宿泊", "泊", "check-in", "check-out", "check in", "hotel", "night", "accommodation", "airbnb"])),
             (.rentalCar, score(["レンタカー", "貸出", "貸渡", "返却", "車種", "rent a car", "rental car", "car rental", "pick-up", "drop-off", "vehicle"])),
             // 「駐車場」だけでは決めない。宿やレストランの案内にも駐車場のことが書いてあるため
@@ -242,26 +266,40 @@ enum ReservationEmailParser {
 
     private static let confirmationLabel = #"(?:予約番号|予約コード|予約確認番号|確認番号|確認コード|予約ID|予約No\.?|受付番号|予約依頼番号|依頼番号|予約申込番号|受付ID|整理番号|お預かり番号|お申込番号|申込番号|confirmation (?:number|code|no\.?)|booking (?:reference|number|id|no\.?)|reservation (?:number|code|no\.?)|itinerary number|booking code|record locator|pnr|예약\s?번호|예약\s?코드|확인\s?번호|訂位代號|訂位代号|訂位編號|預訂編號|预订编号|訂單編號|订单编号|訂單號碼|订单号|確認號碼|确认号码)"#
 
-    static func confirmationNumber(in text: String) -> String? {
+    /// 予約そのものの番号ではないこともあるラベル（受付・整理・申込の番号）。
+    /// 予約番号・確認番号が別にあれば、そちらを使う（3.8）
+    private static let weakConfirmationLabels = ["受付番号", "受付ID", "整理番号", "お預かり番号", "お申込番号", "申込番号",
+                                                 "予約依頼番号", "依頼番号", "予約申込番号"]
+
+    static func confirmationNumber(in text: String, kind: Reservation.Kind? = nil) -> String? {
         // ラベルと同じ行、またはすぐ次の行に書かれていることが多い
         // 「【確認番号】」のように閉じ括弧が挟まる書き方もある
-        let pattern = confirmationLabel + #"\s*[】\])）]?\s*[:：]?\s*\n?\s*([A-Za-z0-9][A-Za-z0-9-]{3,})"#
+        let pattern = "(" + confirmationLabel + ")" + #"\s*[】\])）]?\s*[:：]?\s*\n?\s*([A-Za-z0-9][A-Za-z0-9-]{3,})"#
         guard let regex = try? NSRegularExpression(pattern: pattern, options: [.caseInsensitive]) else { return nil }
         let ns = text as NSString
         let range = NSRange(location: 0, length: ns.length)
         // ラベルの後ろが番号らしくなければ、次に出てくるラベルを見る
-        // （「Confirmation number will be sent…」の「will」を番号にしない）
+        // （「Confirmation number will be sent…」の「will」を番号にしない）。
+        // 予約番号・確認番号を、受付番号・整理番号より先に使う（3.8）
+        var weak: String?
         for match in regex.matches(in: text, range: range) {
-            let value = ns.substring(with: match.range(at: 1))
-            if looksLikeCode(value) { return value }
+            let label = ns.substring(with: match.range(at: 1))
+            let value = ns.substring(with: match.range(at: 2))
+            guard looksLikeCode(value), !isNotConfirmation(value, kind: kind) else { continue }
+            if weakConfirmationLabels.contains(where: label.contains) {
+                if weak == nil { weak = value }
+            } else {
+                return value
+            }
         }
+        if let weak { return weak }
 
         // 「Booking confirmation」の見出しだけの行の次に、番号だけの行が来る書き方
         let heading = #"(?m)^[ \t]*(?:booking|reservation) confirmation[ \t]*\n[ \t]*([A-Za-z0-9][A-Za-z0-9-]{3,})[ \t]*$"#
         if let headingRegex = try? NSRegularExpression(pattern: heading, options: [.caseInsensitive]) {
             for match in headingRegex.matches(in: text, range: range) {
                 let value = ns.substring(with: match.range(at: 1))
-                if looksLikeCode(value) { return value }
+                if looksLikeCode(value), !isNotConfirmation(value, kind: kind) { return value }
             }
         }
         return nil
@@ -272,6 +310,53 @@ enum ReservationEmailParser {
         if value.contains(where: \.isNumber) { return true }
         let letters = value.filter(\.isLetter)
         return letters.count >= 5 && letters.allSatisfy(\.isUppercase)
+    }
+
+    /// 形から見て予約番号ではないもの（3.8）：電話番号・日付・長すぎる数字、飛行機では13桁の航空券番号
+    static func isNotConfirmation(_ value: String, kind: Reservation.Kind? = nil) -> Bool {
+        let digits = value.filter(\.isNumber)
+        // 電話番号（022-395-2211、0120-123-456、09012345678）
+        if value.wholeMatch(of: /0\d{1,4}-\d{1,4}-\d{3,4}/) != nil { return true }
+        if value.allSatisfy(\.isNumber), value.hasPrefix("0"), value.count == 10 || value.count == 11 { return true }
+        // 航空券の番号（航空会社の3桁＋10桁）。予約番号は別に書いてある。
+        // 宿の予約番号には13桁の数字もあるので、飛行機のときだけ
+        if kind == .flight, value.allSatisfy(\.isNumber), value.count == 13 { return true }
+        // 日付（2026-12-01）
+        if value.wholeMatch(of: /\d{4}-\d{1,2}-\d{1,2}/) != nil { return true }
+        // 数字だけで長すぎるもの（カード番号・会員番号など）
+        if value.allSatisfy(\.isNumber), digits.count > 16 { return true }
+        // 小文字と数字の混ざった短い並び（「4u1b」）。写真の読み違いで、予約番号にこの形はまず無い
+        if value.count <= 5, value.contains(where: \.isLowercase), !digits.isEmpty { return true }
+        return false
+    }
+
+    /// 値のすぐ前（同じ行）に、予約番号ではない番号のラベルがあるか（AI の答えを確かめるときに使う）
+    static let nonConfirmationLabels = ["電話", "tel", "phone", "fax", "航空券", "空券", "券番号", "チケット番号", "ticket",
+                                        "会員", "member", "部屋", "room", "郵便", "〒", "管理番号", "カード", "card",
+                                        "郵便番号", "払込", "お問い合わせ番号"]
+
+    static func isLabeledAsOtherNumber(_ value: String, in text: String) -> Bool {
+        let ns = text as NSString
+        var searchRange = NSRange(location: 0, length: ns.length)
+        var sawUnlabeled = false
+        while true {
+            let found = ns.range(of: value, options: [.caseInsensitive], range: searchRange)
+            guard found.location != NSNotFound else { break }
+            let lineRange = ns.lineRange(for: found)
+            let start = max(lineRange.location, found.location - 24)
+            let prefix = ns.substring(with: NSRange(location: start, length: found.location - start)).lowercased()
+            if nonConfirmationLabels.contains(where: { prefix.contains($0) }) {
+                // 同じ行のもっと近くに予約番号のラベルがあれば、そちらのもの
+                if prefix.range(of: confirmationLabel, options: [.regularExpression, .caseInsensitive]) == nil {
+                    searchRange = NSRange(location: found.location + found.length,
+                                          length: ns.length - found.location - found.length)
+                    continue
+                }
+            }
+            sawUnlabeled = true
+            break
+        }
+        return !sawUnlabeled && ns.range(of: value, options: .caseInsensitive).location != NSNotFound
     }
 
     // MARK: - 日時
@@ -329,6 +414,9 @@ enum ReservationEmailParser {
         return false
     }
 
+    /// 年の無い「12/23」を日付として読んでよい見出し
+    private static let shortDateLabels = ["搭乗日", "乗車日", "出発日", "到着日", "利用日", "宿泊日", "来店日", "日付"]
+
     /// 本文の中の「日付（＋近くの時刻）」を、出てくる順に拾う
     static func dateTimeEvents(in text: String, referenceDate: Date) -> [DateTimeEvent] {
         let ns = text as NSString
@@ -352,6 +440,17 @@ enum ReservationEmailParser {
             // 10月6日（年なし）
             (#"(?<![\d/])(\d{1,2})月\s*(\d{1,2})日"#, { m in
                 (nil, Int(ns.substring(with: m.range(at: 1)))!, Int(ns.substring(with: m.range(at: 2)))!)
+            }),
+            // 12/23（年なし。Wallet の搭乗券など）。分数や「2人/1室」と取り違えないよう、
+            // 同じ行かすぐ上の行に「搭乗日」などの日付の見出しがあるときだけ（3.8）
+            (#"(?<![\d/:.])(1[0-2]|0?[1-9])/(3[01]|[12]\d|0?[1-9])(?![\d/])"#, { m in
+                let line = ns.lineRange(for: m.range)
+                var around = ns.substring(with: NSRange(location: line.location, length: m.range.location - line.location))
+                if line.location > 0 {
+                    around += ns.substring(with: ns.lineRange(for: NSRange(location: line.location - 1, length: 0)))
+                }
+                guard shortDateLabels.contains(where: around.contains) else { return nil }
+                return (nil, Int(ns.substring(with: m.range(at: 1)))!, Int(ns.substring(with: m.range(at: 2)))!)
             }),
             // Oct 6, 2026 / October 6th 2026
             (monthName + #"\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(20\d{2})"#, { m in
@@ -530,7 +629,9 @@ enum ReservationEmailParser {
                                        "CX", "HX", "UO", "SQ", "TR", "TG", "VN", "PR", "5J", "QF", "AF", "LH",
                                        "BA", "AY", "KL", "EK", "QR", "AC", "ZG", "MU", "CA", "CZ",
                                        // 韓国・台湾・東南アジアへの旅行でよく使う会社（3.4）
-                                       "BX", "ZE", "RS", "JX", "YP", "D7", "AK", "VJ", "3K", "Z2", "FD"]
+                                       "BX", "ZE", "RS", "JX", "YP", "D7", "AK", "VJ", "3K", "Z2", "FD",
+                                       // ヨーロッパ・中東・オセアニアの乗り継ぎでよく使う会社（3.8）
+                                       "AZ", "IB", "LX", "OS", "SK", "TK", "EY", "ET", "NZ", "VA", "JQ", "AI", "GA", "MH"]
 
     /// 「ANA123」「SKY111」のように、各社の呼び名で書かれることもある。
     /// 値は、カタカナで書かれたときに便名として使う書き方
@@ -550,7 +651,9 @@ enum ReservationEmailParser {
         // 数字の直後に英数字が続くものは便名ではない（予約番号「JL7X9K2P」の頭を JL7 と読まないように）。
         // 写真から読んだ文字では、数字の 0 が英字の O に化けることがある（「SKY025」→「SKYO25」）。
         // 番号の中の O・o は 0 として読む（数字が1つも無いものは便名とみなさない）
-        let pattern = #"(?<![A-Za-z0-9])("# + codes + #")\s?([0-9Oo]{1,4})(?![A-Za-z0-9])(?:\s?便)?"#
+        // 社名と番号のあいだは空白1つまで。タブや改行は表の別の欄なので、つなげない。
+        // 番号の直後が「:」なら時刻（Wallet の搭乗券の「SKY<タブ>09:20」を SKY09 と読んでいた。3.8）
+        let pattern = #"(?<![A-Za-z0-9])("# + codes + #")[ \u3000]?([0-9Oo]{1,4})(?![A-Za-z0-9:])(?:\s?便)?"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
 
         var result: [(Int, String)] = []
@@ -559,6 +662,11 @@ enum ReservationEmailParser {
             let prefix = ns.substring(with: match.range(at: 1))
             let raw = ns.substring(with: match.range(at: 2))
             guard raw.contains(where: \.isNumber) else { continue }
+            // 予約番号のラベルのすぐ後ろの並びは便名ではない（予約番号「BC7788」をスカイマークの便にしていた。3.8）
+            let lineStart = ns.lineRange(for: match.range).location
+            let before = ns.substring(with: NSRange(location: lineStart, length: match.range.location - lineStart))
+            if before.range(of: confirmationLabel + #"\s*[】\])）]?\s*[:：]?\s*$"#,
+                            options: [.regularExpression, .caseInsensitive]) != nil { continue }
             let digits = raw.replacingOccurrences(of: "O", with: "0").replacingOccurrences(of: "o", with: "0")
             // 英字はそのまま、カタカナの社名だけ便名の書き方にする
             let code = prefix.allSatisfy(\.isASCII) ? prefix : (airlineNames[prefix] ?? prefix)
@@ -591,8 +699,8 @@ enum ReservationEmailParser {
     /// 愛媛の「松山空港」は、台北の行に入れない（以前は「松山空港」を台北松山として読んでいた）
     private static let airports: [(pattern: String, name: String)] = [
         ("羽田|東京国際|HANEDA|HND", "羽田空港"), ("成田|NARITA|NRT", "成田空港"), ("伊丹|大阪国際|ITAMI|ITM", "伊丹空港"),
-        ("関西国際|関空|関西|KANSAI|KIX", "関西空港"), ("神戸|UKB", "神戸空港"), ("中部|セントレア|NGO", "中部空港"),
-        ("新千歳|CHITOSE|CTS", "新千歳空港"), ("福岡|FUKUOKA|FUK", "福岡空港"), ("那覇|OKA|(?<=[→⇒]\\s?)沖縄|沖縄(?=\\s?[→⇒])", "那覇空港"),
+        ("関西国際|関空|関西|KANSAI|KIX", "関西空港"), ("神戸|KOBE|UKB", "神戸空港"), ("中部|セントレア|NGO", "中部空港"),
+        ("新千歳|CHITOSE|CTS", "新千歳空港"), ("福岡|FUKUOKA|FUK", "福岡空港"), ("那覇|NAHA|OKA|(?<=[→⇒]\\s?)沖縄|沖縄(?=\\s?[→⇒])", "那覇空港"),
         ("鹿児島|KOJ", "鹿児島空港"), ("仙台|SDJ", "仙台空港"), ("広島|HIJ", "広島空港"),
         ("石垣|ISG", "石垣空港"), ("宮古|MMY", "宮古空港"), ("長崎|NGS", "長崎空港"), ("熊本|KMJ", "熊本空港"),
         ("小松|KMQ", "小松空港"), ("松山|MYJ", "松山空港"), ("高松|TAK", "高松空港"), ("函館|HKD", "函館空港"),
@@ -630,6 +738,17 @@ enum ReservationEmailParser {
             claimed.append(hit.range)
             result.append((hit.range.location, hit.name))
         }
+        // 表に無い空港も、「Frankfurt (FRA)」のように都市名とかっこの3文字コードで書かれていれば読む（3.8。乗り継ぎ便）
+        let generic = #"([A-Z][A-Za-z'.-]+(?: [A-Z][A-Za-z'.-]+){0,2})\s?\(([A-Z]{3})\)"#
+        if let regex = try? NSRegularExpression(pattern: generic) {
+            for match in regex.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+                guard !claimed.contains(where: { NSIntersectionRange($0, match.range).length > 0 }) else { continue }
+                let city = ns.substring(with: match.range(at: 1))
+                let code = ns.substring(with: match.range(at: 2))
+                claimed.append(match.range)
+                result.append((match.range.location, "\(city) (\(code))"))
+            }
+        }
         return result.sorted { $0.0 < $1.0 }
     }
 
@@ -644,47 +763,196 @@ enum ReservationEmailParser {
         let flights = flightNumbers(in: text)
         let airports = airportMentions(in: text)
         let allTimes = timeMatches(in: text)
-        let lineStarts = flights.map { ns.lineRange(for: NSRange(location: $0.position, length: 0)).location }
+
+        // 便の範囲の始まり。便名の行の頭から。ただし、すぐ前の行が便名の無い日付の行
+        // （「【復路】2026年12月4日(金)」）なら、その行から（3.8。帰りの日付を行きの便に使っていた）
+        let flightLineStarts = flights.map { ns.lineRange(for: NSRange(location: $0.position, length: 0)).location }
+        let blockStarts: [Int] = flights.indices.map { index in
+            let lineStart = flightLineStarts[index]
+            guard lineStart > 0 else { return lineStart }
+            let previous = ns.lineRange(for: NSRange(location: lineStart - 1, length: 0))
+            let previousLimit = index > 0 ? flightLineStarts[index - 1] : -1
+            guard previous.location > previousLimit,
+                  events.contains(where: { NSLocationInRange($0.position, previous) }),
+                  !flights.contains(where: { NSLocationInRange($0.position, previous) }) else { return lineStart }
+            return previous.location
+        }
 
         return flights.enumerated().map { index, flight in
-            let from = lineStarts[index]
-            let limit = index + 1 < flights.count ? lineStarts[index + 1] : Int.max
-            let previousLimit = index > 0 ? lineStarts[index - 1] : -1
+            let single = flights.count == 1
+            let from = blockStarts[index]
+            let limit = index + 1 < flights.count ? blockStarts[index + 1] : Int.max
+            let previousLimit = index > 0 ? blockStarts[index - 1] : -1
 
             let myEvents = events.filter { $0.position >= from && $0.position < limit }
             let dateEvent = myEvents.first
                 ?? events.last { $0.position < from && $0.position >= previousLimit }
-            let times = allTimes.filter { $0.position >= from && $0.position < limit }
+            var times = allTimes.filter { $0.position >= from && $0.position < limit }
+            // 便が1つだけで、便名が日時より後ろに書いてある文面（「ご出発日… 出発 09:00 … ご利用便：ADO 12便」）では、
+            // 日付から後ろの時刻を使う（3.8）
+            if single, times.isEmpty, let dateEvent, dateEvent.position < from {
+                times = allTimes.filter { $0.position >= dateEvent.position }
+            }
 
             var draft = ReservationDraft(kind: .flight)
             draft.transportNumber = flight.number
 
             if var start = dateEvent?.components {
-                // 日付の近くに時刻が無い書き方（日付の行と時刻の行が離れている）なら、範囲の時刻を使う
-                if start.hour == nil, let first = times.first {
+                // 日付の近くに時刻が無い書き方（日付の行と時刻の行が離れている）なら、範囲の時刻を使う。
+                // 日付に付いた時刻が範囲の中に無ければ（次の便の行の時刻を拾った）、範囲の時刻にする（3.8）
+                let inRange = start.hour.map { hour in
+                    times.contains { $0.hour == hour && $0.minute == (start.minute ?? 0) } } ?? false
+                if !inRange, let first = times.first {
                     start.hour = first.hour
                     start.minute = first.minute
+                } else if !inRange, start.hour != nil, !single {
+                    start.hour = nil
+                    start.minute = nil
                 }
                 draft.start = start
                 draft.guessedYear = dateEvent?.guessedYear ?? false
 
-                if myEvents.count >= 2, myEvents[1].components.hour != nil {
-                    draft.arrival = myEvents[1].components
-                } else if times.count >= 2 {
-                    // 到着の日付が省かれているときは、出発と同じ日の時刻とみなす
-                    var arrival = start
-                    arrival.hour = times[1].hour
-                    arrival.minute = times[1].minute
-                    draft.arrival = arrival
+                let laterEvents = myEvents.dropFirst().filter { $0.components.hour != nil }
+                if let arrivalEvent = laterEvents.first, myEvents.first.map({ $0.position }) == dateEvent?.position {
+                    draft.arrival = arrivalEvent.components
+                } else if let startHour = start.hour, let startMinute = start.minute,
+                          let next = times.first(where: { $0.hour != startHour || $0.minute != startMinute }),
+                          times.firstIndex(where: { $0.hour == startHour && $0.minute == startMinute }).map({ times.firstIndex(where: { $0.hour == next.hour && $0.minute == next.minute })! > $0 }) ?? true {
+                    // 到着の日付が書いていないときは、出発と同じ日の時刻とみなす。
+                    // 到着の時刻が出発より早いなら日をまたいでいるが、何日後かは書いていないので空けておく（3.8）
+                    if next.hour * 60 + next.minute > startHour * 60 + startMinute {
+                        var arrival = start
+                        arrival.hour = next.hour
+                        arrival.minute = next.minute
+                        draft.arrival = arrival
+                    }
                 }
             }
 
-            let myAirports = uniqueNames(airports.filter { $0.position >= from && $0.position < limit })
-            let places = myAirports.isEmpty ? uniqueNames(airports) : myAirports
+            // 空港はその便の範囲のものだけ。便が1つのときだけ本文全体から探す（3.8。別の便の空港を使っていた）
+            let inRange = airports.filter { $0.position >= from && $0.position < limit }
+            let pool = inRange.isEmpty && single ? airports : inRange
+            // 1行に2つの空港が並んでいれば、その行の左から順を出発・到着にする（3.8）。
+            // 搭乗券は「KOBE  HANEDA」「神戸  羽田」のように左右に並ぶ。写真によって片方の行だけ
+            // 読み取れると、出てきた順では「羽田、神戸」と逆になることがあった
+            let places = airportPairOnOneLine(pool, in: ns) ?? uniqueNames(pool)
             draft.departurePlace = places.first
             draft.arrivalPlace = places.dropFirst().first
             return draft
         }
+    }
+
+    /// 同じ行に2つの違う空港が書いてある最初の行の、左から順の2つ
+    private static func airportPairOnOneLine(_ mentions: [(position: Int, name: String)], in ns: NSString) -> [String]? {
+        var byLine: [Int: [(position: Int, name: String)]] = [:]
+        for mention in mentions {
+            byLine[ns.lineRange(for: NSRange(location: mention.position, length: 0)).location, default: []].append(mention)
+        }
+        for line in byLine.keys.sorted() {
+            let names = uniqueNames(byLine[line]!.sorted { $0.position < $1.position })
+            if names.count >= 2 { return Array(names.prefix(2)) }
+        }
+        return nil
+    }
+
+    // MARK: - 座席（3.8）
+
+    /// 座席の見出し
+    private static let seatLabel = #"(?:座席番号|座席|お座席|席番号|seat(?:\s?(?:no\.?|number))?)"#
+    /// 座席の値（「23A」「12-K」）
+    private static let seatValue = #"\d{1,3}\s?-?\s?[A-Ka-k]"#
+
+    /// 「26h,26 G」→「26H, 26G」
+    private static func seatList(_ raw: String) -> String {
+        raw.components(separatedBy: CharacterSet(charactersIn: ",、・/"))
+            .map { $0.replacingOccurrences(of: " ", with: "").replacingOccurrences(of: "-", with: "").uppercased() }
+            .filter { !$0.isEmpty }
+            .joined(separator: ", ")
+    }
+
+    /// 座席を、出てくる順に。
+    /// - 「座席：23A」「Seat 12K」のように見出しの後ろ
+    /// - 「5号車6番E席」（新幹線）はそのまま
+    /// - Wallet の搭乗券のように、見出しの行（「搭乗者名  座席」）の次の行の同じ列（右端なら右端）
+    static func seats(in text: String) -> [String] {
+        var found: [(position: Int, seat: String)] = []
+        let ns = text as NSString
+        func add(_ position: Int, _ raw: String) {
+            let seat = seatList(raw)
+            guard !found.contains(where: { $0.position == position }) else { return }
+            found.append((position, seat))
+        }
+
+        // 新幹線の「5号車6番E席」
+        if let regex = try? NSRegularExpression(pattern: #"(\d{1,2})\s?号車\s?(\d{1,2})\s?番\s?([A-Ea-e])\s?席"#) {
+            for match in regex.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+                let car = ns.substring(with: match.range(at: 1))
+                let row = ns.substring(with: match.range(at: 2))
+                let letter = ns.substring(with: match.range(at: 3)).uppercased()
+                // 「5号車6番E席」は書かれたとおりに残す（車内の表示と同じ書き方のほうが探しやすい）
+                found.append((match.range.location, "\(car)号車\(row)番\(letter)席"))
+            }
+        }
+
+        // 見出しの後ろ（同じ行）。2人分なら「26H,26G」のように並ぶので、まとめて「26H, 26G」にする
+        let inline = seatLabel + #"\s*[】\])）]?\s*[:：]?\s*("# + seatValue + #"(?:\s*[,、・/]\s*"# + seatValue + #")*)(?![A-Za-z0-9])"#
+        if let regex = try? NSRegularExpression(pattern: inline, options: [.caseInsensitive]) {
+            for match in regex.matches(in: text, range: NSRange(location: 0, length: ns.length)) {
+                add(match.range(at: 1).location, seatList(ns.substring(with: match.range(at: 1))))
+            }
+        }
+
+        // 見出しだけの行の下（ANA の「□ 座席番号」の下に、名前の行と「[1]38J」）。4行先まで見る
+        let headingOnly = try? NSRegularExpression(pattern: #"^[□■【\[・\s]*"# + seatLabel + #"\s*[】\]]?\s*[:：]?$"#,
+                                                   options: [.caseInsensitive])
+        let passengerSeat = try? NSRegularExpression(pattern: #"^(?:\[\d{1,2}\]\s*)?("# + seatValue + #")$"#)
+        var lineOffset = 0
+        let allLines = text.components(separatedBy: "\n")
+        for (index, line) in allLines.enumerated() {
+            defer { lineOffset += (line as NSString).length + 1 }
+            let trimmed = line.trimmingCharacters(in: .whitespaces)
+            guard headingOnly?.firstMatch(in: trimmed, range: NSRange(location: 0, length: (trimmed as NSString).length)) != nil
+            else { continue }
+            var seatsBelow: [String] = []
+            var position = lineOffset + (line as NSString).length + 1
+            for next in allLines.dropFirst(index + 1).prefix(4) {
+                let cell = next.trimmingCharacters(in: .whitespaces)
+                if let match = passengerSeat?.firstMatch(in: cell, range: NSRange(location: 0, length: (cell as NSString).length)) {
+                    seatsBelow.append((cell as NSString).substring(with: match.range(at: 1)))
+                } else if !seatsBelow.isEmpty {
+                    break
+                }
+                if seatsBelow.isEmpty { position += (next as NSString).length + 1 }
+            }
+            if !seatsBelow.isEmpty { add(position, seatList(seatsBelow.joined(separator: ","))) }
+        }
+
+        // 表の形（見出しの行の次の行）
+        let lines = text.components(separatedBy: "\n")
+        var offset = 0
+        let onlyLabel = try? NSRegularExpression(pattern: "^" + seatLabel + "$", options: [.caseInsensitive])
+        let onlyValue = try? NSRegularExpression(pattern: "^" + seatValue + "$")
+        for (index, line) in lines.enumerated() {
+            defer { offset += (line as NSString).length + 1 }
+            guard index + 1 < lines.count else { continue }
+            let cells = line.components(separatedBy: "\t").map { $0.trimmingCharacters(in: .whitespaces) }
+            guard let column = cells.firstIndex(where: { cell in
+                onlyLabel?.firstMatch(in: cell, range: NSRange(location: 0, length: (cell as NSString).length)) != nil
+            }) else { continue }
+            let next = lines[index + 1].components(separatedBy: "\t").map { $0.trimmingCharacters(in: .whitespaces) }
+            let value: String?
+            if next.count == cells.count {
+                value = next[column]
+            } else if column == cells.count - 1 {
+                value = next.last
+            } else {
+                value = nil
+            }
+            guard let value, onlyValue?.firstMatch(in: value, range: NSRange(location: 0, length: (value as NSString).length)) != nil
+            else { continue }
+            add(offset + (line as NSString).length + 1, value)
+        }
+        return found.sorted { $0.position < $1.position }.map(\.seat)
     }
 
     // MARK: - 新幹線
@@ -711,8 +979,8 @@ enum ReservationEmailParser {
 
             var draft = ReservationDraft(kind: .train)
             draft.transportNumber = "\(group(4))\(group(5))号"
-            draft.departurePlace = group(1)
-            draft.arrivalPlace = group(6)
+            draft.departurePlace = placeName(group(1))
+            draft.arrivalPlace = placeName(group(6))
             var start = dateEvent.components
             start.hour = Int(group(2))
             start.minute = Int(group(3))
@@ -772,11 +1040,28 @@ enum ReservationEmailParser {
 
     private static func firstRoute(in text: String, from position: Int) -> (from: String, to: String)? {
         let ns = text as NSString
-        let pattern = #"([\p{Han}\p{Katakana}ー]{1,8}駅?)\s*(?:→|->|⇒|～|〜|-)\s*([\p{Han}\p{Katakana}ー]{1,8}駅?)"#
+        // 「新宿バスタ 23:10 発 → 大阪梅田 7:20 着」のように、名前と矢印の間に時刻や「発」が入る書き方も（3.8）
+        let departure = #"([\p{Han}\p{Katakana}ー][\p{Han}\p{Katakana}\p{Hiragana}ー]{0,11}?(?:駅|港|バスタ)?)"#
+        // 「東京(10:03)→新大阪(12:57)」のように、時刻がかっこに入る書き方も
+        let between = #"\s*(?:[(（]?\d{1,2}:\d{2}[)）]?\s*)?(?:発\s*)?(?:→|->|⇒|～|〜|-)\s*"#
+        // 到着地は、ひらがなを含めない（「新大阪から」の「から」まで取らない）。後ろの「着」は含めない
+        let arrival = #"([\p{Han}\p{Katakana}ー]{1,12}(?<!着))"#
+        let pattern = departure + between + arrival
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return nil }
         let matches = regex.matches(in: text, range: NSRange(location: 0, length: ns.length))
         guard let match = matches.first(where: { $0.range.location >= position }) ?? matches.first else { return nil }
-        return (ns.substring(with: match.range(at: 1)), ns.substring(with: match.range(at: 2)))
+        let from = placeName(ns.substring(with: match.range(at: 1)))
+        let to = placeName(ns.substring(with: match.range(at: 2)))
+        guard !from.isEmpty, !to.isEmpty else { return nil }
+        return (from, to)
+    }
+
+    /// 駅などの名前から、前に付いた列車の号数（「のぞみ21号東京」の「号」）と、後ろの「発」「着」を外す（3.8）
+    static func placeName(_ raw: String) -> String {
+        var name = raw
+        if let index = name.lastIndex(of: "号") { name = String(name[name.index(after: index)...]) }
+        while let last = name.last, "発着".contains(last) { name.removeLast() }
+        return name.trimmingCharacters(in: .whitespaces)
     }
 
     /// 便名・列車名が読めなかった乗り物の予約（3.8）。日付・時刻・発着地だけで下書きを作る。
@@ -784,7 +1069,7 @@ enum ReservationEmailParser {
     private static func routeDraftWithoutNumber(kind: Reservation.Kind, in text: String,
                                                 events: [DateTimeEvent]) -> ReservationDraft {
         var draft = ReservationDraft(kind: kind)
-        let dateWords = ["出発日", "搭乗日", "乗車日", "ご利用日", "利用日", "出発", "date"]
+        let dateWords = ["出発日", "搭乗日", "乗車日", "乗船日", "出航日", "ご利用日", "利用日", "出発", "出航", "date"]
         let dateEvent = event(after: dateWords, in: text, events: events) ?? events.first
         if var start = dateEvent?.components {
             let times = timeMatches(in: text).filter { $0.position >= (dateEvent?.position ?? 0) }
@@ -1021,10 +1306,20 @@ enum ReservationEmailParser {
             if let paren = value.range(of: #"[(（]\s*(TEL|tel|電話)"#, options: .regularExpression) {
                 value = String(value[..<paren.lowerBound]).trimmingCharacters(in: .whitespaces)
             }
+            // 写真から読むと、宿の名前の〈〉が＜＞に化ける（「アパホテル〈六本木SIX〉」。3.8）
+            if kind == .hotel {
+                value = value.replacingOccurrences(of: "<", with: "〈").replacingOccurrences(of: ">", with: "〉")
+            }
             if !value.isEmpty { return String(value.prefix(40)) }
         }
 
         if kind == .hotel {
+            // 「フレックステイイン新浦安 へのチェックインは11月1日(日)」（Booking.com）。
+            // 名前に「ホテル」などの言葉が入っていない宿も、この書き方なら読める（3.8）
+            if let match = text.firstMatch(of: /(?m)^[^\S\n]*(?:\[[^\]\n]*\][^\S\n]*)?([^\n\[\]]{2,40}?)[^\S\n]?へのチェックインは/) {
+                let name = String(match.1).trimmingCharacters(in: .whitespaces)
+                if !name.isEmpty { return name }
+            }
             // 「イン」は「ツインルーム」にも入っているので手がかりにしない。部屋やプランの行も除く
             let keywords = ["ホテル", "旅館", "リゾート", "ゲストハウス", "hotel", "resort", "hostel"]
             let excluded = ["予約", "楽天", "じゃらん", "ルーム", "部屋", "プラン", "㎡", "マイル", "キャンペーン"]

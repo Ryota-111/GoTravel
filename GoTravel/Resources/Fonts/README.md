@@ -7,6 +7,10 @@
 | ZenAntique-Regular.ttf | `ZenAntique-Regular` | 5.5 MB | レトロ・トラベル（見出し）、パスポート（見出し） |
 | ZenKakuGothicNew-Regular.ttf | `ZenKakuGothicNew-Regular` | 2.4 MB | レトロ・トラベル、ガイドブック、パスポート（本文） |
 | SpaceMono-Bold.ttf | `SpaceMono-Bold` | 96 KB | レトロ・トラベル（日付・英字ラベル） |
+| GreatVibes-Regular.ttf | `GreatVibes-Regular` | 457 KB | 思い出をつくる（3.8）：筆記体の題 |
+| Caveat-Variable.ttf | `Caveat-Regular`（太さは可変） | 403 KB | 思い出をつくる：手書きの英字 |
+| PlayfairDisplay-Variable.ttf | `PlayfairDisplay-Regular`（太さは可変） | 301 KB | 思い出をつくる：ポスターの見出し |
+| Yomogi-Regular.ttf | `Yomogi-Regular` | 4.0 MB | 思い出をつくる：手書き風の和文（日記・日本語の題） |
 
 合計 8.0 MB。日本語フォントは全漢字を持つため、1書体でこの大きさになる。
 Space Mono は英数字と記号だけなので、桁が違って小さい。
@@ -31,7 +35,7 @@ Space Mono は英数字と記号だけなので、桁が違って小さい。
 
 ## ライセンス
 
-どちらも SIL Open Font License 1.1。同梱・再配布は可能で、
+すべて SIL Open Font License 1.1。同梱・再配布は可能で、
 ライセンス全文を添付することが条件のため `OFL-*.txt` を同じ場所に置いている。
 削除しないこと。
 
@@ -42,5 +46,14 @@ Space Mono は英数字と記号だけなので、桁が違って小さい。
 - Space Mono — Copyright 2016 The Space Mono Project Authors
   https://github.com/googlefonts/spacemono
 
-どちらも Reserved Font Name を持つため、改変版を同じ名前で配布することはできない。
+- Great Vibes — Copyright 2015 The Great Vibes Pro Project Authors
+  https://github.com/googlefonts/great-vibes
+- Caveat — Copyright 2014 The Caveat Project Authors
+  https://github.com/googlefonts/caveat
+- Playfair Display — Copyright 2017 The Playfair Display Project Authors（Reserved Font Name "Playfair Display"）
+  https://github.com/clauseggers/Playfair-Display
+- Yomogi — Copyright 2020 The Yomogi Project Authors
+  https://github.com/satsuyako/YomogiFont
+
+Zen の2書体と Playfair Display は Reserved Font Name を持つため、改変版を同じ名前で配布することはできない。
 そのまま使うぶんには問題ない。

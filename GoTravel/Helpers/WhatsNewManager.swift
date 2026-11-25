@@ -28,7 +28,7 @@ enum WhatsNewManager {
         guard WhatsNew.current != nil else { return false }
 
         #if DEBUG
-        if alwaysShowForTesting { return true }
+        if alwaysShowForTesting || WhatsNew.previewVersion != nil { return true }
         #endif
 
         guard let lastShown = UserDefaults.standard.string(forKey: lastShownVersionKey) else {
@@ -73,15 +73,49 @@ struct WhatsNew: Identifiable {
 
     let version: String
     let items: [Item]
+    /// 全画面の「こんなことができます」（`WhatsNewShowcaseView`）で見せるか（3.8〜）。false なら文字の一覧
+    var showcase = false
 
     var id: String { version }
 
     /// 現在のバージョンのお知らせ。用意していないバージョンでは nil（＝表示しない）
     static var current: WhatsNew? {
-        all.first { $0.version == WhatsNewManager.currentVersion }
+        let version = previewVersion ?? WhatsNewManager.currentVersion
+        return all.first { $0.version == version }
+    }
+
+    /// 開発用のビルドだけ、起動引数 `-TravoryWhatsNewPreview 3.8` で、そのバージョンのお知らせを毎回出す（版を上げる前に見るため）
+    static var previewVersion: String? {
+        #if DEBUG
+        return UserDefaults.standard.string(forKey: "TravoryWhatsNewPreview").flatMap { $0.isEmpty ? nil : $0 }
+        #else
+        return nil
+        #endif
     }
 
     private static let all: [WhatsNew] = [
+        WhatsNew(
+            version: "3.8",
+            items: [
+                Item(icon: "sparkles", title: "旅の写真から、思い出の1枚をつくれます",
+                     detail: "思い出タブの「旅の思い出をつくる」から、旅行中に撮った写真で写真コラージュ・旅行ポスター・旅行日記をつくれます。"),
+                Item(icon: "square.and.pencil", title: "旅行計画がなくても思い出をつくれます",
+                     detail: "名前と期間か、使いたい写真を選ぶだけで、思い出の1枚やダイジェスト動画をつくれます。"),
+                Item(icon: "plus.circle.fill", title: "右下の＋から、作るものを選べます",
+                     detail: "思い出タブと場所保存の＋を押すと、作れるものや追加のしかたが小さなメニューで開きます。"),
+                Item(icon: "person.2.fill", title: "同行者と写真を見せ合えます",
+                     detail: "共有した旅行のアルバムで「共有する」を押すと、同行者の写真も同じアルバムに集まります（無料）。"),
+                Item(icon: "link", title: "リンクを送るだけで旅行に招待できます",
+                     detail: "招待のメッセージのリンクを押すと、コードが入った参加の画面が開きます。"),
+                Item(icon: "film.stack", title: "旅のあとも楽しめます",
+                     detail: "旅行の次の日の夜に、旅のダイジェスト動画のお知らせが届きます。12月からは、その年の旅をふり返れます。"),
+                Item(icon: "tram.fill", title: "予約の乗り物を「移動」の形で出せます",
+                     detail: "予約から行程に入れた飛行機や新幹線を、移動1件か、出発と到着の2件かで選べます。2件のときも間に乗り物と時間が出ます。"),
+                Item(icon: "text.viewfinder", title: "予約の読み取りを見直しました",
+                     detail: "往復や乗り継ぎの航空券、バス・船の予約も読めるようになりました。座席も読み取って入れます。"),
+            ],
+            showcase: true
+        ),
         WhatsNew(
             version: "3.7",
             items: [

@@ -599,11 +599,6 @@ struct TravelPlanDetailView: View {
                 }
             }
 
-            // 終わった旅行を見返すのは、思い出が良い形で残っている場面
-            if Calendar.current.startOfDay(for: plan.endDate) < Calendar.current.startOfDay(for: Date()) {
-                ReviewRequestManager.shared.record(.travelCompleted)
-            }
-
             // 画面が出きってから聞く（開いた直後に出すと、何の話か分かりにくい）
             if TabSwipePrompt.shouldAsk() {
                 DispatchQueue.main.asyncAfter(deadline: .now() + 0.8) {
@@ -1325,7 +1320,7 @@ struct TravelPlanDetailView: View {
                 : themeManager.currentTheme.secondaryText.opacity(0.18),
             placeholderColor: themeManager.currentTheme.secondaryText.opacity(0.45),
             isPast: state == .past,
-            removable: !item.isSingleMove
+            removable: !item.hasFixedTimelineTransport
         ) { mode in
             setTransport(mode, after: item, in: plan)
         }
@@ -1533,7 +1528,7 @@ struct TravelPlanDetailView: View {
                     Button {
                         showsCalendarExport = true
                     } label: {
-                        Label("iPhone のカレンダーに追加", systemImage: "calendar.badge.plus")
+                        Label("\(DeviceWord.name) のカレンダーに追加", systemImage: "calendar.badge.plus")
                     }
 
                     Divider()
@@ -1856,7 +1851,7 @@ struct TravelPlanDetailView: View {
                             tint: scheduleAccentColor,
                             isPast: state == .past,
                             leading: 4,
-                            removable: !item.isSingleMove
+                            removable: !item.hasFixedTimelineTransport
                         ) { mode in
                             setTransport(mode, after: item, in: plan)
                         }
@@ -2175,7 +2170,7 @@ struct TravelPlanDetailView: View {
                                 tint: scheduleAccentColor,
                                 isPast: rowState(index: index, nowIndex: nowIndex) == .past,
                                 leading: 4,
-                                removable: !item.isSingleMove
+                                removable: !item.hasFixedTimelineTransport
                             ) { mode in
                                 setTransport(mode, after: item, in: plan)
                             }

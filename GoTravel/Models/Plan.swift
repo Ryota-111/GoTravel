@@ -41,7 +41,7 @@ enum PlanType: String, Codable, CaseIterable {
     /// 名前欄に薄く出す例。何を入れる箱なのかは、説明文より例のほうが早い
     var titlePlaceholder: String {
         switch self {
-        case .outing:      return "大阪旅行"
+        case .outing:      return "鎌倉さんぽ"
         case .daily:       return "ジム"
         case .anniversary: return "結婚記念日"
         }
