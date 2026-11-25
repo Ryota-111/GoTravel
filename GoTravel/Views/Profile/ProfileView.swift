@@ -274,7 +274,7 @@ struct ProfileView: View {
     /// 旅行計画・予定をまとめてカレンダーに入れる・カレンダーの予定を表示する（3.0）
     private var calendarExportCard: some View {
         NavigationLink(destination: CalendarExportSettingsView()) {
-            ProfileMenuRow(icon: "calendar", color: .red, title: "iPhone のカレンダー")
+            ProfileMenuRow(icon: "calendar", color: .red, title: "\(DeviceWord.name) のカレンダー")
         }
     }
 

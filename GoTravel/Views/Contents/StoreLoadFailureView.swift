@@ -27,10 +27,10 @@ struct StoreLoadFailureView: View {
                 VStack(alignment: .leading, spacing: 12) {
                     Text("これまでに入れた旅行や予定は消えていません。少し待ってから「もう一度開く」を押してください。")
                     if failure.looksLikeLowStorage {
-                        Text("iPhone の空き容量が少ないようです。設定の「一般」→「iPhoneストレージ」で空きを作ってから、もう一度開いてください。")
+                        Text("\(DeviceWord.name) の空き容量が少ないようです。設定の「一般」→「\(DeviceWord.name)ストレージ」で空きを作ってから、もう一度開いてください。")
                             .fontWeight(.semibold)
                     } else {
-                        Text("直らないときは、iPhone の空き容量を確かめるか、iPhone を再起動してから開いてください。")
+                        Text("直らないときは、\(DeviceWord.name) の空き容量を確かめるか、\(DeviceWord.name) を再起動してから開いてください。")
                     }
                 }
                 .font(.body)

@@ -1528,7 +1528,7 @@ struct TravelPlanDetailView: View {
                     Button {
                         showsCalendarExport = true
                     } label: {
-                        Label("iPhone のカレンダーに追加", systemImage: "calendar.badge.plus")
+                        Label("\(DeviceWord.name) のカレンダーに追加", systemImage: "calendar.badge.plus")
                     }
 
                     Divider()

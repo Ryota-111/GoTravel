@@ -36,7 +36,7 @@ struct PlanCategoryListSheet: View {
                 Section {
                     row(title: "すべて", subtitle: "どのカレンダーの予定も重ねて見る", color: nil,
                         isSelected: selection == .all) { choose(.all) }
-                    row(title: PlanCategory.personalName, subtitle: "自分だけの予定。旅行計画と iPhone の予定もここに出ます",
+                    row(title: PlanCategory.personalName, subtitle: "自分だけの予定。旅行計画と \(DeviceWord.name) の予定もここに出ます",
                         color: accent.opacity(0.5), isSelected: selection == .personal) { choose(.personal) }
                     ForEach(manager.categories) { category in
                         row(title: category.name, subtitle: sharingText(category), color: category.color,
@@ -66,14 +66,14 @@ struct PlanCategoryListSheet: View {
                     NavigationLink {
                         CalendarExportSettingsView()
                     } label: {
-                        Label("iPhone のカレンダー", systemImage: "calendar")
+                        Label("\(DeviceWord.name) のカレンダー", systemImage: "calendar")
                             .foregroundColor(.primary)
                     }
                     actionRow("ファイル（.ics）から読み込む", systemImage: "square.and.arrow.down", action: .importICS)
                 } header: {
                     Text("ほかのカレンダー")
                 } footer: {
-                    Text("iPhone のカレンダーの予定を並べて見たり、Travory の予定を iPhone のカレンダーに入れたりできます。")
+                    Text("\(DeviceWord.name) のカレンダーの予定を並べて見たり、Travory の予定を \(DeviceWord.name) のカレンダーに入れたりできます。")
                 }
             }
             .navigationTitle("カレンダー")
