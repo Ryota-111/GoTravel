@@ -1320,7 +1320,7 @@ struct TravelPlanDetailView: View {
                 : themeManager.currentTheme.secondaryText.opacity(0.18),
             placeholderColor: themeManager.currentTheme.secondaryText.opacity(0.45),
             isPast: state == .past,
-            removable: !item.isSingleMove
+            removable: !item.hasFixedTimelineTransport
         ) { mode in
             setTransport(mode, after: item, in: plan)
         }
@@ -1851,7 +1851,7 @@ struct TravelPlanDetailView: View {
                             tint: scheduleAccentColor,
                             isPast: state == .past,
                             leading: 4,
-                            removable: !item.isSingleMove
+                            removable: !item.hasFixedTimelineTransport
                         ) { mode in
                             setTransport(mode, after: item, in: plan)
                         }
@@ -2170,7 +2170,7 @@ struct TravelPlanDetailView: View {
                                 tint: scheduleAccentColor,
                                 isPast: rowState(index: index, nowIndex: nowIndex) == .past,
                                 leading: 4,
-                                removable: !item.isSingleMove
+                                removable: !item.hasFixedTimelineTransport
                             ) { mode in
                                 setTransport(mode, after: item, in: plan)
                             }
