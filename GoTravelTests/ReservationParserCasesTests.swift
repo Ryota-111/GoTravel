@@ -230,4 +230,42 @@ struct ReservationParserCasesTests {
         """
         #expect(ReservationEmailParser.parse(car, referenceDate: Self.reference)[0].cost == 5500)
     }
+
+    @Test("Wallet の搭乗券：ロゴの社名と時刻をつなげて便名にしない。年の無い搭乗日とローマ字の空港も読む（3.8）")
+    func walletBoardingPass() {
+        let text = "出発時刻\t搭乗日\nSKY\t09:20\t12/23\nKOBE\tHANEDA\n神戸\t羽田\n便名\t出発時刻\t到着時刻\t運航状況\nSKY102\t09:20\t10:25\n搭乗者名\t座席\n8G"
+        let drafts = ReservationEmailParser.parse(text, referenceDate: Self.reference)
+        #expect(drafts.count == 1)
+        #expect(drafts.first?.transportNumber == "SKY102")
+        #expect(drafts.first?.departurePlace == "神戸空港")
+        #expect(drafts.first?.arrivalPlace == "羽田空港")
+        #expect(drafts.first?.start?.month == 12)
+        #expect(drafts.first?.start?.day == 23)
+        #expect(drafts.first?.start?.hour == 9)
+        #expect(drafts.first?.arrival?.hour == 10)
+    }
+
+    @Test("宿：字のあいだを空けた「合　計」と、到着予定時刻を読む。名前の＜＞は〈〉に戻す（3.8）")
+    func hotelSpacedTotal() {
+        let text = """
+        【ホテル名】：アパホテル＜六本木SIX＞
+        【宿泊日】：2026年12月23日（水）～2026年12月24日（木）
+        【泊数】：1泊
+        【到着予定時刻】：18:00
+        【宿泊代金】：12,000円
+        【クーポン割引金額】：0
+        【合\t計】：12,000円（諸税・サービス料込）
+        """
+        let draft = ReservationEmailParser.parse(text, referenceDate: Self.reference).first
+        #expect(draft?.kind == .hotel)
+        #expect(draft?.title == "アパホテル〈六本木SIX〉")
+        #expect(draft?.start?.hour == 18)
+        #expect(draft?.cost == 12000)
+    }
+
+    @Test("年の無い「2/1」は、日付の見出しが無ければ日付にしない")
+    func shortDateNeedsLabel() {
+        let events = ReservationEmailParser.dateTimeEvents(in: "大人 2/1室あたり 割合 3/4", referenceDate: Self.reference)
+        #expect(events.isEmpty)
+    }
 }

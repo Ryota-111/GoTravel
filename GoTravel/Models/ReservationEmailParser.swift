@@ -63,7 +63,9 @@ enum ReservationEmailParser {
             drafts = [routeDraftWithoutNumber(kind: kind, in: text, events: events)]
         case .hotel:
             drafts = [periodDraft(kind: .hotel, in: text, events: events,
-                                  startWords: ["チェックイン", "宿泊日", "到着日", "check-in", "check in", "arrival", "arrive"],
+                                  startWords: ["チェックイン", "宿泊日", "到着日", "check-in", "check in", "arrival", "arrive",
+                                               // 「到着予定時刻：18:00」。チェックインの時刻が無い宿の目安（3.8）
+                                               "到着予定時刻", "到着予定"],
                                   endWords: ["チェックアウト", "出発日", "check-out", "check out", "departure", "depart"])]
         case .parking:
             drafts = [periodDraft(kind: .parking, in: text, events: events,
@@ -101,12 +103,16 @@ enum ReservationEmailParser {
                                        "支払い金額", "支払金額", "ご請求額", "お支払い総額", "支払総額", "合計金額", "料金合計",
                                        "総額", "合計", "total", "領収額", "発売額", "運賃額", "航空券代金",
                                        // カーシェア（Times CAR）の「課金予定料金」（3.8）
-                                       "課金予定料金", "利用予定料金", "運賃"]
+                                       "課金予定料金", "利用予定料金", "運賃",
+                                       // 宿の代金（合計が無いとき。3.8）
+                                       "宿泊代金", "宿泊料金"]
 
     /// 支払った金額（円）。ラベルの後ろ（改行1つまで）にある最初の円の金額を使う。
     /// 小計や1枚あたりの値段を拾わないよう、ラベルの無い金額は使わない。
     /// 円以外（ドル・ユーロ）は、予算が円なので読まない
     static func paidAmount(in text: String) -> Double? {
+        // 「【合　計】」のように、字のあいだに空白を入れて幅をそろえたラベルも読む（3.8。アパホテル）
+        let text = text.replacingOccurrences(of: #"合[ \t\u3000]+計"#, with: "合計", options: .regularExpression)
         let ns = text as NSString
         let amount = #"^[^\n]{0,30}?(?:\n[^\n]{0,30}?)?(?:[¥￥]\s?([\d,]+)|([\d,]+)\s?円|JPY\s?([\d,]+)|·\s?(\d{1,3}(?:,\d{3})+|\d{3,})(?=\s?[(（\n]|\s*\z))"#
         guard let amountRegex = try? NSRegularExpression(pattern: amount, options: [.caseInsensitive]) else { return nil }
@@ -397,6 +403,9 @@ enum ReservationEmailParser {
         return false
     }
 
+    /// 年の無い「12/23」を日付として読んでよい見出し
+    private static let shortDateLabels = ["搭乗日", "乗車日", "出発日", "到着日", "利用日", "宿泊日", "来店日", "日付"]
+
     /// 本文の中の「日付（＋近くの時刻）」を、出てくる順に拾う
     static func dateTimeEvents(in text: String, referenceDate: Date) -> [DateTimeEvent] {
         let ns = text as NSString
@@ -420,6 +429,17 @@ enum ReservationEmailParser {
             // 10月6日（年なし）
             (#"(?<![\d/])(\d{1,2})月\s*(\d{1,2})日"#, { m in
                 (nil, Int(ns.substring(with: m.range(at: 1)))!, Int(ns.substring(with: m.range(at: 2)))!)
+            }),
+            // 12/23（年なし。Wallet の搭乗券など）。分数や「2人/1室」と取り違えないよう、
+            // 同じ行かすぐ上の行に「搭乗日」などの日付の見出しがあるときだけ（3.8）
+            (#"(?<![\d/:.])(1[0-2]|0?[1-9])/(3[01]|[12]\d|0?[1-9])(?![\d/])"#, { m in
+                let line = ns.lineRange(for: m.range)
+                var around = ns.substring(with: NSRange(location: line.location, length: m.range.location - line.location))
+                if line.location > 0 {
+                    around += ns.substring(with: ns.lineRange(for: NSRange(location: line.location - 1, length: 0)))
+                }
+                guard shortDateLabels.contains(where: around.contains) else { return nil }
+                return (nil, Int(ns.substring(with: m.range(at: 1)))!, Int(ns.substring(with: m.range(at: 2)))!)
             }),
             // Oct 6, 2026 / October 6th 2026
             (monthName + #"\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(20\d{2})"#, { m in
@@ -620,7 +640,9 @@ enum ReservationEmailParser {
         // 数字の直後に英数字が続くものは便名ではない（予約番号「JL7X9K2P」の頭を JL7 と読まないように）。
         // 写真から読んだ文字では、数字の 0 が英字の O に化けることがある（「SKY025」→「SKYO25」）。
         // 番号の中の O・o は 0 として読む（数字が1つも無いものは便名とみなさない）
-        let pattern = #"(?<![A-Za-z0-9])("# + codes + #")\s?([0-9Oo]{1,4})(?![A-Za-z0-9])(?:\s?便)?"#
+        // 社名と番号のあいだは空白1つまで。タブや改行は表の別の欄なので、つなげない。
+        // 番号の直後が「:」なら時刻（Wallet の搭乗券の「SKY<タブ>09:20」を SKY09 と読んでいた。3.8）
+        let pattern = #"(?<![A-Za-z0-9])("# + codes + #")[ \u3000]?([0-9Oo]{1,4})(?![A-Za-z0-9:])(?:\s?便)?"#
         guard let regex = try? NSRegularExpression(pattern: pattern) else { return [] }
 
         var result: [(Int, String)] = []
@@ -666,8 +688,8 @@ enum ReservationEmailParser {
     /// 愛媛の「松山空港」は、台北の行に入れない（以前は「松山空港」を台北松山として読んでいた）
     private static let airports: [(pattern: String, name: String)] = [
         ("羽田|東京国際|HANEDA|HND", "羽田空港"), ("成田|NARITA|NRT", "成田空港"), ("伊丹|大阪国際|ITAMI|ITM", "伊丹空港"),
-        ("関西国際|関空|関西|KANSAI|KIX", "関西空港"), ("神戸|UKB", "神戸空港"), ("中部|セントレア|NGO", "中部空港"),
-        ("新千歳|CHITOSE|CTS", "新千歳空港"), ("福岡|FUKUOKA|FUK", "福岡空港"), ("那覇|OKA|(?<=[→⇒]\\s?)沖縄|沖縄(?=\\s?[→⇒])", "那覇空港"),
+        ("関西国際|関空|関西|KANSAI|KIX", "関西空港"), ("神戸|KOBE|UKB", "神戸空港"), ("中部|セントレア|NGO", "中部空港"),
+        ("新千歳|CHITOSE|CTS", "新千歳空港"), ("福岡|FUKUOKA|FUK", "福岡空港"), ("那覇|NAHA|OKA|(?<=[→⇒]\\s?)沖縄|沖縄(?=\\s?[→⇒])", "那覇空港"),
         ("鹿児島|KOJ", "鹿児島空港"), ("仙台|SDJ", "仙台空港"), ("広島|HIJ", "広島空港"),
         ("石垣|ISG", "石垣空港"), ("宮古|MMY", "宮古空港"), ("長崎|NGS", "長崎空港"), ("熊本|KMJ", "熊本空港"),
         ("小松|KMQ", "小松空港"), ("松山|MYJ", "松山空港"), ("高松|TAK", "高松空港"), ("函館|HKD", "函館空港"),
@@ -1155,6 +1177,10 @@ enum ReservationEmailParser {
             // 「Bella Dining Cafe(TEL:050-…)」のような電話番号の添え書きは外す
             if let paren = value.range(of: #"[(（]\s*(TEL|tel|電話)"#, options: .regularExpression) {
                 value = String(value[..<paren.lowerBound]).trimmingCharacters(in: .whitespaces)
+            }
+            // 写真から読むと、宿の名前の〈〉が＜＞に化ける（「アパホテル〈六本木SIX〉」。3.8）
+            if kind == .hotel {
+                value = value.replacingOccurrences(of: "<", with: "〈").replacingOccurrences(of: ">", with: "〉")
             }
             if !value.isEmpty { return String(value.prefix(40)) }
         }
