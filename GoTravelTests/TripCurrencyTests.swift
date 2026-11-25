@@ -93,4 +93,25 @@ struct TripCurrencyTests {
         #expect(TripStats.spendCurrency(of: [a, c]) == "JPY")
         #expect(TripStats.spend(of: c, in: "EUR") == 0)
     }
+
+    @Test("円 → 香港ドル → 円と戻しても、行きと同じレートなら金額が元に戻る（3.8、ご報告から）")
+    func roundTripToYen() throws {
+        var dimsum = ScheduleItem(time: Self.start, title: "飲茶")
+        dimsum.foreignCost = ForeignCost(currencyCode: "HKD", rate: 20, amount: 300)
+        dimsum.cost = 6_000
+        let train = ScheduleItem(time: Self.start, title: "成田エクスプレス", cost: 3_070)
+        var plan = trip(items: [dimsum, train])
+
+        plan.changeCurrency(to: "HKD", rate: 20)          // 1 HKD = 20 円
+        // 戻すときの初期値は「1 HKD = 20 円」。画面は 1 HKD が何円かで聞き、逆数にして渡す
+        #expect(plan.exchangeRate(for: "JPY").map { 1 / $0 } == 20)
+        plan.changeCurrency(to: "JPY", rate: 1.0 / 20)
+
+        let items = plan.daySchedules[0].scheduleItems
+        #expect(items[0].foreignCost?.currencyCode == "HKD")
+        #expect(items[0].foreignCost?.rate == 20)
+        #expect(items[0].cost == 6_000)
+        #expect(items[1].foreignCost == nil)
+        #expect(items[1].cost == 3_070)
+    }
 }

@@ -238,15 +238,34 @@ struct BudgetSummaryView: View {
 
     private var currencyAlertMessage: String {
         guard let code = pendingCurrency else { return "" }
-        return "1 \(code) が何\(CurrencyCatalog.unitLabel(of: currentPlan.currencyCode))かを入れてください。"
+        let current = currentPlan.currencyCode
+        // 円に戻すときは「1 HKD が何円か」で聞く。「1 円が何 HKD か」で聞くと、
+        // ふだんの向き（1 HKD = 20 円）の数字を入れてしまい、金額が 1/400 になっていた（ご報告から。3.8）
+        let question = asksRateInverted
+            ? "1 \(current) が何円かを入れてください。"
+            : "1 \(code) が何\(CurrencyCatalog.unitLabel(of: current))かを入れてください。"
+        return question
             + "入っている金額を、このレートで\(CurrencyCatalog.shortName(of: code))に直します（入れた数字は残るので、あとからレートを直せます）。"
+    }
+
+    /// 円に戻すときは、今の通貨 1 単位が何円かで聞く
+    private var asksRateInverted: Bool {
+        pendingCurrency == CurrencyCatalog.yen
+    }
+
+    /// 前にその通貨で入れていた費用があれば、そのときのレートを入れておく
+    /// （円 → 香港ドル → 円と戻すとき、行きと同じレートで戻せば金額も元に戻る）
+    private func suggestedRateText(for code: String) -> String {
+        guard let rate = currentPlan.exchangeRate(for: code), rate > 0 else { return "" }
+        guard code == CurrencyCatalog.yen else { return CurrencyCatalog.editingText(rate) }
+        return CurrencyCatalog.editingText((1 / rate * 1_000_000).rounded() / 1_000_000)
     }
 
     /// 金額が入っていなければすぐ変える。入っていれば、直すためのレートを聞く
     private func chooseCurrency(_ code: String) {
         guard code != currentPlan.currencyCode else { return }
         if currentPlan.hasAnyAmount {
-            currencyRateText = ""
+            currencyRateText = suggestedRateText(for: code)
             pendingCurrency = code
         } else {
             applyCurrency(code, rate: nil)
@@ -255,10 +274,12 @@ struct BudgetSummaryView: View {
 
     private func commitCurrency() {
         guard let code = pendingCurrency,
-              let rate = CurrencyCatalog.parse(currencyRateText), rate > 0 else {
+              let entered = CurrencyCatalog.parse(currencyRateText), entered > 0 else {
             pendingCurrency = nil
             return
         }
+        // changeCurrency は「新しい通貨 1 単位が今の通貨でいくらか」で受け取る
+        let rate = asksRateInverted ? 1 / entered : entered
         applyCurrency(code, rate: rate)
         pendingCurrency = nil
     }
