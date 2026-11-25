@@ -112,7 +112,7 @@ struct WhatsNew: Identifiable {
                 Item(icon: "tram.fill", title: "予約の乗り物を「移動」の形で出せます",
                      detail: "予約から行程に入れた飛行機や新幹線を、移動1件か、出発と到着の2件かで選べます。2件のときも間に乗り物と時間が出ます。"),
                 Item(icon: "text.viewfinder", title: "予約の読み取りを見直しました",
-                     detail: "往復や乗り継ぎの航空券、バス・船の予約も読めるようになりました。"),
+                     detail: "往復や乗り継ぎの航空券、バス・船の予約も読めるようになりました。座席も読み取って入れます。"),
             ],
             showcase: true
         ),
