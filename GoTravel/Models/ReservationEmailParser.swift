@@ -819,12 +819,29 @@ enum ReservationEmailParser {
             }
 
             // 空港はその便の範囲のものだけ。便が1つのときだけ本文全体から探す（3.8。別の便の空港を使っていた）
-            let myAirports = uniqueNames(airports.filter { $0.position >= from && $0.position < limit })
-            let places = myAirports.isEmpty && single ? uniqueNames(airports) : myAirports
+            let inRange = airports.filter { $0.position >= from && $0.position < limit }
+            let pool = inRange.isEmpty && single ? airports : inRange
+            // 1行に2つの空港が並んでいれば、その行の左から順を出発・到着にする（3.8）。
+            // 搭乗券は「KOBE  HANEDA」「神戸  羽田」のように左右に並ぶ。写真によって片方の行だけ
+            // 読み取れると、出てきた順では「羽田、神戸」と逆になることがあった
+            let places = airportPairOnOneLine(pool, in: ns) ?? uniqueNames(pool)
             draft.departurePlace = places.first
             draft.arrivalPlace = places.dropFirst().first
             return draft
         }
+    }
+
+    /// 同じ行に2つの違う空港が書いてある最初の行の、左から順の2つ
+    private static func airportPairOnOneLine(_ mentions: [(position: Int, name: String)], in ns: NSString) -> [String]? {
+        var byLine: [Int: [(position: Int, name: String)]] = [:]
+        for mention in mentions {
+            byLine[ns.lineRange(for: NSRange(location: mention.position, length: 0)).location, default: []].append(mention)
+        }
+        for line in byLine.keys.sorted() {
+            let names = uniqueNames(byLine[line]!.sorted { $0.position < $1.position })
+            if names.count >= 2 { return Array(names.prefix(2)) }
+        }
+        return nil
     }
 
     // MARK: - 新幹線

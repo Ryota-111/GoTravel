@@ -268,4 +268,12 @@ struct ReservationParserCasesTests {
         let events = ReservationEmailParser.dateTimeEvents(in: "大人 2/1室あたり 割合 3/4", referenceDate: Self.reference)
         #expect(events.isEmpty)
     }
+
+    @Test("搭乗券のローマ字の行が片方しか読めなくても、左右に並んだ空港の行から出発・到着を決める（3.8）")
+    func boardingPassPartialRomaji() {
+        let text = "SKY\t09:20\t12/23\nHANEDA\n神戸\t羽田\n便名\t出発時刻\t到着時刻\nSKY102\t09:20\t10:25"
+        let draft = ReservationEmailParser.parse(text, referenceDate: Self.reference).first
+        #expect(draft?.departurePlace == "神戸空港")
+        #expect(draft?.arrivalPlace == "羽田空港")
+    }
 }
