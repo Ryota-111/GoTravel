@@ -43,8 +43,11 @@ enum TripPhotoLibrary {
         var assets: [PHAsset] = []
         // 旅行中に作って保存した思い出の画像は、旅行の写真に混ぜない
         let exported = exportedAssetIds
+        // 旅行計画なしで、写真を自分で選んで作るときは、選んだ写真だけ
+        let picked = FreeMemoryStore.pickedAssetIds(planId: plan.id)
         PHAsset.fetchAssets(with: options).enumerateObjects { asset, _, _ in
-            guard !exported.contains(asset.localIdentifier) else { return }
+            if let picked, !picked.contains(asset.localIdentifier) { return }
+            guard picked != nil || !exported.contains(asset.localIdentifier) else { return }
             switch asset.mediaType {
             case .image where !asset.mediaSubtypes.contains(.photoScreenshot):
                 assets.append(asset)
@@ -55,9 +58,9 @@ enum TripPhotoLibrary {
             }
         }
 
-        let picked = spread(assets, limit: maxScored)
+        let spreadAssets = spread(assets, limit: maxScored)
         var result: [TripPhotoCandidate] = []
-        for asset in picked {
+        for asset in spreadAssets {
             guard let date = asset.creationDate else { continue }
             var candidate = TripPhotoCandidate(id: asset.localIdentifier, date: date, isVideo: asset.mediaType == .video)
             if asset.mediaType == .image, let thumb = await image(asset: asset, maxPixel: 360)?.cgImage {

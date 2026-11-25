@@ -85,7 +85,10 @@ enum TripDigestComposer {
         let result = PHAsset.fetchAssets(with: options)
         var sources: [TripDigest.Source] = []
         var assets: [String: PHAsset] = [:]
+        // 旅行計画なしで、写真を自分で選んで作るときは、選んだ写真だけ
+        let picked = FreeMemoryStore.pickedAssetIds(planId: plan.id)
         result.enumerateObjects { asset, _, _ in
+            if let picked, !picked.contains(asset.localIdentifier) { return }
             guard asset.mediaType == .image || asset.mediaType == .video,
                   !asset.mediaSubtypes.contains(.photoScreenshot),
                   let date = asset.creationDate else { return }

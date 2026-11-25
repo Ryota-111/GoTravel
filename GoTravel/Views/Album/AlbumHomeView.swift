@@ -24,6 +24,11 @@ struct AlbumHomeView: View {
     /// 残した動画が変わった合図（ダイジェストの画面を閉じたら読み直す）
     @State private var libraryVersion = 0
     @State private var digestPlan: TravelPlan?
+    /// 旅行計画なしで作ったもの（3.8）
+    @State private var freeMemories: [FreeMemory] = FreeMemoryStore.all()
+    @State private var settingUpFreeDigest = false
+    /// 「自由に作る」で決めたもの。決める画面を閉じてからダイジェストを開く
+    @State private var createdFreeDigest: FreeMemory?
     /// 旅の記録（3.1）
     @State private var showsStats = false
     /// 「旅の思い出をつくる」「旅のダイジェスト」をしまったか（3.8。アプリを閉じても覚えておく）
@@ -139,7 +144,23 @@ struct AlbumHomeView: View {
                     }
             }
         }
-        .sheet(item: $digestPlan, onDismiss: { libraryVersion += 1 }) { plan in
+        .sheet(isPresented: $settingUpFreeDigest, onDismiss: {
+            // 決める画面が閉じてから開く（続けて別の画面を出すと、出ないことがあるため）
+            if let createdFreeDigest { digestPlan = createdFreeDigest.plan }
+            createdFreeDigest = nil
+        }) {
+            NavigationStack {
+                FreeMemorySetupView(purpose: "旅のダイジェスト") { memory in
+                    freeMemories = FreeMemoryStore.all()
+                    createdFreeDigest = memory
+                    settingUpFreeDigest = false
+                }
+            }
+        }
+        .sheet(item: $digestPlan, onDismiss: {
+            libraryVersion += 1
+            freeMemories = FreeMemoryStore.all()
+        }) { plan in
             // 上の旅行名から、ほかの旅行にも切り替えられる
             TripDigestView(plan: plan, otherPlans: digestCandidates)
         }
@@ -301,11 +322,6 @@ struct AlbumHomeView: View {
             .padding(.horizontal, 20)
             if digestCollapsed {
                 EmptyView()
-            } else if digestCandidates.isEmpty {
-                Text("旅行が始まると、撮った写真と動画から作れます。")
-                    .font(.footnote)
-                    .foregroundColor(themeManager.currentTheme.secondaryText)
-                    .padding(.horizontal, 20)
             } else {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 12) {
@@ -314,7 +330,18 @@ struct AlbumHomeView: View {
                                            saved: TripDigestLibrary.entries(planId: plan.id).first,
                                            onOpen: { digestPlan = plan },
                                            onPlay: { entry in playingDigest = entry })
+                                .contextMenu {
+                                    if FreeMemoryStore.isFree(planId: plan.id), let id = plan.id {
+                                        Button(role: .destructive) {
+                                            FreeMemoryStore.delete(id: id)
+                                            withAnimation { freeMemories = FreeMemoryStore.all() }
+                                        } label: {
+                                            Label("削除", systemImage: "trash")
+                                        }
+                                    }
+                                }
                         }
+                        freeDigestCard
                     }
                     .padding(.horizontal, 20)
                     .padding(.vertical, 4)
@@ -391,12 +418,41 @@ struct AlbumHomeView: View {
             .foregroundColor(accentColor)
     }
 
-    /// ダイジェストを作れる旅行（もう始まっている旅行。新しい順）
+    /// ダイジェストを作れる旅行（もう始まっている旅行と、旅行計画なしで作ったもの。新しい順）
     private var digestCandidates: [TravelPlan] {
         let today = Calendar.current.startOfDay(for: Date())
-        return travelPlanViewModel.travelPlans
+        return (travelPlanViewModel.travelPlans
             .filter { Calendar.current.startOfDay(for: $0.startDate) <= today }
+            + freeMemories.map(\.plan))
             .sorted { $0.startDate > $1.startDate }
+    }
+
+    /// 旅行計画なしでダイジェストを作る入口（3.8）。旅行のカードと同じ大きさで、列の最後に置く
+    private var freeDigestCard: some View {
+        Button { settingUpFreeDigest = true } label: {
+            VStack(spacing: 10) {
+                Image(systemName: "plus")
+                    .font(.title2.weight(.semibold))
+                    .foregroundColor(mainColor)
+                    .frame(width: 48, height: 48)
+                    .background(Circle().fill(mainColor.opacity(0.12)))
+                Text("自由に作る")
+                    .font(.subheadline.weight(.bold))
+                    .foregroundColor(accentColor)
+                Text(digestCandidates.isEmpty ? "旅行計画がなくても\n期間か写真を選んで" : "期間か写真を\n選んで作る")
+                    .font(.caption)
+                    .multilineTextAlignment(.center)
+                    .foregroundColor(themeManager.currentTheme.secondaryText)
+            }
+            .frame(width: DigestTripCard.size.width, height: DigestTripCard.size.height)
+            .background(
+                RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous)
+                    .strokeBorder(mainColor.opacity(0.4), style: StrokeStyle(lineWidth: 1.5, dash: [6, 4]))
+            )
+            .contentShape(RoundedRectangle(cornerRadius: AppRadius.large, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("旅行計画なしでダイジェストを自由に作る")
     }
 
     private func statChip(icon: String, text: String) -> some View {

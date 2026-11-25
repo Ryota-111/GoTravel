@@ -136,6 +136,8 @@ enum DemoDataSeeder {
         for plan in [okinawa, kyoto, sapporo, osaka, hakone] {
             for kind in MemoryKind.allCases { MemoryStore.delete(planId: plan.id ?? "", kind: kind) }
         }
+        // 旅行計画なしで作ったもの（3.8）も、撮るたびに消す
+        for memory in FreeMemoryStore.all() { FreeMemoryStore.delete(id: memory.id) }
 
         let plans = [
             Plan(title: "鎌倉さんぽ", startDate: day(5), endDate: day(5), places: [],

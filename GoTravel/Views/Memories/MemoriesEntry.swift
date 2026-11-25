@@ -154,26 +154,51 @@ struct MemoryTripPicker: View {
     @ObservedObject private var themeManager = ThemeManager.shared
     /// 表紙の写真（小さく縮めたもの）
     @State private var covers: [String: UIImage] = [:]
+    /// 旅行計画なしで作ったもの（3.8）
+    @State private var freeMemories: [FreeMemory] = FreeMemoryStore.all()
+    @State private var settingUpFree = false
+    /// 「自由に作る」で決めたもの。決める画面を閉じてから作る画面へ移る
+    @State private var createdFree: FreeMemory?
+    @State private var openFree: FreeMemory?
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     header
-                    if plans.isEmpty {
+                    freeButton
+                    if plans.isEmpty && freeMemories.isEmpty {
                         emptyState
                     }
                     ForEach(plans, id: \.id) { plan in
                         NavigationLink {
-                            if kind == .diary {
-                                DiaryEditorView(plan: plan)
-                            } else {
-                                MemoryEditorView(plan: plan, kind: kind)
-                            }
+                            editor(for: plan)
                         } label: {
                             tripCard(plan)
                         }
                         .buttonStyle(.plain)
+                    }
+                    if !freeMemories.isEmpty {
+                        Text("自由に作ったもの")
+                            .font(.subheadline.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(.top, plans.isEmpty ? 0 : 8)
+                        ForEach(freeMemories) { memory in
+                            NavigationLink {
+                                editor(for: memory.plan)
+                            } label: {
+                                tripCard(memory.plan)
+                            }
+                            .buttonStyle(.plain)
+                            .contextMenu {
+                                Button(role: .destructive) {
+                                    FreeMemoryStore.delete(id: memory.id)
+                                    withAnimation { freeMemories = FreeMemoryStore.all() }
+                                } label: {
+                                    Label("削除", systemImage: "trash")
+                                }
+                            }
+                        }
                     }
                 }
                 .padding(.horizontal, 20)
@@ -185,8 +210,100 @@ struct MemoryTripPicker: View {
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) { Button("閉じる") { dismiss() } }
             }
-            .task { loadCovers() }
+            .task { await loadCovers() }
+            .navigationDestination(item: $openFree) { memory in
+                editor(for: memory.plan)
+            }
+            .sheet(isPresented: $settingUpFree, onDismiss: {
+                // 決める画面が閉じてから移る（閉じる途中に移ると、移らないことがあるため）
+                if let createdFree { openFree = createdFree }
+                createdFree = nil
+            }) {
+                NavigationStack {
+                    FreeMemorySetupView(purpose: kind.title) { memory in
+                        freeMemories = FreeMemoryStore.all()
+                        createdFree = memory
+                        settingUpFree = false
+                    }
+                }
+            }
         }
+    }
+
+    @ViewBuilder
+    private func editor(for plan: TravelPlan) -> some View {
+        if kind == .diary {
+            DiaryEditorView(plan: plan)
+        } else {
+            MemoryEditorView(plan: plan, kind: kind)
+        }
+    }
+
+    /// 旅行計画なしで作る入口（3.8）。作るものと同じ紙と墨の見た目にして、旅行の写真のカードと並べても負けないように
+    private var freeButton: some View {
+        Button { settingUpFree = true } label: {
+            HStack(spacing: 16) {
+                // 白いふちの写真が2枚重なった絵
+                ZStack {
+                    freeStackCard(angle: -10, x: -8, icon: "photo")
+                    freeStackCard(angle: 8, x: 8, icon: "sparkles")
+                }
+                .frame(width: 78, height: 78)
+                VStack(alignment: .leading, spacing: 1) {
+                    Text("Make your own")
+                        .font(MemoryFont.script(28))
+                    Text("旅行を選ばずに自由に作る")
+                        .font(.system(size: 14, weight: .bold))
+                    Text("期間か写真を選ぶだけ。旅行計画がなくても大丈夫")
+                        .font(MemoryFont.sans(10.5))
+                        .foregroundStyle(MemoryColor.softInk)
+                        .fixedSize(horizontal: false, vertical: true)
+                        .padding(.top, 3)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.right")
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundStyle(MemoryColor.paper)
+                    .frame(width: 32, height: 32)
+                    .background(Circle().fill(MemoryColor.ink))
+            }
+            .foregroundStyle(MemoryColor.ink)
+            .padding(.vertical, 18)
+            .padding(.horizontal, 16)
+            .background(PaperBackground())
+            .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+            .overlay(alignment: .top) {
+                // マスキングテープ
+                Rectangle()
+                    .fill(Color(red: 0.86, green: 0.78, blue: 0.62).opacity(0.8))
+                    .frame(width: 70, height: 16)
+                    .rotationEffect(.degrees(-3))
+                    .offset(y: -7)
+            }
+            .shadow(color: .black.opacity(0.12), radius: 10, y: 5)
+            .contentShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+        }
+        .buttonStyle(.plain)
+        .padding(.top, 6)
+    }
+
+    private func freeStackCard(angle: Double, x: CGFloat, icon: String) -> some View {
+        VStack(spacing: 0) {
+            Rectangle()
+                .fill(MemoryColor.paperShadow.opacity(0.6))
+                .frame(width: 46, height: 46)
+                .overlay {
+                    Image(systemName: icon)
+                        .font(.system(size: 15, weight: .light))
+                        .foregroundStyle(MemoryColor.softInk)
+                }
+            Color.clear.frame(width: 46, height: 10)
+        }
+        .padding(4)
+        .background(Color.white)
+        .shadow(color: .black.opacity(0.18), radius: 3, y: 1.5)
+        .rotationEffect(.degrees(angle))
+        .offset(x: x)
     }
 
     /// 何を作るか
@@ -215,7 +332,7 @@ struct MemoryTripPicker: View {
             Image(systemName: "airplane.departure")
                 .font(.system(size: 36))
                 .foregroundStyle(.secondary)
-            Text("旅行が始まると、旅行中に撮った写真から作れます。")
+            Text("旅行が始まると、旅行中に撮った写真から作れます。\n旅行計画がなくても、上の「自由に作る」から作れます。")
                 .font(.subheadline)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
@@ -286,11 +403,17 @@ struct MemoryTripPicker: View {
         .accessibilityHint("この旅行で\(kind.title)を作ります")
     }
 
-    private func loadCovers() {
+    private func loadCovers() async {
         for plan in plans {
             guard let id = plan.id, covers[id] == nil,
                   let image = TravelBookletRenderer.coverImage(for: plan) else { continue }
             covers[id] = image.downscaled(maxPixel: 900)
+        }
+        // 自由に作ったものは、使う写真の最初の1枚を表紙にする
+        for memory in freeMemories where covers[memory.id] == nil {
+            guard let first = FreeMemoryStore.coverAssetId(for: memory),
+                  let image = await TripPhotoLibrary.image(assetId: first, maxPixel: 900) else { continue }
+            covers[memory.id] = image
         }
     }
 }

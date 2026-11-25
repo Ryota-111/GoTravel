@@ -94,7 +94,7 @@ enum MemoryBuilder {
     /// 写真の無い日は、予定だけで項目を作る
     static func diaryPages(plan: TravelPlan, candidates: [TripPhotoCandidate],
                            calendar: Calendar = .current) -> [DiaryPage] {
-        (1...max(plan.dayCount, 1)).map { day in
+        let pages: [DiaryPage] = (1...max(plan.dayCount, 1)).map { day in
             let date = plan.date(forDay: day)
             let items = (plan.daySchedules.first { $0.dayNumber == day }?.scheduleItems ?? [])
                 .filter { !$0.hasUndecidedTime }
@@ -114,6 +114,10 @@ enum MemoryBuilder {
             }
             return DiaryPage(dayNumber: day, date: date, entries: entries)
         }
+        // 旅行計画なしで作るもの（予定が無い）は、写真の無い日のページを作らない（白紙のページが並ぶため）
+        guard FreeMemoryStore.isFree(planId: plan.id) else { return pages }
+        let filled = pages.filter { !$0.entries.isEmpty }
+        return filled.isEmpty ? Array(pages.prefix(1)) : filled
     }
 
     /// 動画も含めて、時間が散らばるように選ぶ

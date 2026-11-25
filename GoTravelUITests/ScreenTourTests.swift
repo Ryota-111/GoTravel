@@ -155,6 +155,71 @@ final class ScreenTourTests: XCTestCase {
                 shot("memories-\(index)")
             }
         }
+        if steps.contains("free") {
+            // 旅行計画なしで自由に作る（3.8）：思い出タブのダイジェストの列 → コラージュの「自由に作る」
+            let app = launch(tab: 0, extra: extra)
+            openTab(app, "思い出")
+            sleep(2)
+            // ダイジェストの列の最後（「自由に作る」のカード）まで送る
+            let card = app.descendants(matching: .any).matching(NSPredicate(format: "label CONTAINS '3泊4日のダイジェスト'")).firstMatch
+            if card.waitForExistence(timeout: 3) {
+                let window = app.windows.firstMatch
+                let y = card.frame.midY / window.frame.height
+                for _ in 0..<3 {
+                    window.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: y))
+                        .press(forDuration: 0.05, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.1, dy: y)))
+                }
+                sleep(1)
+            }
+            shot("free-digest-row")
+            if tap(app, "写真コラージュ") {
+                sleep(1)
+                shot("free-entry")
+            }
+            if tap(app, "自由に作る") {
+                allowPhotos(app)
+                sleep(2)
+                shot("free-setup")
+                // 写真を自分で選ぶ（選択の画面は別のアプリなので、出せたら写真を数枚押してみる）
+                app.swipeUp()
+                sleep(1)
+                if tap(app, "使いたい写真") {
+                    shot("free-pick-empty")
+                    if tap(app, "100枚まで") {
+                        sleep(3)
+                        shot("free-picker-sheet")
+                        // 選択の画面は別のアプリで中を探せないので、写真のマスの位置を押して、右上の印で決める
+                        let window = app.windows.firstMatch
+                        for (x, y) in [(0.5, 0.43), (0.83, 0.43), (0.5, 0.74), (0.83, 0.74), (0.5, 0.58)] {
+                            window.coordinate(withNormalizedOffset: CGVector(dx: x, dy: y)).tap()
+                            usleep(400_000)
+                        }
+                        sleep(1)
+                        let done = XCUIApplication(bundleIdentifier: "com.apple.springboard").buttons.matching(NSPredicate(format: "label IN %@", ["追加", "完了", "Add", "Done"])).firstMatch
+                        if done.exists {
+                            done.tap()
+                        } else {
+                            window.coordinate(withNormalizedOffset: CGVector(dx: 0.9, dy: 0.155)).press(forDuration: 0.15)
+                        }
+                        sleep(3)
+                        sleep(3)
+                        shot("free-pick-grid")
+                    }
+                    tap(app, "期間で選ぶ")
+                }
+                if tap(app, "写真コラージュを作る") {
+                    allowPhotos(app)
+                    sleep(8)
+                    shot("free-editor")
+                    // 戻ると、旅行の一覧の下に「自由に作ったもの」として残っている
+                    app.navigationBars.buttons.firstMatch.tap()
+                    sleep(2)
+                    app.swipeUp()
+                    sleep(1)
+                    shot("free-picker")
+                }
+            }
+        }
         if steps.contains("map") {
             // 旅行計画の地図タブ（地図と行程表）。地図の絵が読み込まれるまで待つ
             let app = launch(tab: 0, extra: extra)

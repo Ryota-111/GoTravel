@@ -96,7 +96,16 @@ struct DigestTripCard: View {
                                         start as NSDate, end as NSDate, PHAssetMediaType.image.rawValue)
         options.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: true)]
         options.fetchLimit = 1
-        guard let asset = PHAsset.fetchAssets(with: options).firstObject else { return }
+        // 写真を自分で選んで作ったもの（旅行計画なし）は、選んだ写真の最初の1枚
+        let first: PHAsset?
+        if let picked = FreeMemoryStore.pickedAssetIds(planId: plan.id) {
+            let pickedOptions = PHFetchOptions()
+            pickedOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: true)]
+            first = PHAsset.fetchAssets(withLocalIdentifiers: Array(picked), options: pickedOptions).firstObject
+        } else {
+            first = PHAsset.fetchAssets(with: options).firstObject
+        }
+        guard let asset = first else { return }
         let request = PHImageRequestOptions()
         request.deliveryMode = .opportunistic
         request.isNetworkAccessAllowed = true
