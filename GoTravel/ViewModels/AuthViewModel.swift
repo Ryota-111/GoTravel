@@ -27,6 +27,11 @@ final class AuthViewModel: ObservableObject {
     private let legacyEmailKey = "appleSignInUserEmail"
 
     init() {
+        #if DEBUG
+        // サインインの画面を確かめるとき（`-TravoryPreviewLogin`）は、入っていない状態で始める
+        if ProcessInfo.processInfo.arguments.contains("-TravoryPreviewLogin") { return }
+        #endif
+
         // UserDefaultsから保存されたユーザー情報を復元
         if let savedUserId = userDefaults.string(forKey: userIdKey) {
             migrateLegacyProfileIfNeeded(userId: savedUserId)
