@@ -130,6 +130,8 @@ struct TravelPlanDetailView: View {
     @State private var showAddScheduleItem = false
     @State private var showBasicInfoEditor = false
     @State private var showDuplicateSheet = false
+    /// 日程のスポットをまとめて場所保存に入れる確認（3.9）
+    @State private var showsSaveSpotsDialog = false
     /// 旅のしおり（PDF）。Pro でなければ Pro の案内を出す
     @State private var showsBooklet = false
     @State private var showsProForBooklet = false
@@ -215,6 +217,10 @@ struct TravelPlanDetailView: View {
 
     private var currentPlan: TravelPlan? {
         viewModel.travelPlans.first(where: { $0.id == planId })
+    }
+
+    private var saveSpotsDialogTitle: String {
+        "日程のスポット\(currentPlan?.scheduleSpots.count ?? 0)か所を場所保存に入れます"
     }
 
     private var tripDuration: Int {
@@ -583,6 +589,15 @@ struct TravelPlanDetailView: View {
         // アプリに戻ってきたとき。1時間以上たっていれば取り直す（たっていなければ、覚えた予報を使うだけ）
         .onChange(of: scenePhase) { _, phase in
             if phase == .active { fetchPlanWeather() }
+        }
+        .confirmationDialog(saveSpotsDialogTitle, isPresented: $showsSaveSpotsDialog, titleVisibility: .visible) {
+            if let plan = currentPlan {
+                Button("行った場所として入れる") { saveSpots(plan.scheduleSpots, as: .visited, plan: plan) }
+                Button("行きたい場所として入れる") { saveSpots(plan.scheduleSpots, as: .wish, plan: plan) }
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("同じ場所がもう場所保存にあるときは、二重には入れません。")
         }
         .onAppear {
             withAnimation {
@@ -1033,6 +1048,10 @@ struct TravelPlanDetailView: View {
                 if !arrival {
                     duplicateMenu(item: item, plan: plan)
                 }
+                // 日程の場所を、そのまま場所保存の「行きたい」「行った」に（3.9、ご要望から）
+                if !arrival {
+                    saveToPlacesMenu(item: item, plan: plan)
+                }
                 Button(role: .destructive) {
                     deleteScheduleItem(item, from: plan)
                 } label: {
@@ -1367,6 +1386,34 @@ struct TravelPlanDetailView: View {
         }
     }
 
+    // MARK: - 場所保存に入れる（3.9）
+
+    @ViewBuilder
+    private func saveToPlacesMenu(item: ScheduleItem, plan: TravelPlan) -> some View {
+        if let spot = item.scheduleSpot {
+            Menu {
+                Button {
+                    saveSpots([spot], as: .wish, plan: plan)
+                } label: {
+                    Label("行きたい場所として", systemImage: "heart")
+                }
+                Button {
+                    saveSpots([spot], as: .visited, plan: plan)
+                } label: {
+                    Label("行った場所として", systemImage: "checkmark.circle")
+                }
+            } label: {
+                Label("場所保存に入れる", systemImage: "mappin.and.ellipse")
+            }
+        }
+    }
+
+    private func saveSpots(_ spots: [ScheduleSpot], as kind: ScheduleSpotSaveKind, plan: TravelPlan) {
+        guard let userId = authVM.userId, !spots.isEmpty else { return }
+        let summary = ScheduleSpotSaver.save(spots, as: kind, userId: userId, travelPlanId: plan.id)
+        showToast(summary.message(kind: kind))
+    }
+
     // MARK: - 複製（3.8）
 
     /// 複製する先の日を選ぶメニュー。いま見ている日をいちばん上に出す
@@ -1529,6 +1576,15 @@ struct TravelPlanDetailView: View {
                         showsCalendarExport = true
                     } label: {
                         Label("\(DeviceWord.name) のカレンダーに追加", systemImage: "calendar.badge.plus")
+                    }
+
+                    // 日程の場所をまとめて場所保存へ（3.9、ご要望から）。場所の入った予定が無ければ出さない
+                    if !plan.scheduleSpots.isEmpty {
+                        Button {
+                            showsSaveSpotsDialog = true
+                        } label: {
+                            Label("スポットを場所保存に入れる", systemImage: "mappin.and.ellipse")
+                        }
                     }
 
                     Divider()
