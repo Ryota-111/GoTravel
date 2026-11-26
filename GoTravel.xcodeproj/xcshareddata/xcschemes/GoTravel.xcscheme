@@ -16,7 +16,7 @@
             <BuildableReference
                BuildableIdentifier = "primary"
                BlueprintIdentifier = "6C713E3F2E80F8240072D26B"
-               BuildableName = "GoTravel.app"
+               BuildableName = "Travory.app"
                BlueprintName = "GoTravel"
                ReferencedContainer = "container:GoTravel.xcodeproj">
             </BuildableReference>
@@ -69,7 +69,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "6C713E3F2E80F8240072D26B"
-            BuildableName = "GoTravel.app"
+            BuildableName = "Travory.app"
             BlueprintName = "GoTravel"
             ReferencedContainer = "container:GoTravel.xcodeproj">
          </BuildableReference>
@@ -99,7 +99,7 @@
          <BuildableReference
             BuildableIdentifier = "primary"
             BlueprintIdentifier = "6C713E3F2E80F8240072D26B"
-            BuildableName = "GoTravel.app"
+            BuildableName = "Travory.app"
             BlueprintName = "GoTravel"
             ReferencedContainer = "container:GoTravel.xcodeproj">
          </BuildableReference>

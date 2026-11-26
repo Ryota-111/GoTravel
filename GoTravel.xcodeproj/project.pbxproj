@@ -60,7 +60,7 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		6C713E402E80F8240072D26B /* GoTravel.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = GoTravel.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		6C713E402E80F8240072D26B /* Travory.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Travory.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		6C713E4D2E80F8270072D26B /* GoTravelTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GoTravelTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6C713E572E80F8270072D26B /* GoTravelUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = GoTravelUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		6CE7BFAB3018E05700D30B9F /* GoTravelWidgetExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = GoTravelWidgetExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -198,7 +198,7 @@
 		6C713E412E80F8240072D26B /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				6C713E402E80F8240072D26B /* GoTravel.app */,
+				6C713E402E80F8240072D26B /* Travory.app */,
 				6C713E4D2E80F8270072D26B /* GoTravelTests.xctest */,
 				6C713E572E80F8270072D26B /* GoTravelUITests.xctest */,
 				6CE7BFAB3018E05700D30B9F /* GoTravelWidgetExtension.appex */,
@@ -239,7 +239,7 @@
 			);
 			name = GoTravel;
 			productName = GoTravel;
-			productReference = 6C713E402E80F8240072D26B /* GoTravel.app */;
+			productReference = 6C713E402E80F8240072D26B /* Travory.app */;
 			productType = "com.apple.product-type.application";
 		};
 		6C713E4C2E80F8270072D26B /* GoTravelTests */ = {
@@ -636,7 +636,8 @@
 				);
 				MARKETING_VERSION = 3.8;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gmail.taismryotasis.Travory;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_MODULE_NAME = GoTravel;
+				PRODUCT_NAME = Travory;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -681,7 +682,8 @@
 				);
 				MARKETING_VERSION = 3.8;
 				PRODUCT_BUNDLE_IDENTIFIER = com.gmail.taismryotasis.Travory;
-				PRODUCT_NAME = "$(TARGET_NAME)";
+				PRODUCT_MODULE_NAME = GoTravel;
+				PRODUCT_NAME = Travory;
 				PROVISIONING_PROFILE_SPECIFIER = "";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -710,7 +712,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GoTravel.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GoTravel";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Travory.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Travory";
 			};
 			name = Debug;
 		};
@@ -731,7 +733,7 @@
 				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
 				SWIFT_VERSION = 5.0;
 				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/GoTravel.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/GoTravel";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/Travory.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/Travory";
 			};
 			name = Release;
 		};
