@@ -70,8 +70,8 @@ struct DigestFinish {
     }
 }
 
-/// 仕上げの設定を選ぶ欄（使う写真を確かめる画面に出す）。
-/// すぐ上の「文字の位置」と同じく、動画と同じ部品で描いた見本を押して入れる・入れないを選ぶ
+/// 仕上げの設定を選ぶ欄（動画を作る画面の下。種類ごとのタブで出し分ける）。
+/// 見本は動画と同じ部品で描く
 struct DigestFinishOptions: View {
     let plan: TravelPlan
     let scope: TripDigest.Scope
@@ -80,6 +80,9 @@ struct DigestFinishOptions: View {
     let assets: [String: PHAsset]
     /// 地図のカードの文字も、選んでいる位置に出す
     let textPosition: TripDigestComposer.TextPosition
+    /// どの設定を出すか（3.9。色味・文字・仕上げ・音楽に分けた）
+    var part: DigestEditTab = .finish
+    @AppStorage("tripDigestTextPosition") private var textPositionValue = TripDigestComposer.TextPosition.bottomLeft.rawValue
 
     @AppStorage(DigestFinish.openingKey) private var opening = true
     @AppStorage(DigestFinish.mapKey) private var map = true
@@ -103,10 +106,79 @@ struct DigestFinishOptions: View {
     private var stops: [TripDigest.MapStop] { TripDigest.mapStops(plan: plan, scope: scope) }
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            Text("仕上がり")
-                .font(.caption.weight(.semibold))
-                .foregroundColor(.secondary)
+        VStack(alignment: .leading, spacing: 10) {
+            switch part {
+            case .look: lookSection
+            case .text: textSection
+            case .finish: finishSection
+            case .photos: EmptyView()
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .task(id: "\(plan.title)|\(plan.destination)|\(scope.id)|\(shape)|\(font)") { renderOpeningText() }
+        .task(id: "\(scope.id)|\(textPosition.rawValue)|\(proStore.isPurchased)|\(stops.count)|\(shape)|\(font)") { await renderMap() }
+        .task(id: "\(sample?.sourceId ?? "")|\(shape)") { await renderLooks() }
+        .onDisappear { player.stop() }
+    }
+
+    private func heading(_ text: String) -> some View {
+        Text(text)
+            .font(.subheadline.weight(.semibold))
+    }
+
+    private func note(_ text: String) -> some View {
+        Text(text)
+            .font(.caption)
+            .foregroundColor(.secondary)
+            .fixedSize(horizontal: false, vertical: true)
+    }
+
+    // MARK: 色味
+
+    private var lookSection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            heading("色味")
+            lookRow
+            note("全部のコマを同じ色味にそろえます。「デジカメ」を選ぶと、文字は「カメラの日付」になります（「文字」で変えられます）。")
+        }
+    }
+
+    // MARK: 文字
+
+    private var textSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            DigestTextPositionPicker(selection: $textPositionValue, sample: sample, assets: assets)
+            switch TripDigestComposer.TextPosition(rawValue: textPositionValue) ?? .bottomLeft {
+            case .cameraDate: note("昔のカメラのように、右下に撮った日付と時刻をオレンジで写し込みます。場所の名前は出ません。")
+            case .hidden: note("日付も場所の名前も出しません。写真だけを流します。")
+            default: note("その日の何日目と時刻、近くの予定の場所の名前を出します。写真を押すと、場所の名前を好きな文字に変えられます（Pro）。")
+            }
+            // 文字の書体（3.5。Pro）。その書体で書いた「旅」と名前を並べる
+            choiceRow("書体") {
+                ForEach(DigestFont.allCases) { candidate in
+                    chip(selected: font == candidate.rawValue,
+                         accessibility: "文字の書体：\(candidate.name)\(candidate.isPro && !proStore.isPurchased ? "（Pro）" : "")") {
+                        font = candidate.rawValue
+                    } label: {
+                        HStack(spacing: 5) {
+                            Text("Aa 旅")
+                                .font(Font(candidate.font(ofSize: 15, weight: .bold)))
+                            Text(candidate.name)
+                            if candidate.isPro && !proStore.isPurchased {
+                                ProBadge(onAccent: font == candidate.rawValue)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // MARK: 仕上げ
+
+    private var finishSection: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            heading("最初と最後のカード")
             HStack(alignment: .top, spacing: 14) {
                 tile(name: "題名", isOn: $opening) {
                     ZStack {
@@ -139,7 +211,7 @@ struct DigestFinishOptions: View {
                 }
             }
             .frame(maxWidth: .infinity)
-            lookRow
+            heading("形と長さ")
                 .padding(.top, 6)
             choiceRow("形") {
                 ForEach(DigestShape.allCases) { candidate in
@@ -160,24 +232,6 @@ struct DigestFinishOptions: View {
                     }
                 }
             }
-            // 文字の書体（3.5。Pro）。その書体で書いた「旅」と名前を並べる
-            choiceRow("書体") {
-                ForEach(DigestFont.allCases) { candidate in
-                    chip(selected: font == candidate.rawValue,
-                         accessibility: "文字の書体：\(candidate.name)\(candidate.isPro && !proStore.isPurchased ? "（Pro）" : "")") {
-                        font = candidate.rawValue
-                    } label: {
-                        HStack(spacing: 5) {
-                            Text("Aa 旅")
-                                .font(Font(candidate.font(ofSize: 15, weight: .bold)))
-                            Text(candidate.name)
-                            if candidate.isPro && !proStore.isPurchased {
-                                ProBadge(onAccent: font == candidate.rawValue)
-                            }
-                        }
-                    }
-                }
-            }
             choiceRow("1コマ") {
                 ForEach(DigestPace.choices, id: \.self) { seconds in
                     chip(selected: pace == seconds, accessibility: "1コマの長さ：\(DigestPace.text(seconds))") {
@@ -187,14 +241,22 @@ struct DigestFinishOptions: View {
                     }
                 }
             }
-            soundRow
-                .padding(.top, 2)
+            heading("音")
+                .padding(.top, 6)
+            // 曲がアプリに入っていれば曲も選ぶ。入っていなければ、動画の音を入れるかだけ（3.9。「音楽」のタブはやめた）
+            if TripDigestMusic.tracks.isEmpty {
+                Toggle(isOn: $keepsSound) {
+                    Label("動画の音を入れる", systemImage: keepsSound ? "speaker.wave.2.fill" : "speaker.slash.fill")
+                        .font(.subheadline)
+                }
+                note("動画のコマで録れた音を、そのまま入れるかを選べます。写真のコマは音なしです。")
+            } else {
+                soundRow
+                note("曲を押すと少し流れます。右のスピーカーで、動画のコマの音を残すか消すかを選べます。")
+            }
         }
-        .task(id: "\(plan.title)|\(plan.destination)|\(scope.id)|\(shape)|\(font)") { renderOpeningText() }
-        .task(id: "\(scope.id)|\(textPosition.rawValue)|\(proStore.isPurchased)|\(stops.count)|\(shape)|\(font)") { await renderMap() }
-        .task(id: "\(sample?.sourceId ?? "")|\(shape)") { await renderLooks() }
-        .onDisappear { player.stop() }
     }
+
 
     /// 見本の絵を押して、入れる・入れないを切り替える（「文字の位置」と同じ大きさと選び方）
     private func tile<Content: View>(name: String, isOn: Binding<Bool>, @ViewBuilder content: () -> Content) -> some View {
@@ -274,11 +336,17 @@ struct DigestFinishOptions: View {
                 ForEach(DigestLook.allCases) { candidate in
                     let selected = look == candidate.rawValue
                     Button {
-                        withAnimation(.easeInOut(duration: 0.15)) { look = candidate.rawValue }
+                        withAnimation(.easeInOut(duration: 0.15)) {
+                            look = candidate.rawValue
+                            // デジカメらしく、日付の写し込みにする（文字の出し方は「文字」で変えられる）
+                            if candidate == .digicam {
+                                textPositionValue = TripDigestComposer.TextPosition.cameraDate.rawValue
+                            }
+                        }
                     } label: {
                         VStack(spacing: 4) {
                             Color(.tertiarySystemFill)
-                                .frame(width: 58, height: 58)
+                                .frame(width: 66, height: 66)
                                 .overlay {
                                     if let image = lookSamples[candidate] {
                                         Image(uiImage: image).resizable().scaledToFill()
@@ -539,6 +607,64 @@ struct DigestLookShowcase: View {
             UIColor(white: 1, alpha: 0.5).setFill()
             for y in [0.62, 0.69, 0.76] {
                 cg.fill(CGRect(x: 30 + y * 40, y: size.height * y, width: 60, height: 2))
+            }
+        }
+    }
+}
+
+/// 動画を作る画面の下で、選ぶ設定の種類（3.9）
+enum DigestEditTab: String, CaseIterable, Identifiable {
+    case photos, look, text, finish
+
+    var id: String { rawValue }
+
+    var name: String {
+        switch self {
+        case .photos: return "写真"
+        case .look: return "色味"
+        case .text: return "文字"
+        case .finish: return "仕上げ"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .photos: return "photo.on.rectangle"
+        case .look: return "camera.filters"
+        case .text: return "textformat"
+        case .finish: return "rectangle.stack"
+        }
+    }
+}
+
+/// 設定の種類を切り替える帯（アイコンと名前）
+struct DigestEditTabBar: View {
+    @Binding var selection: DigestEditTab
+
+    var body: some View {
+        HStack(spacing: 4) {
+            ForEach(DigestEditTab.allCases) { tab in
+                let selected = selection == tab
+                Button {
+                    withAnimation(.easeInOut(duration: 0.15)) { selection = tab }
+                } label: {
+                    VStack(spacing: 3) {
+                        Image(systemName: tab.systemImage)
+                            .font(.system(size: 17, weight: .semibold))
+                            .frame(height: 22)
+                        Text(tab.name)
+                            .font(.caption2.weight(selected ? .bold : .medium))
+                    }
+                    .foregroundColor(selected ? .accentColor : .secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 6)
+                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        .fill(selected ? Color.accentColor.opacity(0.12) : .clear))
+                    .contentShape(Rectangle())
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(tab.name)
+                .accessibilityAddTraits(selected ? .isSelected : [])
             }
         }
     }

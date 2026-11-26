@@ -65,7 +65,7 @@ nonisolated struct DigestClipEdit: Codable, Equatable, Hashable {
 
 /// 色味。全部のコマを同じ色味にそろえる（題名のカードの背景も）
 nonisolated enum DigestLook: String, CaseIterable, Identifiable {
-    case natural, film, warm, crisp, mono
+    case natural, film, warm, crisp, mono, digicam, retro, lightLeak, dusty
 
     static let storageKey = "tripDigestLook"
 
@@ -78,8 +78,13 @@ nonisolated enum DigestLook: String, CaseIterable, Identifiable {
         case .warm: return "あたたかい"
         case .crisp: return "すっきり"
         case .mono: return "白黒"
+        case .digicam: return "デジカメ"
+        case .retro: return "レトロ"
+        case .lightLeak: return "光もれ"
+        case .dusty: return "ヴィンテージ"
         }
     }
+
 
     /// Pro の色味（「そのまま」以外）
     var isPro: Bool { self != .natural }

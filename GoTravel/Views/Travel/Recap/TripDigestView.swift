@@ -147,7 +147,16 @@ struct TripDigestView: View {
 
     private var carousel: some View {
         VStack(spacing: 0) {
-            Spacer(minLength: 12)
+            Spacer(minLength: 8)
+            // どこまでを1本の動画にするかを選ぶ画面だと、最初に言う（3.9）
+            VStack(spacing: 4) {
+                Text("どの動画を作りますか？")
+                    .font(.title3.weight(.bold))
+                Text("旅行全体か、1日分かを選んでください")
+                    .font(.footnote)
+                    .foregroundColor(.secondary)
+            }
+            .padding(.bottom, 14)
             ScrollView(.horizontal, showsIndicators: false) {
                 LazyHStack(spacing: 16) {
                     ForEach(Array(scopes.enumerated()), id: \.element.id) { index, scope in
@@ -164,16 +173,14 @@ struct TripDigestView: View {
             .scrollTargetBehavior(.viewAligned)
             .scrollPosition(id: $selected)
             .frame(maxHeight: 520)
-            // 作るのはカードを押した先（使う写真を確かめてから）。文字の位置はここでも選べる
-            Text("カードを押すと、使う写真を確かめて動画を作れます")
+            // 色味や文字は、カードを押した先で見本を見ながら選ぶ（3.9。ここでは範囲だけを選ぶ）
+            Text("左右にめくって選び、カードを押すと、写真と仕上がりを決める画面に進みます")
                 .font(.footnote)
                 .foregroundColor(.secondary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 32)
                 .padding(.top, 14)
             Spacer(minLength: 12)
-            DigestTextPositionPicker(selection: $textPosition,
-                                     sample: clips(for: selectedScope ?? .trip).first, assets: assets)
-                .padding(.horizontal, 24)
-                .padding(.bottom, 12)
             bottomBar
                 .padding(.horizontal, 24)
                 .padding(.bottom, 20)
@@ -187,7 +194,9 @@ struct TripDigestView: View {
         let count = clips(for: scope)
         // 前に作った動画があれば、札を押すとそのまま見られる
         let saved = libraryVersion >= 0 ? TripDigestLibrary.entry(planId: plan.id, scopeId: scope.id) : nil
+        // コマ数と長さはカードに書いたので、ここは前に作った動画があるときだけ出す（3.9）
         return HStack(spacing: 12) {
+            if saved != nil {
             Button {
                 if let saved { result = DigestResult(url: TripDigestLibrary.url(of: saved), title: saved.title) }
             } label: {
@@ -198,7 +207,7 @@ struct TripDigestView: View {
                     Text(scope.label(plan: plan).uppercased())
                         .font(.system(size: 10, weight: .semibold))
                         .foregroundColor(.secondary)
-                    Text(saved == nil ? "\(count.count)コマ・約\(Int(TripDigest.duration(of: count)))秒" : "作成済み・見る")
+                    Text("前に作った動画を見る")
                         .font(.footnote.weight(.semibold))
                 }
             }
@@ -209,9 +218,9 @@ struct TripDigestView: View {
             .overlay(Capsule().stroke(Color.primary.opacity(0.08), lineWidth: 1))
             }
             .buttonStyle(.plain)
-            .disabled(saved == nil)
+            }
         }
-        .frame(maxWidth: .infinity)
+        .frame(maxWidth: .infinity, minHeight: 44)
     }
 
     private var noAccessView: some View {
@@ -518,7 +527,8 @@ private struct DigestCoverCard: View {
                 }
             }
             .overlay {
-                LinearGradient(colors: [.black.opacity(0.35), .clear, .clear, .black.opacity(0.55)],
+                // 上の「旅行全体」「1日目」が明るい空の上でも読めるように、上も暗めにする
+                LinearGradient(colors: [.black.opacity(0.55), .clear, .clear, .black.opacity(0.6)],
                                startPoint: .top, endPoint: .bottom)
             }
             .overlay(alignment: .topLeading) { dateMark.padding(20) }
@@ -534,6 +544,21 @@ private struct DigestCoverCard: View {
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
                     }
+                    Text("\(clips.count)コマ・約\(Int(TripDigest.duration(of: clips)))秒の動画")
+                        .font(.footnote.weight(.semibold))
+                        .opacity(0.9)
+                    // 押すと進めることを、ボタンの形で見せる
+                    HStack(spacing: 4) {
+                        Text(clips.isEmpty ? "写真を足して作る" : "この範囲で作る")
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.bold))
+                    }
+                    .font(.subheadline.weight(.bold))
+                    .foregroundColor(.black)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 11)
+                    .background(Capsule().fill(.white))
+                    .padding(.top, 4)
                     HStack(spacing: 10) {
                         Text("\(position)/\(count)")
                             .font(.caption2.monospacedDigit())
@@ -568,27 +593,32 @@ private struct DigestCoverCard: View {
 
     @ViewBuilder
     private var dateMark: some View {
+        // 「ALL」「22 NOV」では何の動画か分かりにくかった（3.9）。日本語ではっきり書く
         switch scope {
         case .trip:
-            VStack(alignment: .leading, spacing: 2) {
-                Text("ALL")
-                    .font(.system(size: 52, weight: .thin).width(.condensed))
-                Text("\(plan.dayCount) DAYS")
-                    .font(.system(size: 15, weight: .medium).width(.expanded))
-            }
-            .foregroundColor(.white)
-        case .day(let n):
-            VStack(alignment: .leading, spacing: 0) {
-                Text(DigestDateStyle.day(date))
-                    .font(.system(size: 64, weight: .thin).width(.condensed))
-                Text(DigestDateStyle.month(date))
-                    .font(.system(size: 17, weight: .medium).width(.expanded))
-                Text("DAY \(n) · \(DigestDateStyle.weekday(date))")
-                    .font(.system(size: 11, weight: .semibold))
+            VStack(alignment: .leading, spacing: 4) {
+                Text("旅行全体")
+                    .font(.system(size: 34, weight: .bold))
+                Text(plan.dayCount > 1 ? "\(plan.dayCount)日間をまとめて1本に" : "1日をまとめて1本に")
+                    .font(.subheadline.weight(.semibold))
+                Text("\(TravelPlanTextExporter.dateString(plan.startDate)) 〜 \(TravelPlanTextExporter.dateString(plan.endDate))")
+                    .font(.caption)
                     .opacity(0.85)
-                    .padding(.top, 4)
             }
             .foregroundColor(.white)
+            .shadow(color: .black.opacity(0.3), radius: 6)
+        case .day(let n):
+            VStack(alignment: .leading, spacing: 4) {
+                Text("\(n)日目")
+                    .font(.system(size: 34, weight: .bold))
+                Text("この日だけを1本に")
+                    .font(.subheadline.weight(.semibold))
+                Text(TravelPlanTextExporter.dateString(date))
+                    .font(.caption)
+                    .opacity(0.85)
+            }
+            .foregroundColor(.white)
+            .shadow(color: .black.opacity(0.3), radius: 6)
         }
     }
 }
@@ -697,17 +727,48 @@ private struct DigestReviewView: View {
         return numbers.map { ($0, grouped[$0] ?? []) }
     }
 
+    /// 下で選んでいる設定の種類（3.9。上の見本を見ながら選ぶ）
+    @State private var tab: DigestEditTab = .photos
+
     var body: some View {
-        ScrollView {
+        attachSheets(to: editor)
+    }
+
+    private var editor: some View {
+        VStack(spacing: 0) {
+            // 上：選んだ色味・文字・形で、コマを順に流す見本。押すと大きく見られる
+            DigestLivePreview(plan: plan, scope: scope, clips: clips, assets: assets, edits: edits) { clip in
+                previewing = clip
+            }
+            .containerRelativeFrame(.vertical) { height, _ in min(height * 0.4, 360) }
+            .padding(.top, 8)
+            DigestEditTabBar(selection: $tab)
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
+            Divider()
+            ScrollView {
+                Group {
+                    switch tab {
+                    case .photos: photoList
+                    case .look, .text, .finish:
+                        DigestFinishOptions(plan: plan, scope: scope, sample: clips.first, assets: assets,
+                                            textPosition: TripDigestComposer.TextPosition(rawValue: textPosition) ?? .bottomLeft,
+                                            part: tab)
+                    }
+                }
+                .padding(16)
+            }
+        }
+        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+    }
+
+    /// 写真：日ごとのコマの一覧（押すと大きく見て、外す・選び直す・文字を変える）
+    private var photoList: some View {
             LazyVStack(alignment: .leading, spacing: 12, pinnedViews: [.sectionHeaders]) {
                 Text("写真を押すと大きく見られ、外したり、その日の別の写真に選び直したり、出す文字や時刻を変えたりできます。「＋ 足す」で、あとからもらった写真も入れられます。")
                     .font(.footnote)
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 4)
-                DigestTextPositionPicker(selection: $textPosition, sample: clips.first, assets: assets)
-                // 題名・地図のカードと音楽（3.2）
-                DigestFinishOptions(plan: plan, scope: scope, sample: clips.first, assets: assets,
-                                    textPosition: TripDigestComposer.TextPosition(rawValue: textPosition) ?? .bottomLeft)
                 ForEach(days, id: \.day) { group in
                     Section {
                         ForEach(group.clips) { clip in
@@ -730,9 +791,11 @@ private struct DigestReviewView: View {
                     excludedHoursSection
                 }
             }
-            .padding(16)
-        }
-        .background(Color(.systemGroupedBackground).ignoresSafeArea())
+    }
+
+    /// 作る・Pro の案内・大きく見る・写真を足す
+    private func attachSheets<Content: View>(to content: Content) -> some View {
+        content
         .overlay {
             if let progress { MakingOverlay(progress: progress, onCancel: { making?.cancel() }) }
         }
@@ -1496,7 +1559,8 @@ private struct DigestFramePreview: View {
         let H = TripDigestComposer.renderSize.height
         let timeLine: CGFloat = 53 + 8
         switch position {
-        case .bottomLeft: return H - 150 - Self.placeLineHeight / 2
+        // 日付だけ・文字なしのときも、書き換える欄は左下に出す（動画には出ないことを下に書く）
+        case .bottomLeft, .cameraDate, .hidden: return H - 150 - Self.placeLineHeight / 2
         case .topRight: return 170 + timeLine + Self.placeLineHeight / 2
         case .center: return (title == nil ? H * 0.44 : H * 0.56) + timeLine + Self.placeLineHeight / 2
         }
@@ -1504,7 +1568,7 @@ private struct DigestFramePreview: View {
 
     private var placeAlignment: TextAlignment {
         switch position {
-        case .bottomLeft: return .leading
+        case .bottomLeft, .cameraDate, .hidden: return .leading
         case .center: return .center
         case .topRight: return .trailing
         }
@@ -1693,10 +1757,10 @@ private struct DigestLoopingVideo: UIViewRepresentable {
     }
 }
 
-/// 時刻・場所の文字の位置を選ぶ（左下・真ん中・右上）。
+/// 文字の出し方を選ぶ（左下・真ん中・右上・カメラの日付・なし。3.9 で日付となしを足した）。
 /// 選ぶボタンそのものを見本にする：1枚目の写真に、そのコマの時刻と場所を、動画と同じ部品
 /// （`TripDigestComposer.overlayImage`）で重ねて描くので、見本と動画の見た目が食い違わない
-private struct DigestTextPositionPicker: View {
+struct DigestTextPositionPicker: View {
     @Binding var selection: String
     /// 見本にするコマ（選んでいる範囲の1枚目）
     let sample: TripDigest.Clip?
@@ -1712,10 +1776,10 @@ private struct DigestTextPositionPicker: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("文字の位置")
-                .font(.caption.weight(.semibold))
-                .foregroundColor(.secondary)
-            HStack(spacing: 14) {
+            Text("文字の出し方")
+                .font(.subheadline.weight(.semibold))
+            ScrollView(.horizontal, showsIndicators: false) {
+            HStack(spacing: 9) {
                 ForEach(TripDigestComposer.TextPosition.allCases) { position in
                     let isSelected = selection == position.rawValue
                     Button {
@@ -1725,7 +1789,9 @@ private struct DigestTextPositionPicker: View {
                             // 画面の幅いっぱいに3つ並ぶ大きさ（縦長 9:16）
                             Color.clear
                                 .aspectRatio(TripDigestComposer.aspectRatio, contentMode: .fit)
-                                .frame(maxWidth: 130, maxHeight: 231)
+                                // 5つが画面の幅に収まる大きさ
+                                .frame(width: 70 * min(1, TripDigestComposer.aspectRatio / (9.0 / 16.0)))
+                                .frame(height: 124 * min(1, (9.0 / 16.0) / TripDigestComposer.aspectRatio))
                                 .overlay {
                                     AssetImage(asset: sample.flatMap { assets[$0.sourceId] },
                                                target: CGSize(width: 300, height: 540))
@@ -1753,11 +1819,12 @@ private struct DigestTextPositionPicker: View {
                         }
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("文字の位置：\(position.name)")
+                    .accessibilityLabel("文字の出し方：\(position.name)")
                     .accessibilityAddTraits(isSelected ? .isSelected : [])
                 }
             }
-            .frame(maxWidth: .infinity)
+            .padding(.vertical, 2)
+            }
             if !proStore.isPurchased {
                 Text("右下に小さく「Travory」の文字が、最後に1秒「Travory」の印が入ります。Pro なら印なしになり、色味・正方形と横長、場所の名前の代わりに好きな文字も使えます。")
                     .font(.caption2)
@@ -1887,6 +1954,81 @@ private struct DigestProSheet: View {
                         Button("閉じる") { isPresented = false }
                     }
                 }
+        }
+    }
+}
+
+/// 動画を作る画面の上の見本（3.9）。選んでいる色味・文字・形で、コマを1つずつ順に流す。
+/// 押すと、そのコマを大きく見る画面（外す・選び直す・文字を変える）を開く
+private struct DigestLivePreview: View {
+    let plan: TravelPlan
+    let scope: TripDigest.Scope
+    let clips: [TripDigest.Clip]
+    let assets: [String: PHAsset]
+    let edits: [String: DigestClipEdit]
+    let onOpen: (TripDigest.Clip) -> Void
+
+    @ObservedObject private var proStore = ProStore.shared
+    @AppStorage("tripDigestTextPosition") private var textPosition = TripDigestComposer.TextPosition.bottomLeft.rawValue
+    @AppStorage(DigestLook.storageKey) private var lookValue = DigestLook.natural.rawValue
+    @AppStorage(DigestShape.storageKey) private var shapeValue = DigestShape.vertical.rawValue
+    @AppStorage(DigestPace.storageKey) private var paceValue = DigestPace.standard
+    @AppStorage(DigestFinish.openingKey) private var opening = true
+    @AppStorage(DigestFont.storageKey) private var fontValue = DigestFont.standard.rawValue
+    @State private var index = 0
+    @State private var paused = false
+
+    private var current: TripDigest.Clip? { clips.isEmpty ? nil : clips[index % clips.count] }
+
+    var body: some View {
+        VStack(spacing: 8) {
+            ZStack {
+                if let clip = current {
+                    DigestFramePreview(clip: clip, asset: assets[clip.sourceId],
+                                       edit: edits[clip.sourceId] ?? DigestClipEdit(),
+                                       look: DigestLook(rawValue: lookValue) ?? .natural,
+                                       // 題名のカードを入れないときは、動画と同じく1コマ目に題名を重ねる
+                                       title: index % max(clips.count, 1) == 0 && !opening ? plan.title : nil,
+                                       subtitle: DigestMaker.subtitle(plan: plan, scope: scope),
+                                       position: TripDigestComposer.TextPosition(rawValue: textPosition) ?? .bottomLeft,
+                                       watermark: !proStore.isPurchased, isActive: true)
+                        .id("\(clip.id)|\(shapeValue)|\(fontValue)")
+                        .transition(.opacity)
+                        .onTapGesture { onOpen(clip) }
+                } else {
+                    RoundedRectangle(cornerRadius: 16, style: .continuous)
+                        .fill(Color(.tertiarySystemFill))
+                        .aspectRatio(TripDigestComposer.aspectRatio, contentMode: .fit)
+                        .overlay(Text("写真がありません").font(.footnote).foregroundColor(.secondary))
+                }
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .shadow(color: .black.opacity(0.15), radius: 10, y: 4)
+            HStack(spacing: 10) {
+                Button {
+                    paused.toggle()
+                } label: {
+                    Image(systemName: paused ? "play.fill" : "pause.fill")
+                        .font(.caption.weight(.bold))
+                        .frame(width: 28, height: 28)
+                        .background(Circle().fill(Color(.tertiarySystemFill)))
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel(paused ? "見本を流す" : "見本を止める")
+                Text(clips.isEmpty ? "見本" : "\(index % clips.count + 1) / \(clips.count)コマ・押すと大きく見られます")
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .monospacedDigit()
+            }
+        }
+        // 1コマの秒数ごとに次のコマへ（動画と同じ速さ）
+        .task(id: "\(paused)|\(paceValue)|\(clips.count)") {
+            guard !paused, clips.count > 1 else { return }
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(TripDigest.clipSeconds * 1_000_000_000))
+                guard !Task.isCancelled else { return }
+                withAnimation(.easeInOut(duration: 0.35)) { index = (index + 1) % clips.count }
+            }
         }
     }
 }

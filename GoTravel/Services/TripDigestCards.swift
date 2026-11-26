@@ -252,8 +252,8 @@ extension TripDigestComposer {
         let W = renderSize.width, H = renderSize.height
         // 経路を置く範囲。文字の位置と重ならないところ
         let area: CGRect = {
-            switch position {
-            case .bottomLeft: return CGRect(x: W * 0.14, y: H * 0.12, width: W * 0.72, height: H * 0.5)
+            switch position.forMapCard {
+            case .bottomLeft, .cameraDate, .hidden: return CGRect(x: W * 0.14, y: H * 0.12, width: W * 0.72, height: H * 0.5)
             case .topRight: return CGRect(x: W * 0.14, y: H * 0.36, width: W * 0.72, height: H * 0.5)
             case .center: return CGRect(x: W * 0.14, y: H * 0.1, width: W * 0.72, height: H * 0.5)
             }
@@ -276,7 +276,7 @@ extension TripDigestComposer {
             CGPoint(x: (point.x - fitted.rect.minX) / fitted.perPixel, y: (point.y - fitted.rect.minY) / fitted.perPixel)
         }
         let overlay = overlayImage(caption: caption, headline: headline, title: nil, subtitle: "",
-                                   position: position, watermark: watermark, centerTop: 0.7)
+                                   position: position.forMapCard, watermark: watermark, centerTop: 0.7)
         return MapCard(map: snapshot.image, points: points,
                        names: stops.count <= MapCard.maxLabels ? stops.map(\.name) : [],
                        overlay: overlay)
@@ -317,6 +317,8 @@ extension TripDigestComposer {
 extension DigestLook {
     /// 色味をかける（1コマの絵に。大きさは変えない）
     nonisolated func apply(to image: CIImage) -> CIImage {
+        // 大きさの決まらない絵には、大きさを使う色味をかけない
+        if image.extent.isInfinite, [.digicam, .lightLeak, .dusty].contains(self) { return image }
         switch self {
         case .natural:
             return image
@@ -352,7 +354,219 @@ extension DigestLook {
             let mono = CIFilter.photoEffectMono()
             mono.inputImage = image
             return mono.outputImage ?? image
+        case .digicam:
+            return Self.digicam(image)
+        case .retro:
+            return Self.retro(image)
+        case .lightLeak:
+            return Self.lightLeak(image)
+        case .dusty:
+            return Self.dusty(image)
         }
+    }
+
+    /// 明るさを曲線で変える（x が元、y が変えたあと）
+    nonisolated private static func curve(_ image: CIImage, _ y: [CGFloat]) -> CIImage {
+        let curve = CIFilter.toneCurve()
+        curve.inputImage = image
+        curve.point0 = CGPoint(x: 0, y: y[0])
+        curve.point1 = CGPoint(x: 0.25, y: y[1])
+        curve.point2 = CGPoint(x: 0.5, y: y[2])
+        curve.point3 = CGPoint(x: 0.75, y: y[3])
+        curve.point4 = CGPoint(x: 1, y: y[4])
+        return curve.outputImage ?? image
+    }
+
+    nonisolated private static func controls(_ image: CIImage, saturation: Float, contrast: Float = 1) -> CIImage {
+        let colors = CIFilter.colorControls()
+        colors.inputImage = image
+        colors.saturation = saturation
+        colors.contrast = contrast
+        return colors.outputImage ?? image
+    }
+
+    /// 赤・緑・青の強さと、足す量
+    nonisolated private static func channels(_ image: CIImage, r: CGFloat, g: CGFloat, b: CGFloat,
+                                             bias: (CGFloat, CGFloat, CGFloat) = (0, 0, 0)) -> CIImage {
+        let matrix = CIFilter.colorMatrix()
+        matrix.inputImage = image
+        matrix.rVector = CIVector(x: r, y: 0, z: 0, w: 0)
+        matrix.gVector = CIVector(x: 0, y: g, z: 0, w: 0)
+        matrix.bVector = CIVector(x: 0, y: 0, z: b, w: 0)
+        matrix.biasVector = CIVector(x: bias.0, y: bias.1, z: bias.2, w: 0)
+        return matrix.outputImage ?? image
+    }
+
+    nonisolated private static func vignette(_ image: CIImage, intensity: Float, radius: Float) -> CIImage {
+        let vignette = CIFilter.vignette()
+        vignette.inputImage = image
+        vignette.intensity = intensity
+        vignette.radius = radius
+        return vignette.outputImage ?? image
+    }
+
+    /// レトロ：黄みがかって色あせ、明暗は強め、四隅を暗く
+    nonisolated private static func retro(_ image: CIImage) -> CIImage {
+        let extent = image.extent
+        var result = curve(image, [0.08, 0.24, 0.52, 0.8, 0.94])
+        result = controls(result, saturation: 0.78, contrast: 1.18)
+        result = channels(result, r: 1.06, g: 1.0, b: 0.82, bias: (0.02, 0.01, 0))
+        return vignette(result, intensity: 1.1, radius: 1.3).cropped(to: extent)
+    }
+
+    /// 光もれ：明るく色あせた写りに、左から赤とオレンジの光が差し、右の端に淡い虹
+    nonisolated private static func lightLeak(_ image: CIImage) -> CIImage {
+        let extent = image.extent
+        let w = extent.width, h = extent.height
+        var result = curve(image, [0.1, 0.36, 0.63, 0.86, 1])
+        result = controls(result, saturation: 0.88)
+        result = channels(result, r: 1.03, g: 1.02, b: 0.92, bias: (0.01, 0.02, 0.02))
+
+        func glow(x: CGFloat, y: CGFloat, radius: CGFloat, _ color: CIColor) -> CIImage? {
+            let gradient = CIFilter.radialGradient()
+            gradient.center = CGPoint(x: extent.minX + x * w, y: extent.minY + y * h)
+            gradient.radius0 = 0
+            gradient.radius1 = Float(radius * max(w, h))
+            gradient.color0 = color
+            gradient.color1 = CIColor(red: 0, green: 0, blue: 0, alpha: 0)
+            return gradient.outputImage?.cropped(to: extent)
+        }
+        let leaks = [glow(x: -0.05, y: 0.58, radius: 0.42, CIColor(red: 1, green: 0.22, blue: 0.08, alpha: 0.85)),
+                     glow(x: 0.12, y: 0.4, radius: 0.22, CIColor(red: 1, green: 0.6, blue: 0.15, alpha: 0.55)),
+                     glow(x: 0.5, y: -0.05, radius: 0.35, CIColor(red: 1, green: 0.85, blue: 0.4, alpha: 0.35)),
+                     glow(x: 1.05, y: 0.75, radius: 0.18, CIColor(red: 0.5, green: 1, blue: 0.6, alpha: 0.3)),
+                     glow(x: 1.05, y: 0.85, radius: 0.16, CIColor(red: 0.9, green: 0.4, blue: 1, alpha: 0.25))]
+        for case let leak? in leaks {
+            result = leak.applyingFilter("CIScreenBlendMode", parameters: [kCIInputBackgroundImageKey: result])
+        }
+        return result.cropped(to: extent)
+    }
+
+    /// ヴィンテージ：青緑に色あせた写りに、ほこりと細い糸くずのキズ
+    nonisolated private static func dusty(_ image: CIImage) -> CIImage {
+        let extent = image.extent
+        var result = curve(image, [0.1, 0.3, 0.55, 0.78, 0.93])
+        result = controls(result, saturation: 0.8, contrast: 1.05)
+        result = channels(result, r: 0.92, g: 1.0, b: 1.04, bias: (0, 0.025, 0.04))
+        result = vignette(result, intensity: 0.4, radius: 1.8)
+        if let dust = dustImage(size: extent.size) {
+            result = dust.transformed(by: CGAffineTransform(translationX: extent.minX, y: extent.minY)).composited(over: result)
+        }
+        return result.cropped(to: extent)
+    }
+
+    nonisolated private static let dustLock = NSLock()
+    nonisolated(unsafe) private static var dustCache: (size: CGSize, image: CIImage)?
+
+    /// ほこりとキズの絵（白い点と細い線。いつも同じ並びにするので、大きさごとに1回だけ描く）
+    nonisolated private static func dustImage(size: CGSize) -> CIImage? {
+        dustLock.lock()
+        defer { dustLock.unlock() }
+        if let cache = dustCache, cache.size == size { return cache.image }
+        let width = Int(size.width), height = Int(size.height)
+        guard width > 0, height > 0,
+              let context = CGContext(data: nil, width: width, height: height, bitsPerComponent: 8, bytesPerRow: 0,
+                                      space: CGColorSpaceCreateDeviceRGB(),
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
+        // いつも同じ並びになる乱数
+        var seed: UInt64 = 0x5EED_D057
+        func random() -> CGFloat {
+            seed = seed &* 6_364_136_223_846_793_005 &+ 1_442_695_040_888_963_407
+            return CGFloat(seed >> 11) / CGFloat(1 << 53)
+        }
+        let unit = min(size.width, size.height) / 1080
+        // 点
+        for _ in 0..<160 {
+            let radius = (0.8 + random() * 2.4) * unit
+            context.setFillColor(CGColor(gray: 1, alpha: 0.35 + random() * 0.5))
+            context.fillEllipse(in: CGRect(x: random() * size.width, y: random() * size.height,
+                                           width: radius * 2, height: radius * 2))
+        }
+        // 糸くず（短く曲がった線）
+        context.setLineCap(.round)
+        for _ in 0..<34 {
+            let start = CGPoint(x: random() * size.width, y: random() * size.height)
+            let length = (20 + random() * 70) * unit
+            let angle = random() * .pi * 2
+            let end = CGPoint(x: start.x + cos(angle) * length, y: start.y + sin(angle) * length)
+            let bend = CGPoint(x: (start.x + end.x) / 2 + (random() - 0.5) * length,
+                               y: (start.y + end.y) / 2 + (random() - 0.5) * length)
+            context.setStrokeColor(CGColor(gray: 1, alpha: 0.35 + random() * 0.4))
+            context.setLineWidth((1 + random() * 1.4) * unit)
+            context.move(to: start)
+            context.addQuadCurve(to: end, control: bend)
+            context.strokePath()
+        }
+        // 縦の細い傷を数本
+        for _ in 0..<3 {
+            let x = random() * size.width
+            context.setStrokeColor(CGColor(gray: 1, alpha: 0.18 + random() * 0.15))
+            context.setLineWidth(unit)
+            context.move(to: CGPoint(x: x, y: random() * size.height * 0.3))
+            context.addLine(to: CGPoint(x: x + (random() - 0.5) * 20 * unit, y: size.height * (0.6 + random() * 0.4)))
+            context.strokePath()
+        }
+        guard let cg = context.makeImage() else { return nil }
+        let image = CIImage(cgImage: cg)
+        dustCache = (size, image)
+        return image
+    }
+
+    /// 昔のデジカメ：画素の少ないやわらかな写りに、強すぎる輪郭、白く飛ぶ明るいところ、
+    /// 派手で少し青い色、細かなざらつき、ほんのり暗い四隅
+    nonisolated private static func digicam(_ image: CIImage) -> CIImage {
+        let extent = image.extent
+        // いったん小さくしてから戻す（続けて拡大・縮小すると1つにまとめられてしまうので、縮小は別の処理で）
+        let down = CIFilter.lanczosScaleTransform()
+        down.inputImage = image
+        down.scale = 0.42
+        down.aspectRatio = 1
+        var result = (down.outputImage ?? image)
+            .samplingLinear()
+            .transformed(by: CGAffineTransform(scaleX: 1 / 0.42, y: 1 / 0.42))
+            .clampedToExtent()
+            .cropped(to: extent)
+
+        let sharpen = CIFilter.unsharpMask()
+        sharpen.inputImage = result
+        sharpen.radius = 2.5
+        sharpen.intensity = 1.1
+        result = sharpen.outputImage ?? result
+
+        let colors = CIFilter.colorControls()
+        colors.inputImage = result
+        colors.saturation = 1.35
+        colors.contrast = 1.12
+        result = colors.outputImage ?? result
+
+        // 全体を明るくして、明るいところを白く飛ばす。少し青と緑に寄せる
+        let matrix = CIFilter.colorMatrix()
+        matrix.inputImage = result
+        matrix.rVector = CIVector(x: 1.06, y: 0, z: 0, w: 0)
+        matrix.gVector = CIVector(x: 0, y: 1.1, z: 0, w: 0)
+        matrix.bVector = CIVector(x: 0, y: 0, z: 1.16, w: 0)
+        matrix.biasVector = CIVector(x: 0.01, y: 0.01, z: 0.01, w: 0)
+        let clamp = CIFilter.colorClamp()
+        clamp.inputImage = matrix.outputImage
+        result = clamp.outputImage ?? result
+
+        // 細かなざらつき（灰色の点を薄く重ねる）
+        let noise = CIFilter.randomGenerator().outputImage?
+            .applyingFilter("CIColorMatrix", parameters: [
+                "inputRVector": CIVector(x: 0, y: 1, z: 0, w: 0),
+                "inputGVector": CIVector(x: 0, y: 1, z: 0, w: 0),
+                "inputBVector": CIVector(x: 0, y: 1, z: 0, w: 0),
+                "inputAVector": CIVector(x: 0, y: 0, z: 0, w: 0),
+                "inputBiasVector": CIVector(x: 0, y: 0, z: 0, w: 0.025),
+            ])
+            .cropped(to: extent)
+        if let noise { result = noise.composited(over: result) }
+
+        let vignette = CIFilter.vignette()
+        vignette.inputImage = result
+        vignette.intensity = 0.45
+        vignette.radius = 1.6
+        return (vignette.outputImage ?? result).cropped(to: extent)
     }
 
     /// 赤と青の強さを変える（1 より大きいと強く）
