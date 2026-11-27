@@ -408,9 +408,10 @@ extension DigestLook {
     /// レトロ：黄みがかって色あせ、明暗は強め、四隅を暗く
     nonisolated private static func retro(_ image: CIImage) -> CIImage {
         let extent = image.extent
-        var result = curve(image, [0.08, 0.24, 0.52, 0.8, 0.94])
-        result = controls(result, saturation: 0.78, contrast: 1.18)
-        result = channels(result, r: 1.06, g: 1.0, b: 0.82, bias: (0.02, 0.01, 0))
+        // 動画では明るく見えすぎたので、黒の持ち上げと中ほどを下げた（3.9）
+        var result = curve(image, [0.06, 0.22, 0.49, 0.76, 0.93])
+        result = controls(result, saturation: 0.8, contrast: 1.15)
+        result = channels(result, r: 1.05, g: 0.99, b: 0.82, bias: (0.01, 0.005, 0))
         return vignette(result, intensity: 1.1, radius: 1.3).cropped(to: extent)
     }
 
@@ -418,9 +419,10 @@ extension DigestLook {
     nonisolated private static func lightLeak(_ image: CIImage) -> CIImage {
         let extent = image.extent
         let w = extent.width, h = extent.height
-        var result = curve(image, [0.1, 0.36, 0.63, 0.86, 1])
-        result = controls(result, saturation: 0.88)
-        result = channels(result, r: 1.03, g: 1.02, b: 0.92, bias: (0.01, 0.02, 0.02))
+        // 動画では明るく見えすぎたので、全体の持ち上げを弱めた（3.9）
+        var result = curve(image, [0.05, 0.26, 0.52, 0.78, 0.96])
+        result = controls(result, saturation: 0.92)
+        result = channels(result, r: 1.03, g: 1.0, b: 0.92, bias: (0.005, 0.01, 0.01))
 
         func glow(x: CGFloat, y: CGFloat, radius: CGFloat, _ color: CIColor) -> CIImage? {
             let gradient = CIFilter.radialGradient()
@@ -431,9 +433,9 @@ extension DigestLook {
             gradient.color1 = CIColor(red: 0, green: 0, blue: 0, alpha: 0)
             return gradient.outputImage?.cropped(to: extent)
         }
-        let leaks = [glow(x: -0.05, y: 0.58, radius: 0.42, CIColor(red: 1, green: 0.22, blue: 0.08, alpha: 0.85)),
-                     glow(x: 0.12, y: 0.4, radius: 0.22, CIColor(red: 1, green: 0.6, blue: 0.15, alpha: 0.55)),
-                     glow(x: 0.5, y: -0.05, radius: 0.35, CIColor(red: 1, green: 0.85, blue: 0.4, alpha: 0.35)),
+        let leaks = [glow(x: -0.05, y: 0.58, radius: 0.4, CIColor(red: 1, green: 0.22, blue: 0.08, alpha: 0.75)),
+                     glow(x: 0.12, y: 0.4, radius: 0.2, CIColor(red: 1, green: 0.6, blue: 0.15, alpha: 0.45)),
+                     glow(x: 0.5, y: -0.05, radius: 0.3, CIColor(red: 1, green: 0.85, blue: 0.4, alpha: 0.22)),
                      glow(x: 1.05, y: 0.75, radius: 0.18, CIColor(red: 0.5, green: 1, blue: 0.6, alpha: 0.3)),
                      glow(x: 1.05, y: 0.85, radius: 0.16, CIColor(red: 0.9, green: 0.4, blue: 1, alpha: 0.25))]
         for case let leak? in leaks {
@@ -445,9 +447,10 @@ extension DigestLook {
     /// ヴィンテージ：青緑に色あせた写りに、ほこりと細い糸くずのキズ
     nonisolated private static func dusty(_ image: CIImage) -> CIImage {
         let extent = image.extent
-        var result = curve(image, [0.1, 0.3, 0.55, 0.78, 0.93])
-        result = controls(result, saturation: 0.8, contrast: 1.05)
-        result = channels(result, r: 0.92, g: 1.0, b: 1.04, bias: (0, 0.025, 0.04))
+        // 動画では明るく見えすぎたので、黒の持ち上げと中ほどを下げた（3.9）
+        var result = curve(image, [0.06, 0.23, 0.47, 0.72, 0.9])
+        result = controls(result, saturation: 0.82, contrast: 1.06)
+        result = channels(result, r: 0.93, g: 1.0, b: 1.03, bias: (0, 0.012, 0.02))
         result = vignette(result, intensity: 0.4, radius: 1.8)
         if let dust = dustImage(size: extent.size) {
             result = dust.transformed(by: CGAffineTransform(translationX: extent.minX, y: extent.minY)).composited(over: result)
@@ -535,17 +538,17 @@ extension DigestLook {
 
         let colors = CIFilter.colorControls()
         colors.inputImage = result
-        colors.saturation = 1.35
-        colors.contrast = 1.12
+        colors.saturation = 1.3
+        colors.contrast = 1.1
         result = colors.outputImage ?? result
 
-        // 全体を明るくして、明るいところを白く飛ばす。少し青と緑に寄せる
+        // 少し青と緑に寄せる。動画では空が白く飛びすぎたので、明るくする量を抑えた（3.9）
         let matrix = CIFilter.colorMatrix()
         matrix.inputImage = result
-        matrix.rVector = CIVector(x: 1.06, y: 0, z: 0, w: 0)
-        matrix.gVector = CIVector(x: 0, y: 1.1, z: 0, w: 0)
-        matrix.bVector = CIVector(x: 0, y: 0, z: 1.16, w: 0)
-        matrix.biasVector = CIVector(x: 0.01, y: 0.01, z: 0.01, w: 0)
+        matrix.rVector = CIVector(x: 0.97, y: 0, z: 0, w: 0)
+        matrix.gVector = CIVector(x: 0, y: 1.0, z: 0, w: 0)
+        matrix.bVector = CIVector(x: 0, y: 0, z: 1.05, w: 0)
+        matrix.biasVector = CIVector(x: 0, y: 0, z: 0, w: 0)
         let clamp = CIFilter.colorClamp()
         clamp.inputImage = matrix.outputImage
         result = clamp.outputImage ?? result

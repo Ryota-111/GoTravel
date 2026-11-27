@@ -69,7 +69,8 @@ struct TripDigestView: View {
 
     private func clips(for scope: TripDigest.Scope) -> [TripDigest.Clip] {
         TripDigest.clips(plan: plan, sources: usable, scope: scope, pinned: pinned,
-                         captions: proStore.isPurchased ? captions : [:], added: added, excludedHours: excludedHours)
+                         captions: proStore.isPurchased ? captions : [:], added: added, excludedHours: excludedHours,
+                         order: edits.compactMapValues(\.sortTime))
     }
 
     private var selectedScope: TripDigest.Scope? {
@@ -161,7 +162,8 @@ struct TripDigestView: View {
                 LazyHStack(spacing: 16) {
                     ForEach(Array(scopes.enumerated()), id: \.element.id) { index, scope in
                         DigestCoverCard(plan: plan, scope: scope, clips: clips(for: scope), assets: assets,
-                                        position: index + 1, count: scopes.count)
+                                        position: index + 1, count: scopes.count,
+                                        videoLengths: edits.compactMapValues(\.videoLength))
                             .containerRelativeFrame(.horizontal) { width, _ in width * 0.72 }
                             .onTapGesture { reviewing = scope }
                             .id(scope.id)
@@ -500,6 +502,8 @@ private struct DigestCoverCard: View {
     let assets: [String: PHAsset]
     let position: Int
     let count: Int
+    /// 動画の長さを決めたコマ（id → 秒）。「約◯秒」に使う
+    var videoLengths: [String: Double] = [:]
 
     private var date: Date {
         if case .day(let n) = scope { return plan.date(forDay: n) }
@@ -544,7 +548,7 @@ private struct DigestCoverCard: View {
                             .lineLimit(2)
                             .fixedSize(horizontal: false, vertical: true)
                     }
-                    Text("\(clips.count)コマ・約\(Int(TripDigest.duration(of: clips)))秒の動画")
+                    Text("\(clips.count)コマ・約\(Int(TripDigest.duration(of: clips, lengths: videoLengths)))秒の動画")
                         .font(.footnote.weight(.semibold))
                         .opacity(0.9)
                     // 押すと進めることを、ボタンの形で見せる
@@ -684,11 +688,22 @@ private struct DigestReviewView: View {
     @AppStorage("tripDigestTextPosition") private var textPosition = TripDigestComposer.TextPosition.bottomLeft.rawValue
     /// 押して大きく見ているコマ（外すかどうかはここで決める）
     @State private var previewing: TripDigest.Clip?
+    /// 並べ替えている日（3.9。ご要望から）
+    @State private var reorderingDay: ReorderDay?
+
+    struct ReorderDay: Identifiable {
+        let day: Int
+        var id: Int { day }
+    }
 
     private var clips: [TripDigest.Clip] {
         TripDigest.clips(plan: plan, sources: sources.filter { !excluded.contains($0.id) }, scope: scope, pinned: pinned,
-                         captions: proStore.isPurchased ? captions : [:], added: added, excludedHours: excludedHours)
+                         captions: proStore.isPurchased ? captions : [:], added: added, excludedHours: excludedHours,
+                         order: edits.compactMapValues(\.sortTime))
     }
+
+    /// 動画の長さを決めたコマ（id → 秒）。「約◯秒」に使う
+    private var videoLengths: [String: Double] { edits.compactMapValues(\.videoLength) }
 
     /// 外した時間（この動画の範囲の日だけ）。押すと、その時間をまるごと戻せる
     private var excludedHourEntries: [(key: String, start: Date, day: Int, sources: [TripDigest.Source])] {
@@ -765,7 +780,7 @@ private struct DigestReviewView: View {
     /// 写真：日ごとのコマの一覧（押すと大きく見て、外す・選び直す・文字を変える）
     private var photoList: some View {
             LazyVStack(alignment: .leading, spacing: 12, pinnedViews: [.sectionHeaders]) {
-                Text("写真を押すと大きく見られ、外したり、その日の別の写真に選び直したり、出す文字や時刻を変えたりできます。「＋ 足す」で、あとからもらった写真も入れられます。")
+                Text("写真を押すと大きく見られ、外したり、その日の別の写真に選び直したり、出す文字や時刻を変えたりできます。「＋ 足す」で、あとからもらった写真も入れられます。「並べ替え」で、流す順番を変えられます。")
                     .font(.footnote)
                     .foregroundColor(.secondary)
                     .padding(.horizontal, 4)
@@ -799,7 +814,7 @@ private struct DigestReviewView: View {
         .overlay {
             if let progress { MakingOverlay(progress: progress, onCancel: { making?.cancel() }) }
         }
-        .navigationTitle("\(clips.count)コマ・約\(Int(TripDigest.duration(of: clips)))秒")
+        .navigationTitle("\(clips.count)コマ・約\(Int(TripDigest.duration(of: clips, lengths: videoLengths)))秒")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
             ToolbarItem(placement: .confirmationAction) {
@@ -835,6 +850,13 @@ private struct DigestReviewView: View {
                                onSetHour: { clip, hour in setHour(hour, of: clip) },
                                onAddAfter: { clip, ids in add(ids, day: clip.dayNumber, after: clip) },
                                onReplace: { clip, id in replace(clip, with: id) })
+        }
+        .sheet(item: $reorderingDay) { target in
+            DigestReorderSheet(day: target.day, date: plan.date(forDay: target.day),
+                               clips: days.first { $0.day == target.day }?.clips ?? [], assets: assets,
+                               edits: edits,
+                               onMove: { from, to in moveClip(day: target.day, from: from, to: to) },
+                               onReset: { resetOrder(day: target.day) })
         }
         .sheet(item: $pendingAdd) { pending in
             DigestAddedTimeSheet(count: pending.ids.count, day: pending.day, plan: plan) { hour in
@@ -874,11 +896,29 @@ private struct DigestReviewView: View {
                 .foregroundColor(DigestDateStyle.color(date, default: .secondary))
             Spacer()
             Text("\(count)コマ").font(.caption).foregroundColor(.secondary)
+            if count > 1 {
+                Button {
+                    reorderingDay = ReorderDay(day: day)
+                } label: {
+                    Label("並べ替え", systemImage: "arrow.up.arrow.down")
+                        .font(.caption.weight(.semibold))
+                        .lineLimit(1)
+                        .fixedSize()
+                        .padding(.horizontal, 9)
+                        .padding(.vertical, 4)
+                        .background(Capsule().stroke(Color.accentColor.opacity(0.5), lineWidth: 1))
+                }
+                .buttonStyle(.plain)
+                .foregroundColor(.accentColor)
+                .accessibilityLabel("Day \(day)の順番を並べ替える")
+            }
             PhotosPicker(selection: Binding(get: { picking },
                                             set: { pickingDay = day; picking = $0 }),
                          matching: .any(of: [.images, .videos]), photoLibrary: .shared()) {
                 Label("足す", systemImage: "plus")
                     .font(.caption.weight(.semibold))
+                    .lineLimit(1)
+                    .fixedSize()
                     .padding(.horizontal, 9)
                     .padding(.vertical, 4)
                     .background(Capsule().stroke(Color.accentColor.opacity(0.5), lineWidth: 1))
@@ -972,6 +1012,34 @@ private struct DigestReviewView: View {
         let day: Int
         let ids: [String]
         var id: String { "\(day)|" + ids.joined(separator: ",") }
+    }
+
+    // MARK: 並べ替え（3.9。ご要望から）
+
+    /// その日の `from` 番目のコマを `to` 番目の前へ移す。動かしたコマの並べる位置だけを変える
+    private func moveClip(day: Int, from: Int, to: Int) {
+        let list = days.first { $0.day == day }?.clips ?? []
+        let changes = TripDigest.reorder(list, from: from, to: to, order: edits.compactMapValues(\.sortTime))
+        guard !changes.isEmpty else { return }
+        withAnimation {
+            for (id, time) in changes {
+                var edit = edits[id] ?? DigestClipEdit()
+                edit.sortTime = time
+                edits[id] = edit
+            }
+        }
+    }
+
+    /// その日を、撮った時刻の順に戻す
+    private func resetOrder(day: Int) {
+        let ids = (days.first { $0.day == day }?.clips ?? []).map(\.sourceId)
+        withAnimation {
+            for id in ids {
+                guard var edit = edits[id], edit.sortTime != nil else { continue }
+                edit.sortTime = nil
+                edits[id] = edit.isDefault ? nil : edit
+            }
+        }
     }
 
     /// 外す。撮った時間のコマは、その時間をまるごと外す（同じ時間の別の写真が代わりに入らない）。
@@ -1080,6 +1148,14 @@ private struct DigestReviewView: View {
             }
         }
         if !unknown.isEmpty { pendingAdd = PendingAdd(day: day, ids: unknown) }
+        // 並べ替えたコマのあとに足したときは、時刻ではなく、そのコマのすぐあとに並べる
+        if let clip, let anchor = edits[clip.sourceId]?.sortTime {
+            for (offset, id) in ids.filter({ fetched[$0] != nil && !unknown.contains($0) }).enumerated() {
+                var edit = edits[id] ?? DigestClipEdit()
+                edit.sortTime = anchor + 0.001 * Double(offset + 1)
+                edits[id] = edit
+            }
+        }
         return true
     }
 
@@ -1516,6 +1592,71 @@ private struct DigestAddedTimeSheet: View {
 
 /// 動画の1コマの見本。動画と同じ部品（`TripDigestComposer.overlayImage`）で文字を描いて重ねる。
 /// 動画のコマは、動画で使う真ん中の2秒をくり返し流す（めくって見ているときだけ）
+/// 1日のコマの順番を並べ替える（3.9。ご要望から）。
+/// お店の看板を帰りに撮ったときなど、撮った順と見せたい順が違うときに使う。
+/// 時刻は早い順のまま動かさず、写真だけを入れ替える（看板を前にすれば、看板に入った時刻が出る）
+private struct DigestReorderSheet: View {
+    let day: Int
+    let date: Date
+    let clips: [TripDigest.Clip]
+    let assets: [String: PHAsset]
+    let edits: [String: DigestClipEdit]
+    let onMove: (Int, Int) -> Void
+    let onReset: () -> Void
+
+    @Environment(\.dismiss) private var dismiss
+
+    private var isReordered: Bool { clips.contains { edits[$0.sourceId]?.sortTime != nil } }
+
+    var body: some View {
+        NavigationStack {
+            List {
+                Section {
+                    ForEach(clips) { clip in
+                        HStack(spacing: 12) {
+                            AssetImage(asset: assets[clip.sourceId], target: CGSize(width: 200, height: 200))
+                                .frame(width: 56, height: 56)
+                                .clipShape(RoundedRectangle(cornerRadius: 8, style: .continuous))
+                            VStack(alignment: .leading, spacing: 3) {
+                                HStack(spacing: 6) {
+                                    Text(clip.timeText)
+                                        .font(.subheadline.weight(.semibold).monospacedDigit())
+                                    if assets[clip.sourceId]?.mediaType == .video {
+                                        Image(systemName: "video").font(.caption).foregroundColor(.secondary)
+                                    }
+                                }
+                                if let place = clip.placeName {
+                                    Text(place).font(.caption).foregroundColor(.secondary).lineLimit(1)
+                                }
+                            }
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                    .onMove { from, to in
+                        guard let first = from.first else { return }
+                        onMove(first, to)
+                    }
+                } footer: {
+                    Text("右の線を押さえたまま動かすと、流す順番を変えられます。時刻の並びはそのままで、写真だけが入れ替わります。")
+                }
+                if isReordered {
+                    Section {
+                        Button("撮った順に戻す", role: .destructive, action: onReset)
+                    }
+                }
+            }
+            .environment(\.editMode, .constant(.active))
+            .navigationTitle("Day \(day)の順番")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完了") { dismiss() }.fontWeight(.semibold)
+                }
+            }
+        }
+    }
+}
+
 private struct DigestFramePreview: View {
     let clip: TripDigest.Clip
     let asset: PHAsset?
@@ -1980,6 +2121,13 @@ private struct DigestLivePreview: View {
 
     private var current: TripDigest.Clip? { clips.isEmpty ? nil : clips[index % clips.count] }
 
+    /// そのコマを流す秒数（作る動画と同じ）
+    private func seconds(of clip: TripDigest.Clip?) -> Double {
+        guard let clip, let asset = assets[clip.sourceId], asset.mediaType == .video,
+              let edit = edits[clip.sourceId], edit.videoLength != nil else { return TripDigest.clipSeconds }
+        return max(0.5, edit.videoRange(duration: asset.duration, length: TripDigest.clipSeconds).length)
+    }
+
     var body: some View {
         VStack(spacing: 8) {
             ZStack {
@@ -2021,11 +2169,11 @@ private struct DigestLivePreview: View {
                     .monospacedDigit()
             }
         }
-        // 1コマの秒数ごとに次のコマへ（動画と同じ速さ）
-        .task(id: "\(paused)|\(paceValue)|\(clips.count)") {
+        // 1コマの秒数ごとに次のコマへ（動画と同じ速さ。長さを決めた動画は、その長さ）
+        .task(id: "\(paused)|\(paceValue)|\(clips.count)|\(edits.hashValue)") {
             guard !paused, clips.count > 1 else { return }
             while !Task.isCancelled {
-                try? await Task.sleep(nanoseconds: UInt64(TripDigest.clipSeconds * 1_000_000_000))
+                try? await Task.sleep(nanoseconds: UInt64(seconds(of: current) * 1_000_000_000))
                 guard !Task.isCancelled else { return }
                 withAnimation(.easeInOut(duration: 0.35)) { index = (index + 1) % clips.count }
             }

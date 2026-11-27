@@ -63,9 +63,10 @@ enum TripDigest {
     ///   - added: 自分で足した写真・動画。決めた日時のコマとして必ず入れる（上限にも数えない）。
     ///     旅行全体の動画にも入る。足した写真は、撮った時間のコマの候補からは外す
     ///   - excludedHours: 外した時間（`hourKey`）。その時間に撮った写真からはコマを作らない（足した写真は入る）
+    ///   - order: 並べ替えたコマの並べる位置（`DigestClipEdit.sortTime`）。その日の中で、撮った時刻の代わりに使う
     static func clips(plan: TravelPlan, sources: [Source], scope: Scope, pinned: Set<String> = [],
                       captions: [String: String] = [:], added: [Added] = [],
-                      excludedHours: Set<String> = [],
+                      excludedHours: Set<String> = [], order: [String: Double] = [:],
                       calendar: Calendar = .current) -> [Clip] {
         let days: [Int]
         switch scope {
@@ -92,9 +93,51 @@ enum TripDigest {
                      isAdded: true)
             }
             // 同じ時刻なら、撮ったコマのあとに足したコマ（「このあとに足す」で差し込んだ順）
-            return (picked + mine).enumerated().sorted { lhs, rhs in
+            let all = Array((picked + mine).enumerated())
+            let byTime = all.sorted { lhs, rhs in
                 lhs.element.date != rhs.element.date ? lhs.element.date < rhs.element.date : lhs.offset < rhs.offset
-            }.map(\.element)
+            }
+            let ordered = all.sorted { lhs, rhs in
+                let l = sortTime(lhs.element, order: order), r = sortTime(rhs.element, order: order)
+                return l != r ? l < r : lhs.offset < rhs.offset
+            }
+            // 並べ替えても、出す時刻は早い順のまま（写真だけが入れ替わる）。並べ替えていなければ同じ
+            return zip(ordered, byTime).map { slot, time in
+                var clip = slot.element
+                clip.timeText = time.element.timeText
+                return clip
+            }
+        }
+    }
+
+    /// 並べる位置。並べ替えていなければ撮った時刻
+    static func sortTime(_ clip: Clip, order: [String: Double]) -> Double {
+        order[clip.sourceId] ?? clip.date.timeIntervalSince1970
+    }
+
+    /// 並べ替え（3.9。ご要望から）。その日の今の並び `list` で、`from` 番目を `to` 番目の前へ移したときの、
+    /// 新しい並べる位置（id → 位置）。前後のコマの位置の間に置くので、ほかのコマの位置は変えない。
+    /// 前後が同じ位置で間に置けないときだけ、並び全体に位置を振り直す
+    static func reorder(_ list: [Clip], from: Int, to: Int, order: [String: Double]) -> [String: Double] {
+        guard list.indices.contains(from), to >= 0, to <= list.count, to != from, to != from + 1 else { return [:] }
+        var moved = list
+        let item = moved.remove(at: from)
+        let index = to > from ? to - 1 : to
+        moved.insert(item, at: index)
+        let times = moved.map { sortTime($0, order: order) }
+        let before = index > 0 ? times[index - 1] : nil
+        let after = index + 1 < moved.count ? times[index + 1] : nil
+        switch (before, after) {
+        case let (b?, a?) where a - b > 0.002:
+            return [item.sourceId: (a + b) / 2]
+        case let (b?, nil):
+            return [item.sourceId: b + 1]
+        case let (nil, a?):
+            return [item.sourceId: a - 1]
+        default:
+            // 同じ位置が並んでいる：最初のコマの位置から、0.01秒ずつずらして並べ直す
+            let base = times.min() ?? 0
+            return Dictionary(uniqueKeysWithValues: moved.enumerated().map { ($0.element.sourceId, base + Double($0.offset) * 0.01) })
         }
     }
 
@@ -188,8 +231,9 @@ enum TripDigest {
     }
 
     /// 動画の長さ（秒）
-    static func duration(of clips: [Clip]) -> Double {
-        Double(clips.count) * clipSeconds
+    /// 動画の長さを決めたコマ（`lengths`：id → 秒）は、その長さで数える
+    static func duration(of clips: [Clip], lengths: [String: Double] = [:]) -> Double {
+        clips.reduce(0) { $0 + (lengths[$1.sourceId] ?? clipSeconds) }
     }
 
     /// ファイル名（「沖縄旅行 Day2.mp4」「沖縄旅行.mp4」）

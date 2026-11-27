@@ -330,9 +330,9 @@ struct DigestFinishOptions: View {
     }
 
     /// 色味：1枚目の写真に色味をかけた見本を横に並べ、押して選ぶ
+    /// 色味の見本を、横に送らず全部並べる（下が空いているので、3.9 で折り返して並べるようにした）
     private var lookRow: some View {
-        ScrollView(.horizontal, showsIndicators: false) {
-            HStack(spacing: 10) {
+        LazyVGrid(columns: [GridItem(.adaptive(minimum: 62, maximum: 90), spacing: 10)], spacing: 12) {
                 ForEach(DigestLook.allCases) { candidate in
                     let selected = look == candidate.rawValue
                     Button {
@@ -346,7 +346,7 @@ struct DigestFinishOptions: View {
                     } label: {
                         VStack(spacing: 4) {
                             Color(.tertiarySystemFill)
-                                .frame(width: 66, height: 66)
+                                .aspectRatio(1, contentMode: .fit)
                                 .overlay {
                                     if let image = lookSamples[candidate] {
                                         Image(uiImage: image).resizable().scaledToFill()
@@ -370,9 +370,8 @@ struct DigestFinishOptions: View {
                     .accessibilityLabel("色味：\(candidate.name)\(candidate.isPro && !proStore.isPurchased ? "（Pro）" : "")")
                     .accessibilityAddTraits(selected ? .isSelected : [])
                 }
-            }
-            .padding(.vertical, 2)
         }
+        .padding(.vertical, 2)
     }
 
     /// 左に小さな見出し、右に丸いボタンを並べる行（形・1コマの秒数）

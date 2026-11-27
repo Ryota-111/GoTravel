@@ -385,10 +385,29 @@ enum TripDigestComposer {
 
     nonisolated static func frameImage(_ source: CIImage, edit: DigestClipEdit, look: DigestLook,
                                        motion: Double, canvas: CGSize) -> CIImage {
-        let filled = fill(source, zoom: edit.zoom * motion, focus: CGPoint(x: edit.focusX, y: edit.focusY), canvas: canvas)
+        let filled = fill(standardRange(source), zoom: edit.zoom * motion,
+                          focus: CGPoint(x: edit.focusX, y: edit.focusY), canvas: canvas)
         // 色味には画面の大きさで切ってから渡す（光もれ・ほこりは絵の大きさから位置を決める）
         let rect = CGRect(origin: .zero, size: canvas)
         return look.apply(to: filled.composited(over: .black).cropped(to: rect)).cropped(to: rect)
+    }
+
+    /// HDR の絵（iPhone で撮った動画など）を、ふつうの明るさの範囲に収める（3.9）。
+    /// iPhone の動画は HDR で、白より明るいところを持つ。そのまま色味をかけると、トーンカーブや
+    /// 光を重ねる色味（デジカメ・レトロ・光もれ・ヴィンテージ）で明るいところが飛び、動画が真っ白に近くなっていた。
+    /// 明るいところを先にふつうの範囲へなだらかに収め、0〜1 の外を切ってから色味をかける。ふつうの写真は変わらない
+    nonisolated static func standardRange(_ image: CIImage) -> CIImage {
+        var result = image
+        if image.contentHeadroom > 1, let toneMap = CIFilter(name: "CIToneMapHeadroom") {
+            toneMap.setValue(image, forKey: kCIInputImageKey)
+            toneMap.setValue(1.0, forKey: "inputTargetHeadroom")
+            result = toneMap.outputImage ?? image
+        }
+        let clamp = CIFilter.colorClamp()
+        clamp.inputImage = result
+        clamp.minComponents = CIVector(x: 0, y: 0, z: 0, w: 0)
+        clamp.maxComponents = CIVector(x: 1, y: 1, z: 1, w: 1)
+        return clamp.outputImage ?? result
     }
 
     /// 絵を画素に描いて写しを取る（元の動画のコマを手放しても使えるように）
