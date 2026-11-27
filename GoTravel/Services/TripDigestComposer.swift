@@ -16,11 +16,15 @@ enum TripDigestComposer {
     static var aspectRatio: CGFloat { renderSize.width / renderSize.height }
     static let fps: Int32 = 30
 
-    /// 時刻・場所の文字を置く位置
+    /// コマに出す文字の出し方（3.9 で「文字の位置」から広げた）
     enum TextPosition: String, CaseIterable, Identifiable {
         case bottomLeft
         case center
         case topRight
+        /// 昔のカメラのように、右下にオレンジの日付と時刻だけを写し込む（場所の名前は出さない）
+        case cameraDate
+        /// 文字を出さない
+        case hidden
 
         var id: String { rawValue }
 
@@ -29,15 +33,21 @@ enum TripDigestComposer {
             case .bottomLeft: return "左下"
             case .center: return "真ん中"
             case .topRight: return "右上"
+            case .cameraDate: return "カメラの日付"
+            case .hidden: return "なし"
             }
         }
 
-        var systemImage: String {
-            switch self {
-            case .bottomLeft: return "arrow.down.left.square"
-            case .center: return "square.dashed.inset.filled"
-            case .topRight: return "arrow.up.right.square"
-            }
+        /// 場所の名前を出すか（自分で入れた文字も、ここに出る）
+        var showsPlace: Bool { self == .bottomLeft || self == .center || self == .topRight }
+
+        /// 地図のカードの文字の位置。日付だけ・文字なしのときは左下に出す（地図には日時が無いため）
+        var forMapCard: TextPosition { showsPlace ? self : .bottomLeft }
+
+        /// 写し込む日付と時刻（「'26 11 22  14:05」）
+        static func cameraStamp(date: Date, time: String, calendar: Calendar = .current) -> String {
+            let parts = calendar.dateComponents([.year, .month, .day], from: date)
+            return String(format: "'%02d %d %d", (parts.year ?? 0) % 100, parts.month ?? 0, parts.day ?? 0) + "  " + time
         }
     }
 
@@ -224,7 +234,8 @@ enum TripDigestComposer {
                 }
                 guard let cg = loaded?.cgImage else { continue }
                 let source = CIImage(cgImage: cg)
-                firstFrame = frameImage(source, edit: edit, look: look)
+                // 題名のカードでぼかすので、画素に描いた写しを使う（デジカメの色味は、加工したままぼかすと白く飛んでいた）
+                firstFrame = snapshot(frameImage(source, edit: edit, look: look))
                 try await writeSegment(to: segmentURL, seconds: clipSeconds) { frame, frames in
                     // 写真は少しずつ寄っていく
                     let motion = 1 + 0.06 * Double(frame) / Double(max(frames - 1, 1))
@@ -374,8 +385,29 @@ enum TripDigestComposer {
 
     nonisolated static func frameImage(_ source: CIImage, edit: DigestClipEdit, look: DigestLook,
                                        motion: Double, canvas: CGSize) -> CIImage {
-        let filled = fill(source, zoom: edit.zoom * motion, focus: CGPoint(x: edit.focusX, y: edit.focusY), canvas: canvas)
-        return look.apply(to: filled.composited(over: .black)).cropped(to: CGRect(origin: .zero, size: canvas))
+        let filled = fill(standardRange(source), zoom: edit.zoom * motion,
+                          focus: CGPoint(x: edit.focusX, y: edit.focusY), canvas: canvas)
+        // 色味には画面の大きさで切ってから渡す（光もれ・ほこりは絵の大きさから位置を決める）
+        let rect = CGRect(origin: .zero, size: canvas)
+        return look.apply(to: filled.composited(over: .black).cropped(to: rect)).cropped(to: rect)
+    }
+
+    /// HDR の絵（iPhone で撮った動画など）を、ふつうの明るさの範囲に収める（3.9）。
+    /// iPhone の動画は HDR で、白より明るいところを持つ。そのまま色味をかけると、トーンカーブや
+    /// 光を重ねる色味（デジカメ・レトロ・光もれ・ヴィンテージ）で明るいところが飛び、動画が真っ白に近くなっていた。
+    /// 明るいところを先にふつうの範囲へなだらかに収め、0〜1 の外を切ってから色味をかける。ふつうの写真は変わらない
+    nonisolated static func standardRange(_ image: CIImage) -> CIImage {
+        var result = image
+        if image.contentHeadroom > 1, let toneMap = CIFilter(name: "CIToneMapHeadroom") {
+            toneMap.setValue(image, forKey: kCIInputImageKey)
+            toneMap.setValue(1.0, forKey: "inputTargetHeadroom")
+            result = toneMap.outputImage ?? image
+        }
+        let clamp = CIFilter.colorClamp()
+        clamp.inputImage = result
+        clamp.minComponents = CIVector(x: 0, y: 0, z: 0, w: 0)
+        clamp.maxComponents = CIVector(x: 1, y: 1, z: 1, w: 1)
+        return clamp.outputImage ?? result
     }
 
     /// 絵を画素に描いて写しを取る（元の動画のコマを手放しても使えるように）
@@ -498,15 +530,16 @@ enum TripDigestComposer {
     /// watermark なら右下に小さく「Travory」を入れる（左下の文字より下に置くので重ならない）
     static func overlayImage(for clip: TripDigest.Clip, title: String?, subtitle: String,
                              position: TextPosition = .bottomLeft, watermark: Bool = false) -> CIImage? {
-        overlayImage(caption: "Day \(clip.dayNumber)   \(clip.timeText)", headline: clip.placeName,
-                     title: title, subtitle: subtitle, position: position, watermark: watermark)
+        let stamp = position == .cameraDate ? TextPosition.cameraStamp(date: clip.date, time: clip.timeText) : nil
+        return overlayImage(caption: "Day \(clip.dayNumber)   \(clip.timeText)", headline: clip.placeName,
+                            title: title, subtitle: subtitle, position: position, watermark: watermark, stamp: stamp)
     }
 
     /// コマの文字（小さい1行 `caption` と、大きい `headline`）を選んだ位置に置く。地図のカードも同じ見た目にするため分けた。
     /// - Parameter centerTop: 真ん中のときの文字の上端（画面の高さに対する割合）。地図のカードは経路と重ならないよう下げる
     static func overlayImage(caption: String, headline: String?, title: String?, subtitle: String,
                              position: TextPosition = .bottomLeft, watermark: Bool = false,
-                             centerTop: CGFloat? = nil) -> CIImage? {
+                             centerTop: CGFloat? = nil, stamp: String? = nil) -> CIImage? {
         let format = UIGraphicsImageRendererFormat()
         format.scale = 1
         format.opaque = false
@@ -529,6 +562,9 @@ enum TripDigestComposer {
             case .center:
                 cg.setFillColor(UIColor.black.withAlphaComponent(0.22).cgColor)
                 cg.fill(CGRect(origin: .zero, size: renderSize))
+            case .cameraDate, .hidden:
+                // 写真をそのまま見せる（暗くしない）
+                break
             }
 
             let shadow = NSShadow()
@@ -599,10 +635,33 @@ enum TripDigestComposer {
                     draw(place, size: 64, weight: .bold, align: .center, width: width,
                          origin: CGPoint(x: margin, y: top))
                 }
+            case .cameraDate, .hidden:
+                break
+            }
+
+            // カメラの日付：右下にオレンジの日付と時刻
+            if let stamp {
+                let size = 58 * min(W, H) / 1080
+                let glow = NSShadow()
+                glow.shadowColor = UIColor(red: 1, green: 0.45, blue: 0.05, alpha: 0.85)
+                glow.shadowBlurRadius = size * 0.18
+                glow.shadowOffset = .zero
+                let style = NSMutableParagraphStyle()
+                style.alignment = .right
+                let attrs: [NSAttributedString.Key: Any] = [
+                    .font: UIFont.monospacedSystemFont(ofSize: size, weight: .medium),
+                    .foregroundColor: UIColor(red: 1, green: 0.62, blue: 0.16, alpha: 1),
+                    .kern: size * 0.06, .shadow: glow, .paragraphStyle: style,
+                ]
+                let height = ceil(UIFont.monospacedSystemFont(ofSize: size, weight: .medium).lineHeight)
+                (stamp as NSString)
+                    .draw(in: CGRect(x: margin, y: H - 72 * min(W, H) / 1080 - height, width: W - margin * 2, height: height),
+                          withAttributes: attrs)
             }
 
             if watermark {
-                draw("Travory", size: 34, weight: .semibold, align: .right, width: width,
+                // 右下に日付を写し込むときは、印を左下に
+                draw("Travory", size: 34, weight: .semibold, align: stamp == nil ? .right : .left, width: width,
                      origin: CGPoint(x: margin, y: H - 72), fromBottom: true)
             }
 

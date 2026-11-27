@@ -201,7 +201,7 @@ struct WhatsNewShowcaseView: View {
 
 // MARK: - 絵：旅の思い出をつくる（本物のテンプレートを、見本の写真で描く）
 
-private struct ShowcaseMemoriesVisual: View {
+struct ShowcaseMemoriesVisual: View {
     @State private var collage: UIImage?
     @State private var poster: UIImage?
     @State private var diary: UIImage?

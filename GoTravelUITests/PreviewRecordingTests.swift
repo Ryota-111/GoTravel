@@ -25,7 +25,9 @@ final class PreviewRecordingTests: XCTestCase {
         app.launchArguments = ["-TravoryEmptyDataMode", "-TravoryDemoData", "-appleSignInUserId", "demo",
                                "-hasCompletedOnboarding", "YES", "-lastShownWhatsNewVersion", "3.8",
                                "-TabSwipePromptState", "done", "-TravoryInitialTab", "0",
-                               "-calendarShareTipDismissed", "YES", "-TravoryProPreview", "YES"] + extra
+                               "-calendarShareTipDismissed", "YES", "-TravoryProPreview", "YES",
+                               // 撮っている途中に App Store の評価のお願いが出ないように（最後に頼んだのが先の日付）
+                               "-ReviewLastRequestedAt", "<date>2099-01-01T00:00:00Z</date>"] + extra
         app.launch()
         // まれに起動がうまくいかず、ホーム画面に戻ることがある。下のタブが出なければ起動し直す
         if !app.tabBars.firstMatch.waitForExistence(timeout: 8) {
@@ -149,6 +151,68 @@ final class PreviewRecordingTests: XCTestCase {
         }
         sleep(12)
         mark("digest", "end")
+    }
+
+    // MARK: - アプリ全体の紹介（3.9）
+
+    /// 計画 → 日程 → 地図 → 予約 → リスト → 費用 → 場所保存 → フォトマップ を続けて撮る。
+    /// 場面ごとに `ov_<場面>.start` `.end` を書くので、編集でそこだけ切り出す
+    @MainActor
+    func testOverview() {
+        let app = launch()
+        let window = app.windows.firstMatch
+
+        mark("ov_plans", "start")
+        sleep(2)
+        let trip = app.buttons.matching(NSPredicate(format: "label CONTAINS '沖縄 3泊4日'")).firstMatch
+        if trip.waitForExistence(timeout: 5) {
+            trip.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)).tap()
+        } else {
+            tap(app, "沖縄 3泊4日")
+        }
+        sleep(3)
+        mark("ov_plans", "end")
+
+        mark("ov_schedule", "start")
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
+            .press(forDuration: 0.05, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.35)))
+        sleep(2)
+        window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
+            .press(forDuration: 0.05, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.45)))
+        sleep(2)
+        mark("ov_schedule", "end")
+
+        for (name, tab) in [("map", "地図"), ("reservation", "予約確認"), ("list", "リスト"), ("budget", "費用")] {
+            tap(app, tab, wait: 0)
+            mark("ov_\(name)", "start")
+            sleep(name == "map" ? 4 : 3)
+            if name == "budget" {
+                window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.8))
+                    .press(forDuration: 0.05, thenDragTo: window.coordinate(withNormalizedOffset: CGVector(dx: 0.5, dy: 0.5)))
+                sleep(2)
+            }
+            mark("ov_\(name)", "end")
+        }
+
+        // 計画の一覧へ戻って、場所保存とフォトマップ
+        let back = app.buttons.matching(NSPredicate(format: "label == '戻る' OR label == 'Back'")).firstMatch
+        if back.waitForExistence(timeout: 2) { back.tap() } else { window.swipeRight() }
+        sleep(2)
+        openTab(app, "場所保存")
+        mark("ov_places", "start")
+        sleep(3)
+        mark("ov_places", "end")
+
+        openTab(app, "思い出")
+        tap(app, "日本全国フォトマップ", wait: 0)
+        // 開ききってから撮る（「全画面で見る」が出たら開いている）
+        _ = app.buttons.matching(NSPredicate(format: "label CONTAINS '全画面'")).firstMatch.waitForExistence(timeout: 10)
+        sleep(1)
+        mark("ov_photomap", "start")
+        sleep(5)
+        mark("ov_photomap", "end")
+        // テストが終わるとアプリが閉じるので、少し待ってから終える
+        sleep(3)
     }
 
     // MARK: - 写真コラージュ

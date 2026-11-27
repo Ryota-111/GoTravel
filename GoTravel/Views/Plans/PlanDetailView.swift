@@ -18,6 +18,8 @@ struct PlanDetailView: View {
     @State private var isSaving = false
     @State private var showAlert = false
     @State private var alertMessage = ""
+    /// 場所保存に入れたときの一言（3.9）
+    @State private var spotToast: String?
     @State private var showDeleteConfirmation = false
     @State private var showScheduleEditor = false
     @State private var showNotificationSettings = false
@@ -185,6 +187,18 @@ struct PlanDetailView: View {
                 let item = MKMapItem(placemark: MKPlacemark(coordinate: picked.coordinate))
                 item.name = picked.name
                 addPlaceFromMapResult(item, address: picked.address)
+            }
+        }
+        .overlay(alignment: .bottom) {
+            if let spotToast {
+                Text(spotToast)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 12)
+                    .background(Capsule().fill(Color.black.opacity(0.8)))
+                    .padding(.bottom, 40)
+                    .transition(.move(edge: .bottom).combined(with: .opacity))
             }
         }
         .alert("エラー", isPresented: $showAlert) {
@@ -1838,6 +1852,24 @@ struct PlanDetailView: View {
                     Label("編集", systemImage: "pencil")
                 }
 
+                // 予定の場所を、そのまま場所保存の「行きたい」「行った」に（3.9、ご要望から）
+                if let spot = plan.scheduleSpot(for: item) {
+                    Menu {
+                        Button {
+                            saveSpot(spot, as: .wish)
+                        } label: {
+                            Label("行きたい場所として", systemImage: "heart")
+                        }
+                        Button {
+                            saveSpot(spot, as: .visited)
+                        } label: {
+                            Label("行った場所として", systemImage: "checkmark.circle")
+                        }
+                    } label: {
+                        Label("場所保存に入れる", systemImage: "mappin.and.ellipse")
+                    }
+                }
+
                 Button(role: .destructive, action: {
                     deleteScheduleItem(item)
                 }) {
@@ -1964,6 +1996,18 @@ struct PlanDetailView: View {
     private func minutesOfDay(_ date: Date) -> Int {
         let components = Calendar.current.dateComponents([.hour, .minute], from: date)
         return (components.hour ?? 0) * 60 + (components.minute ?? 0)
+    }
+
+    private func saveSpot(_ spot: ScheduleSpot, as kind: ScheduleSpotSaveKind) {
+        guard let userId = authVM.userId else { return }
+        let message = ScheduleSpotSaver.save([spot], as: kind, userId: userId, travelPlanId: nil).message(kind: kind)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+        withAnimation(.spring(response: 0.35, dampingFraction: 0.8)) { spotToast = message }
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) {
+            withAnimation(.easeInOut(duration: 0.25)) {
+                if spotToast == message { spotToast = nil }
+            }
+        }
     }
 
     private func deleteScheduleItem(_ item: PlanScheduleItem) {

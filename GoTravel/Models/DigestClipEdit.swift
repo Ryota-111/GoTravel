@@ -19,13 +19,21 @@ nonisolated struct DigestClipEdit: Codable, Equatable, Hashable {
     var zoom: Double = 1
     /// 動画を何秒目から使うか。nil なら真ん中（撮りはじめと撮り終わりはぶれやすい）
     var videoStart: Double?
+    /// 動画を何秒使うか（3.9。ご要望から）。nil なら1コマの秒数
+    var videoLength: Double?
+    /// 並べる位置（1970年からの秒）。並べ替えたコマだけ持ち、撮った時刻の代わりにこれで並べる（3.9。ご要望から）
+    var sortTime: Double?
 
     static let maxZoom: Double = 3
+    /// 動画1コマの長さの範囲（秒）
+    static let videoLengthRange: ClosedRange<Double> = 0.5...10
 
     /// トリミングしていない
     var isUncropped: Bool { zoom <= 1.0001 && abs(focusX - 0.5) < 0.0001 && abs(focusY - 0.5) < 0.0001 }
+    /// 見え方（トリミングと動画の範囲）を変えていない。並べ替えは含めない
+    var isUntrimmed: Bool { isUncropped && videoStart == nil && videoLength == nil }
     /// 何も変えていない（覚えておく必要がない）
-    var isDefault: Bool { isUncropped && videoStart == nil }
+    var isDefault: Bool { isUntrimmed && sortTime == nil }
 
     /// 写真（大きさ source）を画面（canvas）いっぱいに広げて、zoom 倍したときの大きさ
     static func filledSize(of source: CGSize, in canvas: CGSize, zoom: Double) -> CGSize {
@@ -54,9 +62,11 @@ nonisolated struct DigestClipEdit: Codable, Equatable, Hashable {
         return edit
     }
 
-    /// 動画（長さ duration 秒）のうち使う範囲。length 秒より短い動画は全部
+    /// 動画（長さ duration 秒）のうち使う範囲。使う長さより短い動画は全部。
+    /// 長さを決めていれば（`videoLength`）その長さ
     func videoRange(duration: Double, length: Double) -> (start: Double, length: Double) {
-        let used = min(length, max(duration, 0))
+        let wanted = videoLength.map { min(max($0, Self.videoLengthRange.lowerBound), Self.videoLengthRange.upperBound) } ?? length
+        let used = min(wanted, max(duration, 0))
         let latest = max(0, duration - used)
         let start = videoStart.map { min(max($0, 0), latest) } ?? latest / 2
         return (start, used)
@@ -65,7 +75,7 @@ nonisolated struct DigestClipEdit: Codable, Equatable, Hashable {
 
 /// 色味。全部のコマを同じ色味にそろえる（題名のカードの背景も）
 nonisolated enum DigestLook: String, CaseIterable, Identifiable {
-    case natural, film, warm, crisp, mono
+    case natural, film, warm, crisp, mono, digicam, retro, lightLeak, dusty
 
     static let storageKey = "tripDigestLook"
 
@@ -78,8 +88,13 @@ nonisolated enum DigestLook: String, CaseIterable, Identifiable {
         case .warm: return "あたたかい"
         case .crisp: return "すっきり"
         case .mono: return "白黒"
+        case .digicam: return "デジカメ"
+        case .retro: return "レトロ"
+        case .lightLeak: return "光もれ"
+        case .dusty: return "ヴィンテージ"
         }
     }
+
 
     /// Pro の色味（「そのまま」以外）
     var isPro: Bool { self != .natural }
