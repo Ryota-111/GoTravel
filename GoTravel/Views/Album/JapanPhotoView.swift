@@ -290,7 +290,7 @@ struct PhotoMapCanvas: View {
         let size = prefecture.mapSize
         return rect.union(CGRect(x: center.x - size.width / 2, y: center.y - size.height / 2,
                                  width: size.width, height: size.height))
-    }
+    }.union(Prefecture.okinawaInsetFrame)
 
     var body: some View {
         GeometryReader { geo in
@@ -299,6 +299,7 @@ struct PhotoMapCanvas: View {
             let dx = (geo.size.width - box.width * fit) / 2
             let dy = (geo.size.height - box.height * fit) / 2
             ZStack(alignment: .topLeading) {
+                OkinawaInsetFrame(box: box, scale: fit, dx: dx, dy: dy, color: ink.opacity(0.22))
                 ForEach(Prefecture.allCases) { prefecture in
                     cell(prefecture, scale: fit)
                         .position(x: dx + (Prefecture.mapCanvas.width * prefecture.mapPosition.x - box.minX) * fit,
@@ -328,6 +329,26 @@ struct PhotoMapCanvas: View {
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("\(prefecture.name)\(covers[prefecture] == nil ? "、写真なし" : "")")
         .accessibilityAddTraits(.isButton)
+    }
+}
+
+/// 沖縄を囲む角丸の枠（沖縄は九州の左下に大きくして置いているので、別の場所だと分かるように）
+struct OkinawaInsetFrame: View {
+    /// 地図の四角（370 × 600 の中）と、そこから画面への倍率・ずらし
+    let box: CGRect
+    let scale: CGFloat
+    let dx: CGFloat
+    let dy: CGFloat
+    let color: Color
+
+    var body: some View {
+        let frame = Prefecture.okinawaInsetFrame
+        RoundedRectangle(cornerRadius: 6 * scale, style: .continuous)
+            .strokeBorder(color, lineWidth: max(0.5, 0.8 * scale))
+            .frame(width: frame.width * scale, height: frame.height * scale)
+            .position(x: dx + (frame.midX - box.minX) * scale, y: dy + (frame.midY - box.minY) * scale)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 }
 
@@ -963,125 +984,111 @@ enum Prefecture: String, CaseIterable, Identifiable {
         String(name.prefix(3))
     }
 
-    /// 手でそろえた位置（370 × 600 の中の割合）。**ここの数字は直さない。**
-    /// 微調整は `PrefectureMapAdjustment` の表で持ち、`mapPosition` で足す
+    /// 地図の中の位置（370 × 600 の中の割合。県の形の四角の真ん中）。
+    /// 国土の形（Natural Earth・パブリックドメイン）の実際の県境から作った（3.9）。
+    /// 県の形の画像 `prefecture_<名前>` と組で、作り直すときは両方をいっしょに書き出す
     var baseMapPosition: CGPoint {
         switch self {
-        // 北海道
-        case .hokkaido: return CGPoint(x: 1.45, y: 0.69)
-
-        // 東北
-        case .aomori: return CGPoint(x: 1.33, y: 0.82)
-        case .iwate: return CGPoint(x: 1.368, y: 0.888)
-        case .akita: return CGPoint(x: 1.301, y: 0.883)
-        case .miyagi: return CGPoint(x: 1.341, y: 0.951)
-        case .yamagata: return CGPoint(x: 1.284, y: 0.9493)
-        case .fukushima: return CGPoint(x: 1.284, y: 1)
-
-        // 関東
-        case .ibaraki: return CGPoint(x: 1.294, y: 1.053)
-        case .tochigi: return CGPoint(x: 1.265, y: 1.036)
-        case .gunma: return CGPoint(x: 1.215, y: 1.045)
-        case .saitama: return CGPoint(x: 1.231, y: 1.065)
-        case .chiba: return CGPoint(x: 1.298, y: 1.093)
-        case .tokyo: return CGPoint(x: 1.239, y: 1.081)
-        case .kanagawa: return CGPoint(x: 1.236, y: 1.096)
-
-        // 中部
-        case .niigata: return CGPoint(x: 1.196, y: 0.9885)
-        case .toyama: return CGPoint(x: 1.095, y: 1.04)
-        case .ishikawa: return CGPoint(x: 1.064, y: 1.032)
-        case .fukui: return CGPoint(x: 1.006, y: 1.081)
-        case .yamanashi: return CGPoint(x: 1.189, y: 1.088)
-        case .nagano: return CGPoint(x: 1.146, y: 1.066)
-        case .gifu: return CGPoint(x: 1.07, y: 1.082)
-        case .shizuoka: return CGPoint(x: 1.167, y: 1.111)
-        case .aichi: return CGPoint(x: 1.089, y: 1.125)
-
-        // 関西
-        case .mie: return CGPoint(x: 1.025, y: 1.159)
-        case .shiga: return CGPoint(x: 1.003, y: 1.114)
-        case .kyoto: return CGPoint(x: 0.952, y: 1.115)
-        case .osaka: return CGPoint(x: 0.947, y: 1.15)
-        case .hyogo: return CGPoint(x: 0.9065, y: 1.132)
-        case .nara: return CGPoint(x: 0.985, y: 1.169)
-        case .wakayama: return CGPoint(x: 0.959, y: 1.194)
-
-        // 中国
-        case .tottori: return CGPoint(x: 0.827, y: 1.109)
-        case .shimane: return CGPoint(x: 0.725, y: 1.132)
-        case .okayama: return CGPoint(x: 0.829, y: 1.136)
-        case .hiroshima: return CGPoint(x: 0.744, y: 1.152)
-        case .yamaguchi: return CGPoint(x: 0.661, y: 1.174)
-
-        // 四国
-        case .tokushima: return CGPoint(x: 0.864, y: 1.189)
-        case .kagawa: return CGPoint(x: 0.849, y: 1.171)
-        case .ehime: return CGPoint(x: 0.774, y: 1.204)
-        case .kochi: return CGPoint(x: 0.812, y: 1.218)
-
-        // 九州
-        case .fukuoka: return CGPoint(x: 0.589, y: 1.211)
-        case .saga: return CGPoint(x: 0.553, y: 1.223)
-        case .nagasaki: return CGPoint(x: 0.531, y: 1.237)
-        case .kumamoto: return CGPoint(x: 0.592, y: 1.249)
-        case .oita: return CGPoint(x: 0.642, y: 1.222)
-        case .miyazaki: return CGPoint(x: 0.63, y: 1.273)
-        case .kagoshima: return CGPoint(x: 0.592, y: 1.293)
-        case .okinawa: return CGPoint(x: 0.35, y: 1.40)
+        case .hokkaido: return CGPoint(x: 0.84658, y: 0.08259)
+        case .aomori: return CGPoint(x: 0.75469, y: 0.17295)
+        case .iwate: return CGPoint(x: 0.78167, y: 0.21763)
+        case .miyagi: return CGPoint(x: 0.76387, y: 0.26041)
+        case .akita: return CGPoint(x: 0.73483, y: 0.21472)
+        case .yamagata: return CGPoint(x: 0.72362, y: 0.25905)
+        case .fukushima: return CGPoint(x: 0.72431, y: 0.29548)
+        case .ibaraki: return CGPoint(x: 0.73146, y: 0.33218)
+        case .tochigi: return CGPoint(x: 0.71015, y: 0.32019)
+        case .gunma: return CGPoint(x: 0.67566, y: 0.32606)
+        case .saitama: return CGPoint(x: 0.68752, y: 0.34332)
+        case .chiba: return CGPoint(x: 0.73415, y: 0.36156)
+        case .tokyo: return CGPoint(x: 0.69284, y: 0.35478)
+        case .kanagawa: return CGPoint(x: 0.69007, y: 0.36521)
+        case .niigata: return CGPoint(x: 0.66285, y: 0.28639)
+        case .toyama: return CGPoint(x: 0.59499, y: 0.32187)
+        case .ishikawa: return CGPoint(x: 0.57446, y: 0.31580)
+        case .fukui: return CGPoint(x: 0.54401, y: 0.35044)
+        case .yamanashi: return CGPoint(x: 0.65842, y: 0.35921)
+        case .nagano: return CGPoint(x: 0.63006, y: 0.34015)
+        case .gifu: return CGPoint(x: 0.58117, y: 0.35087)
+        case .shizuoka: return CGPoint(x: 0.64304, y: 0.37482)
+        case .aichi: return CGPoint(x: 0.59471, y: 0.37936)
+        case .mie: return CGPoint(x: 0.55603, y: 0.39765)
+        case .shiga: return CGPoint(x: 0.54274, y: 0.37086)
+        case .kyoto: return CGPoint(x: 0.51359, y: 0.37052)
+        case .osaka: return CGPoint(x: 0.51133, y: 0.39146)
+        case .hyogo: return CGPoint(x: 0.48651, y: 0.38111)
+        case .nara: return CGPoint(x: 0.53295, y: 0.40326)
+        case .wakayama: return CGPoint(x: 0.51702, y: 0.41713)
+        case .tottori: return CGPoint(x: 0.43968, y: 0.36733)
+        case .shimane: return CGPoint(x: 0.38098, y: 0.36748)
+        case .okayama: return CGPoint(x: 0.44019, y: 0.38307)
+        case .hiroshima: return CGPoint(x: 0.39099, y: 0.39356)
+        case .yamaguchi: return CGPoint(x: 0.34205, y: 0.40587)
+        case .tokushima: return CGPoint(x: 0.45691, y: 0.41754)
+        case .kagawa: return CGPoint(x: 0.44788, y: 0.40405)
+        case .ehime: return CGPoint(x: 0.39527, y: 0.42798)
+        case .kochi: return CGPoint(x: 0.42315, y: 0.43879)
+        case .fukuoka: return CGPoint(x: 0.29459, y: 0.43215)
+        case .saga: return CGPoint(x: 0.27324, y: 0.44003)
+        case .nagasaki: return CGPoint(x: 0.24335, y: 0.42650)
+        case .kumamoto: return CGPoint(x: 0.29561, y: 0.46145)
+        case .oita: return CGPoint(x: 0.33251, y: 0.44146)
+        case .miyazaki: return CGPoint(x: 0.32486, y: 0.48038)
+        case .kagoshima: return CGPoint(x: 0.28575, y: 0.51190)
+        case .okinawa: return CGPoint(x: 0.10464, y: 0.51893)
         }
     }
 
-    /// 手でそろえた大きさ。**ここの数字は直さない。** 微調整は `mapSize` で掛ける
+    /// 地図の中の大きさ（ポイント。県の形の画像の縦横の比と同じ）
     var baseMapSize: CGSize {
         switch self {
-        case .hokkaido: return CGSize(width: 130, height: 130)
-        case .aomori: return CGSize(width: 50, height: 42)
-        case .iwate: return CGSize(width: 55, height: 55)
-        case .akita: return CGSize(width: 53, height: 53)
-        case .miyagi: return CGSize(width: 39, height: 39)
-        case .yamagata: return CGSize(width: 45, height: 44)
-        case .fukushima: return CGSize(width: 44, height: 44)
-        case .ibaraki: return CGSize(width: 36, height: 36)
-        case .tochigi: return CGSize(width: 29, height: 29)
-        case .gunma: return CGSize(width: 36, height: 36)
-        case .saitama: return CGSize(width: 29, height: 29)
-        case .chiba: return CGSize(width: 35, height: 35)
-        case .tokyo: return CGSize(width: 25, height: 25)
-        case .kanagawa: return CGSize(width: 21, height: 21)
-        case .niigata: return CGSize(width: 58, height: 60)
-        case .toyama: return CGSize(width: 24, height: 30)
-        case .ishikawa: return CGSize(width: 50, height: 45)
-        case .fukui: return CGSize(width: 40, height: 40)
-        case .yamanashi: return CGSize(width: 25, height: 25)
-        case .nagano: return CGSize(width: 55, height: 57)
-        case .gifu: return CGSize(width: 46, height: 46)
-        case .shizuoka: return CGSize(width: 42, height: 42)
-        case .aichi: return CGSize(width: 32, height: 32)
-        case .mie: return CGSize(width: 55, height: 55)
-        case .shiga: return CGSize(width:33, height: 33)
-        case .kyoto: return CGSize(width:38, height: 38)
-        case .osaka: return CGSize(width: 30, height: 30)
-        case .hyogo: return CGSize(width:51, height: 51)
-        case .nara: return CGSize(width:33, height: 33)
-        case .wakayama: return CGSize(width:35, height: 33)
-        case .tottori: return CGSize(width:40, height: 40)
-        case .shimane: return CGSize(width:47, height: 47)
-        case .okayama: return CGSize(width:36, height: 36)
-        case .hiroshima: return CGSize(width:41, height: 41)
-        case .yamaguchi: return CGSize(width:40, height: 40)
-        case .tokushima: return CGSize(width:28, height: 28)
-        case .kagawa: return CGSize(width:23, height: 23)
-        case .ehime: return CGSize(width:41, height: 41)
-        case .kochi: return CGSize(width:44, height: 44)
-        case .fukuoka: return CGSize(width:32, height: 32)
-        case .saga: return CGSize(width:24, height: 24)
-        case .nagasaki: return CGSize(width:35, height: 35)
-        case .kumamoto: return CGSize(width:30, height: 30)
-        case .oita: return CGSize(width:29, height: 29)
-        case .miyazaki: return CGSize(width:40, height: 40)
-        case .kagoshima: return CGSize(width:36, height: 36)
-        case .okinawa: return CGSize(width: 40, height: 40)
+        case .hokkaido: return CGSize(width: 101.590, height: 86.505)
+        case .aomori: return CGSize(width: 30.594, height: 28.046)
+        case .iwate: return CGSize(width: 23.685, height: 35.642)
+        case .miyagi: return CGSize(width: 23.548, height: 25.619)
+        case .akita: return CGSize(width: 21.237, height: 34.188)
+        case .yamagata: return CGSize(width: 17.937, height: 29.242)
+        case .fukushima: return CGSize(width: 31.635, height: 24.612)
+        case .ibaraki: return CGSize(width: 20.222, height: 25.080)
+        case .tochigi: return CGSize(width: 16.114, height: 19.796)
+        case .gunma: return CGSize(width: 21.756, height: 22.464)
+        case .saitama: return CGSize(width: 19.711, height: 10.905)
+        case .chiba: return CGSize(width: 18.901, height: 24.781)
+        case .tokyo: return CGSize(width: 16.153, height: 8.189)
+        case .kanagawa: return CGSize(width: 14.864, height: 11.267)
+        case .niigata: return CGSize(width: 37.847, height: 38.101)
+        case .toyama: return CGSize(width: 16.377, height: 14.738)
+        case .ishikawa: return CGSize(width: 18.990, height: 30.829)
+        case .fukui: return CGSize(width: 22.872, height: 20.060)
+        case .yamanashi: return CGSize(width: 15.987, height: 16.817)
+        case .nagano: return CGSize(width: 23.354, height: 38.372)
+        case .gifu: return CGSize(width: 22.930, height: 27.582)
+        case .shizuoka: return CGSize(width: 28.260, height: 21.699)
+        case .aichi: return CGSize(width: 18.987, height: 16.913)
+        case .mie: return CGSize(width: 18.101, height: 32.459)
+        case .shiga: return CGSize(width: 11.745, height: 18.928)
+        case .kyoto: return CGSize(width: 19.677, height: 22.604)
+        case .osaka: return CGSize(width: 10.558, height: 15.186)
+        case .hyogo: return CGSize(width: 19.987, height: 31.107)
+        case .nara: return CGSize(width: 11.206, height: 19.349)
+        case .wakayama: return CGSize(width: 15.704, height: 19.707)
+        case .tottori: return CGSize(width: 23.191, height: 11.536)
+        case .shimane: return CGSize(width: 28.758, height: 42.900)
+        case .okayama: return CGSize(width: 18.999, height: 18.969)
+        case .hiroshima: return CGSize(width: 23.612, height: 21.193)
+        case .yamaguchi: return CGSize(width: 26.967, height: 18.813)
+        case .tokushima: return CGSize(width: 18.504, height: 15.131)
+        case .kagawa: return CGSize(width: 14.827, height: 11.687)
+        case .ehime: return CGSize(width: 27.813, height: 29.526)
+        case .kochi: return CGSize(width: 28.206, height: 24.024)
+        case .fukuoka: return CGSize(width: 19.532, height: 20.696)
+        case .saga: return CGSize(width: 13.056, height: 12.788)
+        case .nagasaki: return CGSize(width: 29.775, height: 44.784)
+        case .kumamoto: return CGSize(width: 22.908, height: 22.897)
+        case .oita: return CGSize(width: 21.096, height: 19.979)
+        case .miyazaki: return CGSize(width: 19.660, height: 30.563)
+        case .kagoshima: return CGSize(width: 25.768, height: 40.691)
+        case .okinawa: return CGSize(width: 64.831, height: 46.540)
         }
     }
 

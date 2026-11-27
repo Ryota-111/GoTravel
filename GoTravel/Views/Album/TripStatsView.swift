@@ -529,7 +529,7 @@ struct VisitedPrefectureMap: View {
         let size = prefecture.mapSize
         return rect.union(CGRect(x: center.x - size.width / 2, y: center.y - size.height / 2,
                                  width: size.width, height: size.height))
-    }
+    }.union(Prefecture.okinawaInsetFrame)
 
     var body: some View {
         GeometryReader { geo in
@@ -539,6 +539,7 @@ struct VisitedPrefectureMap: View {
             let dx = (geo.size.width - box.width * scale) / 2
             let dy = (geo.size.height - box.height * scale) / 2
             ZStack(alignment: .topLeading) {
+                OkinawaInsetFrame(box: box, scale: scale, dx: dx, dy: dy, color: otherColor)
                 ForEach(Prefecture.allCases) { prefecture in
                     cell(prefecture, scale: scale)
                         .position(x: dx + (Self.canvas.width * prefecture.mapPosition.x - box.minX) * scale,
